@@ -1,0 +1,10 @@
+npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma.
+┌─────────────────────────────────────────────────────────┐
+│  Update available 7.8.0 -> 7.9.1                        │
+│  Run the following to update                            │
+│    npm i --save-dev prisma@latest                       │
+│    npm i @prisma/client@latest                          │
+└─────────────────────────────────────────────────────────┘

@@ -1,0 +1,17 @@
+// A per-user notification feed. Created by real events elsewhere in the
+// app — a submission getting reviewed, a withdrawal or giveaway payout
+// changing status — not a generic system any route can post to freely.
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@map("notification")
+}

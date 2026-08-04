@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <linearGradient id="deepwLogoGradient" x1="10%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#22D3EE" />
+      <stop offset="45%" stop-color="#4F46E5" />
+      <stop offset="100%" stop-color="#9333EA" />
+    </linearGradient>
+  </defs>
+  <path
+    fill="url(#deepwLogoGradient)"
+    fill-rule="evenodd"
+    clip-rule="evenodd"
+    d="M45 25 L110 25 A75 75 0 0 1 110 175 L45 175 Z M68 66 L68 134 L120 100 Z"
+  />
+</svg>

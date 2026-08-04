@@ -1,0 +1,78 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+
+import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
+
+// Super-user only. Every broadcast announcement.
+export const GET = withDonkeyAuth(async (request) => {
+  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+    return NextResponse.json(
+      { error: "Forbidden", message: "Only super users can view this." },
+      { status: 403 },
+    );
+  }
+
+  const announcements = await prisma.announcement.findMany({
+    include: { targetUser: { select: { displayName: true, email: true, name: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return NextResponse.json({ announcements });
+});
+
+const createSchema = z
+  .object({
+    headline: z.string().trim().min(1).max(2000),
+    priority: z.enum(["Info", "Warning", "Critical"]),
+    isPinned: z.boolean(),
+    targetType: z.enum(["all", "super_users", "specific_user"]),
+    targetUserId: z.string().trim().min(1).optional(),
+    scheduledAt: z.string().datetime().optional(),
+  })
+  .strict()
+  .refine((v) => v.targetType !== "specific_user" || v.targetUserId, {
+    message: "targetUserId is required when targetType is specific_user",
+  });
+
+export const POST = withDonkeyAuth(async (request) => {
+  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+    return NextResponse.json(
+      { error: "Forbidden", message: "Only super users can do this." },
+      { status: 403 },
+    );
+  }
+
+  const parsed = createSchema.safeParse(await request.json());
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        error: "Invalid request",
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message,
+        })),
+      },
+      { status: 400 },
+    );
+  }
+
+  const { scheduledAt, targetType, targetUserId, ...rest } = parsed.data;
+  const scheduledDate = scheduledAt ? new Date(scheduledAt) : null;
+  const status = scheduledDate && scheduledDate > new Date() ? "Scheduled" : "Active";
+
+  const announcement = await prisma.announcement.create({
+    data: {
+      ...rest,
+      scheduledAt: scheduledDate,
+      status,
+      targetType,
+      targetUserId: targetType === "specific_user" ? targetUserId : null,
+    },
+    include: { targetUser: { select: { displayName: true, email: true, name: true } } },
+  });
+
+  return NextResponse.json({ announcement });
+});

@@ -1,0 +1,19 @@
+// External AI provider credentials shown on the admin API Integration pages.
+// Storage only — self-seeds one row per provider from
+// src/lib/marketplace/api-integrations-seed.ts on first read. apiKey is
+// write-only from the admin API: reads return whether it's set, never the
+// value, except via the dedicated /reveal endpoint. The real inference
+// adapters (src/lib/inference/adapters/*) still read their keys from
+// environment variables, not from this table — see that seed file's header
+// comment.
+model ApiIntegration {
+  id           String   @id @default(cuid())
+  provider     String   @unique
+  apiKey       String?
+  baseUrl      String?
+  status       String   @default("Active")
+  autoFailover Boolean  @default(true)
+  updatedAt    DateTime @updatedAt
+
+  @@map("api_integration")
+}

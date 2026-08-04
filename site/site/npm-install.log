@@ -1,0 +1,9 @@
+
+> site@0.1.0 postinstall
+> prisma generate
+
+
+✔ Generated Prisma Client (7.8.0) to .\src\generated\prisma in 764ms
+
+
+added 994 packages in 8m

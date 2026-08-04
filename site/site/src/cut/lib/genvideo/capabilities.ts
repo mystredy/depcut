@@ -1,0 +1,293 @@
+/**
+ * Model-agnostic capability roles.
+ *
+ * The pipeline never names a provider. It asks for a capability by role —
+ * "write the script", "generate a video", "sync lips to this audio" — and a
+ * `ModelSuite` binds each role to some adapter. Provider names live only inside
+ * those adapters (see `registry.ts`); swapping models is swapping which adapter
+ * a role resolves to, and evals compare suites that differ by one role. The
+ * orchestrator depends on this interface and nothing else model-facing.
+ */
+
+import type { RawShot } from "./coverage";
+import type { RefAsset, ScriptBeat, ScriptPlan, TranscriptWord, VideoAsset } from "./types";
+
+export type Aspect = "9:16" | "16:9";
+
+export interface ScriptInput {
+  brief: string;
+  refs: RefAsset[];
+  targetSeconds?: number;
+}
+
+export interface BreakdownInput {
+  /** Present when an audio spine already exists (provided or generated VO). */
+  transcript: TranscriptWord[];
+  /** Present when the run started from a brief. */
+  beats?: ScriptBeat[];
+  /** The user's story framing, when they gave one — the source of truth for
+   * who speaks and what the video is about; the transcript only times it. */
+  brief?: string;
+  durationFrames: number;
+  fps: number;
+}
+
+export interface StyleInput {
+  brief?: string;
+  /** A look the user pinned up front — the bible's style must realize it. */
+  style?: string;
+  refs: RefAsset[];
+  /** The story to design for. `characters`/`location` carry the stable ids the
+   * script/breakdown assigned (char:1, loc:1, …); the style role returns one
+   * asset per distinct id, so identity ties back to the shots by construction. */
+  beats: { dialogue: string; action: string; characters?: string[]; location?: string }[];
+}
+
+export interface StyleBible {
+  /** The reusable style string every downstream prompt carries. */
+  style: string;
+  /** What must never appear in a render of this look — the wrong medium's
+   * tells (e.g. photorealistic footage in a hand-drawn cut). */
+  negative?: string;
+  characters: VideoAsset[];
+  locations: VideoAsset[];
+}
+
+export interface ImageInput {
+  prompt: string;
+  refs: RefAsset[];
+  aspect: Aspect;
+}
+
+export interface VideoInput {
+  prompt: string;
+  /** The model's negative prompt — the look's banned tells plus the base
+   * bans every render shares. */
+  negativePrompt?: string;
+  refs: RefAsset[];
+  /** The shot this render is for — its stable identity across reloads, so a
+   * resumed run re-adopts its own in-flight job instead of billing a retake. */
+  shotId?: string;
+  startKeyframe?: string;
+  /** The audio slice this shot should be spoken over — for audio-native video. */
+  audioMediaId?: string;
+  audioFromSec?: number;
+  audioToSec?: number;
+  durationSec: number;
+  aspect: Aspect;
+}
+
+export interface VoiceInput {
+  script: string;
+  voice?: string;
+  direction?: string;
+}
+
+export interface VoiceResult {
+  mediaId: string;
+  durationSec: number;
+}
+
+export interface MusicInput {
+  mood: string;
+  durationSec: number;
+}
+
+export interface LipSyncInput {
+  videoMediaId: string;
+  audioMediaId: string;
+  fromSec?: number;
+  toSec?: number;
+}
+
+export interface ScriptRole {
+  write(input: ScriptInput): Promise<ScriptPlan>;
+}
+export interface BreakdownRole {
+  segment(input: BreakdownInput): Promise<RawShot[]>;
+}
+export interface StyleRole {
+  design(input: StyleInput): Promise<StyleBible>;
+}
+export interface ImageRole {
+  /** Returns the generated project media id. */
+  generate(input: ImageInput): Promise<string>;
+}
+export interface VideoTake {
+  /** The generated project media id. */
+  mediaId: string;
+  /** Whether the take rode an image anchor (seed keyframe or reference
+   * sheets). An unanchored take came from the text rung — identity held only
+   * by words — which changes the retake policy: its identity break means the
+   * provider refused the seed, so a FRESH seed re-rolls that refusal, whereas
+   * an anchored stranger keeps the seed it drifted from. */
+  anchored: boolean;
+}
+export interface VideoRole {
+  generate(input: VideoInput): Promise<VideoTake>;
+  /** True when this model lip-syncs to provided audio itself (no post-pass). */
+  readonly audioNative: boolean;
+}
+export interface VoiceRole {
+  speak(input: VoiceInput): Promise<VoiceResult>;
+}
+export interface MusicRole {
+  /** Returns the generated project media id. */
+  compose(input: MusicInput): Promise<string>;
+}
+export interface LipSyncRole {
+  /** Returns a new video media id with mouths aligned to the audio. */
+  sync(input: LipSyncInput): Promise<string>;
+}
+export interface TranscribeRole {
+  transcribe(audioMediaId: string): Promise<TranscriptWord[]>;
+}
+
+export interface ReviewInput {
+  /** Project media id of the rendered take. */
+  videoMediaId: string;
+  /** What the plan wanted on screen. */
+  action: string;
+  /** The video's one-line story, so the reviewer judges the take as this beat
+   * of that story — not as an isolated action divorced from what it is for. */
+  logline?: string;
+  /** This shot's job in the arc (its beat's intent) — the same grounding. */
+  intent?: string;
+  /** The plan's look — the reviewer judges the medium against it strictly. */
+  style?: string;
+  /** The shot's approved opening frame — the take must match its rendering
+   * technique, so a weaker-rung render can't land in a different look. */
+  keyframeMediaId?: string;
+  /** The canonical design sheet of each cast member in the shot, by name — the
+   * take's characters must read as the SAME designs, so a weaker-rung render
+   * can't land a reinvented character. */
+  castSheets?: { name: string; mediaId: string }[];
+  /** The words heard over the shot. */
+  narration: string;
+  /** Seconds of the take the timeline slot needs. */
+  slotSec: number;
+}
+
+export interface ReviewVerdict {
+  /** Whether the take shows the planned action and subject. */
+  ok: boolean;
+  /** Why a declined take failed — carried into the retake prompt. */
+  note?: string;
+  /** A declined take that doesn't belong to this production — a character off
+   * its design sheet, or the wrong medium/technique (3D or live-action in a
+   * 2D production). Not a weak performance: an off-model take NEVER places,
+   * even on the last attempt — the on-model keyframe still holds the slot
+   * instead. The retake's seed follows the take's anchor: an anchored
+   * stranger keeps the gated-on-model seed it drifted from; an unanchored one
+   * means the provider refused the seed, so a fresh mint re-rolls it. */
+  offModel?: boolean;
+  /** Where the slot's window starts inside the take (seconds; default 0). */
+  fromSec?: number;
+}
+
+export interface FrameCheckInput {
+  /** Project media id of the minted frame. */
+  imageMediaId: string;
+  /** The production's technique benchmark (the anchor sheet). */
+  benchmarkMediaId: string;
+  /** The plan's look. */
+  style?: string;
+  /** What the frame should show. */
+  subject: string;
+}
+
+/** One frame of the storyboard: a shot's opening keyframe and what it is for. */
+export interface StoryboardPanel {
+  /** The shot this frame opens — the verdict is keyed back to it. */
+  shotId: string;
+  /** The frame image to judge; absent panels are skipped (nothing to see). */
+  frameMediaId?: string;
+  /** What the beat depicts, what is heard over it, and its job in the arc. */
+  action: string;
+  narration: string;
+  intent?: string;
+}
+
+export interface StoryboardInput {
+  /** The video's one-line story the ordered frames must tell. */
+  logline: string;
+  style?: string;
+  /** The shots' opening frames, in timeline order. */
+  panels: StoryboardPanel[];
+}
+
+/** A per-frame verdict on whether it earns its place in the story. */
+export interface StoryboardNote {
+  shotId: string;
+  ok: boolean;
+  /** Retake direction for a frame that doesn't carry the story — carried into
+   * the frame's re-mint prompt. */
+  note?: string;
+}
+
+export interface StoryboardVerdict {
+  notes: StoryboardNote[];
+}
+
+export interface ReviewRole {
+  /** Watch a rendered take against its plan — the dailies check. */
+  watch(input: ReviewInput): Promise<ReviewVerdict>;
+  /** Judge one minted frame against the production's benchmark BEFORE it seeds
+   * a paid render — the same-artist gate. Optional; absent means no gate. */
+  frame?(input: FrameCheckInput): Promise<ReviewVerdict>;
+  /** Read the whole storyboard as one sequence BEFORE any video spends, and
+   * flag every frame that doesn't carry the story forward — a wrong beat, a
+   * repeat, a dropped prop, a teleported setting. Optional; absent means the
+   * frames go to camera unread as a sequence. */
+  storyboard?(input: StoryboardInput): Promise<StoryboardVerdict>;
+}
+
+/** One model choice per role — what the orchestrator runs against. */
+export interface ModelSuite {
+  /** Human label for evals and logs, e.g. "fast-video + hi-res-image". */
+  label: string;
+  script: ScriptRole;
+  breakdown: BreakdownRole;
+  style: StyleRole;
+  image: ImageRole;
+  video: VideoRole;
+  voice: VoiceRole;
+  /** Absent when no music backend is configured — the run assembles with no
+   * bed rather than failing. */
+  music?: MusicRole;
+  /** Absent when `video.audioNative` — the video does its own lip-sync. */
+  lipSync?: LipSyncRole;
+  transcribe: TranscribeRole;
+  /** Absent when no reviewer is configured — takes place unwatched. */
+  review?: ReviewRole;
+}
+
+export type RoleName = keyof Omit<ModelSuite, "label">;
+
+/** The deterministic segmenter — the breakdown fallback and the fake's brain. */
+export function segmentByDuration(input: BreakdownInput, maxShotSec: number): RawShot[] {
+  const { durationFrames, fps, transcript } = input;
+  const maxFrames = Math.round(maxShotSec * fps);
+  const count = Math.max(1, Math.ceil(durationFrames / maxFrames));
+  const per = Math.floor(durationFrames / count);
+  const shots: RawShot[] = [];
+  for (let i = 0; i < count; i++) {
+    const startFrame = i * per;
+    const endFrame = i === count - 1 ? durationFrames : (i + 1) * per;
+    shots.push({
+      startFrame,
+      endFrame,
+      audioText: wordsInRange(transcript, startFrame / fps, endFrame / fps),
+      action: "",
+      characters: ["char:1"],
+      location: "loc:1",
+      framing: i === 0 ? "wide establishing shot" : "medium shot",
+    });
+  }
+  return shots;
+}
+
+/** The transcript words heard across a span of seconds. */
+export function wordsInRange(words: TranscriptWord[], from: number, to: number): string {
+  return words.filter((w) => w.t1 > from && w.t0 < to).map((w) => w.w).join(" ");
+}

@@ -1,0 +1,64 @@
+// Admin-configured defaults for Donkey's AI chat assistant: model/sampling
+// defaults, prompt categories and templates, and provider routing priority.
+// None of this is read by the real inference call path yet (the editor's
+// assistant and generateText() call a fixed model directly — see
+// src/lib/inference/adapters/gemini-client.ts) — it's stored and editable
+// here, ready for when that wiring is built.
+
+// Singleton row (id always "singleton"). GET creates it on first read.
+model ChatSettings {
+  id              String   @id @default("singleton")
+  defaultModel    String   @default("gemini-3.5-flash")
+  // 0-150, displayed divided by 100 (e.g. 70 -> "0.70").
+  temperature     Int      @default(70)
+  maxOutputTokens Int      @default(4096)
+  streamOutput    Boolean  @default(true)
+  updatedAt       DateTime @updatedAt
+
+  @@map("chat_settings")
+}
+
+// A grouping for chat templates (e.g. "Legal", "SEO"), with an admin-facing
+// prompt count shown as this category's linked template count.
+model ChatCategory {
+  id          String         @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  templates   ChatTemplate[]
+
+  @@map("chat_category")
+}
+
+// A named assistant persona/prompt preset.
+model ChatTemplate {
+  id         String        @id @default(cuid())
+  name       String
+  role       String?
+  model      String?
+  categoryId String?
+  category   ChatCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([categoryId])
+  @@map("chat_template")
+}
+
+// A row in the provider routing priority list. status: "active" | "standby".
+// fallback/latencyNote are admin-entered descriptive text, not measured —
+// no real router reads priority/status yet.
+model AiEngine {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  fallback    String?
+  latencyNote String?
+  priority    Int      @default(0)
+  status      String   @default("standby")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([priority])
+  @@map("ai_engine")
+}
