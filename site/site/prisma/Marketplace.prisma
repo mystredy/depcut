@@ -1,0 +1,230 @@
+// Creator marketplace: the shared category taxonomy, the Inspire-mode task
+// board, and Submit Project's submissions. Status/type fields are plain
+// String (not Prisma enum) to match this schema's existing convention — see
+// Credits.prisma's UserCreditGrant.status for the same pattern; the closed
+// unions live in the TypeScript types that read/write these columns.
+
+// The single source for the marketplace's category list. Both Submit
+// Project's category picker and the Inspiration board read from this table
+// instead of each keeping their own hardcoded array; /api/categories
+// self-seeds it from src/lib/marketplace/categories-seed.ts on first read.
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  emoji       String
+  // Comma-separated example niches under this category, e.g. "Celebrity
+  // news, pop culture, viral moments, ...".
+  niches      String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tasks       Task[]
+  submissions Submission[]
+
+  @@map("category")
+}
+
+// An Inspire-mode task on the creator marketplace: a brief a creator can
+// claim and submit a remix against. status: "available" | "taken" |
+// "submitted" | "under_review" | "completed" | "expired".
+model Task {
+  id                      String    @id @default(cuid())
+  title                   String
+  categoryId              String
+  category                Category  @relation(fields: [categoryId], references: [id])
+  maxRates                Int
+  description             String
+  status                  String    @default("available")
+  deadline                DateTime
+  requiredArtists         String[]  @default([])
+  script                  String?
+  shortClip               String?
+  fullClip                String?
+  instructions            String?
+  hoursToComplete         Int?
+  additionalRevenueReward Boolean   @default(false)
+  niche                   String?
+  claimedAt               DateTime?
+  claimedById             String?
+  claimedBy               User?     @relation("TaskClaims", fields: [claimedById], references: [id])
+  expiresAt               DateTime?
+  submittedAt             DateTime?
+  reviewedAt              DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  submissions             Submission[]
+  uploads                 Upload[]
+
+  @@index([status])
+  @@index([categoryId])
+  @@map("task")
+}
+
+// A Submit Project submission. subType: "SPVID" (publisher) | "CSVID"
+// (creator, the default — SPVID has no UI yet). extension: "standard" |
+// "pro". subSource: "InspiredExternal" | "TaskExternal" — every submission
+// through this flow comes from an external editing tool, so it's always the
+// External variant, chosen by which mode (Inspire vs Task) the creator
+// submitted under. reviewStatus: "Pending" | "InReview" | "Qualified" |
+// "Disqualified". points: engagement/reputation/XP points, a separate
+// currency from Rates. amount: direct USD value credited to pending balance
+// on submit, moved to available on approval. reward: a bonus/incentive
+// metric layered on top of amount for campaign-specific payout tiers.
+model Submission {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation("UserSubmissions", fields: [userId], references: [id], onDelete: Cascade)
+  subSource         String?
+  subType           String    @default("CSVID")
+  extension         String    @default("standard")
+  title             String
+  categoryId        String?
+  category          Category? @relation(fields: [categoryId], references: [id])
+  status            String?
+  statusRemark      String?
+  points            Int?
+  amount            Float?
+  reward            Float?
+  inspireUrl        String?
+  taskId            String?
+  task              Task?     @relation(fields: [taskId], references: [id])
+  spaceid           String?
+  voiceScript       String?
+  // Original picked filename — kept as a label even once the real object
+  // (videoKey below) exists.
+  videofile         String?
+  // R2 object key for the real uploaded video — see
+  // src/cut/server/cloud/r2.ts's submissionVideoKey and
+  // /api/submissions/[id]/video/{presign,complete}. Null until that upload
+  // finishes.
+  videoKey          String?
+  thumbnailFile     String?
+  // R2 object key for the real uploaded thumbnail — see submissionThumbnailKey
+  // and /api/submissions/[id]/thumbnail/{presign,complete}.
+  thumbnailKey      String?
+  duration          Int?
+  publishingid      String?
+  editCode          String?
+  watermarkEnabled  Boolean   @default(false)
+  watermarkText     String?
+  burnInCaptions    Boolean   @default(false)
+  generatedMetadata Boolean   @default(false)
+  maxRates          Int?
+  earnedRates       Int?
+  reviewScore       Int?
+  additionalReward  Float?
+  publisherWorkdone Int?
+  creatorWorkdone   Int?
+  reviewedById      String?
+  reviewedByUser    User?     @relation("ReviewedSubmissions", fields: [reviewedById], references: [id])
+  reviewedAt        DateTime?
+  reviewRemark      String?
+  reviewStatus      String?
+  reviewedByName    String?
+  reviewStartedAt   DateTime?
+  reviewCompletedAt DateTime?
+  submittedAt       DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  uploads           Upload[]
+
+  @@index([userId, submittedAt])
+  @@index([taskId])
+  @@index([categoryId])
+  @@index([reviewStatus])
+  @@map("submission")
+}
+
+// The Pro Verification Suite's publishing package for a submission: the
+// AI-generated title/description/tags/media, and (once a publisher pushes it
+// out) per-platform links and verification. Submission.publishingid holds
+// this row's id once one exists. status: "Pending" | "Processing" |
+// "Published" | "Failed".
+model Upload {
+  id                  String    @id @default(cuid())
+  createdById         String?
+  createdBy           User?     @relation("UploadCreatedBy", fields: [createdById], references: [id])
+  publishById         String?
+  publishBy           User?     @relation("UploadPublishBy", fields: [publishById], references: [id])
+  taskId              String?
+  task                Task?     @relation(fields: [taskId], references: [id])
+  submissionId        String?
+  submission          Submission? @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  title               String
+  description         String?
+  // Comma-separated tags.
+  tags                String?
+  mediaUrls           String?
+  // Pro submissions' fresh export from the editor, matched against the main
+  // submission video to verify it's the final cut. mediaFile is the original
+  // picked filename; mediaKey is the real R2 object key once uploaded — see
+  // submissionVerificationKey and
+  // /api/submissions/[id]/verification/{presign,complete}.
+  mediaFile           String?
+  mediaKey            String?
+  status              String    @default("Pending")
+  brandName           String?
+  date                DateTime?
+  postType            String?
+  publishedPostIds    String[]  @default([])
+  // { passed: boolean, checkedAt: string, errors?: string[] }
+  publishVerification Json?
+  // { youtube?, facebook?, instagram?, tiktok?, threads?, snapchat?, x? } or a plain string
+  publishLink         Json?
+  publishedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  posts               Post[]
+
+  @@index([submissionId])
+  @@index([taskId])
+  @@index([status])
+  @@map("upload")
+}
+
+// One per-platform post an Upload fans out to (an Upload with a YouTube and a
+// TikTok link publishes as two Post rows). platform: "tiktok" | "youtube" |
+// "facebook" | "instagram" | "threads" | "snapchat" | "x". state flattens the
+// PostState union: "scheduled" | "published" (→ postUrl) | "failed"
+// (→ errorMessage) — only the matching column is set for a given state.
+//
+// No publish integration exists yet (no per-platform API keys/OAuth) — this
+// is schema only, ready for whenever that pipeline gets built.
+model Post {
+  id           String    @id @default(cuid())
+  uploadId     String
+  upload       Upload    @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  postTime     DateTime?
+  platform     String?
+  shortLink    Boolean   @default(false)
+  text         String?
+  mediaUrls    String?
+  state        String    @default("scheduled")
+  postUrl      String?
+  errorMessage String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([uploadId])
+  @@index([state])
+  @@map("post")
+}
+
+// Site-wide payout rail configuration: which providers are enabled and their
+// credentials. Self-seeds one disabled row per provider on first read (see
+// /api/admin/payment-methods) — provider: "cryptomus" | "paypal" | "wise" |
+// "flutterwave" | "paystack". Secret fields are write-only from the admin
+// API: reads return whether each is set, never the value itself.
+model PaymentMethod {
+  id            String   @id @default(cuid())
+  provider      String   @unique
+  enabled       Boolean  @default(false)
+  publicKey     String?
+  secretKey     String?
+  merchantId    String?
+  webhookSecret String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("payment_method")
+}

@@ -1,0 +1,243 @@
+/**
+ * The assistant's tool catalog and skills library.
+ *
+ * Tools are defined once (JSON Schema) and exposed to both providers through
+ * the stdio MCP proxy. Every tool except the `server: true` ones is executed
+ * in the browser against the editor store, so the assistant edits the exact
+ * same state the user sees. Every tool is defined in a `*.tools.ts` sibling
+ * of the component that exposes the same feature to the user and aggregated
+ * here, so the UI and the model always offer the same catalog.
+ */
+
+import { AI_PANEL_TOOLS } from "@/cut/components/AiPanel.tools";
+import { OVERLAY_ANIMATION_TOOLS } from "@/cut/components/AnimationTiles.tools";
+import { AUDIO_TOOLS } from "@/cut/components/AudioPanel.tools";
+import { EDITOR_TOOLS } from "@/cut/components/Editor.tools";
+import { EFFECT_TREATMENTS, EFFECTS_TOOLS } from "@/cut/components/EffectsPanel.tools";
+import { ELEMENTS_TOOLS } from "@/cut/components/ElementsPanel.tools";
+import { VIDEO_GEN_TOOLS } from "@/cut/components/GeneratePanel.tools";
+import { IMAGE_GEN_TOOLS } from "@/cut/components/ImageGenPanel.tools";
+import { INSPECTOR_TOOLS } from "@/cut/components/Inspector.tools";
+import { LIBRARY_TOOLS } from "@/cut/components/LibraryView.tools";
+import { PREVIEW_TOOLS } from "@/cut/components/Preview.tools";
+import { SCENE_TOOLS } from "@/cut/components/SceneCard.tools";
+import { SIDE_PANEL_TOOLS } from "@/cut/components/SidePanel.tools";
+import { STOCK_TOOLS } from "@/cut/components/StockPanels.tools";
+import { SUBTITLES_TOOLS } from "@/cut/components/SubtitlesPanel.tools";
+import { TIMELINE_TOOLS } from "@/cut/components/Timeline.tools";
+import { TOP_BAR_TOOLS } from "@/cut/components/TopBar.tools";
+import { TRANSITIONS_TOOLS } from "@/cut/components/TransitionsPanel.tools";
+import { LOOK_EFFECTS, OVERLAY_ANIM_STYLE_IDS, OVERLAY_LOOP_STYLE_IDS } from "@donkeycut/effects-kit";
+import type { AiToolDef } from "../../lib/aiToolDef";
+import { TRANSITION_STYLE_IDS } from "../../lib/types";
+
+export const AI_TOOLS: AiToolDef[] = [
+  ...AI_PANEL_TOOLS,
+  ...PREVIEW_TOOLS,
+  ...TIMELINE_TOOLS,
+  ...INSPECTOR_TOOLS,
+  ...ELEMENTS_TOOLS,
+  ...EFFECTS_TOOLS,
+  ...OVERLAY_ANIMATION_TOOLS,
+  ...TRANSITIONS_TOOLS,
+  ...SUBTITLES_TOOLS,
+  ...AUDIO_TOOLS,
+  ...IMAGE_GEN_TOOLS,
+  ...VIDEO_GEN_TOOLS,
+  ...SCENE_TOOLS,
+  ...STOCK_TOOLS,
+  ...LIBRARY_TOOLS,
+  ...SIDE_PANEL_TOOLS,
+  ...TOP_BAR_TOOLS,
+  ...EDITOR_TOOLS,
+];
+
+/** Deep documentation the model can pull in on demand. */
+export const AI_SKILLS: Record<string, string> = {
+  "editor-overview": `# Cut editor overview
+Cut is a local, project-based short-video editor. Each project has an output aspect ratio "W:H" — presets 16:9, 9:16, 1:1, 4:3, 3:4, 2:1, or any custom ratio like 9:5 — rendered with the frame's short side at 1080px and switchable from the pill in the top bar; the current one is in editor_state project.aspect. Layout:
+- Left icon rail tabs: Media (user-imported files + Exports list), Library (shared reusable assets), Video (stock clip browser — footage + talking characters — beside the AI video generator), Image (stock images beside the AI image generator), Audio (AI voiceover + audio files), Text (title presets), Subtitles (transcript editor), Publish (caption/tags/sound metadata). Camera/mic recording lives in the top bar next to the aspect picker.
+- Media shows only what the user imported. Everything Cut makes carries an origin tag (generated, voiceover, recording, stock, freeze, chat — see \`media\` in editor_state) and lives where it was created — media you make previews on a card in this chat, panel renders sit in their job lists; a "…" menu on each files it into Media or the Library, and every card drags onto the timeline. Deleting a chat thread deletes the chat media the user never placed or filed away.
+- Center: the video preview canvas (composited at the project's frame size) with draggable text overlays and subtitle captions.
+- Right: the Inspector — its content follows the selection (video clip, overlay video, soundtrack clip, title, or cue).
+- Bottom: the timeline (resizable by dragging its top border). Rows top-to-bottom: the video tracks in z-order (positive tracks, then track 0, then negative tracks behind it), soundtrack lanes (green), titles (purple), subtitle tracks (amber, when enabled). Every track is free-positioned in time.
+Everything autosaves to the project folder. Undo/redo is unlimited (⌘Z / ⇧⌘Z).
+Times are in seconds on the shared timeline. The playhead is currentTime; a skimmer previews under the mouse without moving the playhead.`,
+
+  "timeline-editing": `# Timeline editing
+- Every track is free-positioned: items carry a start time, gaps are allowed, and a track-0 gap plays black (and silence). videoTrack entries in editor_state report gapBefore where one exists.
+- While track 0 is the only video track, deleting a track-0 clip ripples: the span it occupied closes, later items on every track slide left together, items wholly inside the span go with it, and straddlers are trimmed. A gap that already existed stays. With overlay video tracks present the delete leaves its gap (remove_gap closes it by sliding that track's later clips left). Deletes on other tracks remove just that item.
+- Two ways to move a track-0 clip: place_clip sets its start (respects gaps, slides right if the spot is taken); move_clip reorders by index, opening a slot at the landing point — clips after it shift right, every other gap survives. Index-based inserts (freeze_frame, generated clips) open a slot the same way.
+- add_clip puts a project asset on the timeline the way a drag does: video/image onto track 0 (a \`start\`, an \`index\` insert, or appended at the end), audio onto the soundtrack.
+- Overlay video: a video/image asset can sit on a track above track 0 (track 1, 2… — topmost wins). A full-frame overlay covers everything below it; give it a layout to share the frame — top/bottom/left/right halves for a split screen, pip for a floating corner box, or a custom region rect. add_overlay_video creates one from a media asset; update_overlay_video moves/trims/regions/mutes/hides it. The user makes them by dragging media above track 0; they drag the region in the preview.
+- A clip's timeline length is (out-in)/speed; total duration runs to the last clip's end, gaps included. Transitions blend at cuts and never change layout or length.
+- trim_clip changes in/out inside the source media. in >= 0, out <= source duration, out-in >= 0.1.
+- set_speed sets a clip's playback rate; it changes the clip's timeline length, and later titles/captions ripple to stay in sync.
+- set_transition joins a clip into the next one (0–2s, ${TRANSITION_STYLE_IDS.length} styles); set_animation animates one clip's own entrance/exit — read the transitions-and-fades skill before styling cuts. Splitting or deleting clears the affected transition. Grading a clip's picture is add_effect: an effect dropped over a clip opens covering it.
+- split_at cuts the track-0 clip under that time into two clips at the exact frame. With a soundtrack or overlay clip selected it splits that instead.
+- The user can multi-select (⌘/⇧-click) and delete several items at once; a hover chip on each video clip toggles its own audio.
+- Anything can be hidden instead of deleted: it stays on the timeline (grayed) but drops out of playback and export — a hidden video clip plays black and silent. Per item: set_clip_hidden, or the \`hidden\` field on update_overlay_video/update_overlay/update_audio. Whole rows: set_track_hidden (video/soundtrack/text/subtitles) and set_track_muted (video) — the eye/speaker toggles on the track headers.
+- detach_audio lifts a video clip's sound to the soundtrack track (and mutes the clip) so audio can be cut independently of video.
+- freeze_frame grabs one frame (default: the playhead — what the user currently sees) as a still clip and inserts it, by default at index 0 as a cover/hook frame ("make this the first frame"). The still is baked at the project's current aspect with the clip's framing applied; if the user later switches aspect they should capture a fresh one.
+- set_framing: per-clip Fit (letterbox) vs Fill (crop to cover the project frame). In Fill, panX/panY position the crop window; the user can also drag the video directly in the preview. The control lives in the Inspector under "Framing" when a video clip is selected. Landscape footage usually wants fill + a pan that keeps the subject.
+- The user can copy/paste any selected segment (video, overlay video, audio, title) with ⌘C/⌘V; pastes aim for the playhead and slide right to free space.
+- Zoom: set_view pxPerSec (12..800) or fit. The timeline panel height: set_view timelineH (170..600).`,
+
+  "watching-and-cutting": `# Watching footage & cutting by content
+When a request depends on what the footage actually contains — "cut the dead air", "clip the best moment", "remove the boring part", "split where the scene changes" — watch it first. Never guess at content you haven't seen.
+
+Your eyes and ears:
+- watch_video(clip_id | asset_id, from?, to?, interval_seconds?): samples the SOURCE at scene changes plus a steady floor and returns timestamped contact sheets — cells read left→right, top→bottom, and each burned stamp is source seconds — plus sceneChanges, the natural cut candidates. Coverage is capped per call: survey the whole range at the default interval first, then zoom into the moments that matter with a narrow from/to and interval_seconds 0.5–1. When truncated, continue from coveredTo.
+- detect_silence(clip_id | asset_id, threshold_db?, min_silence?): silent stretches in source seconds; with clip_id each also carries its timeline times.
+- capture_frame: one composited frame at the playhead — for checking the final look, not for surveying footage.
+
+The flow for "edit this for me":
+1. get_state — every clip, its trim (in/out), speed, gaps, and the other tracks.
+2. Speech? subtitles_generate first — cue timings are timeline seconds and say what is said when.
+3. watch_video each distinct source (or the ranges in question); note scene changes and what happens where.
+4. Plan in thoughts: group the cues into sentences and thoughts, decide which thoughts stay whole, then detect_silence to find where the speaker actually pauses. Cue timings approximate the audio — a trailing word often spills past its cue — so aim every speech cut into a detected silence span, and aim loose: up to a second of spare air on each side beats a tight cut, because the refine step trues the edges after. A cue boundary with no silence span around it means the speech runs continuously there, so leave that joint alone.
+5. Execute: split_at (timeline s) to divide, delete_item to drop a segment, trim_clip (source s) to tighten edges, place_clip/move_clip to close gaps or reorder, set_speed to compress slow stretches.
+6. Refine: refine_speech_cuts with every recut clip id. It re-scans the audio at each edge and re-trims it to sit a ~0.25s breath inside the real pause, keeping the clips' spacing. It reads sound, not intent — leave out a clip whose edge you placed mid-speech on purpose.
+7. Verify by ear: listen_audio at each edge the refine flagged, plus a spot-check or two (scope from/to to ~2s around the joint), and check the first and last words arrive whole and the hand-off into the next thought sounds natural. A clipped word → widen that trim deeper into the silence and listen again. After a heavy edit, listen once end-to-end. seek + capture_frame when the change is visual.
+
+Time math (get this right):
+- watch_video, detect_silence, and trim_clip speak SOURCE seconds; split_at and place_clip speak TIMELINE seconds.
+- timeline_t = clip.start + (source_t − clip.in) / clip.speed, valid while source_t is inside [in, out]. Each watch result's clip block carries this formula with the real numbers filled in.
+- The same source can appear in several clips — map per clip.
+
+Cutting speech well: pace is part of the message. Keep a beat of the speaker's own pause between sentences (~0.3s) and a slightly longer one between thoughts (~0.5s) — shorten a long pause to that beat instead of deleting it, and speech butted directly together reads as rushed. Cut loose and let refine_speech_cuts set the breath at each edge. Prefer split_at + delete_item, then place_clip to close the gap (a beat of black may be wanted — ask the cut, not the tool); trim_clip only tightens a clip's edges.`,
+
+  "transitions-and-fades": `# Transitions, animations, looks & fades
+Route the ask to the right feature:
+- set_transition: a styled join between one video clip and the next, blended across the cut. It never moves clips or shortens anything, and it plays only while the pair touches.
+- set_animation: one clip's own entrance ("in") or exit ("out") — the clip fades/zooms/pops/slides on its own edge. Never moves neighbors. For "fade this clip in", "make it slide in", use this. A wipe is a transition, not an animation.
+- set_project_fade: the whole video fades in from black at the start and/or out to black at the end — picture and full mix (titles, captions, soundtrack). Survives clip reordering. For "fade in the video", "fade to black at the end", use this.
+- update_audio fadeIn/fadeOut: audio-only ramps on one soundtrack clip ("fade the music out").
+
+set_transition styles (clipId = the leading clip; 0 clears, max 2s): crossfade blends; crosszoom adds a zoom punch; dipblack/dipwhite dip through a solid color; blur defocuses through the cut; pushleft/right/up/down shove the old frame out; wipeleft/right/up/down reveal with a hard traveling edge; circleopen/close and splitopen/close are shape reveals. Directional names describe the motion.
+set_animation styles: fade (audio follows), zoom, pop, slideleft/right/up/down — the slide names are the motion direction (slideleft enters from the right edge moving left, or exits off the left). Each edge holds one effect and the last pick wins: set_animation on a transitioned edge replaces that transition, set_transition clears the animations adjacent to its joint.
+Picking for a vibe: "smooth" → crossfade; "punchy/energetic" → crosszoom or a push; "dramatic scene change" → dipblack 0.5–0.8s; "dreamy" → blur (or the dreamy look); "retro" → vhs or vintage look. Between clips 0.4–0.8s reads well; 1s+ is slow and cuts total duration.
+UI: select a clip → Inspector "Effects" opens the panel (Transition / In / Out / Looks tabs); a blue badge marks each styled joint on the timeline. Preview and export render the same treatment.`,
+
+  "graphics": `# Graphics: titles, shapes & stickers
+The title lanes hold three overlay element kinds, all sharing timing (start/end), center position (x/y fractions 0..1), rotation (degrees), opacity, and a lane; \`overlays\` in editor_state lists them with their \`kind\`. All burn into the export exactly as previewed.
+Titles (add_title / update_overlay): text, size (frame px; the design short side is 1080), font (sf=SF Pro, serif=New York, rounded, mono, impact), weight (400/700), color, shadow, plate (translucent dark backdrop).
+Shapes (add_shape): rect, ellipse, line, arrow. w/h are frame fractions; rect/ellipse take fill + fill_opacity, corner radius (rect), and an outline (stroke_color/stroke_width); line/arrow draw in \`fill\` with h as their thickness, and rotation gives them their direction (0° points right, 90° points down).
+Stickers (add_sticker): a project image asset (generated cutouts in the Elements panel carry origin "sticker"); w is a frame-width fraction and height follows the source's aspect. Lottie JSON uploads become animated stickers that loop for the element's duration.
+Custom stickers (create_sticker): one call generates the image, removes the background, adds the die-cut outline, and places it — use it when the user asks for a sticker of something they don't have (it spends credits like image generation).
+Effects (add_effect): time-ranged treatments over the finished picture — the footage and everything laid over it. Two families, one list: the treatments (${EFFECT_TREATMENTS.join(", ")}) and the graded looks (${LOOK_EFFECTS.join(", ")}). Placed like any element and tuned with \`amount\` (update_overlay); an effect added over a clip opens covering that clip, and trims like anything else. One effect at a time reads best, amounts under ~0.5.
+Advanced text (update_overlay): italic, align (multi-line), letter_spacing (em), line_height, stroke_color/stroke_width (em outline behind the fill), and richer shadows. Bundled Google families join the system set — inter, montserrat, poppins, oswald, space-grotesk, playfair, caveat, bebas, anton, archivo-black, bangers, lobster, pacifico, permanent-marker, dm-serif — and the user can upload .ttf/.otf fonts (they appear as font ids like "asset:<id>").
+Animation (set_overlay_animation): every element takes preset In/Out ramps (${OVERLAY_ANIM_STYLE_IDS.join(", ")} — typewriter for titles only) and a Loop (${OVERLAY_LOOP_STYLE_IDS.join(", ")}) that runs its whole duration. Entrances 0.3–0.6s read well; one loop per scene, sparingly.
+Keyframes (set_overlay_keyframes): for motion no preset covers — a path across the frame, a slow push in, a drift that holds first. A key is a whole pose (position, scale, rotation, opacity) at a time in seconds from the element's start; the pose moves linearly between keys and holds outside them, and presets still compose on top. Two or three keys carry almost everything; reach for a preset first and keyframes when the user describes a specific path or timing. In the UI the diamond in the inspector adds a key at the playhead, and dragging the element then records into it.
+Behind the speaker: a title with behind_subject sits behind the person in the shot (on-device person segmentation; preview and export match). It reads well when the speaker is clearly separated from the background; with no detectable person it degrades to a normal front title. Groups: the user can group elements (select several, Group in the inspector) — selecting one selects all, and moves/resize/rotate/timing ride together.
+Good TikTok titles: short punchy lines, high contrast (white/yellow + shadow or plate), size 72–110, keep inside the middle 80% of the frame (x 0.1..0.9, y 0.1..0.9), avoid the caption band (y≈0.8) when subtitles are on.
+Tasteful graphics: shapes read best as accents (a highlight box behind a stat, an arrow pointing at the subject, a color bar under a title) — semi-transparent fills (fill_opacity 0.2–0.5) sit better over footage than solid blocks. One or two stickers a scene; size 0.15–0.3 of the frame width.
+In the UI: the timeline toolbar adds Text; the Elements side-panel tab browses stickers and shapes and creates sticker images, and the Effects tab holds the effects — a click in any panel picks a tile, and dragging one onto the timeline is what places it; dragging in the preview places an element, its corner handle resizes, the top handle rotates; the Inspector edits every field.`,
+
+  "audio-and-subtitles": `# Audio, voiceover & subtitles
+Soundtrack clips: volume 0..1.5, fadeIn/fadeOut seconds (max half the clip), start = timeline position, in/out = trim inside the source; clips can spread across several soundtrack lanes (the \`lane\` field), new sounds slide to free space in their lane. Fades render with ffmpeg afade on export.
+Ducking: a soundtrack clip's \`duck\` (0..1, via update_audio) lowers ALL other audio — video-clip sound and other music — to that gain while the clip plays; 1 clears it. Voiceovers set this so narration sits over quieter music. It applies in both the preview and the export.
+Voiceover (Donkey's hosted speech model — signed in, spends credits, like image/video generation):
+- voiceover_generate(script, voice?, direction?, duck?, add_to_timeline?, start?, language?): synthesizes the script into a playable chat card; add_to_timeline:true (or a start) also drops it on the soundtrack at the playhead (or start) when the user asked for it in the cut. Defaults to a 0.4 duck when placed so it sits over other audio. Voices are Gemini's prebuilt set — list_voices returns them (id + one-word character like Warm, Upbeat, Gravelly); omit voice for a good default. \`direction\` steers delivery in natural language ("Say warmly, like an old friend") and may ask for another language — "say it in Spanish" translates the script before synthesis; the script itself can carry inline tags like [whispers], [excited], [laughs]. \`language\` only pins pronunciation of the text as written.
+- read_subtitles_aloud(voice?, direction?, duck?, track?): speaks one subtitle track's cues, each line at its own cue time — captions become narration. Needs cues first. The Inspector offers the same per-clip: "Generate audio for clip" transcribes just that clip when it has no cues yet, then voices it.
+Music (Donkey's hosted music model, Gemini/Lyria — signed in, spends credits):
+- generate_music(prompt, instrumental?, length?, add_to_timeline?, start?, volume?): renders a track from a mood/genre/tempo brief — a full song with sung vocals (instrumental:false; the model writes the lyrics, or pass your own [Verse]/[Chorus] lines) or a vocal-free bed (instrumental:true, the default). length "clip" (~30s, default) or "song" (~2min). It returns when the track lands and previews as a chat card; add_to_timeline (or a start) drops it on the soundtrack at a soft bed volume. For "background music for this video", keep it instrumental, read videoTrack/duration to fit the mood and length, and set any speech clips' \`duck\` so the bed sits under them. This is sung music — a spoken narration is voiceover_generate; the Audio tab's Voice/Music sub-tabs mirror the two.
+Subtitle tracks: a project carries up to 3, one language each (editor_state subtitles.tracks; each cue's \`track\`). Each track shows its own caption line, dragged to its own spot; all share one visual style. The panel and generation write to the ACTIVE track — the track tool param switches it. subtitles_add_track / subtitles_remove_track manage them; subtitles_translate_track("ko-KR") is the whole "add Korean subtitles" flow when captions exist (it adds/reuses the track and translates cue-for-cue).
+Generating: subtitles_generate transcribes the cut's audio on-device (Apple speech, macOS 26) onto the target track; cues are caption-sized (≈38 chars). subtitles_from_visuals is the fallback for a cut with NO speech — it watches sampled frames (via the user's Claude login) and writes timed narration captions of what's on screen. So: speech present → subtitles_generate; silent/music-only footage the user wants captioned → subtitles_from_visuals. Never fabricate a spoken transcript.
+captions_generate rewrites a track's cues into punchy social captions (emoji, curiosity-hook opener) in a style (clean/hook/punchy), keeping timings — use it when the ask is social/TikTok captions rather than a plain transcript.
+Editing: update_cue (text or retime), delete_cue, merge_cue (joins into the previous cue on the same track). In the panel, Return splits a caption at the cursor onto real word timings; hand-edited text drops its word timings.
+subtitles_set_view: showOnVideo (preview + export burn-in), showOnTimeline (amber cue rows).
+Caption look: the Subtitles panel offers 10 visual presets (clean, hook, punchy, minimal, editorial, typewriter, block, highlight, bubble, neon), a per-word karaoke highlight with accent overrides, and each track's caption drags to a new spot in the preview. No tool sets the look — direct the user to the panel. captions_generate's clean/hook/punchy choice shapes the caption text it writes; the visual preset is separate.`,
+
+  "ai-generation": `# Stock media & AI generation
+Three ways to get footage the user doesn't have: bundled stock (local, free), a URL they point at (import_url downloads TikTok / YouTube / Instagram / direct links, free), and hosted generation (signed in, spends credits). Prefer stock when it genuinely fits; generate when the shot needs to be specific.
+Stock: stock_search browses the bundled catalogs — footage clips and images in 8 categories plus ~20 UGC talking characters — matching prompts, categories, and tags. stock_add imports an item into the project as a chat card; add_to_timeline:true (or a start) also drops it on the timeline when the user asked. In the UI these live in the Video and Image tabs beside the generators; clicking a stock tile seeds the generate panel with its prompt.
+Generation:
+- generate_image(prompt, aspect?, resolution?, reference_asset_ids?, add_to_timeline?, index?): the hosted image model renders the prompt at 16:9, 9:16, or 1:1 (default: the supported shape closest to the project aspect) and 1K/2K/4K. The still previews in the chat; placed (add_to_timeline:true or an index) it rides video track 0 as a still clip (8s default, stretchable). Great for a cover/hook frame (index 0), a background, or a b-roll still.
+- generate_video(prompt, aspect?, reference_asset_id?, add_to_timeline?, index?): the hosted video model renders a short clip with audio in one pass — 720p, up to ~10s, the model picks the length (no duration knob; the user trims the clip on the timeline). With reference_asset_id it stages: the image model designs the opening frame from the reference first (that still previews in the chat), then the video model animates that exact frame. The render takes a minute or two, so the tool returns once it's started and the clip previews in the chat when it finishes (on the timeline only when asked) — tell the user it's rendering. Don't call it again for the same shot while one is in flight.
+- Every render's live status is \`renders\` in editor_state (running with elapsed seconds, done with its asset id, failed with the error) — report render progress from there, never from memory. When the user's ask depends on a running render ("assemble the clips", "add it when it's done"), call wait_for_renders and finish the job in the same turn — never hand the waiting to the user.
+- generate_character_video(character_id, line, …): a stock talking character delivers a line to camera, same async render as generate_video. Characters come from stock_search kind:"character" — each has a persona; you write the line (chat deliverable rules apply: asked for "a script", write it in chat first).
+References: users attach media to their message or the generate panels; project asset ids (see \`media\` in editor_state, including attachments — OS drops become project assets) pass through reference_asset_ids / reference_asset_id. Images draw from any number of references; video stages one reference into a designed opening frame and animates it; generate_music matches the sound of an audio reference or the mood of a video/image one. When the user says "use this clip/image/song" or "match this", pass the reference — don't just describe it in the prompt.
+If generation fails with a sign-in or credits message, relay that plainly — generation needs a Donkey sign-in with credits. Write vivid, specific prompts (subject, style, lighting, motion); the user's request is usually shorthand, so flesh it out. A narrated multi-shot production is generate_scene — read the scene-productions skill before planning one, especially from an audio file or in a named style.`,
+
+  "scene-productions": `# Scene productions (generate_scene)
+generate_scene plans a narrated multi-shot cut; approve_scene renders it. Planning is free; every shot render spends credits, so present the plan card and wait for the user's go-ahead — never approve on your own. Per shot, the pipeline already guarantees: smooth continuous motion (no stop-motion or held poses), zero on-screen text, character consistency via a style bible plus reference sheets, gapless non-overlapping placement, and a reviewer that retakes failed renders. Audio: a brief-driven scene has NO separate narration track — the video model speaks each shot's line, so the clip plays its own burned-in narration with a soft music bed under it; a from-audio scene mutes the shots as b-roll under the user's spine instead.
+Aspect: every shot renders at the project's shape, frozen when the plan is approved — 9:16 or 16:9, and a custom project ratio freezes the closest of the two, with the shots letterboxed in the frame. The project's shape is the user's own setting and a scene run never changes it: a reference in another shape, a platform the brief mentions, and the shots' own letterboxing are all reasons to say something, not to reframe their project. They asked for a vertical or horizontal video → set_aspect first, then plan.
+Look: the user's style reference is the strongest anchor — pass attached images/clips as reference_asset_ids; they anchor the style bible and every shot. A reference contributes the LOOK; when the user wants its pictured character or place in the video itself, say that in the brief — otherwise the pipeline designs a fresh cast in the reference's technique. The brief describes the same look in plain visual traits so words and image agree; with no reference, build the trait wording from the ask (a simple children's cartoon → "flat hand-drawn 2D animation, clean thick outlines, simple rounded characters, soft colors, gentle fluid motion"). Describe any show, franchise, or artist by traits — the generator rejects trademarked names. Name recurring wardrobe and props in the brief so independently rendered shots match.
+From an audio file (the audio rides the timeline as the spine): listen_audio first and extract every fact — who speaks, who appears, each topic in order. Then generate_scene with from_audio_asset_id PLUS a brief carrying those facts; the brief outranks transcript mishears. Speech in another language: write the brief's facts in English and pass audio_language so the on-device transcriber uses the right recognizer. Long silence or music in the source becomes filler shots — suggest trimming first (detect_silence); shots tile the full asset length, so warn on long files (many paid shots).
+Scope: deliver exactly what was asked — no subtitle tracks, titles, or extra music on top (brief mode lays its own soft music bed; from-audio mode adds none). One scene run at a time — cancel_scene stops the active one when the user wants it gone or replaced.
+After renders land: spot-check with capture_frame or watch_video (aspect, style, motion). The user may point at clips by @ token ("@c2 doesn't match the audio") — the clip attachment's id maps to videoTrack in editor_state, whose sceneShot is the n regenerate_shot takes; carry their complaint as its note, and check the audio itself with listen_audio (the spine asset in from-audio mode, or the shot clip's own source in a brief-driven scene, where the narration is burned into each clip) — subtitles_generate would write a caption track nobody asked for. A shot that failed all its takes holds a still — repair it ONLY with regenerate_shot n (it re-runs the shot's identity ladder and swaps the clip in place); deleting the still or rendering a replacement with generate_video orphans the shot and loses the run's identity anchors and review. Revisions ladder by scope, never a fresh generate_scene (that replans and re-bills the whole video): one shot redone or nudged → regenerate_shot; a section restructured — split, tightened, content added ("the last shot is missing the soccer scene") → recut_scene from_shot..to_shot with the ask as its instruction (replans just that span on the same audio, keeps the cast and every other clip, bills only the new shots, no approval gate — the user's ask is the go-ahead); a whole-look change → restyle_scene (every shot re-renders, confirm first). Undo removes clips; spent credits stay spent.`,
+
+  "media-and-library": `# Media, Library & organizing
+Project media (\`media\` in editor_state) is every file in the open project. The Media panel shows the user's own imports — assets with no origin tag; created media (origin generated, voiceover, stock, chat, freeze, recording) lives where it was made until filed away.
+- add_clip / add_overlay_video place a project asset on the timeline; listen_audio plays an asset's sound to you — an audio asset, or a video/clip's own track; watch_video is the visual sibling.
+- file_asset moves a created asset into Media (to:"media", clears its origin) or copies any asset into the Library (to:"library").
+- delete_asset removes an asset from the project plus its timeline clips; the media does not come back with undo, so only on an explicit ask, and say what went with it.
+The Library is shared across every project: folders, reusable assets, and templates — a template is a saved arrangement (clips, overlays, titles, captions, by reference) that comes back editable.
+- library_list browses it; library_add copies an asset into the project (the import step "library"-scope attachments need); template_add re-materializes a template; save_template saves timeline items as one.
+- library_organize handles folders (create/rename/delete), filing (move_asset), and deletes (permanent — explicit ask only).
+- import_url reads any URL (TikTok, YouTube, Instagram, an X post or Article, a web page, direct links): a page comes back as its article text and its pictures, a post as its video or photos, and a source that is only words as sourceText alone. Media lands as a card in the chat with that text quoted beside it; the user drags a card to the timeline, Media, or the Library. Place it with add_clip only when they asked for it in the cut.
+Attachments: media files dropped on the chat import into project media by themselves; library attachments wait for library_add.`,
+
+  "publish-and-export": `# Publish & export
+Publish tab fields (set_publish): caption (TikTok limit 4,000 chars INCLUDING tags/emoji; hook in the first line), tags (3–5 focused tags recommended; stored space-separated, rendered as #tags), soundTitle (TikTok lets you rename the sound once after posting), handle (shown as @handle in platform previews).
+Export (open_export): presets Original (matches the sharpest source clip along the aspect, 1080p floor, 4K cap), Best 1080p CRF19, Quick share 1080p, Draft 720p — H.264 + AAC, 30fps, rendered at the project aspect ratio, titles and subtitles burned in. Files land in the project's exports/ folder and appear in the Media tab's Exports section, where each can be previewed plain or in TikTok/Instagram/YouTube chrome with the publish metadata rendered in place, revealed in Finder, or deleted.`,
+};
+
+/** System prompt shared by all providers. */
+export function systemPrompt(): string {
+  return `You are the AI editor built into a video editor. Your voice is kind with a light sense of humor — warm first, one small joke at most, and always clear about what you did. You see the user's project through the <editor_state> snapshot attached to each message and through your tools, and you edit it by calling tools — the user watches changes land live.
+
+Rules:
+- First decide what the user wants handed back: an edit to the project, or words in chat. "Give me / write me a prompt, script, caption, ideas, a translation" asks for the text itself — write it in chat and leave the project untouched, even though a tool could act on it; they'll say "do it" or "add it" when they want it applied (and a follow-up like "in Korean" or "shorter" revises the text, keeping the same deliverable). A complaint or observation ("ugh, this is cluttered") is words too: sympathize, offer what you could do, and touch nothing until they say go. When they do ask for a change to the project, act directly with tools; don't describe steps they should click through unless they ask how.
+- Do what the newest message asks, then stop. The turns above are finished work: what an earlier reply already ran is recorded with it, and the snapshot shows where the project landed — start from there and leave settled work alone. Ideas beyond the ask (a transition, a look, music, captions) belong in one closing sentence for the user to take up.
+- Use ids exactly as given in the state — <editor_state> lists every clip, title, cue, asset, and setting with its id, so an edit it already answers ("mute all clips", "delete the second title") goes straight to the tools. Act on what your tools return — each reports what it changed, so batch independent edits into one step and call get_state only when the snapshot is stale or a result surprised you. A tool that comes back "unreachable" or "no live editor session" is a dropped bridge, not a limit and not your request's fault — the editor never received the call, so quietly make the same call once more before doing anything else, and never tell the user to reconnect or restart the editor.
+- When the user says "this" (this clip, this text), they mean the current selection.
+- Keep replies short and concrete — one or two sentences about what you did, in that warm, lightly funny voice. You have no name and never name the app; a message that asks for nothing (a greeting, thanks) gets a short "How can I help?" / "What would you like to do?" back — words alone, no tool calls. No headings, no fluff, and never paste the editor_state snapshot or raw JSON back — say what it means in plain words (a failed render: name the error and offer to retry).
+- Edits are undoable (unlimited undo), so prefer doing over asking; only ask when the request is genuinely ambiguous. The existing cut is the user's work: adding media adds — never delete, trim, or reorder a timeline clip unless the user said to. Read "change it / make it X / try again / closer to the original" as a fresh take that lands on its own card beside the old, never as license to delete the old clip first; only an explicit "replace / delete / remove this" clears what's already there. Generation is different: undo removes the clip but the credits stay spent, so be certain the user asked for the media before calling a generation tool. Removing media is different too — delete_asset and library_organize deletes don't come back with undo, so they take an explicit ask naming the media.
+- Times are seconds. The frame follows project.aspect in editor_state — any "W:H" ratio, short side 1080px; project.frame has the exact pixels. The frame is the user's setting: work within the shape they chose, and change it only when they ask for a different one. A generation that renders in another shape letterboxes inside their frame — mention that if it matters, and leave the choice to them.
+- Read list_skills / read_skill before working in an area you're unsure about — they document every setting. A tool whose description already answers the ask goes straight through.
+- Transcription tools write tracks the user sees — run subtitles_generate / captions_generate only when captions were asked for, never just to read the words: existing cues are in editor_state, and audio plays to you via listen_audio. Don't transcribe a video with no speech (subtitles_from_visuals narrates silent footage), and never invent a spoken transcript.
+- Voiceovers duck other audio by default so they stay audible. Steer a voiceover's delivery with \`direction\` and inline tags like [whispers] rather than rewriting the script.
+- generate_image / generate_video / generate_character_video / voiceover_generate / read_subtitles_aloud / generate_music make media through hosted models (spends the user's Donkey credits, needs sign-in); call them when the user asked for the media itself — a request for the prompt or script gets text in chat. generate_music makes a music track — a vocal-free background bed by default ("add music to this video"), or a full sung song (instrumental:false); it's sung music, so a spoken narration is voiceover_generate. Bundled stock media (stock_search / stock_add) is free — use it when it fits. Media the user attached is in \`media\`; pass those asset ids as generation references when they say "use this", and place project assets in the cut with add_clip when they ask for them there ("make a movie from these photos"). Generated media previews on a chat card the user can expand, drag in, or file away; add it to the timeline (add_to_timeline:true or an index) only when they asked for it in the cut. Write a rich, specific prompt from their shorthand. Video renders take a minute or two. "Generate a video of/about X" means one generate_video clip; only when they name a narrated multi-shot production (a story, episode, narrated short) does generate_scene plan it and stop at the storyboard — the user reviews the frames (regenerate_shot redraws any before approval, no credits), then call approve_scene, since it renders many paid shots (regenerate_shot / recut_scene / restyle_scene revise it after).
+- You can see and hear: audio the user attaches to their message plays right in it — answer "what does this say" from what you hear, no tool call. For project footage, watch_video samples a source's frames into timestamped contact sheets (scene changes included) — watch before cutting footage you haven't seen; listen_audio plays a source's audio — an audio asset or a video/clip's own track; detect_silence finds dead air; capture_frame shows the one rendered frame at the playhead. The watching-and-cutting skill has the flow.`;
+}
+
+export const AI_SKILL_INDEX = Object.keys(AI_SKILLS);
+
+/** The ledger an assistant turn carries when the conversation is replayed
+ * rather than resumed. A provider session keeps its own tool traffic; a
+ * replayed conversation carries text alone, so without this line a past reply
+ * reads as a plan nobody carried out — and the next message makes the model
+ * run the whole thing again on top of what it was actually asked for. Names
+ * and counts are the whole record: the editor snapshot carries the result.
+ * Empty when the turn ran nothing. */
+export function toolsRanBlock(names: string[]): string {
+  if (names.length === 0) return "";
+  const counts = new Map<string, number>();
+  for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1);
+  const list = [...counts].map(([n, c]) => (c > 1 ? `${n} ×${c}` : n)).join(", ");
+  return `\n\n<tools_ran>This reply already ran: ${list}. That work is done.</tools_ran>`;
+}
+
+/** The <attached_assets> block a user turn carries when it has attachment
+ * refs. One builder serves hosted chat, the engine chat, and the eval mirror,
+ * so the doctrine — especially the clip-scope steering — can never drift
+ * between them. Empty when there is nothing attached. */
+export function attachedAssetsBlock(refs: unknown[]): string {
+  if (refs.length === 0) return "";
+  // A ref is described here, never fetched from here: the payload rides as
+  // parts on the newest turn. Its url would be replayed as prompt text on
+  // every later turn — and for a captured frame or a dropped text file that
+  // url IS the payload, a data: URL the media budget cannot see or trim.
+  const described = refs.map((r) => {
+    const rest = { ...(r as Record<string, unknown>) };
+    delete rest.url;
+    delete rest.thumb;
+    return rest;
+  });
+  const clipHint = refs.some((r) => (r as { scope?: string }).scope === "clip")
+    ? '\nA "clip" attachment means the user is pointing at that segment of the cut: diagnose with read-only looks (watch_video, listen_audio — never subtitles_generate, which writes captions), then revise the clip in place — regenerate_shot for its sceneShot, edit tools otherwise — without deleting it.'
+    : "";
+  return `\n\n<attached_assets>\nThe user attached these assets to this message; their text may cite one by @handle or @name. Assets with scope "project" are in the open project (ids usable with the editor tools); "clip" assets are clips on the timeline — a video clip's id matches videoTrack in editor_state (a scene-run clip carries its sceneShot number there), an audio clip's (kind "audio") id matches soundtrack; "library" and "stock" assets live outside the project until imported; "file" assets came straight from the user's computer and exist only on this message. An asset with "t" carries a moment the user pinned, in seconds into it — the attached frame (or audio segment) reads from there, and that moment is what they mean by the reference; when you pass such an asset to a generation tool, forward the pin by appending it to the asset id ("<assetId>@<seconds>"):\n${JSON.stringify(described)}${clipHint}\n</attached_assets>`;
+}

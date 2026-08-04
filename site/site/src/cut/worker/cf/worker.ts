@@ -1,0 +1,140 @@
+// Cloudflare Workers shell for the Cut render worker container. Wrangler
+// deploys this Worker together with the container image (../Dockerfile). The
+// container wakes on demand: the hosted API POSTs /wake whenever it queues a
+// job (and while polling a still-queued one, so a lost wake self-heals); the
+// poller in ../main.ts exits once the queue drains, stopping the container.
+// This file is compiled by wrangler, not the site's tsconfig — workers
+// globals are typed loosely on purpose.
+import { Container, getContainer } from "@cloudflare/containers";
+import { CUT_MEDIA_HOST, CUT_WORKER_HOST } from "../../lib/hosts";
+import { serveMedia, type MediaEnv } from "./media";
+
+type WorkerEnv = MediaEnv & {
+  CUT_RENDER_WORKER: unknown;
+  DATABASE_URL: string;
+  R2_ACCOUNT_ID: string;
+  R2_ACCESS_KEY_ID: string;
+  R2_SECRET_ACCESS_KEY: string;
+  CUT_WAKE_SECRET: string;
+  CUT_COPY_EXECUTE_URL: string;
+  CUT_COPY_EXECUTE_SECRET: string;
+  CLOUDFLARE_KV_API_TOKEN: string;
+};
+
+// Minimal shapes for the queue consumer — this file stays off workers-types
+// on purpose (see the header note).
+type QueueMessage = {
+  body: unknown;
+  ack(): void;
+  retry(opts?: { delaySeconds?: number }): void;
+};
+type QueueBatch = { messages: QueueMessage[] };
+
+// How many container replicas the render pool runs. Each one takes a single
+// job at a time, so this is also the number of renders that can be in flight
+// at once. Keep it in step with max_instances in ../wrangler.jsonc; a replica
+// with nothing to claim drains out on its own (IDLE_EXIT_MS in ../main.ts),
+// so waking the whole pool costs idle poll time and nothing else.
+const REPLICAS = 4;
+
+const replicaName = (i: number) => `cut-render-${i}`;
+
+export class CutRenderWorker extends Container<WorkerEnv> {
+  // Backstop only: main.ts exits by itself when the queue drains. This stops
+  // a hung process that no longer polls (and so can't exit).
+  sleepAfter = "15m";
+
+  constructor(ctx: unknown, env: WorkerEnv) {
+    // The Container base types come from workers-types, which this file keeps
+    // out of the site program; the runtime shapes match.
+    super(ctx as never, env as never);
+    this.envVars = {
+      DATABASE_URL: env.DATABASE_URL,
+      R2_ACCOUNT_ID: env.R2_ACCOUNT_ID,
+      R2_ACCESS_KEY_ID: env.R2_ACCESS_KEY_ID,
+      R2_SECRET_ACCESS_KEY: env.R2_SECRET_ACCESS_KEY,
+      // The container records a finished HLS ladder in KV. It is not a Worker,
+      // so it has no binding and goes over the REST API like the site does.
+      CLOUDFLARE_KV_API_TOKEN: env.CLOUDFLARE_KV_API_TOKEN,
+    };
+  }
+}
+
+export default {
+  async fetch(
+    request: Request,
+    env: WorkerEnv,
+    ctx: { waitUntil(p: Promise<unknown>): void }
+  ): Promise<Response> {
+    const url = new URL(request.url);
+    // Two jobs on one Worker: media is the only public traffic it takes, and
+    // the control plane is where the hosted API wakes the container. On a
+    // zone with both custom domains claimed (wrangler.jsonc), the hostname
+    // tells them apart; on a single workers.dev URL there is only one
+    // hostname, so /wake is matched by path first and everything else falls
+    // to media — the two paths never collide.
+    const isWakeRequest = request.method === "POST" && url.pathname === "/wake";
+    const onMediaHost = url.hostname === CUT_MEDIA_HOST;
+    const onWorkerHost = url.hostname === CUT_WORKER_HOST;
+    const onKnownHost = onMediaHost || onWorkerHost;
+    if (!isWakeRequest && (onMediaHost || !onKnownHost)) {
+      return serveMedia(request, env, ctx);
+    }
+    if (isWakeRequest) {
+      // Starting the container bills CPU, so the wake is not public: callers
+      // present the shared secret the hosted API holds.
+      const auth = request.headers.get("authorization") ?? "";
+      if (!env.CUT_WAKE_SECRET || auth !== `Bearer ${env.CUT_WAKE_SECRET}`) {
+        return new Response("Unauthorized", { status: 401 });
+      }
+      // Wake the whole pool: the queue is drained by whichever replicas are up,
+      // and each claim is atomic, so starting them all is how a burst of jobs
+      // renders in parallel instead of one at a time. start() is a no-op on a
+      // replica already running and a boot on one that slept.
+      const starts = await Promise.allSettled(
+        Array.from({ length: REPLICAS }, (_, i) =>
+          getContainer(env.CUT_RENDER_WORKER as never, replicaName(i)).start()
+        )
+      );
+      const started = starts.filter((s) => s.status === "fulfilled").length;
+      // Some replicas failing still drains the queue, just slower. All of them
+      // failing means no render can ever run, which has to be loud.
+      if (started === 0) {
+        const first = starts.find((s) => s.status === "rejected");
+        const why = first?.status === "rejected" ? String(first.reason) : "unknown";
+        return new Response(`No render replica started: ${why}`, { status: 500 });
+      }
+      return Response.json({ ok: true, started });
+    }
+    return new Response("donkey-cut-worker", { status: 200 });
+  },
+
+  // Share-copy queue consumer (donkey-cut-copy, wrangler.jsonc): one message
+  // per batch, one batch at a time, so copies drain serially no matter how
+  // many viewers ask at once. The copy itself runs on the hosted API — this
+  // handler only paces it and carries the queue's retry semantics: 2xx acks,
+  // anything else redelivers after a delay.
+  async queue(batch: QueueBatch, env: WorkerEnv): Promise<void> {
+    for (const message of batch.messages) {
+      const jobId = (message.body as { jobId?: unknown } | null)?.jobId;
+      if (typeof jobId !== "string" || !jobId) {
+        message.ack();
+        continue;
+      }
+      try {
+        const res = await fetch(env.CUT_COPY_EXECUTE_URL, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${env.CUT_COPY_EXECUTE_SECRET}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ jobId }),
+        });
+        if (res.ok) message.ack();
+        else message.retry({ delaySeconds: 30 });
+      } catch {
+        message.retry({ delaySeconds: 30 });
+      }
+    }
+  },
+};
