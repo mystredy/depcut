@@ -1,0 +1,130 @@
+name: Publish Bundled Tools
+
+# Builds the prebuilt CLI tools bundle (ffmpeg, ffprobe, yt-dlp) from source and
+# publishes it as a GitHub release asset, then commits the refreshed bundled-tools.json so app packaging
+# and the dev script stage the new bundle. This is the ONE place the heavy source build runs — every other
+# build only ever downloads the result, and the app then carries it.
+#
+# Runs on demand, and automatically whenever the tools recipe changes (e.g. a new ffmpeg).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version for the tools bundle (default: today's UTC date)"
+        required: false
+  push:
+    branches: [main]
+    paths:
+      - scripts/fetch-bundled-tools.sh
+      - tools/**
+
+permissions:
+  contents: write
+  # Dispatching Release Donkey once the new manifest lands.
+  actions: write
+
+concurrency:
+  group: publish-bundled-tools
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Build and publish tools
+    # macos-26 is arm64 with the Xcode SDK the tools build against.
+    runs-on: macos-26
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Determine version
+        id: ver
+        run: |
+          v="${{ github.event.inputs.version }}"
+          if [ -z "$v" ]; then v="$(date -u +'%Y.%m.%d')"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      # Same cache key as the nightly build, so the two share a single ffmpeg/Rust build. The key busts
+      # when the recipe changes, which is
+      # also what triggers this workflow.
+      - name: Restore bundled tools cache
+        id: tools-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor/donkey-tools
+          key: donkey-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/fetch-bundled-tools.sh', 'tools/**') }}
+
+      # Import the Developer ID cert into a throwaway keychain and stage the notary API key, so the tools
+      # are production-signed + notarized. Absent the secrets this no-ops to ad-hoc signing (still runnable,
+      # but flagged not-for-distribution), so the workflow stays green before signing is configured.
+      - name: Set up Developer ID signing
+        id: signing
+        env:
+          CERT_P12: ${{ secrets.DONKEY_DEVELOPER_ID_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.DONKEY_DEVELOPER_ID_CERT_PASSWORD }}
+          SIGN_IDENTITY: ${{ secrets.DONKEY_TOOLS_SIGN_IDENTITY }}
+          NOTARY_KEY_P8: ${{ secrets.DONKEY_NOTARY_KEY_P8 }}
+        run: |
+          if [ -z "$CERT_P12" ] || [ -z "$SIGN_IDENTITY" ]; then
+            echo "::warning::No Developer ID secrets; bundled tools will be ad-hoc signed (not for public distribution)."
+            echo "identity=-" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/donkey-signing.keychain-db"
+          kpw="$(uuidgen)"
+          security create-keychain -p "$kpw" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$kpw" "$keychain"
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kpw" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | sed -e 's/"//g')
+          rm -f "$RUNNER_TEMP/cert.p12"
+          if [ -n "$NOTARY_KEY_P8" ]; then
+            echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          fi
+          echo "identity=$SIGN_IDENTITY" >> "$GITHUB_OUTPUT"
+
+      - name: Build and publish the tools bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DONKEY_TOOLS_SIGN_IDENTITY: ${{ steps.signing.outputs.identity }}
+          DONKEY_NOTARY_KEY_P8: ${{ runner.temp }}/notary.p8
+          DONKEY_NOTARY_KEY_ID: ${{ secrets.DONKEY_NOTARY_KEY_ID }}
+          DONKEY_NOTARY_ISSUER_ID: ${{ secrets.DONKEY_NOTARY_ISSUER_ID }}
+        run: ./scripts/publish-bundled-tools.sh "${{ steps.ver.outputs.version }}"
+
+      - name: Commit the refreshed manifest
+        id: manifest
+        run: |
+          manifest="apps/Donkey/Sources/DonkeyRuntime/Resources/bundled-tools.json"
+          if git diff --quiet -- "$manifest"; then
+            echo "Manifest unchanged; nothing to commit."
+            echo "committed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$manifest"
+          git commit -m "chore(tools): publish bundled tools ${{ steps.ver.outputs.version }} [skip ci]"
+          git push origin "HEAD:${{ github.event.repository.default_branch }}"
+          echo "committed=true" >> "$GITHUB_OUTPUT"
+
+      # New tools are new bytes inside the app, so they need a release. The push above
+      # cannot trigger one — a git push authored by the Actions token never starts a
+      # workflow — but a workflow_dispatch from that same token does, and it is the only
+      # release route for a tools change. Dispatch only when the manifest actually moved,
+      # so a rebuild that pins the same bundle doesn't reissue the current version.
+      - name: Release the new tools
+        if: steps.manifest.outputs.committed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          gh workflow run promote-donkey-release.yml \
+            --ref "$DEFAULT_BRANCH" \
+            --field bump=patch

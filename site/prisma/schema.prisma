@@ -1,0 +1,12 @@
+// Migrations are manual-only in this repo. Do not run Prisma migrate/db push
+// or commit generated migration files unless explicitly asked to create the
+// handwritten migration artifact.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}

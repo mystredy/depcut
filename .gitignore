@@ -1,0 +1,26 @@
+## macOS
+.DS_Store
+._*
+
+## Swift / Xcode
+.build/
+.swiftpm/
+DerivedData/
+xcuserdata/
+*.dSYM
+
+## Build artifacts
+/dist/
+/apps/Donkey/ultralytics/
+__pycache__/
+*.pyc
+
+## Bundled capability tools (large arm64 binaries; fetched by scripts/fetch-bundled-tools.sh)
+/vendor/
+
+## Local agent settings (per-machine permission mode; never shared)
+/.claude/settings.local.json
+/.claude/scheduled_tasks.lock
+
+## Project policy
+# Keep Package.resolved tracked for reproducible dependency resolution.

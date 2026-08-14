@@ -1,0 +1,76 @@
+// Cloudflare deployment for the Cut render worker: one Worker (cf/worker.ts)
+// owning one container instance built from ./Dockerfile. Deploy from site/:
+//   npm run worker:build && npx wrangler deploy -c src/cut/worker/wrangler.jsonc
+// Secrets (DATABASE_URL, R2_*) are set once with `wrangler secret put`, never
+// checked in.
+{
+  "name": "donkey-cut-worker",
+  "main": "cf/worker.ts",
+  "compatibility_date": "2026-07-01",
+  // Streams the container's stdout/stderr into Workers Logs (wrangler tail).
+  "observability": { "enabled": true },
+  "containers": [
+    {
+      "class_name": "CutRenderWorker",
+      "image": "./Dockerfile",
+      // The Dockerfile copies dist/cut-worker/main.js, so the build context is
+      // the site root (three levels up from this file).
+      "image_build_context": "../../..",
+      // Renders scale out, not up: each replica runs ONE job on the whole box
+      // (MAX_RUNNING in ../main.ts), so an export never splits cores with
+      // another render or queues behind someone else's. Keep this in step with
+      // REPLICAS in cf/worker.ts — that constant is what /wake starts.
+      "max_instances": 4,
+      // The platform maximum (4 vCPU / 12 GiB / 20 GB). ffmpeg encodes are
+      // CPU-bound and x264 scales nearly linearly across threads, and container
+      // CPU bills on active use rather than provisioned, so the wider box costs
+      // about the same per render and finishes in half the time. Cloudflare
+      // validation: >= 3 GiB memory per vCPU, disk <= 2x memory.
+      "instance_type": { "vcpu": 4, "memory_mib": 12288, "disk_mb": 20000 }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "CUT_RENDER_WORKER", "class_name": "CutRenderWorker" }]
+  },
+  // Shared media is served from the edge (cf/media.ts) with the bucket kept
+  // private: this binding is the only way in. The Cache API is inert on
+  // workers.dev, so the route has to be a real hostname on the zone.
+  "r2_buckets": [{ "binding": "CUT_MEDIA", "bucket_name": "donkey-cut" }],
+  // Both hostnames are declared here and named in ../../lib/hosts.ts, which is
+  // what cf/worker.ts matches on; change a pattern and that constant together.
+  // Wrangler creates the DNS record and certificate for each on deploy.
+  // The control host carries /wake. It is a route on the zone rather than the
+  // workers.dev address on purpose: declaring the media route made wrangler
+  // default workers_dev to false, which took workers.dev down and stranded
+  // every render until this moved off it.
+  "routes": [
+    { "pattern": "media.donkeycut.com", "custom_domain": true },
+    { "pattern": "worker.donkeycut.com", "custom_domain": true }
+  ],
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CutRenderWorker"] }],
+  // Share-copy jobs and the site's generic async jobs drain serially: one
+  // message per batch, one batch in flight, so a burst can't stampede R2 or
+  // the database. Create each queue once:
+  //   npx wrangler queues create donkey-cut-copy
+  //   npx wrangler queues create donkey-jobs
+  // The jobs consumer needs JOBS_EXECUTE_URL and JOBS_EXECUTE_SECRET set with
+  // `wrangler secret put`, mirroring the CUT_COPY_EXECUTE_* pair.
+  "queues": {
+    "consumers": [
+      {
+        "queue": "donkey-cut-copy",
+        "max_batch_size": 1,
+        "max_concurrency": 1,
+        "max_retries": 10,
+        "retry_delay": 30
+      },
+      {
+        "queue": "donkey-jobs",
+        "max_batch_size": 1,
+        "max_concurrency": 1,
+        "max_retries": 10,
+        "retry_delay": 30
+      }
+    ]
+  }
+}
