@@ -8,7 +8,6 @@ import {
   MessageSquare,
   Scissors,
   Sparkles,
-  Upload,
   Video,
   Volume2,
   Wand2,
@@ -60,7 +59,6 @@ export const CREATOR_HUB_GROUP: NavGroup = {
   children: [
     { slug: "inspiration", label: "Inspiration", icon: Compass },
     { slug: "my-projects", label: "My Submissions", icon: FolderKanban },
-    { slug: "submit-project", label: "Submit Project", icon: Upload },
   ],
 };
 

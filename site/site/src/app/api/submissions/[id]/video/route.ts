@@ -17,16 +17,22 @@ type RouteContext = { params: Promise<{ id: string }> };
 export const GET = withDonkeyAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
   const submission = await prisma.submission.findUnique({
-    select: { userId: true, videoKey: true },
+    select: { userId: true },
     where: { id },
   });
-  if (!submission?.videoKey) return notFoundResponse();
+  if (!submission) return notFoundResponse();
 
   const userId = request.donkey.userId;
   if (submission.userId !== userId && !(await isDonkeySuperUser(userId))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "Forbidden", message: "Forbidden" }, { status: 403 });
   }
 
-  const url = await presignGet(submission.videoKey);
+  const asset = await prisma.submissionAsset.findUnique({
+    select: { storageKey: true },
+    where: { submissionId_type: { submissionId: id, type: "video" } },
+  });
+  if (!asset?.storageKey) return notFoundResponse();
+
+  const url = await presignGet(asset.storageKey);
   return NextResponse.redirect(url);
 });

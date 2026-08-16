@@ -1,18 +1,38 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiFetch } from "@/queries/apiClient";
 
 export const submissionsQueryKey = ["submissions"] as const;
+export const submissionQueryKey = (id: string) => ["submissions", id] as const;
 
+export type AssetType = "video" | "thumbnail" | "verification";
+
+export type SubmissionAsset = {
+  id: string;
+  submissionId: string;
+  type: AssetType;
+  fileName: string | null;
+  storageKey: string | null;
+  status: "pending" | "uploading" | "complete" | "failed";
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// status: "draft" (freely editable) | "submitting" (Submit clicked, at
+// least one required asset still isn't "complete") | "submitted" (every
+// required asset landed) | "failed" (one didn't — retry re-uploads just
+// that asset, no new submission). Once review picks it up, the existing
+// admin flow can further advance status to "Approved" | "Rejected".
 export type Submission = {
   id: string;
   userId: string;
   subSource: string | null;
   subType: string;
   extension: string;
-  title: string;
+  title: string | null;
   categoryId: string | null;
   category: { name: string; emoji: string } | null;
   status: string | null;
@@ -24,10 +44,6 @@ export type Submission = {
   taskId: string | null;
   spaceid: string | null;
   voiceScript: string | null;
-  videofile: string | null;
-  thumbnailFile: string | null;
-  hasThumbnail: boolean;
-  hasVideo: boolean;
   duration: number | null;
   publishingid: string | null;
   editCode: string | null;
@@ -35,6 +51,9 @@ export type Submission = {
   watermarkText: string | null;
   burnInCaptions: boolean;
   generatedMetadata: boolean;
+  packageTitle: string | null;
+  packageDescription: string | null;
+  packageTags: string | null;
   maxRates: number | null;
   earnedRates: number | null;
   additionalReward: number | null;
@@ -47,38 +66,15 @@ export type Submission = {
   reviewedByName: string | null;
   reviewStartedAt: string | null;
   reviewCompletedAt: string | null;
-  submittedAt: string;
+  createdAt: string;
+  submitRequestedAt: string | null;
+  submittedAt: string | null;
   updatedAt: string;
+  assets: SubmissionAsset[];
 };
 
-export type CreateSubmissionInput = {
-  title: string;
-  categoryId: string;
-  subSource: "InspiredExternal" | "TaskExternal";
-  inspireUrl?: string;
-  voiceScript: string;
-  spaceid: string;
-  videofile?: string;
-  thumbnailFile?: string;
-  // R2 keys, already uploaded — see the draft upload hooks below. Uploads
-  // start the instant a file is picked, well before this call fires.
-  thumbnailKey?: string;
-  videoKey?: string;
-  extension: "standard" | "pro";
-  editCode?: string;
-  watermarkEnabled: boolean;
-  watermarkText?: string;
-  burnInCaptions: boolean;
-  generatedMetadata: boolean;
-  // Pro Verification Suite only — becomes the linked Upload's publishing package.
-  packageTitle?: string;
-  description?: string;
-  tags?: string;
-  mediaFile?: string;
-  verificationKey?: string;
-};
-
-// The signed-in user's own submissions — feeds My Submissions.
+// The signed-in user's own submissions, every status — feeds My Submissions'
+// Draft/In Progress/Action Required/Submitted tabs.
 export function useSubmissions() {
   return useQuery({
     queryFn: () => apiFetch<{ submissions: Submission[] }>("/api/submissions"),
@@ -86,13 +82,88 @@ export function useSubmissions() {
   });
 }
 
-export function useCreateSubmission() {
+// One submission, for the Submit Project editor. Polls while "submitting" so
+// the page picks up promotion to "submitted" (or a drop to "failed") on its
+// own, without the creator needing to do anything once they've hit Submit.
+export function useSubmission(id: string | null) {
+  return useQuery({
+    enabled: Boolean(id),
+    queryFn: () => apiFetch<{ submission: Submission }>(`/api/submissions/${id}`),
+    queryKey: submissionQueryKey(id ?? ""),
+    refetchInterval: (query) => (query.state.data?.submission.status === "submitting" ? 3000 : false),
+  });
+}
+
+// "New Submit" calls this — no fields required, the row exists the instant
+// this resolves and the page navigates to it.
+export function useCreateDraftSubmission() {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateSubmissionInput) =>
-      apiFetch<{ submission: Submission }>("/api/submissions", {
+    mutationFn: () => apiFetch<{ submission: Submission }>("/api/submissions", { method: "POST" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: submissionsQueryKey });
+    },
+  });
+}
+
+export type AutosaveSubmissionInput = Partial<{
+  title: string;
+  categoryId: string;
+  subSource: "InspiredExternal" | "TaskExternal";
+  inspireUrl: string;
+  voiceScript: string;
+  spaceid: string;
+  extension: "standard" | "pro";
+  editCode: string;
+  watermarkEnabled: boolean;
+  watermarkText: string;
+  burnInCaptions: boolean;
+  generatedMetadata: boolean;
+  packageTitle: string;
+  packageDescription: string;
+  packageTags: string;
+}>;
+
+// Every Submit Project field edit lands here, debounced client-side. Only
+// works while the draft is still "draft" — the server rejects it otherwise.
+export function useAutosaveSubmission(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AutosaveSubmissionInput) =>
+      apiFetch<{ submission: Submission }>(`/api/submissions/${id}`, {
         body: JSON.stringify(input),
-        method: "POST",
+        method: "PATCH",
       }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(submissionQueryKey(id), data);
+    },
+  });
+}
+
+// Doesn't wait on uploads — locks the row and moves it to "submitting" (or
+// straight to "submitted" if every asset had already finished). The server
+// validates required fields/assets are at least picked; see
+// /api/submissions/[id]/submit for the exact list.
+export function useSubmitSubmission(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<{ submission: Submission }>(`/api/submissions/${id}/submit`, { method: "POST" }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(submissionQueryKey(id), data);
+      void queryClient.invalidateQueries({ queryKey: submissionsQueryKey });
+    },
+  });
+}
+
+// Only a draft or failed submission can be deleted — see
+// /api/submissions/[id] DELETE.
+export function useDeleteSubmission() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<{ ok: boolean }>(`/api/submissions/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: submissionsQueryKey });
+    },
   });
 }
 
@@ -113,73 +184,49 @@ function uploadWithProgress(url: string, blob: Blob, onProgress?: (fraction: num
   });
 }
 
-// Uploads start the moment a file is picked, before any Submission row
-// exists — so these are keyed by a client-generated draftId (crypto.randomUUID())
-// rather than a submission id. Each hook resolves to the R2 key once the
-// bytes land; that key rides along in the final createSubmission call
-// instead of a separate "complete" round-trip. A draft that's never
-// submitted is swept later (see /api/admin/marketplace/sweep-drafts).
-export function useUploadSubmissionThumbnail() {
+// One hook for all three asset types — the submission row already exists by
+// the time this is ever called, so every upload is scoped to its real id
+// from the start (no client-generated draft id). Uploads start the instant
+// a file is picked; Submit doesn't wait for this to resolve. On failure,
+// tells the server so a submission that already asked to submit gets
+// flipped to "failed" rather than hanging.
+export function useUploadSubmissionAsset(submissionId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
-      draftId,
-      blob,
-      onProgress,
-    }: {
-      draftId: string;
-      blob: Blob;
-      onProgress?: (fraction: number) => void;
-    }) => {
-      const { key, url } = await apiFetch<{ key: string; url: string }>(
-        `/api/submissions/drafts/${draftId}/thumbnail/presign`,
-        { body: JSON.stringify({ mime: blob.type }), method: "POST" }
-      );
-      await uploadWithProgress(url, blob, onProgress);
-      return { key };
-    },
-  });
-}
-
-export function useUploadSubmissionVideo() {
-  return useMutation({
-    mutationFn: async ({
-      draftId,
+      type,
       file,
       onProgress,
     }: {
-      draftId: string;
-      file: File;
+      type: AssetType;
+      file: File | Blob;
       onProgress?: (fraction: number) => void;
     }) => {
-      const { key, url } = await apiFetch<{ key: string; url: string }>(
-        `/api/submissions/drafts/${draftId}/video/presign`,
-        { body: JSON.stringify({ fileName: file.name, mime: file.type }), method: "POST" }
+      const fileName = file instanceof File ? file.name : undefined;
+      const mime = file.type || "application/octet-stream";
+      const { url } = await apiFetch<{ key: string; url: string }>(
+        `/api/submissions/${submissionId}/assets/${type}/presign`,
+        { body: JSON.stringify({ fileName, mime }), method: "POST" }
       );
-      await uploadWithProgress(url, file, onProgress);
-      return { key };
-    },
-  });
-}
 
-// Pro submissions only — the verification export attaches to the linked
-// Upload row once the submission is created, not before.
-export function useUploadSubmissionVerification() {
-  return useMutation({
-    mutationFn: async ({
-      draftId,
-      file,
-      onProgress,
-    }: {
-      draftId: string;
-      file: File;
-      onProgress?: (fraction: number) => void;
-    }) => {
-      const { key, url } = await apiFetch<{ key: string; url: string }>(
-        `/api/submissions/drafts/${draftId}/verification/presign`,
-        { body: JSON.stringify({ fileName: file.name, mime: file.type }), method: "POST" }
-      );
-      await uploadWithProgress(url, file, onProgress);
-      return { key };
+      try {
+        await uploadWithProgress(url, file, onProgress);
+      } catch (error) {
+        await apiFetch(`/api/submissions/${submissionId}/assets/${type}/fail`, {
+          body: JSON.stringify({
+            error: error instanceof Error ? error.message : "Upload failed",
+          }),
+          method: "POST",
+        }).catch(() => {});
+        throw error;
+      }
+
+      await apiFetch<{ ok: boolean }>(`/api/submissions/${submissionId}/assets/${type}/complete`, {
+        method: "POST",
+      });
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: submissionQueryKey(submissionId) });
     },
   });
 }

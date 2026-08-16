@@ -95,3 +95,20 @@ model SocialAppConfig {
 
   @@map("social_app_config")
 }
+
+// Singleton row (id is always "singleton"): which admin events push a
+// message to the Telegram bot's destinations. The destinations themselves
+// (admin, group, channel) live on SocialAppConfig instead (platform
+// "telegram", adminId/groupId/channelId) alongside the bot's other identity
+// fields — this row is just the event toggles. Read by notifyTelegram
+// (src/lib/telegram/notify.ts), which every trigger point calls
+// best-effort — a notification failure never blocks the real action.
+model TelegramNotificationSettings {
+  id                   String   @id @default("singleton")
+  notifySubmissions    Boolean  @default(false)
+  notifyWithdrawals    Boolean  @default(false)
+  notifySupportTickets Boolean  @default(false)
+  updatedAt            DateTime @updatedAt
+
+  @@map("telegram_notification_settings")
+}

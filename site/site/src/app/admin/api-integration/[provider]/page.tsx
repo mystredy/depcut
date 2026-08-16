@@ -1,7 +1,7 @@
 "use client";
 
 import { use, useState } from "react";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, EyeOff, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +65,9 @@ function ProviderForm({ label, row }: { label: string; row: AdminApiIntegration 
   const [baseUrl, setBaseUrl] = useState(row.baseUrl ?? "");
   const [visible, setVisible] = useState(false);
   const [revealing, setRevealing] = useState(false);
+  // Baseline for what "reveal" fetched, so viewing the key isn't itself
+  // counted as an edit — only diverging from it after is.
+  const [revealedValue, setRevealedValue] = useState<string | null>(null);
 
   const toggleReveal = () => {
     if (visible) {
@@ -80,10 +83,15 @@ function ProviderForm({ label, row }: { label: string; row: AdminApiIntegration 
       onSettled: () => setRevealing(false),
       onSuccess: (data) => {
         setApiKeyValue(data.value ?? "");
+        setRevealedValue(data.value ?? "");
         setVisible(true);
       },
     });
   };
+
+  const apiKeyChanged =
+    apiKeyValue !== undefined && apiKeyValue.trim() !== "" && apiKeyValue !== revealedValue;
+  const hasChanges = apiKeyChanged || baseUrl !== (row.baseUrl ?? "");
 
   const save = () => {
     update.mutate(
@@ -104,6 +112,21 @@ function ProviderForm({ label, row }: { label: string; row: AdminApiIntegration 
           <p className="mt-0.5 text-xs text-muted-foreground">
             {row.hasApiKey ? "API key is set" : "No API key saved yet"}
           </p>
+          {row.envConfigured ? (
+            <p className="mt-1 flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="size-3.5 shrink-0" />
+              {row.wired
+                ? "Live: a key is set on the server — that's what's actually used, not this form."
+                : `A key is set on the server, but no integration calls ${label} yet.`}
+            </p>
+          ) : (
+            <p className="mt-1 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="size-3.5 shrink-0" />
+              {row.wired
+                ? `Not set on the server yet — add a key to this server's environment to enable ${label}.`
+                : `Not set. ${label} isn't called by any integration yet either.`}
+            </p>
+          )}
         </div>
         <span
           className={
@@ -127,9 +150,9 @@ function ProviderForm({ label, row }: { label: string; row: AdminApiIntegration 
               value={apiKeyValue ?? ""}
               onChange={(e) => setApiKeyValue(e.target.value)}
               placeholder={row.hasApiKey ? "•••••••••••••••• (leave blank to keep)" : "sk-…"}
-              className={row.hasApiKey ? "pr-9" : undefined}
+              className={row.hasApiKey || apiKeyValue !== undefined ? "pr-9" : undefined}
             />
-            {row.hasApiKey && (
+            {(row.hasApiKey || apiKeyValue !== undefined) && (
               <button
                 type="button"
                 onClick={toggleReveal}
@@ -181,9 +204,9 @@ function ProviderForm({ label, row }: { label: string; row: AdminApiIntegration 
         />
       </div>
 
-      <Button disabled={update.isPending} onClick={save}>
+      <Button disabled={update.isPending || !hasChanges} onClick={save}>
         {update.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
-        Save and Deploy Configuration
+        Save Configuration
       </Button>
     </div>
   );

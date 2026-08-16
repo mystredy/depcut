@@ -1,0 +1,26 @@
+// The Telegram bot's real, running behavior — distinct from
+// SocialAppConfig's credentials (how to authenticate) and
+// TelegramNotificationSettings (outbound admin alerts). The webhook at
+// /api/telegram/webhook matches an incoming message's first word against
+// `trigger` and replies with `replyText`.
+model TelegramCommand {
+  id        String   @id @default(cuid())
+  trigger   String   @unique
+  replyText String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("telegram_command")
+}
+
+// One row per distinct Telegram chat that has ever messaged the bot —
+// recorded by the webhook on every update. The only real source for a
+// "how many users" count; nothing here is estimated or seeded.
+model TelegramBotUser {
+  chatId    String   @id
+  firstSeen DateTime @default(now())
+  lastSeen  DateTime @updatedAt
+
+  @@map("telegram_bot_user")
+}

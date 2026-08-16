@@ -15,7 +15,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -26,13 +25,12 @@ import {
 } from "@/components/ui/table";
 import { formatUsd } from "@/lib/credits/format-usd";
 import { creditTopUpPresetsDollars, maxCreditGrantDollars } from "@/lib/credits/top-up";
-import { type AdminUser, useAdminUsers, useSetSuperUser } from "@/queries/admin";
+import { type AdminUser, useAdminUsers } from "@/queries/admin";
 import { useGrantCredits } from "@/queries/credits";
 
 export default function AdminUsersPage() {
   const [query, setQuery] = useState("");
   const users = useAdminUsers(query);
-  const setSuperUser = useSetSuperUser();
   const [grantTarget, setGrantTarget] = useState<AdminUser | null>(null);
 
   return (
@@ -71,7 +69,6 @@ export default function AdminUsersPage() {
                 <TableHead>Balance</TableHead>
                 <TableHead>Lifetime granted</TableHead>
                 <TableHead>Lifetime charged</TableHead>
-                <TableHead>Super user</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -91,16 +88,6 @@ export default function AdminUsersPage() {
                   <TableCell className="font-mono text-sm text-muted-foreground">
                     {formatUsd(u.lifetimeCharged)}
                   </TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={u.superUser}
-                      disabled={setSuperUser.isPending}
-                      onCheckedChange={(v) =>
-                        setSuperUser.mutate({ superUser: v, userId: u.id })
-                      }
-                      aria-label={`Toggle super user for ${u.email}`}
-                    />
-                  </TableCell>
                   <TableCell className="text-right">
                     <Button size="sm" variant="outline" onClick={() => setGrantTarget(u)}>
                       Grant credits
@@ -110,7 +97,7 @@ export default function AdminUsersPage() {
               ))}
               {users.data?.users.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
                     No users match &quot;{query}&quot;.
                   </TableCell>
                 </TableRow>

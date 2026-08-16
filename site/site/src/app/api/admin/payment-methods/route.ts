@@ -30,6 +30,7 @@ export const GET = withDonkeyAuth(async (request) => {
   return NextResponse.json({
     paymentMethods: rows.map((r) => ({
       enabled: r.enabled,
+      hasPayoutKey: Boolean(r.payoutKey),
       hasPublicKey: Boolean(r.publicKey),
       hasSecretKey: Boolean(r.secretKey),
       hasWebhookSecret: Boolean(r.webhookSecret),

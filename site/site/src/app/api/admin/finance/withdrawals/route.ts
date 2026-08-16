@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
 import { prisma } from "@/lib/prisma";
+import { notifyTelegram } from "@/lib/telegram/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +93,7 @@ export const POST = withDonkeyAuth(async (request) => {
         processingFee,
         userId,
       },
+      include: { user: { select: { displayName: true, email: true, name: true } } },
     }),
     prisma.creatorRateAccount.update({
       data: { available: account.available - amountRequested },
@@ -99,5 +101,12 @@ export const POST = withDonkeyAuth(async (request) => {
     }),
   ]);
 
-  return NextResponse.json({ withdrawal });
+  const { user, ...withdrawalFields } = withdrawal;
+  const requesterName = user.displayName || user.name || user.email;
+  await notifyTelegram(
+    "withdrawal",
+    `💸 Withdrawal requested: ${amountRequested} Rates by ${requesterName} via ${method}`,
+  );
+
+  return NextResponse.json({ withdrawal: { ...withdrawalFields, userName: requesterName } });
 });

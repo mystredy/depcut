@@ -3,15 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronRight, X } from "lucide-react";
+import { ChevronRight, Shield, X } from "lucide-react";
 import { ALL_GROUPS, CREATOR_HUB_GROUP, GROUPS, LINKS, type NavGroup } from "@/cut/lib/navData";
 import { homeHref, useCutBase } from "@/cut/lib/nav";
 import { useMobileSidebar } from "@/cut/lib/mobileSidebar";
+import { useAccount } from "@/queries/credits";
 import { cn } from "@/lib/utils";
 
 export function AppSidebar() {
   const pathname = usePathname();
   const base = useCutBase();
+  const account = useAccount();
   const { isMobile, open: mobileOpen, setOpen: setMobileOpen } = useMobileSidebar();
   const [collapsed, setCollapsed] = useState(false);
   // Mobile is show/hide, not shrink/expand — the icon rail only makes sense
@@ -111,7 +113,7 @@ export function AppSidebar() {
             >
               <img
                 src="/deepw-logo.svg"
-                alt="Donkey Cut"
+                alt="Deewp Cut"
                 className="size-9 object-contain transition-opacity group-hover:opacity-0"
               />
               <ChevronRight className="absolute inset-0 m-auto size-4 text-sidebar-foreground opacity-0 transition-opacity group-hover:opacity-100" />
@@ -154,6 +156,15 @@ export function AppSidebar() {
                 <CREATOR_HUB_GROUP.icon className="size-4" />
               </button>
             </div>
+            {account.data?.superUser && (
+              <Link
+                href="/admin"
+                title="Admin"
+                className="grid size-10 shrink-0 place-items-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              >
+                <Shield className="size-4" />
+              </Link>
+            )}
           </div>
         ) : (
           <div className="flex h-full w-60 flex-col px-3 py-4">
@@ -162,13 +173,13 @@ export function AppSidebar() {
                 <span className="grid size-9 shrink-0 place-items-center">
                   <img
                     src="/deepw-logo.svg"
-                    alt="Donkey Cut"
+                    alt="Deewp Cut"
                     width={36}
                     height={36}
                     className="block h-full w-full object-contain"
                   />
                 </span>
-                <span className="text-[17px] font-semibold tracking-tight">Donkey Cut</span>
+                <span className="text-[17px] font-semibold tracking-tight">Deewp Cut</span>
               </div>
               {isMobile ? (
                 <button
@@ -215,6 +226,18 @@ export function AppSidebar() {
               {GROUPS.map(renderGroup)}
             </nav>
             <div className="mt-4 border-t border-sidebar-border pt-4">{renderGroup(CREATOR_HUB_GROUP)}</div>
+            {account.data?.superUser && (
+              <div className="mt-4 border-t border-sidebar-border pt-4">
+                <Link
+                  href="/admin"
+                  onClick={closeOnMobile}
+                  className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                >
+                  <Shield className="size-4" />
+                  Admin
+                </Link>
+              </div>
+            )}
           </div>
         )}
       </aside>

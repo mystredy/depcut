@@ -5,8 +5,12 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-// Super-user only. Creator submissions (subType "CSVID") awaiting or already
-// past review, newest first.
+// Super-user only. Creator submissions (subType "CSVID") that actually
+// reached review — excludes drafts still being worked on, "submitting"
+// (uploads still landing), and "failed" attempts the creator hasn't
+// resubmitted, none of which are admin's business yet. "submitted" and
+// whatever the review action below advances it to ("Approved"/"Rejected")
+// both show, newest first.
 export const GET = withDonkeyAuth(async (request) => {
   if (!(await isDonkeySuperUser(request.donkey.userId))) {
     return NextResponse.json(
@@ -17,24 +21,25 @@ export const GET = withDonkeyAuth(async (request) => {
 
   const rows = await prisma.submission.findMany({
     include: {
+      assets: true,
       category: { select: { emoji: true, name: true } },
       task: { select: { id: true, title: true } },
       user: { select: { displayName: true, email: true, name: true } },
     },
-    orderBy: { submittedAt: "desc" },
-    where: { subType: "CSVID" },
+    orderBy: { createdAt: "desc" },
+    where: { status: { notIn: ["draft", "submitting", "failed"] }, subType: "CSVID" },
   });
 
-  const submissions = rows.map(({ thumbnailKey, videoKey, ...row }) => ({
+  const submissions = rows.map((row) => ({
     ...row,
-    submittedAt: row.submittedAt.toISOString(),
+    createdAt: row.createdAt.toISOString(),
+    hasThumbnail: row.assets.some((a) => a.type === "thumbnail" && a.status === "complete"),
+    hasVideo: row.assets.some((a) => a.type === "video" && a.status === "complete"),
     reviewedAt: row.reviewedAt?.toISOString() ?? null,
     reviewStartedAt: row.reviewStartedAt?.toISOString() ?? null,
     reviewCompletedAt: row.reviewCompletedAt?.toISOString() ?? null,
+    submittedAt: row.submittedAt?.toISOString() ?? null,
     updatedAt: row.updatedAt.toISOString(),
-    task: row.task,
-    hasThumbnail: Boolean(thumbnailKey),
-    hasVideo: Boolean(videoKey),
     submitterEmail: row.user.email,
     submitterName: row.user.displayName ?? row.user.name,
     user: undefined,

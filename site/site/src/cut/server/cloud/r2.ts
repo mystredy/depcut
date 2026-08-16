@@ -77,20 +77,20 @@ export const inferenceBlobKey = (userId: string, sha256: string, ext: string) =>
   `${INFERENCE_PREFIX}${userId}/${sha256}.${ext}`;
 
 /** The creator marketplace's Submit Project uploads — outside the Cut engine's
- * own project media, so its own top-level prefix. Uploads start the moment a
- * file is picked, before the Submission row exists, so they're keyed by a
- * client-generated draftId rather than a submissionId. The key a draft
- * upload lands at is also its permanent home once the submission is
- * created — Submission.thumbnailKey/videoKey and Upload.mediaKey just point
- * at it directly, nothing gets copied. A draft that's never submitted is an
- * orphan; sweepOrphanDrafts (below) is what reclaims it. */
+ * own project media, so its own top-level prefix. "New Submit" creates the
+ * Submission row before anything is picked, so every asset is keyed by that
+ * real id from the start — no client-generated draft id, no orphan sweep by
+ * R2 listing. An abandoned draft is just a `status: "draft"` row; cleaning
+ * one up is a normal delete (row + whatever these keys point at), not a
+ * prefix-scan reconciliation. See prisma/Marketplace.prisma's
+ * SubmissionAsset for the row each of these keys is attached to. */
 export const MARKETPLACE_PREFIX = "marketplace/";
-export const draftThumbnailKey = (userId: string, draftId: string) =>
-  `${MARKETPLACE_PREFIX}${userId}/drafts/${draftId}/thumbnail.webp`;
-export const draftVideoKey = (userId: string, draftId: string, fileName: string) =>
-  `${MARKETPLACE_PREFIX}${userId}/drafts/${draftId}/video/${fileName}`;
-export const draftVerificationKey = (userId: string, draftId: string, fileName: string) =>
-  `${MARKETPLACE_PREFIX}${userId}/drafts/${draftId}/verification/${fileName}`;
+export const submissionThumbnailKey = (userId: string, submissionId: string) =>
+  `${MARKETPLACE_PREFIX}${userId}/submissions/${submissionId}/thumbnail.webp`;
+export const submissionVideoKey = (userId: string, submissionId: string, fileName: string) =>
+  `${MARKETPLACE_PREFIX}${userId}/submissions/${submissionId}/video/${fileName}`;
+export const submissionVerificationKey = (userId: string, submissionId: string, fileName: string) =>
+  `${MARKETPLACE_PREFIX}${userId}/submissions/${submissionId}/verification/${fileName}`;
 
 export function presignPut(key: string, mime: string): Promise<string> {
   return getSignedUrl(

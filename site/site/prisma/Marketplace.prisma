@@ -65,21 +65,36 @@ model Task {
 // "pro". subSource: "InspiredExternal" | "TaskExternal" — every submission
 // through this flow comes from an external editing tool, so it's always the
 // External variant, chosen by which mode (Inspire vs Task) the creator
-// submitted under. reviewStatus: "Pending" | "InReview" | "Qualified" |
-// "Disqualified". points: engagement/reputation/XP points, a separate
-// currency from Rates. amount: direct USD value credited to pending balance
-// on submit, moved to available on approval. reward: a bonus/incentive
-// metric layered on top of amount for campaign-specific payout tiers.
+// submitted under.
+//
+// status tracks the upload lifecycle, separately from reviewStatus (the
+// admin review lifecycle below, which only starts once status reaches
+// "submitted"): "draft" (created the instant "New Submit" is clicked, freely
+// editable, nothing locked) | "submitting" (the creator asked to submit —
+// submitRequestedAt records when — but at least one required asset in
+// `assets` hasn't reached "complete" yet) | "submitted" (every required
+// asset confirmed in R2; the only status admin's queue ever sees) | "failed"
+// (a required asset never completed; the creator can retry that asset,
+// which re-attempts promotion straight to "submitted" without a second
+// Submit click, since submitRequestedAt is still set). See
+// tryPromoteSubmission in /api/submissions for the promotion logic.
+//
+// reviewStatus: "Pending" | "InReview" | "Qualified" | "Disqualified".
+// points: engagement/reputation/XP points, a separate currency from Rates.
+// amount: direct USD value credited to pending balance on submit, moved to
+// available on approval. reward: a bonus/incentive metric layered on top of
+// amount for campaign-specific payout tiers.
 model Submission {
-  id                String    @id @default(cuid())
+  id                String            @id @default(cuid())
   userId            String
-  user              User      @relation("UserSubmissions", fields: [userId], references: [id], onDelete: Cascade)
+  user              User              @relation("UserSubmissions", fields: [userId], references: [id], onDelete: Cascade)
   subSource         String?
-  subType           String    @default("CSVID")
-  extension         String    @default("standard")
-  title             String
+  subType           String            @default("CSVID")
+  extension         String            @default("standard")
+  // Nullable: a fresh draft starts with nothing filled in.
+  title             String?
   categoryId        String?
-  category          Category? @relation(fields: [categoryId], references: [id])
+  category          Category?         @relation(fields: [categoryId], references: [id])
   status            String?
   statusRemark      String?
   points            Int?
@@ -87,28 +102,23 @@ model Submission {
   reward            Float?
   inspireUrl        String?
   taskId            String?
-  task              Task?     @relation(fields: [taskId], references: [id])
+  task              Task?             @relation(fields: [taskId], references: [id])
   spaceid           String?
   voiceScript       String?
-  // Original picked filename — kept as a label even once the real object
-  // (videoKey below) exists.
-  videofile         String?
-  // R2 object key for the real uploaded video — see
-  // src/cut/server/cloud/r2.ts's submissionVideoKey and
-  // /api/submissions/[id]/video/{presign,complete}. Null until that upload
-  // finishes.
-  videoKey          String?
-  thumbnailFile     String?
-  // R2 object key for the real uploaded thumbnail — see submissionThumbnailKey
-  // and /api/submissions/[id]/thumbnail/{presign,complete}.
-  thumbnailKey      String?
   duration          Int?
   publishingid      String?
   editCode          String?
-  watermarkEnabled  Boolean   @default(false)
+  watermarkEnabled  Boolean           @default(false)
   watermarkText     String?
-  burnInCaptions    Boolean   @default(false)
-  generatedMetadata Boolean   @default(false)
+  burnInCaptions    Boolean           @default(false)
+  generatedMetadata Boolean           @default(false)
+  // Pro Verification Suite scratch fields — the creator edits these while
+  // drafting; at promotion to "submitted" they're copied onto the real
+  // publishing-package Upload row (see tryPromoteSubmission), which is what
+  // admin/uploads and the publish pipeline actually read.
+  packageTitle       String?
+  packageDescription String?
+  packageTags        String?
   maxRates          Int?
   earnedRates       Int?
   reviewScore       Int?
@@ -116,22 +126,62 @@ model Submission {
   publisherWorkdone Int?
   creatorWorkdone   Int?
   reviewedById      String?
-  reviewedByUser    User?     @relation("ReviewedSubmissions", fields: [reviewedById], references: [id])
+  reviewedByUser    User?             @relation("ReviewedSubmissions", fields: [reviewedById], references: [id])
   reviewedAt        DateTime?
   reviewRemark      String?
   reviewStatus      String?
   reviewedByName    String?
   reviewStartedAt   DateTime?
   reviewCompletedAt DateTime?
-  submittedAt       DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt         DateTime          @default(now())
+  // The creator clicked Submit — set once, never cleared, even across a
+  // failed → retried → submitted cycle. Distinguishes an abandoned draft
+  // from one the creator actually tried to send.
+  submitRequestedAt DateTime?
+  // Set only once every required asset lands — i.e. on promotion to
+  // "submitted", not at creation.
+  submittedAt       DateTime?
+  updatedAt         DateTime          @updatedAt
   uploads           Upload[]
+  assets            SubmissionAsset[]
 
-  @@index([userId, submittedAt])
+  @@index([userId, createdAt])
   @@index([taskId])
   @@index([categoryId])
   @@index([reviewStatus])
+  @@index([status])
   @@map("submission")
+}
+
+// One row per uploaded asset on a submission — video, thumbnail, or the Pro
+// verification export. type: "video" | "thumbnail" | "verification".
+// status: "pending" (row exists, presigned, nothing uploaded yet) |
+// "uploading" | "complete" (head()-verified in R2) | "failed". Decoupled
+// from Submission.status on purpose: an asset can still be "uploading" while
+// the submission itself has already moved to "submitting" — that's the
+// whole point of letting Submit fire before uploads finish. Re-picking a
+// file upserts the same row by (submissionId, type) rather than creating a
+// second one.
+model SubmissionAsset {
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  type         String
+  // Original picked filename, kept as a label.
+  fileName     String?
+  // R2 object key — see src/cut/server/cloud/r2.ts's submissionVideoKey /
+  // submissionThumbnailKey / submissionVerificationKey. Set as soon as a PUT
+  // is presigned; status is what tracks whether the bytes actually arrived.
+  storageKey   String?
+  status       String     @default("pending")
+  error        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([submissionId, type])
+  @@index([submissionId])
+  @@index([status])
+  @@map("submission_asset")
 }
 
 // The Pro Verification Suite's publishing package for a submission: the
@@ -219,7 +269,15 @@ model PaymentMethod {
   provider      String   @unique
   enabled       Boolean  @default(false)
   publicKey     String?
+  // The provider's pay-in credential (receiving payments). For Cryptomus
+  // specifically this is the Payment API Key, distinct from payoutKey below
+  // — see PAYMENT_METHOD_ENV_VARS in payment-methods-seed.ts for which env
+  // var each field mirrors, per provider.
   secretKey     String?
+  // The provider's pay-out credential (sending payouts to creators), where
+  // the provider issues a separate key for that — Cryptomus does; null for
+  // providers that use the same key for both.
+  payoutKey     String?
   merchantId    String?
   webhookSecret String?
   notes         String?

@@ -8,9 +8,20 @@ import {
   Info,
   Layers,
   Play,
+  Plus,
   Search,
 } from "lucide-react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -42,22 +53,56 @@ import { backendFor, type Residency } from "@/cut/lib/queries";
 import type { ProjectSummary } from "@/cut/lib/types";
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
-import { type Submission, useSubmissions } from "@/queries/submissions";
+import {
+  type Submission,
+  useCreateDraftSubmission,
+  useDeleteSubmission,
+  useSubmissions,
+} from "@/queries/submissions";
 
 type SortTab = "Latest" | "Oldest";
-type StatusFilter = "All" | "Qualified" | "Pending" | "In Review";
+// Draft/Submitting/Action Required track Submission.status (the upload
+// lifecycle); Submitted covers everything that made it past that point —
+// its own review outcome (Pending/InReview/Qualified/Disqualified) still
+// shows per-row via the status badge.
+type StatusFilter = "All" | "Draft" | "Submitting" | "Action Required" | "Submitted";
+
+function inLifecycleBucket(item: Submission, filter: StatusFilter): boolean {
+  if (filter === "All") return true;
+  if (filter === "Draft") return item.status === "draft";
+  if (filter === "Submitting") return item.status === "submitting";
+  if (filter === "Action Required") return item.status === "failed";
+  return item.status === "submitted" || item.status === "Approved" || item.status === "Rejected";
+}
+
+function hasCompleteAsset(item: Submission, type: "video" | "thumbnail"): boolean {
+  return item.assets.some((a) => a.type === type && a.status === "complete");
+}
 
 export default function MyProjectsPage() {
   const router = useRouter();
   const base = useCutBase();
   const submissionsQuery = useSubmissions();
   const submissions = useMemo(() => submissionsQuery.data?.submissions ?? [], [submissionsQuery.data]);
+  const createDraft = useCreateDraftSubmission();
+  const deleteSubmission = useDeleteSubmission();
 
   const [selectedTab, setSelectedTab] = useState<SortTab>("Latest");
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilter, setShowFilter] = useState(false);
   const [infoItem, setInfoItem] = useState<Submission | null>(null);
+  const [playItem, setPlayItem] = useState<Submission | null>(null);
+  const [deleteItem, setDeleteItem] = useState<Submission | null>(null);
+
+  const goToSubmission = (id: string) => router.push(`${base}/creator-hub/submit-project/${id}`);
+  const confirmDelete = () => {
+    if (!deleteItem) return;
+    deleteSubmission.mutate(deleteItem.id, { onSuccess: () => setDeleteItem(null) });
+  };
+  const startNewSubmission = () => {
+    createDraft.mutate(undefined, { onSuccess: (data) => goToSubmission(data.submission.id) });
+  };
 
   // Same creation path as the Cut editor's own Projects page (ProjectsHome):
   // create the project on the picked residency's backend, seed its doc cache
@@ -81,23 +126,14 @@ export default function MyProjectsPage() {
       const q = searchQuery.toLowerCase();
       const matchesSearch =
         !q ||
-        item.title.toLowerCase().includes(q) ||
+        (item.title ?? "").toLowerCase().includes(q) ||
         (item.reviewRemark ?? "").toLowerCase().includes(q) ||
         (item.voiceScript ?? "").toLowerCase().includes(q);
 
-      let matchesStatus = true;
-      if (selectedStatus === "Qualified") {
-        matchesStatus = item.reviewStatus === "Qualified";
-      } else if (selectedStatus === "Pending") {
-        matchesStatus = item.reviewStatus === "Pending" || !item.reviewStatus;
-      } else if (selectedStatus === "In Review") {
-        matchesStatus = item.reviewStatus === "InReview";
-      }
-
-      return matchesSearch && matchesStatus;
+      return matchesSearch && inLifecycleBucket(item, selectedStatus);
     }).sort((a, b) => {
-      const aTime = new Date(a.submittedAt).getTime();
-      const bTime = new Date(b.submittedAt).getTime();
+      const aTime = new Date(a.createdAt).getTime();
+      const bTime = new Date(b.createdAt).getTime();
       return selectedTab === "Latest" ? bTime - aTime : aTime - bTime;
     });
   }, [submissions, searchQuery, selectedStatus, selectedTab]);
@@ -111,11 +147,19 @@ export default function MyProjectsPage() {
             Every project you've submitted for review.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <NewProjectButton onCreate={(r) => void createProject(r)} />
-          <Button onClick={() => router.push(`${base}/creator-hub/submit-project`)}>
-            Submit New
-          </Button>
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex items-center gap-2">
+            <NewProjectButton onCreate={(r) => void createProject(r)} />
+            <Button onClick={startNewSubmission} disabled={createDraft.isPending}>
+              <Plus data-icon="inline-start" />
+              New Submit
+            </Button>
+          </div>
+          {createDraft.isError && (
+            <p role="alert" className="text-xs text-destructive">
+              {createDraft.error instanceof Error ? createDraft.error.message : "Couldn't start a new submission."}
+            </p>
+          )}
         </div>
       </div>
 
@@ -142,7 +186,7 @@ export default function MyProjectsPage() {
           <div className="hidden h-4 w-px bg-border sm:block" />
 
           <div className="flex flex-wrap rounded-xl border bg-muted/40 p-1">
-            {(["All", "Qualified", "Pending", "In Review"] as const).map((status) => (
+            {(["All", "Draft", "Submitting", "Action Required", "Submitted"] as const).map((status) => (
               <button
                 key={status}
                 type="button"
@@ -227,59 +271,81 @@ export default function MyProjectsPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredAndSortedItems.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>
-                    <div className="flex items-start gap-2">
-                      <div className="flex h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted shadow-sm ring-1 ring-black/5">
-                        {item.hasThumbnail ? (
-                          // eslint-disable-next-line @next/next/no-img-element -- submission thumbnail, served from our own API
-                          <img
-                            src={`/api/submissions/${item.id}/thumbnail?v=${encodeURIComponent(item.updatedAt)}`}
-                            alt={`Video thumbnail: ${item.title}`}
-                            className="size-full object-cover"
-                          />
-                        ) : (
-                          <Layers className="size-4 text-muted-foreground" />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{clip(item.title, 18)}</p>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                          {clip(item.voiceScript || item.reviewRemark || "Submitted project video asset", 18)}
-                        </p>
-                        <div className="mt-1.5 flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => setInfoItem(item)}
-                            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-                          >
-                            <Info className="size-3.5" /> Info
-                          </button>
-                          {item.hasVideo && (
-                            <a
-                              href={`/api/submissions/${item.id}/video`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary"
-                            >
-                              <Play className="size-3.5" /> Play
-                            </a>
+              filteredAndSortedItems.map((item) => {
+                const title = item.title || "Untitled draft";
+                const needsAction = item.status === "draft" || item.status === "failed";
+                return (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <div className="flex items-start gap-2">
+                        <div className="flex h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted shadow-sm ring-1 ring-black/5">
+                          {hasCompleteAsset(item, "thumbnail") ? (
+                            // eslint-disable-next-line @next/next/no-img-element -- submission thumbnail, served from our own API
+                            <img
+                              src={`/api/submissions/${item.id}/thumbnail?v=${encodeURIComponent(item.updatedAt)}`}
+                              alt={`Video thumbnail: ${title}`}
+                              className="size-full object-cover"
+                            />
+                          ) : (
+                            <Layers className="size-4 text-muted-foreground" />
                           )}
                         </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{clip(title, 18)}</p>
+                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                            {clip(item.voiceScript || item.reviewRemark || "Submitted project video asset", 18)}
+                          </p>
+                          <div className="mt-1.5 flex items-center gap-3">
+                            {needsAction ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => goToSubmission(item.id)}
+                                  className="flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                                >
+                                  {item.status === "failed" ? "Fix" : "Continue"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteItem(item)}
+                                  className="flex items-center gap-1 text-[11px] font-semibold text-destructive hover:underline"
+                                >
+                                  Delete
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setInfoItem(item)}
+                                className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                              >
+                                <Info className="size-3.5" /> Info
+                              </button>
+                            )}
+                            {hasCompleteAsset(item, "video") && (
+                              <button
+                                type="button"
+                                onClick={() => setPlayItem(item)}
+                                className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-primary"
+                              >
+                                <Play className="size-3.5" /> Play
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{renderStatusBadge(item.reviewStatus)}</TableCell>
-                  <TableCell className="text-sm">
-                    {new Date(item.submittedAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-sm">
-                    {item.reviewStatus === "Qualified" ? `${item.earnedRates ?? 0}/${item.maxRates ?? 0}` : "—"}
-                  </TableCell>
-                  <TableCell className="text-right text-sm text-primary">{clip(item.category?.name ?? "General", 5)}</TableCell>
-                </TableRow>
-              ))
+                    </TableCell>
+                    <TableCell>{renderStatusBadge(item)}</TableCell>
+                    <TableCell className="text-sm">
+                      {new Date(item.createdAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm">
+                      {item.reviewStatus === "Qualified" ? `${item.earnedRates ?? 0}/${item.maxRates ?? 0}` : "—"}
+                    </TableCell>
+                    <TableCell className="text-right text-sm text-primary">{clip(item.category?.name ?? "General", 5)}</TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -297,7 +363,7 @@ export default function MyProjectsPage() {
       <Dialog open={infoItem !== null} onOpenChange={(o) => !o && setInfoItem(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{infoItem?.title}</DialogTitle>
+            <DialogTitle>{infoItem?.title || "Untitled draft"}</DialogTitle>
           </DialogHeader>
           {infoItem && (
             <div className="space-y-4">
@@ -315,8 +381,8 @@ export default function MyProjectsPage() {
                 )}
                 <InfoStat label="Category" value={infoItem.category?.name || "General"} />
                 <InfoStat
-                  label="Submitted At"
-                  value={new Date(infoItem.submittedAt).toLocaleString()}
+                  label={infoItem.submittedAt ? "Submitted At" : "Created At"}
+                  value={new Date(infoItem.submittedAt ?? infoItem.createdAt).toLocaleString()}
                 />
                 <InfoStat label="Extension" value={infoItem.extension ?? "standard"} />
                 <InfoStat label="Source" value={infoItem.subSource || "Inspired"} />
@@ -340,6 +406,49 @@ export default function MyProjectsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={playItem !== null} onOpenChange={(o) => !o && setPlayItem(null)}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{playItem?.title || "Untitled draft"}</DialogTitle>
+          </DialogHeader>
+          {playItem && (
+            // eslint-disable-next-line jsx-a11y/media-has-caption -- creator's own submitted video, no caption track exists
+            <video
+              key={playItem.id}
+              src={`/api/submissions/${playItem.id}/video`}
+              controls
+              autoPlay
+              className="aspect-video w-full rounded-xl bg-black"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteItem !== null} onOpenChange={(o) => !o && setDeleteItem(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{deleteItem?.title || "Untitled draft"}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This deletes the draft and whatever video, thumbnail, or verification export was
+              uploaded to it. This can’t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteSubmission.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteSubmission.isPending}
+              className="bg-destructive/10 text-destructive hover:bg-destructive/20"
+              onClick={(e) => {
+                e.preventDefault();
+                confirmDelete();
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -353,7 +462,33 @@ function InfoStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function renderStatusBadge(reviewStatus: string | null) {
+function renderStatusBadge(item: Submission) {
+  if (item.status === "draft") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
+        <span className="size-1.5 rounded-full bg-muted-foreground" />
+        Draft
+      </span>
+    );
+  }
+  if (item.status === "submitting") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-bold text-blue-700 dark:text-blue-400">
+        <span className="size-1.5 animate-pulse rounded-full bg-blue-500" />
+        Submitting
+      </span>
+    );
+  }
+  if (item.status === "failed") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/20 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-bold text-rose-700 dark:text-rose-400">
+        <span className="size-1.5 rounded-full bg-rose-500" />
+        Action required
+      </span>
+    );
+  }
+
+  const reviewStatus = item.reviewStatus;
   if (!reviewStatus || reviewStatus === "Pending") {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/20 bg-blue-500/10 px-1.5 py-0.5 text-[9px] font-bold text-blue-700 dark:text-blue-400">

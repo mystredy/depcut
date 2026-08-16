@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  Bot,
   ChevronDown,
   Coins,
   CreditCard,
@@ -27,6 +28,7 @@ import {
   Share2,
   ShieldAlert,
   Sparkles,
+  Terminal,
   Users2,
   Workflow,
   Zap,
@@ -90,9 +92,23 @@ const SECTIONS: NavSection[] = [
     color: "text-pink-500",
     children: [
       { label: "Connections", href: "/admin/social/connections", icon: Link2, color: "text-violet-500" },
+      { label: "Posts", href: soon("Social Media — Posts"), icon: FileText, color: "text-orange-500" },
       { label: "Brand Suite", href: "/admin/social/brands", icon: Share2, color: "text-pink-500" },
       { label: "Workflow", href: "/admin/social/workflows", icon: Workflow, color: "text-sky-500" },
       { label: "Analysis", href: soon("Social Media — Analysis"), icon: LineChart, color: "text-emerald-500" },
+    ],
+  },
+  {
+    kind: "group",
+    id: "telegram-bot",
+    label: "Telegram Bot",
+    icon: Send,
+    color: "text-sky-500",
+    children: [
+      { label: "Overview", href: "/admin/telegram-bot", icon: LayoutDashboard, color: "text-sky-500" },
+      { label: "My Bot", href: "/admin/telegram-bot/my-bot", icon: Bot, color: "text-sky-500" },
+      { label: "Commands", href: "/admin/telegram-bot/commands", icon: Terminal, color: "text-sky-500" },
+      { label: "Settings", href: "/admin/telegram-bot/settings", icon: SettingsIcon, color: "text-sky-500" },
     ],
   },
   { kind: "leaf", id: "announcements", label: "Announcements", icon: Megaphone, color: "text-amber-500", href: "/admin/announcements" },
@@ -128,7 +144,7 @@ const SECTIONS: NavSection[] = [
       { label: "AI Credits", href: "/admin/users", icon: Zap, color: "text-yellow-500" },
       { label: "Reports", href: "/admin/finance/reports", icon: FileText, color: "text-orange-500" },
       { label: "Finance Settings", href: "/admin/finance/settings", icon: SettingsIcon, color: "text-gray-500" },
-      { label: "API", href: "/admin/finance/payment-methods", icon: Key, color: "text-amber-500" },
+      { label: "Payment API", href: "/admin/finance/payment-api", icon: Key, color: "text-amber-500" },
     ],
   },
   {

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   ArrowUpDown,
   CheckCircle,
   Clock,
@@ -23,6 +24,7 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { useCutBase } from "@/cut/lib/nav";
 import { useCategories } from "@/queries/categories";
+import { useCreateDraftSubmission } from "@/queries/submissions";
 import { cn } from "@/lib/utils";
 
 type TaskStatus = "available" | "taken" | "completed";
@@ -120,6 +122,7 @@ export default function InspirationPage() {
   const [sortBy, setSortBy] = useState<SortOption>("default");
   const [showUnavailable, setShowUnavailable] = useState(true);
   const [toastMessage, setToastMessage] = useState("");
+  const [toastIsError, setToastIsError] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   // Live timer tick trigger, so the remaining-time strings below count down.
@@ -146,7 +149,17 @@ export default function InspirationPage() {
     return false;
   };
 
-  const goToSubmit = () => router.push(`${base}/creator-hub/submit-project`);
+  const createDraft = useCreateDraftSubmission();
+  const goToSubmit = () => {
+    createDraft.mutate(undefined, {
+      onSuccess: (data) => router.push(`${base}/creator-hub/submit-project/${data.submission.id}`),
+      onError: (error) => {
+        setToastIsError(true);
+        setToastMessage(error instanceof Error ? error.message : "Couldn't start a new submission.");
+        setTimeout(() => setToastMessage(""), 6000);
+      },
+    });
+  };
 
   const handleClaim = (id: string, title: string) => {
     setTasks((prev) =>
@@ -156,6 +169,7 @@ export default function InspirationPage() {
           : t
       )
     );
+    setToastIsError(false);
     setToastMessage(`Task claimed: "${title}". You can submit project edits on the project submission portal!`);
     setTimeout(() => setToastMessage(""), 6000);
   };
@@ -210,15 +224,21 @@ export default function InspirationPage() {
       {/* Toast Alert */}
       {toastMessage && (
         <div className="fixed top-24 right-6 z-50 flex max-w-sm items-center gap-3.5 rounded-2xl border bg-card p-5 text-xs shadow-2xl">
-          <CheckCircle className="size-5 shrink-0 text-emerald-500" />
+          {toastIsError ? (
+            <AlertTriangle className="size-5 shrink-0 text-destructive" />
+          ) : (
+            <CheckCircle className="size-5 shrink-0 text-emerald-500" />
+          )}
           <div className="space-y-1.5 text-left">
             <div className="font-medium text-foreground leading-normal">{toastMessage}</div>
-            <button
-              onClick={goToSubmit}
-              className="mt-1 block cursor-pointer border-0 bg-transparent p-0 text-left font-bold text-primary underline hover:text-primary/80"
-            >
-              Go to Submission Center →
-            </button>
+            {!toastIsError && (
+              <button
+                onClick={goToSubmit}
+                className="mt-1 block cursor-pointer border-0 bg-transparent p-0 text-left font-bold text-primary underline hover:text-primary/80"
+              >
+                Go to Submission Center →
+              </button>
+            )}
           </div>
         </div>
       )}

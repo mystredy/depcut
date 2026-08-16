@@ -2,15 +2,17 @@ import { NextResponse } from "next/server";
 
 import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
 import { prisma } from "@/lib/prisma";
-import { SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
+import { SOCIAL_APP_ENV_VARS, SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
 
 export const dynamic = "force-dynamic";
 
-// Super-user only. Self-seeds one disabled row per platform on first read.
-// Secret ("password") fields never leave the server — only which ones are
-// set (configuredFields). Non-secret ("text") fields like a Telegram
-// username aren't credentials, so their actual saved value comes back in
-// `values` for the admin form to show and edit.
+// Super-user only. Self-seeds one disabled row per platform on every read —
+// skipDuplicates makes this a no-op for platforms that already have a row,
+// so a platform added to SOCIAL_APP_SEED later still gets seeded in without
+// a full reset. Secret ("password") fields never leave the server — only
+// which ones are set (configuredFields). Non-secret ("text") fields like a
+// Telegram username aren't credentials, so their actual saved value comes
+// back in `values` for the admin form to show and edit.
 export const GET = withDonkeyAuth(async (request) => {
   if (!(await isDonkeySuperUser(request.donkey.userId))) {
     return NextResponse.json(
@@ -19,13 +21,10 @@ export const GET = withDonkeyAuth(async (request) => {
     );
   }
 
-  const existing = await prisma.socialAppConfig.count();
-  if (existing === 0) {
-    await prisma.socialAppConfig.createMany({
-      data: SOCIAL_APP_SEED.map((s) => ({ platform: s.platform })),
-      skipDuplicates: true,
-    });
-  }
+  await prisma.socialAppConfig.createMany({
+    data: SOCIAL_APP_SEED.map((s) => ({ platform: s.platform })),
+    skipDuplicates: true,
+  });
 
   const rows = await prisma.socialAppConfig.findMany({ orderBy: { platform: "asc" } });
   const specByPlatform = new Map(SOCIAL_APP_SEED.map((s) => [s.platform, s]));
@@ -43,9 +42,15 @@ export const GET = withDonkeyAuth(async (request) => {
         if (textKeys.has(key)) values[key] = value;
       }
 
+      const envVarsForPlatform = SOCIAL_APP_ENV_VARS[r.platform];
+      const envConfigured = envVarsForPlatform
+        ? Object.values(envVarsForPlatform).every((name) => Boolean(name && process.env[name]?.trim()))
+        : undefined;
+
       return {
         configuredFields: Object.keys(credentials),
         enabled: r.enabled,
+        envConfigured,
         id: r.id,
         platform: r.platform,
         updatedAt: r.updatedAt,

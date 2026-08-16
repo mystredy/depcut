@@ -6,6 +6,11 @@ import {
   notFoundResponse,
   withDonkeyAuth,
 } from "@/lib/donkey-api-auth";
+import { setEnvVar } from "@/lib/env-file";
+import {
+  API_INTEGRATION_ENV_VARS,
+  type ApiIntegrationProvider,
+} from "@/lib/marketplace/api-integrations-seed";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -30,7 +35,10 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
   }
 
   const { id } = await context.params;
-  const existing = await prisma.apiIntegration.findUnique({ select: { id: true }, where: { id } });
+  const existing = await prisma.apiIntegration.findUnique({
+    select: { id: true, provider: true },
+    where: { id },
+  });
   if (!existing) {
     return notFoundResponse();
   }
@@ -54,6 +62,18 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
     data: { ...rest, ...(apiKey ? { apiKey } : {}) },
     where: { id },
   });
+
+  // Best-effort mirror into this server's local .env — the DB row is
+  // reference storage, but this is what actually makes a pasted key take
+  // effect without hand-editing the file. Never fails the save: a real
+  // production host's env usually isn't a writable file at all.
+  if (apiKey) {
+    const envVarName = API_INTEGRATION_ENV_VARS[existing.provider as ApiIntegrationProvider]?.[0];
+    if (envVarName) {
+      await setEnvVar(envVarName, apiKey).catch(() => {});
+    }
+  }
+
   const { apiKey: _omit, ...integration } = updated;
 
   return NextResponse.json({ integration: { ...integration, hasApiKey: Boolean(updated.apiKey) } });

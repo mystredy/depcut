@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { withDonkeyAuth } from "@/lib/donkey-api-auth";
 import { prisma } from "@/lib/prisma";
+import { notifyTelegram } from "@/lib/telegram/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -28,9 +29,18 @@ export const POST = withDonkeyAuth(async (request) => {
     );
   }
 
-  const ticket = await prisma.supportTicket.create({
-    data: { ...parsed.data, userId: request.donkey.userId },
-  });
+  const [ticket, user] = await Promise.all([
+    prisma.supportTicket.create({
+      data: { ...parsed.data, userId: request.donkey.userId },
+    }),
+    prisma.user.findUnique({
+      select: { displayName: true, email: true, name: true },
+      where: { id: request.donkey.userId },
+    }),
+  ]);
+
+  const requesterName = user?.displayName || user?.name || user?.email || "a user";
+  await notifyTelegram("supportTicket", `🆘 Support ticket: "${ticket.subject}" from ${requesterName}`);
 
   return NextResponse.json({ ticket });
 });

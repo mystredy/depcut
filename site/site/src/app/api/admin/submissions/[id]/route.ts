@@ -18,6 +18,7 @@ const actionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("approve"),
     reviewScore: z.number().int().min(1).max(10),
+    creatorWorkdone: z.number().int().min(0).max(100).optional(),
     remark: z.string().trim().max(2000).optional(),
   }),
   z.object({
@@ -78,9 +79,12 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
   } else if (input.action === "approve") {
     const maxRates = submission.task?.maxRates ?? submission.maxRates ?? 10;
     const earnedRates = Math.round((maxRates * input.reviewScore) / 10);
+    const creatorWorkdone = input.creatorWorkdone ?? 50;
     [updated] = await prisma.$transaction([
       prisma.submission.update({
         data: {
+          creatorWorkdone,
+          publisherWorkdone: 100 - creatorWorkdone,
           earnedRates,
           maxRates,
           reviewCompletedAt: new Date(),
@@ -130,18 +134,15 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
     ]);
   }
 
-  const { thumbnailKey, videoKey, ...rest } = updated;
-
   return NextResponse.json({
     submission: {
-      ...rest,
-      hasThumbnail: Boolean(thumbnailKey),
-      hasVideo: Boolean(videoKey),
-      submittedAt: rest.submittedAt.toISOString(),
-      reviewedAt: rest.reviewedAt?.toISOString() ?? null,
-      reviewStartedAt: rest.reviewStartedAt?.toISOString() ?? null,
-      reviewCompletedAt: rest.reviewCompletedAt?.toISOString() ?? null,
-      updatedAt: rest.updatedAt.toISOString(),
+      ...updated,
+      createdAt: updated.createdAt.toISOString(),
+      reviewedAt: updated.reviewedAt?.toISOString() ?? null,
+      reviewStartedAt: updated.reviewStartedAt?.toISOString() ?? null,
+      reviewCompletedAt: updated.reviewCompletedAt?.toISOString() ?? null,
+      submittedAt: updated.submittedAt?.toISOString() ?? null,
+      updatedAt: updated.updatedAt.toISOString(),
     },
   });
 });

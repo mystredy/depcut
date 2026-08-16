@@ -7,7 +7,9 @@ import {
   withDonkeyAuth,
 } from "@/lib/donkey-api-auth";
 import { prisma } from "@/lib/prisma";
-import { SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
+import { SOCIAL_APP_ENV_VARS, SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
+import { fetchTelegramBotInfo } from "@/lib/telegram/bot-info";
+import { setEnvVars } from "@/lib/env-file";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,7 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
   if (!existing) {
     return notFoundResponse();
   }
+  const spec = SOCIAL_APP_SEED.find((s) => s.platform === existing.platform);
 
   const parsed = updateSchema.safeParse(await request.json());
   if (!parsed.success) {
@@ -52,11 +55,44 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
     );
   }
 
-  const current = (existing.credentials as Record<string, string> | null) ?? {};
   const incoming = parsed.data.credentials ?? {};
+
+  // A Telegram bot token that doesn't verify is worse than no token at all
+  // — reject the whole request rather than save it anyway.
+  let verifiedBotInfo: { id: string; username: string } | null = null;
+  if (existing.platform === "telegram" && incoming.botToken?.trim()) {
+    verifiedBotInfo = await fetchTelegramBotInfo(incoming.botToken.trim());
+    if (!verifiedBotInfo) {
+      return NextResponse.json(
+        {
+          error: "verification_failed",
+          message: "Couldn't verify this token with Telegram — nothing was saved.",
+        },
+        { status: 400 },
+      );
+    }
+  }
+
+  const current = (existing.credentials as Record<string, string> | null) ?? {};
   const merged = { ...current };
+  // Tracks every key that actually changed this request — admin-entered or
+  // server-derived — so the .env mirror below covers both, not just what
+  // the client sent.
+  const changedKeys = new Set<string>();
   for (const [key, value] of Object.entries(incoming)) {
-    if (value.trim()) merged[key] = value.trim();
+    if (value.trim()) {
+      merged[key] = value.trim();
+      changedKeys.add(key);
+    }
+  }
+
+  // The bot's ID and @username aren't admin-entered — a new token gets them
+  // resolved from Telegram directly, overwriting whatever was saved before.
+  if (verifiedBotInfo) {
+    merged.botId = verifiedBotInfo.id;
+    merged.botUsername = verifiedBotInfo.username;
+    changedKeys.add("botId");
+    changedKeys.add("botUsername");
   }
 
   const updated = await prisma.socialAppConfig.update({
@@ -67,12 +103,31 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
     where: { id },
   });
 
+  // Best-effort mirror into .env — this is what any real consumer reads
+  // (see the module doc comment on SOCIAL_APP_ENV_VARS), so the env var is
+  // kept in sync with every change made here, not just what the client
+  // typed. Never let a broken env file write fail the request that
+  // triggered it.
+  const envVarsForPlatform = SOCIAL_APP_ENV_VARS[existing.platform];
+  const entries: Record<string, string> = {};
+  if (envVarsForPlatform) {
+    for (const key of changedKeys) {
+      const envVar = envVarsForPlatform[key];
+      if (envVar) entries[envVar] = merged[key];
+    }
+  }
+  // The callback URL is fixed (not admin-entered) — mirror it every time
+  // this platform is saved, so the registered redirect URI in .env always
+  // matches this server's real origin.
+  if (spec?.callbackPath && spec.callbackEnvVar) {
+    entries[spec.callbackEnvVar] = `${request.nextUrl.origin}${spec.callbackPath}`;
+  }
+  if (Object.keys(entries).length > 0) {
+    await setEnvVars(entries).catch(() => {});
+  }
+
   const updatedCredentials = (updated.credentials as Record<string, string> | null) ?? {};
-  const textKeys = new Set(
-    (SOCIAL_APP_SEED.find((s) => s.platform === updated.platform)?.fields ?? [])
-      .filter((f) => f.type === "text")
-      .map((f) => f.key)
-  );
+  const textKeys = new Set((spec?.fields ?? []).filter((f) => f.type === "text").map((f) => f.key));
   const values: Record<string, string> = {};
   for (const [key, value] of Object.entries(updatedCredentials)) {
     if (textKeys.has(key)) values[key] = value;

@@ -18,6 +18,9 @@ export const adminAiEnginesQueryKey = ["admin", "ai-engines"] as const;
 export const adminLegalPagesQueryKey = ["admin", "legal-pages"] as const;
 export const adminOnboardingSlidesQueryKey = ["admin", "onboarding-slides"] as const;
 export const adminFinanceSettingsQueryKey = ["admin", "finance-settings"] as const;
+export const adminTelegramNotificationsQueryKey = ["admin", "telegram-notifications"] as const;
+export const adminTelegramCommandsQueryKey = ["admin", "telegram-commands"] as const;
+export const adminTelegramBotStatsQueryKey = ["admin", "telegram-bot-stats"] as const;
 export const adminFinanceExchangeRateQueryKey = ["admin", "finance-exchange-rate"] as const;
 export const adminFinanceRatesQueryKey = (q?: string) => ["admin", "finance-rates", q ?? ""] as const;
 export const adminFinanceWithdrawalsQueryKey = ["admin", "finance-withdrawals"] as const;
@@ -86,6 +89,14 @@ export type AdminFinanceSettings = {
   methodTonWallet: boolean;
   methodStars: boolean;
   methodCrypto: boolean;
+  updatedAt: string;
+};
+
+export type AdminTelegramNotificationSettings = {
+  id: string;
+  notifySubmissions: boolean;
+  notifyWithdrawals: boolean;
+  notifySupportTickets: boolean;
   updatedAt: string;
 };
 
@@ -208,6 +219,8 @@ export type AdminSubmission = {
   maxRates: number | null;
   earnedRates: number | null;
   reviewScore: number | null;
+  creatorWorkdone: number | null;
+  publisherWorkdone: number | null;
   taskId: string | null;
   task: { id: string; title: string } | null;
   submitterName: string;
@@ -305,6 +318,12 @@ export type AdminApiIntegration = {
   status: "Active" | "Disabled";
   autoFailover: boolean;
   hasApiKey: boolean;
+  // Whether the env var the real adapter reads is actually set on this
+  // server, and whether any adapter reads it at all — see
+  // /api/admin/api-integrations.
+  envConfigured: boolean;
+  envVarNames: string[];
+  wired: boolean;
   updatedAt: string;
 };
 
@@ -345,6 +364,10 @@ export type AdminSocialApp = {
   // Saved values for this platform's non-secret ("text") fields only —
   // secret ("password") fields never come back from the server.
   values: Record<string, string>;
+  // Whether this platform's real .env vars are set — undefined for
+  // platforms with no env mapping (see SOCIAL_APP_ENV_VARS), since this
+  // table's own values are storage-only for those.
+  envConfigured?: boolean;
   updatedAt: string;
 };
 
@@ -354,6 +377,7 @@ export type AdminPaymentMethod = {
   enabled: boolean;
   hasPublicKey: boolean;
   hasSecretKey: boolean;
+  hasPayoutKey: boolean;
   hasWebhookSecret: boolean;
   merchantId: string | null;
   notes: string | null;
@@ -564,6 +588,7 @@ export function useUpdatePaymentMethod() {
       enabled?: boolean;
       publicKey?: string;
       secretKey?: string;
+      payoutKey?: string;
       merchantId?: string;
       webhookSecret?: string;
       notes?: string;
@@ -779,6 +804,105 @@ export function useUpdateFinanceSettings() {
         method: "PATCH",
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminFinanceSettingsQueryKey }),
+  });
+}
+
+export function useAdminTelegramNotifications() {
+  return useQuery({
+    queryFn: () =>
+      apiFetch<{ settings: AdminTelegramNotificationSettings }>("/api/admin/telegram-notifications"),
+    queryKey: adminTelegramNotificationsQueryKey,
+  });
+}
+
+export function useUpdateTelegramNotifications() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Partial<Omit<AdminTelegramNotificationSettings, "id" | "updatedAt">>) =>
+      apiFetch<{ settings: AdminTelegramNotificationSettings }>("/api/admin/telegram-notifications", {
+        body: JSON.stringify(input),
+        method: "PATCH",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminTelegramNotificationsQueryKey }),
+  });
+}
+
+export type AdminTelegramCommand = {
+  id: string;
+  trigger: string;
+  replyText: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function useAdminTelegramCommands() {
+  return useQuery({
+    queryFn: () => apiFetch<{ commands: AdminTelegramCommand[] }>("/api/admin/telegram-commands"),
+    queryKey: adminTelegramCommandsQueryKey,
+  });
+}
+
+export function useCreateTelegramCommand() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { trigger: string; replyText: string; enabled?: boolean }) =>
+      apiFetch<{ command: AdminTelegramCommand }>("/api/admin/telegram-commands", {
+        body: JSON.stringify(input),
+        method: "POST",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminTelegramCommandsQueryKey }),
+  });
+}
+
+export function useUpdateTelegramCommand() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...input
+    }: {
+      id: string;
+      trigger?: string;
+      replyText?: string;
+      enabled?: boolean;
+    }) =>
+      apiFetch<{ command: AdminTelegramCommand }>(`/api/admin/telegram-commands/${id}`, {
+        body: JSON.stringify(input),
+        method: "PATCH",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminTelegramCommandsQueryKey }),
+  });
+}
+
+export function useDeleteTelegramCommand() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<{ ok: true }>(`/api/admin/telegram-commands/${id}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminTelegramCommandsQueryKey }),
+  });
+}
+
+export function useConnectTelegramWebhook() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<{ url: string }>("/api/admin/telegram-webhook/connect", { method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminTelegramBotStatsQueryKey }),
+  });
+}
+
+export type AdminTelegramBotStats = {
+  users: number;
+  commands: number;
+  webhookConnectedAt: string | null;
+};
+
+export function useAdminTelegramBotStats() {
+  return useQuery({
+    queryFn: () => apiFetch<AdminTelegramBotStats>("/api/admin/telegram-bot-stats"),
+    queryKey: adminTelegramBotStatsQueryKey,
   });
 }
 
@@ -1039,7 +1163,7 @@ export function useAdminSubmissions() {
 
 export type ReviewSubmissionAction =
   | { id: string; action: "start-review" }
-  | { id: string; action: "approve"; reviewScore: number; remark?: string }
+  | { id: string; action: "approve"; reviewScore: number; creatorWorkdone?: number; remark?: string }
   | { id: string; action: "reject"; remark?: string };
 
 export function useReviewSubmission() {

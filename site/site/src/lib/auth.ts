@@ -1,6 +1,7 @@
 import { apiKey } from "@better-auth/api-key";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 
 import { DONKEYCUT_CANONICAL } from "@/cut/lib/hosts";
 import { provisionSignupGrants } from "@/lib/onboarding/signup-grants";
@@ -53,6 +54,23 @@ export const auth = betterAuth({
       // signed-in Google session silently reuses the last-used account.
       prompt: "select_account",
     },
+  },
+  // The admin panel's per-platform "Enable" toggle (SocialAppConfig, see
+  // /admin/settings/oauth-app) is otherwise just a label — betterAuth reads
+  // its provider credentials straight from env at startup and has no
+  // concept of a runtime on/off switch. This checks the DB flag right
+  // before a social sign-in starts, so turning Google off here actually
+  // blocks new sign-ins without touching env or restarting the server.
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/sign-in/social") return;
+      const provider = ctx.body?.provider;
+      if (!provider) return;
+      const config = await prisma.socialAppConfig.findUnique({ where: { platform: provider } });
+      if (config && !config.enabled) {
+        throw new APIError("FORBIDDEN", { message: `${provider} sign-in is currently disabled.` });
+      }
+    }),
   },
   plugins: [
     apiKey({
