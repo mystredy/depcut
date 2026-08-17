@@ -1,0 +1,33 @@
+// Editable copy for public content pages, managed from /admin/pages.
+//
+// LegalPage backs the standalone /privacy and /terms routes (slug:
+// "privacy" | "terms"). Self-seeds from the existing legal/*.mdx source on
+// first read — see /api/admin/legal-pages — then both the admin editor and
+// the public route render from this table instead of the .mdx file.
+model LegalPage {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  title           String
+  contentMarkdown String
+  updatedAt       DateTime @updatedAt
+
+  @@map("legal_page")
+}
+
+// Editable headline/body copy for the six welcome-sequence onboarding
+// slides (slug: "welcome" | "referral" | "modes" | "credits" | "ai_chat" |
+// "plans" — see src/cut/components/onboarding/slides). Text only: layout,
+// bullet lists, referral option icons, and live values (Pro price, signup
+// credit amount) stay in code and aren't part of this table. headline is
+// null for "credits", whose heading is the live credit amount, not copy.
+// Self-seeds from the slides' original hardcoded strings on first read —
+// see src/lib/onboarding/slide-copy.ts.
+model OnboardingSlide {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  headline  String?
+  body      String
+  updatedAt DateTime @updatedAt
+
+  @@map("onboarding_slide")
+}

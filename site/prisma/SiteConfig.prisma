@@ -1,0 +1,114 @@
+// Site-wide admin configuration: app identity, maintenance mode, and social
+// platform OAuth credentials for the future publish pipeline (see
+// Upload/Post in Marketplace.prisma).
+
+// Singleton row (id is always "singleton"): general app settings and
+// maintenance-mode copy. GET creates it on first read if missing.
+model AppSettings {
+  id                   String   @id @default("singleton")
+  appName              String   @default("Donkey Cut")
+  adminEmail           String?
+  defaultLocale        String   @default("en-US")
+  timezone             String   @default("UTC")
+  maintenanceMode      Boolean  @default(false)
+  maintenanceHeader    String?
+  maintenanceParagraph String?
+  maintenanceFooter    String?
+  updatedAt            DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
+// A named group of SocialConnections. Posting to a brand is meant to fan
+// out to every connection in it — that publish pipeline doesn't exist yet,
+// this is just the grouping.
+model Brand {
+  id              String             @id @default(cuid())
+  name            String             @unique
+  username        String             @unique
+  logo            Bytes?
+  logoContentType String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  connections SocialConnection[]
+
+  @@map("brand")
+}
+
+// An individual linked social/storage account available as a publish source
+// or destination — e.g. "Virals Facebook @Tobiloba Mohammed", distinct from
+// SocialAppConfig's per-platform API app credentials. No OAuth handshake
+// exists to create these automatically — admins record connections here
+// after linking an account out-of-band, and mark them inactive when a
+// token expires. role: "source" | "destination".
+model SocialConnection {
+  id             String    @id @default(cuid())
+  platform       String
+  accountName    String
+  accountHandle  String?
+  role           String    @default("destination")
+  status         String    @default("active")
+  // Write-only from the admin API, same redaction rule as everywhere else
+  // credentials are stored — reads only ever say whether a token is set.
+  accessToken    String?
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  brandId        String?
+  brand          Brand?    @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  sourceOf       SocialWorkflow[] @relation("WorkflowSource")
+  destinationOf  SocialWorkflow[] @relation("WorkflowDestination")
+
+  @@index([platform])
+  @@index([brandId])
+  @@map("social_connection")
+}
+
+// Pairs a source SocialConnection with a destination one for repurposing
+// content between platforms. No real publish pipeline reads this yet —
+// autoPublish is a stored admin preference, not live automation.
+// status: "Active" | "Inactive".
+model SocialWorkflow {
+  id                    String           @id @default(cuid())
+  name                  String
+  sourceConnectionId    String
+  sourceConnection      SocialConnection @relation("WorkflowSource", fields: [sourceConnectionId], references: [id], onDelete: Cascade)
+  destinationConnectionId String
+  destinationConnection SocialConnection @relation("WorkflowDestination", fields: [destinationConnectionId], references: [id], onDelete: Cascade)
+  status                String           @default("Active")
+  autoPublish           Boolean          @default(true)
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  @@index([sourceConnectionId])
+  @@index([destinationConnectionId])
+  @@map("social_workflow")
+}
+
+model SocialAppConfig {
+  id          String   @id @default(cuid())
+  platform    String   @unique
+  enabled     Boolean  @default(false)
+  credentials Json?
+  updatedAt   DateTime @updatedAt
+
+  @@map("social_app_config")
+}
+
+// Singleton row (id is always "singleton"): which admin events push a
+// message to the Telegram bot's destinations. The destinations themselves
+// (admin, group, channel) live on SocialAppConfig instead (platform
+// "telegram", adminId/groupId/channelId) alongside the bot's other identity
+// fields — this row is just the event toggles. Read by notifyTelegram
+// (src/lib/telegram/notify.ts), which every trigger point calls
+// best-effort — a notification failure never blocks the real action.
+model TelegramNotificationSettings {
+  id                   String   @id @default("singleton")
+  notifySubmissions    Boolean  @default(false)
+  notifyWithdrawals    Boolean  @default(false)
+  notifySupportTickets Boolean  @default(false)
+  updatedAt            DateTime @updatedAt
+
+  @@map("telegram_notification_settings")
+}

@@ -1,0 +1,140 @@
+// The creator "Rates" economy: per-creator balances, withdrawal requests,
+// the platform exchange rate, and the ledger of every balance-affecting
+// event. Distinct from Credits.prisma's UserCreditAccount, which is the
+// Stripe-billed AI inference credit system — these Rates are what a creator
+// earns and cashes out, not what they spend on AI tools.
+//
+// No automated flow posts here yet (Task/Submission completions don't credit
+// a CreatorRateAccount automatically) — admins manage balances directly from
+// /admin/finance. Every balance change and withdrawal is logged to
+// FinanceTransaction, so the ledger stays real even before that wiring
+// exists.
+
+// One row per creator with a Rates balance. Created lazily (upsert) the
+// first time an admin adjusts a user's balance.
+model CreatorRateAccount {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pending   Int      @default(0)
+  available Int      @default(0)
+  referral  Int      @default(0)
+  lifetime  Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("creator_rate_account")
+}
+
+// A creator cashout request against their available Rates balance.
+// status: "Pending" | "Approved" | "Paid" | "Rejected".
+model Withdrawal {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amountRequested  Int
+  processingFee    Float
+  finalAmount      Float
+  method           String
+  destination      String
+  exchangeRateUsed Float
+  status           String   @default("Pending")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("withdrawal")
+}
+
+// An append-only log of every balance-affecting finance event (manual
+// adjustments, paid withdrawals, settled giveaway/referral payouts).
+// type: "Withdrawal" | "Referral" | "Giveaway" | "Manual Adjustment".
+model FinanceTransaction {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userName    String
+  type        String
+  ratesAmount Int      @default(0)
+  amount      Float    @default(0)
+  status      String   @default("Completed")
+  details     String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([type])
+  @@map("finance_transaction")
+}
+
+// Singleton row (id always "singleton"). GET creates it on first read.
+model FinanceSettings {
+  id                String   @id @default("singleton")
+  minWithdrawal     Int      @default(500)
+  processingFeePct  Float    @default(2.5)
+  taxPct            Float    @default(0)
+  currency          String   @default("USD")
+  paymentWindow     String   @default("3-5 business days")
+  payoutCycle       String   @default("Bi-monthly (1st & 16th)")
+  autoTransferDates String   @default("1st, 16th")
+  methodBank        Boolean  @default(true)
+  methodTonWallet   Boolean  @default(false)
+  methodStars       Boolean  @default(false)
+  methodCrypto      Boolean  @default(false)
+  updatedAt         DateTime @updatedAt
+
+  @@map("finance_settings")
+}
+
+// Singleton row (id always "singleton") holding the live 1-Rate-to-USD
+// conversion. Every change is also appended to FinanceExchangeRateHistory.
+model FinanceExchangeRate {
+  id            String   @id @default("singleton")
+  currentRate   Float    @default(0.01)
+  effectiveDate String   @default("")
+  updatedAt     DateTime @updatedAt
+
+  @@map("finance_exchange_rate")
+}
+
+model FinanceExchangeRateHistory {
+  id            String   @id @default(cuid())
+  rate          Float
+  effectiveDate String
+  authorName    String
+  createdAt     DateTime @default(now())
+
+  @@map("finance_exchange_rate_history")
+}
+
+// A manually-recorded giveaway prize payout. No live giveaway/leaderboard
+// system exists yet — admins record winners and mark them paid here.
+// status: "Pending" | "Paid" | "Rejected".
+model GiveawayPayment {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topPosition String
+  reward      String
+  status      String    @default("Pending")
+  paidBy      String?
+  paidDate    DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@map("giveaway_payment")
+}
+
+// One row per creator with referral commissions. No referral-tracking
+// system exists yet (User has no referredBy relation) — admins record
+// referral counts and commissions manually and settle them here.
+model ReferralCommission {
+  userId           String   @id
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  referralCount    Int      @default(0)
+  commissionEarned Float    @default(0)
+  commissionPaid   Float    @default(0)
+  activeReferrals  Int      @default(0)
+  expiredReferrals Int      @default(0)
+  updatedAt        DateTime @updatedAt
+
+  @@map("referral_commission")
+}
