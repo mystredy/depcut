@@ -2,7 +2,6 @@
 
 import { apiJson, getBackend } from "./backend";
 import { readSnapshot, writeSnapshot } from "./cache";
-import { downloadFromUrl } from "./download";
 import {
   enrichAsset,
   importRemote,
@@ -14,13 +13,11 @@ import {
   activeResidency,
   availableResidencies,
   backendFor,
-  libraryResidencies,
   libraryShelfKey,
   listedResidencies,
   type Residency,
 } from "./residency";
 import { useEditor } from "./store";
-import { playheadAt } from "./playhead";
 import type { LibraryTemplate, MediaAsset, TemplateMedia, TemplateSaveInput } from "./types";
 import { IMAGE_CLIP_SECONDS, mediaUrl } from "./types";
 
@@ -67,12 +64,6 @@ export interface LibraryData {
 export const libraryMediaUrl = (fileName: string, residency: Residency) =>
   backendFor(residency).url(`/api/cut/library/media/${encodeURIComponent(fileName)}`);
 
-/** Save a library file to the user's Downloads folder, off the shelf it sits
- * on. */
-export function downloadLibraryAsset(a: Pick<LibraryAsset, "fileName" | "residency">) {
-  downloadFromUrl(libraryMediaUrl(a.fileName, a.residency), a.fileName);
-}
-
 async function fetchLibraryFrom(r: Residency): Promise<LibraryData> {
   const res = await backendFor(r).fetch("/api/cut/library");
   if (!res.ok) throw new Error("Could not load the library.");
@@ -107,8 +98,8 @@ async function rememberedLibraryFrom(r: Residency): Promise<LibraryData | null> 
  * item it can't copy into the project has no business in a picker.
  */
 export async function fetchLibrary(opts?: { remembered?: boolean }): Promise<LibraryData> {
-  const live = libraryResidencies(availableResidencies());
-  const rs = libraryResidencies(opts?.remembered ? listedResidencies() : live);
+  const live = availableResidencies();
+  const rs = opts?.remembered ? listedResidencies() : live;
   const parts = await Promise.all(
     rs.map((r) =>
       live.includes(r) ? fetchLibraryFrom(r).catch(() => null) : rememberedLibraryFrom(r)
@@ -285,14 +276,15 @@ export async function importLibraryAsset(
   );
 }
 
-/** Copy a library asset into the open project and add it to the timeline at
- * the playhead. */
+/** Copy a library asset into the open project and append it to the timeline. */
 export async function addLibraryAssetToProject(
   projectId: string,
   lib: LibraryAsset
 ): Promise<MediaAsset> {
   const asset = await importLibraryAsset(projectId, lib);
-  useEditor.getState().addAssetAtPlayhead(asset.id);
+  const s = useEditor.getState();
+  if (asset.type === "video" || asset.type === "image") s.addClipFromAsset(asset.id);
+  else s.addAudioFromAsset(asset.id);
   return asset;
 }
 
@@ -429,7 +421,7 @@ export async function addTemplateToProject(
     void enrichAsset(asset);
     return asset.id;
   });
-  s.insertTemplate(template, assetIds, at ?? playheadAt());
+  s.insertTemplate(template, assetIds, at ?? useEditor.getState().currentTime);
 }
 
 /** Copy a library template into the project as a project template: its media
@@ -477,7 +469,7 @@ export function addProjectTemplateToTimeline(
     void enrichAsset(asset);
     return asset.id;
   });
-  useEditor.getState().insertTemplate(template, assetIds, at ?? playheadAt());
+  useEditor.getState().insertTemplate(template, assetIds, at ?? useEditor.getState().currentTime);
 }
 
 /** Copy a project asset into the shared library for reuse. It lands on the

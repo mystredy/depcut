@@ -3,5 +3,5 @@
 import { UsageHistoryCard } from "@/components/UsageHistoryCard";
 
 export default function CutUsagePage() {
-  return <UsageHistoryCard />;
+  return <UsageHistoryCard showVision={false} plain />;
 }

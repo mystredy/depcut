@@ -1,14 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { allowedOrigin, corsHeaders, preflightHeaders } from "@/cut/server/cors";
-import { DONKEYCUT_CANONICAL, isDonkeycutHost } from "@/cut/lib/hosts";
+import {
+  DONKEYCUT_CANONICAL,
+  isDonkeycutHost,
+  isLocalHost,
+} from "@/cut/lib/hosts";
 
 // Cut (the video editor, publicly "Donkey Cut") lives under /cut in this single
 // site app: the marketing landing at /cut and the app under /cut/app. Every
 // host gets the same mapping — "/" → landing, "/app/…" → editor app (generic
 // "/…" → "/cut/…" rewrite) — with donkeycut.com as the one production host.
-// The auth pages (/sign-in, /sign-up), "/install", and the legal pages are
-// real root-level routes and pass through the rewrite.
+// The auth pages (/sign-in, /sign-up), "/install", "/donkeyvision", and the
+// legal pages are real root-level routes and pass through the rewrite.
 // www. 308s to the apex; retired domains redirect to donkeycut.com at the
 // edge (Cloudflare) and never reach this app.
 //
@@ -49,7 +53,8 @@ function cutApi(req: NextRequest): NextResponse {
 }
 
 // Root-level routes the generic "/…" → "/cut/…" rewrite must not capture:
-// auth pages, the Mac download, and the legal pages. "/app/settings" is not
+// auth pages, the Mac download, Donkey Vision (marketing, settings, and API
+// docs), the site admin panel, and the legal pages. "/app/settings" is not
 // among them: Cut ships its own billing and usage pages under
 // /cut/app/settings, which the generic rewrite serves at /app/settings.
 const PASSTHROUGH = [
@@ -58,8 +63,8 @@ const PASSTHROUGH = [
   "/terms",
   "/sign-in",
   "/sign-up",
-  // Email-footer unsubscribe page.
-  "/unsubscribe",
+  "/donkeyvision",
+  "/admin",
 ];
 
 // Whole-segment prefix match, so "/cut" covers "/cut/…" but not "/cut-app".
@@ -94,6 +99,10 @@ export function proxy(req: NextRequest) {
 
   if (underPath(pathname, "/api")) return NextResponse.next();
   if (passesThrough(pathname)) return NextResponse.next();
+  // The notch prototype is a dev-only page.
+  if (isLocalHost(host) && underPath(pathname, "/prototype")) {
+    return NextResponse.next();
+  }
 
   const url = req.nextUrl.clone();
   url.pathname =

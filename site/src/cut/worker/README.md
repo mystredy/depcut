@@ -30,7 +30,7 @@ Required env (secrets only — everything else is code constants):
 
 - `DATABASE_URL` — the same Postgres the hosted site uses.
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` — R2 credentials
-  for the `donkey-cut` bucket.
+  for the `deepw-media` bucket.
 
 One replica is enough to start: it runs up to 2 jobs concurrently (the
 engine's cap). Replicas can be added later without coordination — the atomic

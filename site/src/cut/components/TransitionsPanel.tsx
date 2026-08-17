@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { SwatchScene, useSwatchClock } from "@/cut/components/EffectsPanel";
+import { SwatchScene, useSwatchClock, useSwatchRatio } from "@/cut/components/EffectsPanel";
 import { SectionTitle } from "@/cut/components/SectionTitle";
-import { clearElementDrag, setElementDragData, setObjectDragImage } from "@/cut/lib/assetDrag";
+import { clearElementDrag, setElementDragData } from "@/cut/lib/assetDrag";
 import { peekEdgeFrame, requestEdgeFrame } from "@/cut/lib/media";
 import { PICKED_RING, pickGridNav, useAssetPick } from "@/cut/lib/assetPick";
 import { getClipSpans, resolveTransitions, useEditor } from "@/cut/lib/store";
-import { usePreviewTimeEvery } from "@/cut/lib/playhead";
 import {
   TRANSITION_STYLE_GROUPS,
   TRANSITION_STYLE_LABELS,
@@ -42,9 +41,10 @@ export function TransitionsPanel() {
     if (s.selection?.kind !== "clip") return null;
     const roles = resolveTransitions(s.clips, s.transitions);
     return (
-      s.transitions.find((t) =>
-        (roles.get(t.id) ?? []).some((r) => r.kind === "cut" && r.clipId === s.selection!.id)
-      ) ?? null
+      s.transitions.find((t) => {
+        const r = roles.get(t.id);
+        return !!r && r.kind === "cut" && r.clipId === s.selection!.id;
+      }) ?? null
     );
   });
   const { a, b } = useCutFrames();
@@ -122,7 +122,7 @@ function useCutFrames(): { a: string | null; b: string | null } {
   const clips = useEditor((s) => s.clips);
   const assets = useEditor((s) => s.assets);
   // Re-pick the cut as the playhead crosses half-second marks.
-  const tick = usePreviewTimeEvery(2);
+  const tick = useEditor((s) => Math.round(s.currentTime * 2));
   const cut = useMemo(() => {
     const spans = getClipSpans(clips, assets);
     let best: {
@@ -187,10 +187,7 @@ function TransitionTile({
       data-pick-id={`transition:${style}`}
       aria-pressed={marked}
       draggable
-      onDragStart={(e) => {
-        setElementDragData(e, { kind: "transition", style });
-        setObjectDragImage(e);
-      }}
+      onDragStart={(e) => setElementDragData(e, { kind: "transition", style })}
       onDragEnd={clearElementDrag}
       onPointerEnter={() => setRunEpoch((n) => n + 1)}
       onFocus={() => setRunEpoch((n) => n + 1)}
@@ -250,6 +247,7 @@ function TransitionSwatch({
   t: number;
   className?: string;
 }) {
+  const ratio = useSwatchRatio();
   const p0 = Math.min(1, Math.max(0, (t - X_HOLD) / X_RUN));
   const p = p0 * p0 * (3 - 2 * p0);
   const pc = (n: number) => `${(n * 100).toFixed(1)}%`;
@@ -395,8 +393,8 @@ function TransitionSwatch({
   }
   return (
     <span
-      data-drag-object
-      className={cn("relative block aspect-square overflow-hidden rounded-md bg-black", className)}
+      className={cn("relative block overflow-hidden rounded-md bg-black", className)}
+      style={{ aspectRatio: ratio }}
     >
       {layers}
     </span>

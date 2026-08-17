@@ -19,7 +19,7 @@ let inFlightAssetId: string | null = null;
 
 export function setAssetDragData(e: React.DragEvent, assetId: string) {
   e.dataTransfer.setData(ASSET_MIME, assetId);
-  e.dataTransfer.effectAllowed = "copyMove";
+  e.dataTransfer.effectAllowed = "copy";
   inFlightAssetId = assetId;
   // Every media drag also carries the unified asset ref, so reference drop
   // zones (AI chat, the image/video creators) accept it without knowing the
@@ -111,10 +111,7 @@ export function setElementDragData(e: React.DragEvent, spec: ElementDrag) {
     ELEMENT_MIME,
     spec.kind === "shape" ? spec.shape : spec.kind === "effect" ? spec.effect : spec.style
   );
-  // Drop surfaces pick the cursor: the timeline shows the drag as a bar in
-  // hand and asks for "move" so no copy badge rides it; other zones keep
-  // "copy".
-  e.dataTransfer.effectAllowed = "copyMove";
+  e.dataTransfer.effectAllowed = "copy";
   inFlightElement = spec;
 }
 
@@ -132,30 +129,19 @@ export function clearElementDrag() {
   inFlightElement = null;
 }
 
-/** Longest side of a card drag ghost, px. */
-const CARD_GHOST_MAX = 72;
-
-/** Use the card itself as the drag ghost: a scaled-down clone, so the
- * ghost matches the card exactly — rounded corners, fills, labels. A card can
- * narrow the ghost to just its picture: the ghost clones the node marked
- * `data-drag-object` when one exists, and drops anything marked
- * `data-drag-omit` (badges riding on the picture). Live `<video>`/`<canvas>`
- * content is baked into the clone (clones of those paint blank), and
- * hover-revealed controls drop out since the clone is not hovered. The clone
- * lives off-screen just long enough for the browser to snapshot it. */
-/** Ready a clone for ghost duty: drop `data-drag-omit` nodes (badges riding on
- * the picture) and bake live `<video>`/`<canvas>` frames into canvases, since
- * clones of those paint blank. */
-function bakeGhostClone(src: HTMLElement, clone: HTMLElement) {
-  clone.querySelectorAll("[data-drag-omit]").forEach((n) => n.remove());
-  // Skip media inside omitted nodes so both lists pair up by index.
-  const srcMedia = Array.from(src.querySelectorAll<HTMLElement>("video, canvas")).filter(
-    (n) => !n.closest("[data-drag-omit]")
-  );
+/** Use the card itself as the drag ghost: a clone at rendered size, so the
+ * ghost matches the card exactly — rounded corners, fills, labels. Live
+ * `<video>`/`<canvas>` content is baked into the clone (clones of those paint
+ * blank), and hover-revealed controls drop out since the clone is not hovered.
+ * The clone lives off-screen just long enough for the browser to snapshot it. */
+export function setCardDragImage(e: React.DragEvent, el: HTMLElement) {
+  const rect = el.getBoundingClientRect();
+  const clone = el.cloneNode(true) as HTMLElement;
+  const srcMedia = el.querySelectorAll<HTMLElement>("video, canvas");
   clone.querySelectorAll<HTMLElement>("video, canvas").forEach((node, i) => {
-    const from = srcMedia[i];
-    if (!from) return;
-    const r = from.getBoundingClientRect();
+    const src = srcMedia[i];
+    if (!src) return;
+    const r = src.getBoundingClientRect();
     const c = document.createElement("canvas");
     c.width = Math.max(1, Math.round(r.width * devicePixelRatio));
     c.height = Math.max(1, Math.round(r.height * devicePixelRatio));
@@ -166,20 +152,20 @@ function bakeGhostClone(src: HTMLElement, clone: HTMLElement) {
     const ctx = c.getContext("2d");
     if (ctx) {
       try {
-        if (from instanceof HTMLVideoElement) {
+        if (src instanceof HTMLVideoElement) {
           // Match object-cover: scale to fill and center-crop.
-          const vw = from.videoWidth || r.width;
-          const vh = from.videoHeight || r.height;
+          const vw = src.videoWidth || r.width;
+          const vh = src.videoHeight || r.height;
           const scale = Math.max(c.width / vw, c.height / vh);
           ctx.drawImage(
-            from,
+            src,
             (c.width - vw * scale) / 2,
             (c.height - vh * scale) / 2,
             vw * scale,
             vh * scale
           );
         } else {
-          ctx.drawImage(from as HTMLCanvasElement, 0, 0, c.width, c.height);
+          ctx.drawImage(src as HTMLCanvasElement, 0, 0, c.width, c.height);
         }
       } catch {
         // A frame that cannot be painted just leaves that slot blank.
@@ -187,105 +173,16 @@ function bakeGhostClone(src: HTMLElement, clone: HTMLElement) {
     }
     node.replaceWith(c);
   });
-}
-
-export function setCardDragImage(e: React.DragEvent, host: HTMLElement) {
-  const el = host.querySelector<HTMLElement>("[data-drag-object]") ?? host;
-  const rect = el.getBoundingClientRect();
-  const clone = el.cloneNode(true) as HTMLElement;
-  bakeGhostClone(el, clone);
+  clone.style.position = "absolute";
+  clone.style.top = "-1000px";
+  clone.style.left = "-1000px";
   clone.style.width = `${rect.width}px`;
   clone.style.height = `${rect.height}px`;
   clone.style.margin = "0";
-  // Compact ghost: the card at full size blankets the rows it is dragged
-  // across, so it shrinks to a thumbnail, scaled around the grab point.
-  const scale = Math.min(1, CARD_GHOST_MAX / Math.max(rect.width, rect.height));
-  clone.style.transform = `scale(${scale})`;
-  clone.style.transformOrigin = "top left";
-  const wrap = document.createElement("div");
-  wrap.style.cssText =
-    "position:absolute;top:-1000px;left:-1000px;pointer-events:none;" +
-    `width:${rect.width * scale}px;height:${rect.height * scale}px;`;
-  wrap.appendChild(clone);
-  document.body.appendChild(wrap);
-  // A grab outside the snapshot (on the card's label) holds the nearest edge.
-  e.dataTransfer.setDragImage(
-    wrap,
-    Math.min(Math.max(e.clientX - rect.left, 0), rect.width) * scale,
-    Math.min(Math.max(e.clientY - rect.top, 0), rect.height) * scale
-  );
-  setTimeout(() => wrap.remove(), 0);
-}
-
-/** The dragged thing itself as the ghost: the tile's `data-drag-object` node —
- * the shape silhouette, the sticker picture, the effect or transition swatch —
- * cloned alone on a transparent backdrop, so the drag reads as carrying the
- * object rather than a snapshot of the whole card with its border and label.
- * Falls back to the drag source when no node is marked.
- *
- * The visible ghost is our own fixed-position layer under a blank native drag
- * image. A native ghost is frozen at dragstart; the layer can keep reacting,
- * so when the drag crosses a surface that paints its own landing preview
- * (marked `data-segment-drop`, e.g. the timeline with its track-segment
- * ghost) the object shrinks away and hands over, then returns if the drag
- * leaves again. */
-/** Longest side of an object drag ghost, px: a small sticker rides at its own
- * size, a panel-width media tile shrinks to a carryable ghost. */
-const OBJECT_GHOST_MAX = 120;
-
-export function setObjectDragImage(e: React.DragEvent) {
-  const host = e.currentTarget as HTMLElement;
-  const el = host.querySelector<HTMLElement>("[data-drag-object]") ?? host;
-  const rect = el.getBoundingClientRect();
-  const fit = Math.min(1, OBJECT_GHOST_MAX / Math.max(rect.width, rect.height));
-
-  const blank = document.createElement("canvas");
-  blank.width = blank.height = 1;
-  blank.style.cssText = "position:absolute;top:-1000px;left:-1000px;";
-  document.body.appendChild(blank);
-  e.dataTransfer.setDragImage(blank, 0, 0);
-  setTimeout(() => blank.remove(), 0);
-
-  // Hold the object where the pointer grabbed it; a grab outside the object
-  // (on the card around it) holds the nearest edge.
-  const ox = Math.min(Math.max(e.clientX - rect.left, 0), rect.width);
-  const oy = Math.min(Math.max(e.clientY - rect.top, 0), rect.height);
-
-  const root = document.createElement("div");
-  root.style.cssText =
-    "position:fixed;left:0;top:0;z-index:1000;pointer-events:none;will-change:transform;";
-  const object = el.cloneNode(true) as HTMLElement;
-  bakeGhostClone(el, object);
-  object.style.width = `${rect.width}px`;
-  object.style.height = `${rect.height}px`;
-  object.style.margin = "0";
-  object.style.opacity = "0.85";
-  object.style.transition = "opacity 150ms ease, transform 150ms ease";
-  object.style.transformOrigin = `${ox}px ${oy}px`;
-  object.style.transform = `scale(${fit})`;
-  root.appendChild(object);
-  document.body.appendChild(root);
-
-  const position = (x: number, y: number) => {
-    root.style.transform = `translate(${x - ox}px, ${y - oy}px)`;
-  };
-  position(e.clientX, e.clientY);
-
-  const onOver = (ev: DragEvent) => {
-    position(ev.clientX, ev.clientY);
-    const handedOver = !!(ev.target as Element | null)?.closest?.("[data-segment-drop]");
-    object.style.opacity = handedOver ? "0" : "0.85";
-    object.style.transform = `scale(${handedOver ? fit * 0.3 : fit})`;
-  };
-  const end = () => {
-    root.remove();
-    document.removeEventListener("dragover", onOver);
-    window.removeEventListener("dragend", end, true);
-    window.removeEventListener("drop", end, true);
-  };
-  document.addEventListener("dragover", onOver);
-  window.addEventListener("dragend", end, true);
-  window.addEventListener("drop", end, true);
+  clone.style.pointerEvents = "none";
+  document.body.appendChild(clone);
+  e.dataTransfer.setDragImage(clone, e.clientX - rect.left, e.clientY - rect.top);
+  setTimeout(() => clone.remove(), 0);
 }
 
 /** A small chip as the drag image, so the cursor carries a compact marker

@@ -315,9 +315,7 @@ export async function runGc(): Promise<Response> {
       : { count: 0 };
 
   // Scratch inference media, swept by prefix: it never counted toward usage and
-  // no row points at it, so age is the only thing that makes it garbage. The
-  // nightly analytics pipeline also keeps rowless JSON under analytics/ — any
-  // future sweep of unknown prefixes must leave that tree alone.
+  // no row points at it, so age is the only thing that makes it garbage.
   const scratch = await listOlderThan(
     INFERENCE_PREFIX,
     new Date(Date.now() - SCRATCH_MAX_AGE_MS)

@@ -10,24 +10,14 @@ import { cn } from "@/lib/utils"
  * content: it fades in while the pointer is inside or the view is scrolling,
  * and it takes no width from the layout, so a narrow column keeps every pixel
  * it has. `contentClassName` styles the scrolling content itself — padding and
- * layout belong there, sizing on the outer element. The viewport props reach
- * the element that actually scrolls, for callers that pin to the bottom or
- * find the scroller by class.
+ * layout belong there, sizing on the outer element.
  */
 function ScrollArea({
   className,
   contentClassName,
-  viewportClassName,
-  viewportRef,
-  onViewportScroll,
   children,
   ...props
-}: ScrollAreaPrimitive.Root.Props & {
-  contentClassName?: string
-  viewportClassName?: string
-  viewportRef?: React.Ref<HTMLDivElement>
-  onViewportScroll?: React.UIEventHandler<HTMLDivElement>
-}) {
+}: ScrollAreaPrimitive.Root.Props & { contentClassName?: string }) {
   return (
     <ScrollAreaPrimitive.Root
       data-slot="scroll-area"
@@ -36,12 +26,7 @@ function ScrollArea({
     >
       <ScrollAreaPrimitive.Viewport
         data-slot="scroll-area-viewport"
-        ref={viewportRef}
-        onScroll={onViewportScroll}
-        className={cn(
-          "size-full rounded-[inherit] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-          viewportClassName
-        )}
+        className="size-full rounded-[inherit] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
         <ScrollAreaPrimitive.Content
           data-slot="scroll-area-content"

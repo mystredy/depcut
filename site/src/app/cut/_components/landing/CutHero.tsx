@@ -14,13 +14,14 @@ export function CutHero() {
     >
       <div>
         <h1 className="text-[clamp(36px,5.5vw,64px)] leading-[0.95] font-semibold tracking-[-0.02em]">
-          Finally, a video editor{" "}
-          <span className="italic">that&apos;s easy.</span>
+          The video editor iMovie{" "}
+          <span className="italic">should have been.</span>
         </h1>
         <p className="mt-6 max-w-[720px] text-[17px] leading-[1.55] text-[#454545]">
-          Edit with chat, generate images and video, and keep your files on
-          your own computer. Use your existing Claude or Codex subscription if
-          you already have one.
+          A browser editor with AI generation when needed. The companion Mac
+          app transcribes, stores, and exports using your own hardware. No
+          uploads, no cloud storage fees and works with your Claude or Codex
+          subscriptions.
         </p>
         <div className="mt-12">
           <PillButton href={appHref("/app")} variant="primary" size="md">
@@ -28,7 +29,7 @@ export function CutHero() {
           </PillButton>
         </div>
       </div>
-      <div className="-mx-6 mt-12 md:mx-0 md:mt-16">
+      <div className="mt-12 md:mt-16">
         <EditorMock />
       </div>
     </section>

@@ -1,27 +1,21 @@
 // The chat harness's understanding boundary for one composer turn: a fast
-// structured model call judges the newest user message — does it ask for
-// anything, and how big is the job — and the harness gates and routes
-// deterministically on the verdict. A "chat" turn (greeting, thanks — social
-// filler that requests nothing) runs with no tool declarations at all, so
-// unsolicited edits are impossible by construction. A "simple" turn (one
-// self-contained ask) runs on the light chat model; a "complex" turn (a
-// composed job) runs on the full model. The turn runner overlaps this call
-// with the first model round and holds tool execution until the verdict
-// lands, so the gate costs a simple turn no wall time.
+// structured model call judges whether the newest user message asks the
+// assistant for anything, and the harness gates deterministically on the
+// verdict. A "chat" turn (greeting, thanks — social filler that requests
+// nothing) runs with no tool declarations at all, so unsolicited edits are
+// impossible by construction rather than discouraged by prompt.
 
-export type TurnIntent = "chat" | "simple" | "complex";
+export type TurnIntent = "work" | "chat";
 
-/** The gate's instructions. */
-export function turnIntentPrompt(): string {
-  return `You gate an AI assistant built into a video editor. Read the conversation and judge only its newest user message.
+export const TURN_INTENT_PROMPT = `You gate the tools of an AI assistant built into a video editor. Read the conversation and judge only its newest user message: does it ask the assistant for anything — an edit, an answer, media, information, an opinion, or any other work — or is it pure social filler (a greeting, thanks, a sign-off, an acknowledgement) that requests nothing?
+
+Terse follow-ups ("yes", "do it", "the second one") refer to the earlier turns and DO ask for something.
 
 Reply with exactly one word:
-chat — pure social filler (a greeting, thanks, a sign-off, an acknowledgement) that requests nothing.
-simple — one self-contained ask: a single edit, a single generation, or a question to answer. Terse follow-ups ("yes", "do it", "the second one") that confirm one pending action are simple.
-complex — a composed job: several edits across the timeline, cutting or reorganizing many clips, assembling media into a cut, or anything needing a plan across steps. A sweep phrased as one ask still fans out into many cuts — removing filler words, tightening silences, cutting every pause — and is complex. An edit aimed at "this clip / that one / it" with no named target is also complex — resolving the referent takes the full model. So is an edit whose targets are picked by description — "the grey ones", "the short clips" — since deciding which items match takes the full model.
+work — the message asks for something, however vague or implicit.
+chat — the message requests nothing.
 
-If unsure between chat and the others, reply simple. If unsure between simple and complex, reply complex.`;
-}
+If unsure, reply work.`;
 
 /** The conversation as plain text turns for the classifier — recent turns ride
  * along so follow-ups keep their referent, and each is capped so a pasted wall
@@ -35,13 +29,8 @@ export function turnIntentInput(
     .map((t) => ({ role: t.role, content: [{ text: t.text.slice(0, 2000) }] }));
 }
 
-/** Deterministic read of the classifier's verdict line. Only a clear "chat"
- * withholds tools, and only a clear "simple" takes the light model — a garbled
- * reply runs the full model with every tool, so a classifier hiccup never
- * blocks or downgrades a real request. */
+/** Deterministic read of the classifier's one-word verdict; anything but a
+ * clear "chat" counts as work, so a garbled reply never blocks a request. */
 export function parseTurnIntent(outputText: string | undefined): TurnIntent {
-  const t = (outputText ?? "").trim();
-  if (/^\W*chat\b/i.test(t)) return "chat";
-  if (/^\W*simple\b/i.test(t)) return "simple";
-  return "complex";
+  return /^\W*chat\b/i.test((outputText ?? "").trim()) ? "chat" : "work";
 }

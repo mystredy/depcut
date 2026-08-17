@@ -36,7 +36,7 @@ export function MockTopBar({ project }: { project: MockProject }) {
         </span>
         <span className="grid size-[22px] shrink-0 place-items-center">
           <img
-            src="/donkey-logo.svg"
+            src="/deepw-logo.svg"
             alt=""
             width={22}
             height={22}

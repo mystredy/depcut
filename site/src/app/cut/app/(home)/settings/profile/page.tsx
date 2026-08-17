@@ -4,12 +4,10 @@ import { useState } from "react";
 import { Pencil } from "lucide-react";
 
 import { AvatarDialog } from "@/app/cut/app/(home)/settings/profile/AvatarDialog";
-import { EmailSection } from "@/app/cut/app/(home)/settings/profile/EmailSection";
 import { FeatureFlagsSection } from "@/app/cut/app/(home)/settings/profile/FeatureFlagsSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import {
   useAccountProfile,
@@ -29,29 +27,7 @@ export default function CutProfilePage() {
   const [editingAvatar, setEditingAvatar] = useState(false);
 
   if (isPending) {
-    // Skeleton shaped like the identity card and the section below it, so the
-    // page doesn't jump when the data lands.
-    return (
-      <div className="max-w-2xl space-y-6 pb-9">
-        <div className="rounded-xl border bg-card p-5">
-          <div className="flex items-center gap-3">
-            <Skeleton className="size-[3.6rem] rounded-lg" />
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-4 w-48" />
-            </div>
-          </div>
-          <div className="mt-5 border-t pt-5">
-            <Skeleton className="h-4 w-24" />
-            <div className="mt-3 flex items-center gap-2">
-              <Skeleton className="h-8 w-full max-w-xs" />
-              <Skeleton className="h-8 w-14" />
-            </div>
-          </div>
-        </div>
-        <Skeleton className="h-28 w-full rounded-xl" />
-      </div>
-    );
+    return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
   if (isError || !profile) {
     return <p className="text-sm text-red-600">Couldn&apos;t load your profile.</p>;
@@ -121,8 +97,6 @@ export default function CutProfilePage() {
           )}
         </div>
       </div>
-
-      <EmailSection />
 
       <FeatureFlagsSection />
 

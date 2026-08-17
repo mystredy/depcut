@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pause, Play, Plus } from "lucide-react";
 import { PeakStrip } from "@/cut/components/AudioPanel";
 import { clearRefDrag, refFromStockMusic, setRefDragData } from "@/cut/lib/assetRef";
-import { setObjectDragImage } from "@/cut/lib/assetDrag";
+import { setCardDragImage } from "@/cut/lib/assetDrag";
 import { importStockMusic } from "@/cut/lib/media";
 import { useMusicGen } from "@/cut/lib/musicGen";
 import { usePreviewAudio } from "@/cut/lib/previewAudio";
@@ -85,7 +85,7 @@ export function SampleLibrary({ projectId }: { projectId: string }) {
                       name: sampleName(s.id),
                       duration: s.duration,
                     })
-                      .then((a) => useEditor.getState().addAssetAtPlayhead(a.id))
+                      .then((a) => useEditor.getState().addAudioFromAsset(a.id))
                       .catch(() => {})
                   }
                 />
@@ -121,7 +121,7 @@ function SampleCard({
       draggable
       onDragStart={(e) => {
         setRefDragData(e, refFromStockMusic(sample));
-        setObjectDragImage(e);
+        setCardDragImage(e, e.currentTarget);
       }}
       onDragEnd={clearRefDrag}
       onClick={() => remix(sample)}

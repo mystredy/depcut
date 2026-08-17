@@ -8,7 +8,7 @@
 // Canonical, dated-or-versioned model IDs. Add a new constant when adopting a
 // new model; do not inline raw version strings at call sites.
 export const geminiModels = {
-  flash: "gemini-3.7-flash",
+  flash: "gemini-3.5-flash",
   flashLite: "gemini-3.1-flash-lite",
   // Generative image editing/generation ("nano banana"). Bump here when adopting a
   // newer image model.
@@ -62,11 +62,15 @@ export type GeminiMusicModel = (typeof geminiMusicModels)[keyof typeof geminiMus
 export const geminiModelRoles = {
   // General chat and non-decision Responses calls — the latest full flash.
   chat: geminiModels.flash,
-  // Chat turns the gate judges simple — one self-contained ask runs on the
-  // light chat model; complex turns stay on `chat`.
-  chatSimple: geminiModels.flashLite,
   // Fast structured task-intent and follow-up decisions.
   fastDecision: geminiModels.flashLite,
+  // Computer Use tool calls (browser and macOS desktop environments). Computer
+  // use is a built-in tool of the main flash model, so both share one model.
+  computerUse: geminiModels.flash,
+  // Screenshot parsing into read-only UI evidence.
+  screenshotParse: geminiModels.flash,
+  // Vision grounding: a cheap structured pick over already-parsed elements.
+  visionGrounding: geminiModels.flashLite,
   // Generative image editing and generation.
   imageGeneration: geminiModels.proImage,
   // Production review: the director judging rendered takes and minted frames

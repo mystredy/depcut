@@ -11,31 +11,13 @@
  * The math is here, apart from React, because both exports walk the same stack.
  */
 
-import { effectPreviewState, type EffectPreviewState } from "@donkeycut/effects-kit";
-import { isEffectOverlay, laneOf, type Overlay } from "./types";
+import type { EffectPreviewState } from "@donkeycut/effects-kit";
 
 /** One effect live at a moment, with the lane that places it in the stack. */
 export interface LiveEffect {
   lane: number;
   state: EffectPreviewState;
 }
-
-/** The effects playing at `t`, shallowest lane first. */
-export function liveEffectsAt(overlays: Overlay[], t: number): LiveEffect[] {
-  const live: LiveEffect[] = [];
-  for (const o of overlays) {
-    if (!isEffectOverlay(o) || o.hidden || t < o.start || t > o.end) continue;
-    live.push({
-      lane: laneOf(o),
-      state: effectPreviewState(o.effect, o.amount, t - o.start, o.focus, o.ramp, o.end - o.start),
-    });
-  }
-  return live.sort((a, b) => a.lane - b.lane);
-}
-
-/** Whether any effect could be live at all. The stage asks before doing the
- * per-frame work of finding out which ones are. */
-export const hasEffects = (overlays: Overlay[]) => overlays.some(isEffectOverlay);
 
 /** How the content under an effect moves: a zoom's push in, a shake, and the
  * horizontal jump that reads as tearing. Empty for the effects that only
@@ -72,7 +54,7 @@ export function stageEffectTransform(states: EffectPreviewState[]): string | und
 }
 
 /** The grade of a run of effects, as one CSS filter. */
-export const stageEffectFilter = (states: EffectPreviewState[]) =>
+const stageEffectFilter = (states: EffectPreviewState[]) =>
   states
     .map((s) => s.cssFilter)
     .filter(Boolean)
@@ -86,24 +68,23 @@ export type StageSlice =
       /** Elements on lanes in [from, to) — `from` counts down from the top. */
       from: number;
       to: number;
-      /** Effects shallower than this lane grade the slice. Null on the top
-       * slice, which nothing grades. */
-      gradeAbove: number | null;
+      filter?: string;
+      transform?: string;
       /** The topmost slice carries the captions, which nothing grades. */
       captions: boolean;
     }
-  | { kind: "paint"; key: string; lane: number };
+  | { kind: "paint"; key: string; states: EffectPreviewState[] };
 
 /**
- * The stage bottom to top: alternating element slices and the paints of the
- * effect that sits over each.
- *
- * The shape depends only on which lanes hold effects, so it holds still while
- * the playhead moves and changes only when a row does. What each slice *wears*
- * at this instant is worked out by the slice itself, which is what keeps the
- * clock out of the component that lays the stage out.
+ * The stage bottom to top: what the picture itself wears, then alternating
+ * element slices and the paints of the effect that sits over each.
  */
-export function stageSliceStructure(lanes: number[]): StageSlice[] {
+export function stageSlices(
+  live: LiveEffect[],
+  lanes: number[]
+): { picture: { filter?: string; transform?: string }; slices: StageSlice[] } {
+  const above = (lane: number) => live.filter((e) => e.lane < lane).map((e) => e.state);
+  const all = live.map((e) => e.state);
   const slices: StageSlice[] = [];
   // Deepest first: elements under that effect, then its paints over them.
   for (let i = lanes.length - 1; i >= 0; i--) {
@@ -113,18 +94,25 @@ export function stageSliceStructure(lanes: number[]): StageSlice[] {
       key: `band-${lane}`,
       from: lane + 1,
       to: i + 1 < lanes.length ? lanes[i + 1] : Infinity,
-      gradeAbove: lane + 1,
+      filter: stageEffectFilter(above(lane + 1)),
+      transform: stageEffectTransform(above(lane + 1)),
       captions: false,
     });
-    slices.push({ kind: "paint", key: `paint-${lane}`, lane });
+    slices.push({
+      kind: "paint",
+      key: `paint-${lane}`,
+      states: live.filter((e) => e.lane === lane).map((e) => e.state),
+    });
   }
   slices.push({
     kind: "elements",
     key: "band-top",
     from: 0,
     to: lanes.length ? lanes[0] : Infinity,
-    gradeAbove: null,
     captions: true,
   });
-  return slices;
+  return {
+    picture: { filter: stageEffectFilter(all), transform: stageEffectTransform(all) },
+    slices,
+  };
 }

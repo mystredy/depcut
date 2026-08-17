@@ -5,8 +5,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Cloud,
-  Download,
-  Ellipsis,
   Film,
   FolderOpen,
   FolderPlus,
@@ -20,13 +18,6 @@ import {
   Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { LiveElapsed } from "@/cut/components/Elapsed";
 import {
   AlertDialog,
@@ -46,7 +37,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { MEDIA_CORS } from "@/cut/lib/mediaCors";
-import { clearAssetDrag, setLibraryDragData, setObjectDragImage } from "@/cut/lib/assetDrag";
+import { clearAssetDrag, setCardDragImage, setLibraryDragData } from "@/cut/lib/assetDrag";
 import { useInView } from "@/cut/hooks/useInView";
 import { isMediaFile } from "@/cut/lib/media";
 import { patchLibrary, refetchLibrary, useLibrary } from "@/cut/lib/queries";
@@ -55,7 +46,6 @@ import {
   deleteFromLibrary,
   deleteLibraryFolder,
   deleteTemplate,
-  downloadLibraryAsset,
   importUrlToLibrary,
   libraryMediaUrl,
   moveLibraryItem,
@@ -68,15 +58,9 @@ import {
 import { useNewProjectTarget } from "@/cut/lib/newProject";
 import { useListedResidencies, useLocalCompute } from "@/cut/lib/backend/hooks";
 import { setNeedsApp } from "@/cut/lib/needsApp";
-import {
-  availableResidencies,
-  libraryResidencies,
-  RESIDENCY_LABEL,
-  type Residency,
-} from "@/cut/lib/residency";
+import { availableResidencies, RESIDENCY_LABEL, type Residency } from "@/cut/lib/residency";
 import { TemplateCard } from "./TemplateCard";
 import { homeHref, useCutBase } from "@/cut/lib/nav";
-import { shapeBand } from "@/cut/lib/types";
 import { useRevealFlash } from "@/cut/lib/refReveal";
 import { formatTime } from "@/cut/lib/time";
 import { cn } from "@/lib/utils";
@@ -104,7 +88,7 @@ export function ShelfBadge({
   const Icon = residency === "cloud" ? Cloud : Laptop;
   return (
     <span
-      title={offline ? "Local — open the Donkey app to use it" : RESIDENCY_LABEL[residency]}
+      title={offline ? "On this Mac — open the Donkey app to use it" : RESIDENCY_LABEL[residency]}
       className={className}
     >
       <Icon className="size-3" />
@@ -290,26 +274,12 @@ export function LibraryView() {
       e.dataTransfer.setDragImage(ghost, 18, 16);
       setTimeout(() => ghost.remove(), 0);
     } else {
-      setObjectDragImage(e);
+      setCardDragImage(e, e.currentTarget as HTMLElement);
     }
   };
 
   const bothShelves = listed.length > 1;
   const shown = all.filter((a) => (a.folderId ?? null) === openFolder);
-  // Similar-shape tiles get their own band of wrapped rows, so a wide tile
-  // never shares a row with a tall one; audio and unmeasured assets band as
-  // squares. Order within and across bands follows the listing.
-  const shapeOf = (a: LibraryAsset) =>
-    a.type === "audio" || !a.width || !a.height ? 0 : shapeBand(a.width, a.height);
-  const shownBands = new Map<number, LibraryAsset[]>();
-  for (const a of shown) {
-    const band = shownBands.get(shapeOf(a)) ?? [];
-    if (band.length === 0) shownBands.set(shapeOf(a), band);
-    band.push(a);
-  }
-  // Every tile takes the same area — a wide clip spreads, a tall one stands,
-  // and each carries equal weight on the page.
-  const TILE_AREA = 180 * 180;
   const shownTemplates = templates.filter((t) => (t.folderId ?? null) === openFolder);
   const openFolderName = folders.find((f) => f.id === openFolder)?.name;
   const hasContent =
@@ -487,31 +457,26 @@ export function LibraryView() {
         </button>
       ) : shown.length === 0 && uploading === 0 ? null : (
         <Marquee
-          className="flex min-h-[40vh] flex-col content-start gap-8"
+          className="grid min-h-[40vh] grid-cols-[repeat(auto-fill,minmax(160px,1fr))] content-start gap-4"
           selected={selected}
           setSelected={setSelected}
         >
-          {[...shownBands.entries()].map(([shape, band]) => (
-            <div key={shape} className="flex flex-wrap items-start gap-4">
-              {band.map((a) => (
-                <LibraryCard
-                  key={a.id}
-                  asset={a}
-                  area={TILE_AREA}
-                  selected={selected.has(a.id)}
-                  offline={!live(a.residency)}
-                  // Clicking an item this browser can only remember is the
-                  // moment something is actually blocked, so that is when the
-                  // gate's banner — and the way out of it — comes up.
-                  onClick={live(a.residency) ? undefined : () => setNeedsApp(true)}
-                  onDelete={live(a.residency) ? () => setDeleting(a) : undefined}
-                  onDragStartExtra={(e) => onCardDragExtra(e, a)}
-                />
-              ))}
-            </div>
+          {shown.map((a) => (
+            <LibraryCard
+              key={a.id}
+              asset={a}
+              selected={selected.has(a.id)}
+              offline={!live(a.residency)}
+              // Clicking an item this browser can only remember is the moment
+              // something is actually blocked, so that is when the gate's
+              // banner — and the way out of it — comes up.
+              onClick={live(a.residency) ? undefined : () => setNeedsApp(true)}
+              onDelete={live(a.residency) ? () => setDeleting(a) : undefined}
+              onDragStartExtra={(e) => onCardDragExtra(e, a)}
+            />
           ))}
           {uploading > 0 && (
-            <div className="flex size-[180px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-input text-xs text-muted-foreground">
+            <div className="flex aspect-square flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-input text-xs text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
               <span>
                 Uploading… <LiveElapsed />
@@ -599,7 +564,6 @@ export function LibraryCard({
   asset: a,
   selected,
   offline = false,
-  area,
   onClick,
   onDelete,
   onUse,
@@ -610,11 +574,6 @@ export function LibraryCard({
   /** The shelf this item is on isn't answering: it lists from memory, so the
    * card shows what it knows and reaches for no media it can't load. */
   offline?: boolean;
-  /** Tile area in square pixels. When set, the tile takes the media's own
-   * aspect at this shared area — a wide clip spreads, a tall one stands, and
-   * every card carries the same weight. Unset, the tile fills its grid cell
-   * as a square. Audio and unmeasured assets sit square either way. */
-  area?: number;
   onClick?: () => void;
   onDelete?: () => void;
   onUse?: () => void;
@@ -623,7 +582,7 @@ export function LibraryCard({
   const videoRef = useRef<HTMLVideoElement>(null);
   const { flash, attachReveal } = useRevealFlash("library", a.id);
   // With one shelf listed, every card is on it — the badge would say nothing.
-  const bothShelves = libraryResidencies(availableResidencies()).length > 1 || offline;
+  const bothShelves = availableResidencies().length > 1 || offline;
   // Each card is a real media element, so the source waits until the tile has
   // been scrolled near: a large library would otherwise pull every file's
   // metadata across the network the moment the page opened.
@@ -638,16 +597,6 @@ export function LibraryCard({
     offline ? "" : libraryMediaUrl(a.fileName, a.residency),
     hovered
   );
-  const frame =
-    area && a.type !== "audio" && a.width && a.height
-      ? { w: a.width, h: a.height }
-      : { w: 1, h: 1 };
-  const tileStyle = area
-    ? {
-        width: Math.round(Math.sqrt((area * frame.w) / frame.h)),
-        aspectRatio: `${frame.w} / ${frame.h}`,
-      }
-    : undefined;
 
   return (
     <div
@@ -675,13 +624,10 @@ export function LibraryCard({
     >
       <div
         ref={tileRef}
-        data-drag-object
         className={cn(
-          "relative max-w-full cursor-grab overflow-hidden rounded-xl border bg-muted transition-shadow group-hover:shadow-[0_4px_20px_rgba(0,0,0,0.1)] active:cursor-grabbing",
-          !area && "aspect-square",
+          "relative aspect-square cursor-grab overflow-hidden rounded-xl border bg-muted transition-shadow group-hover:shadow-[0_4px_20px_rgba(0,0,0,0.1)] active:cursor-grabbing",
           selected || flash ? "border-[#0a84ff] ring-2 ring-[#0a84ff]" : "border-border"
         )}
-        style={tileStyle}
       >
         {offline ? (
           // Nothing to load from a shelf that isn't answering, so the card
@@ -719,32 +665,25 @@ export function LibraryCard({
             durationClassName={!!onUse && "transition-opacity group-hover:opacity-0"}
           />
         )}
-        {a.type !== "audio" && (a.type === "video" || sizeBytes != null) && (
-          // Length and size share one pill in the corner: on a card this narrow
-          // two of them collide. The length reads at rest, the size takes over
-          // on hover, where the + button is what the pointer is there for.
-          <span
-            data-drag-omit
-            className={cn(
-              "absolute right-1.5 bottom-1.5 rounded-md bg-black/65 px-1.5 py-0.5 font-mono text-[10px] text-white tabular-nums",
-              a.type !== "video" && "opacity-0 transition-opacity group-hover:opacity-100"
-            )}
-          >
-            {a.type === "video" && (
-              <span className={cn(sizeBytes != null && "group-hover:hidden")}>
-                {formatTime(a.duration)}
-              </span>
-            )}
-            {sizeBytes != null && (
-              <span className={cn(a.type === "video" && "hidden group-hover:inline")}>
-                {formatBytes(sizeBytes)}
-              </span>
-            )}
+        {a.type === "video" && (
+          <span className="absolute right-1.5 bottom-1.5 rounded-md bg-black/65 px-1.5 py-0.5 font-mono text-[10px] text-white tabular-nums">
+            {formatTime(a.duration)}
           </span>
         )}
-        {a.type === "audio" && sizeBytes != null && (
-          // Clear of the play circle, matching the face's duration pill.
-          <span className="absolute bottom-3 left-12 rounded-md bg-[#2b4e42] px-1.5 py-0.5 font-mono text-[10px] text-[#d6eddf] tabular-nums opacity-0 transition-opacity group-hover:opacity-100">
+        {sizeBytes != null && (
+          <span
+            className={cn(
+              "absolute font-mono tabular-nums",
+              a.type === "audio"
+                ? // Clear of the play circle, matching the face's duration pill.
+                  "bottom-3 left-12 rounded-md bg-[#2b4e42] px-1.5 py-0.5 text-[10px] text-[#d6eddf]"
+                : cn(
+                    "rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] text-white",
+                    // The + button takes the corner on hover; sit beside it.
+                    onUse ? "bottom-2 left-9" : "bottom-1.5 left-1.5"
+                  )
+            )}
+          >
             {formatBytes(sizeBytes)}
           </span>
         )}
@@ -772,34 +711,27 @@ export function LibraryCard({
             className={cn(
               "absolute top-2 right-2 transition-opacity",
               offline ? "text-muted-foreground" : "text-white/85",
-              // The actions menu takes this corner on hover.
-              "group-hover:opacity-0"
+              // The delete button takes this corner on hover.
+              onDelete && "group-hover:opacity-0"
             )}
           />
         )}
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            aria-label="More actions"
-            title="More actions"
-            className="absolute top-1.5 right-1.5 grid size-6 place-items-center rounded-full bg-black/40 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/60 data-[state=open]:opacity-100"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Ellipsis className="size-3.5" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44" onClick={(e) => e.stopPropagation()}>
-            <DropdownMenuItem onClick={() => downloadLibraryAsset(a)} disabled={offline}>
-              <Download /> Download
-            </DropdownMenuItem>
-            {onDelete && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onClick={onDelete}>
-                  <Trash2 /> Remove from library
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="absolute top-1.5 right-1.5 flex gap-1">
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Remove from library"
+              className="bg-black/40 text-white hover:bg-black/60 hover:text-white"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+            >
+              <Trash2 />
+            </Button>
+          )}
+        </div>
         <CopyNameLabel
           name={a.name}
           dark={a.type === "audio"}

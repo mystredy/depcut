@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronLeft, CloudUpload, Loader2, Mic, Monitor, MoreHorizontal, Ratio, Share2, Smartphone, Sparkles, Square, Upload, Video } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, CloudUpload, Loader2, Mic, Monitor, MoreHorizontal, Ratio, Redo2, Share2, Smartphone, Sparkles, Square, Undo2, Upload, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,7 +26,6 @@ import {
 } from "@/components/ui/tooltip";
 import { cloudBackend } from "@/cut/lib/backend/cloud";
 import { cloudUsageQueryKey, useCutMode } from "@/cut/lib/backend/hooks";
-import { browserBackend } from "@/cut/lib/backend/browser";
 import { localBackend } from "@/cut/lib/backend/local";
 import { clearProjectThreads } from "@/cut/lib/chatThreads";
 import { retryUpload } from "@/cut/lib/importQueue";
@@ -67,6 +66,8 @@ export function TopBar({
   const projectName = useEditor((s) => s.projectName);
   const saveState = useEditor((s) => s.saveState);
   const aiOpen = useEditor((s) => s.aiOpen);
+  const canUndo = useEditor((s) => s.canUndo);
+  const canRedo = useEditor((s) => s.canRedo);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [recordMode, setRecordMode] = useState<RecordMode | null>(null);
@@ -237,11 +238,11 @@ export function TopBar({
     endEditing();
   };
 
-  // "Move to Cloud": copies this local or browser project — doc and every
-  // media file — to the cloud, deletes the original, and reopens the editor on
-  // the cloud copy.
+  // "Move to Cloud": copies this local project — doc and every media file — to
+  // the cloud, deletes the local original, and reopens the editor on the cloud
+  // copy.
   const cutMode = useCutMode();
-  const canMoveToCloud = cutMode === "local" || cutMode === "browser";
+  const canMoveToCloud = cutMode === "local";
   // Cloud imports are real uploads worth reporting; local imports are instant
   // disk copies, so they report nothing.
   const cloudUploading = uploading > 0 && cutMode === "cloud";
@@ -279,11 +280,10 @@ export function TopBar({
       for (let i = 0; i < 40 && useEditor.getState().saveState !== "saved"; i++) {
         await new Promise((r) => setTimeout(r, 250));
       }
-      const src = cutMode === "browser" ? browserBackend : localBackend;
-      const newId = await copyProjectAcross(src, cloudBackend, projectId, {
+      const newId = await copyProjectAcross(localBackend, cloudBackend, projectId, {
         onProgress: (done, total) => setMoveProgress(`Moving media ${done}/${total}…`),
       });
-      await src
+      await localBackend
         .fetch(`/api/cut/projects/${projectId}`, { method: "DELETE" })
         .catch(() => {});
       // The chat history moved with the project; the old project's copy goes
@@ -309,15 +309,13 @@ export function TopBar({
   // bar tightens. Chat keeps its label in both — it is the primary control.
   const actionButtons = (compact: boolean) => (
     <>
-      {(cutMode === "cloud" || cutMode === "browser") && (
-        // Shares are served from the cloud, so for a browser project the
-        // Share button leads to the move that makes sharing possible.
+      {cutMode === "cloud" && (
         <Button
           variant="ghost"
           size={compact ? "icon-sm" : "sm"}
           aria-label="Share"
-          title={cutMode === "browser" ? "Move to Cloud to share" : "Share"}
-          onClick={() => (cutMode === "browser" ? setMoveOpen(true) : setShareOpen(true))}
+          title="Share"
+          onClick={() => setShareOpen(true)}
         >
           <Share2 data-icon={compact ? undefined : "inline-start"} />
           {!compact && "Share"}
@@ -408,7 +406,7 @@ export function TopBar({
         </Button>
         <span className="grid size-[22px] shrink-0 place-items-center">
           <img
-            src="/donkey-logo.svg"
+            src="/deepw-logo.svg"
             alt="Donkey"
             width={22}
             height={22}
@@ -475,6 +473,43 @@ export function TopBar({
             </>
           )}
         </span>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Undo"
+                  className="ml-1"
+                  disabled={!canUndo}
+                  onClick={() => useEditor.getState().undo()}
+                >
+                  <Undo2 />
+                </Button>
+              }
+            />
+            <TooltipContent side="bottom">Undo (⌘Z)</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Redo"
+                  disabled={!canRedo}
+                  onClick={() => useEditor.getState().redo()}
+                >
+                  <Redo2 />
+                </Button>
+              }
+            />
+            <TooltipContent side="bottom">Redo (⌘⇧Z)</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
       <div className="min-w-2 flex-1" />
       <div ref={middleRef} className="flex shrink-0 items-center gap-2">
@@ -693,8 +728,7 @@ export function TopBar({
             </DialogHeader>
             <p className="text-sm text-muted-foreground">
               Copies this project and its media to the cloud, then removes it
-              from {cutMode === "browser" ? "this browser" : "this Mac"}.
-              Exports rendered here stay behind.
+              from this Mac. Exports rendered here stay behind.
             </p>
             {moveError && <p className="text-sm text-red-600">{moveError}</p>}
             <DialogFooter className="mt-2">

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { startDrag } from "@/cut/lib/drag";
-import { useSkim, usePreviewTime } from "@/cut/lib/playhead";
 import { useEditor } from "@/cut/lib/store";
 import {
   captionStyle,
@@ -15,7 +14,7 @@ import {
   subtitleLaneCount,
   trackPos,
 } from "@/cut/lib/subtitles";
-import { evalOverlayFrame, hasMaskKeys, hasOverlayKeys, isOverlayAnimated, lineLikeShape, maskFrameAt, paintMaskCoverage, resolveShadow, shapeMetrics, shapePathD, type LottieHandle, type Mask, type MaskKey } from "@donkeycut/effects-kit";
+import { evalOverlayFrame, hasOverlayKeys, isOverlayAnimated, resolveShadow, shapeMetrics, type LottieHandle } from "@donkeycut/effects-kit";
 import {
   LINE_HEIGHT,
   PLATE_PAD_X,
@@ -25,7 +24,6 @@ import {
   SHADOW,
 } from "@/cut/lib/textRender";
 import {
-  behindSubjectOverlay,
   clampOverlayPos,
   frameOf,
   fontStack,
@@ -36,9 +34,6 @@ import {
   type ShapeOverlay,
   type StickerOverlay,
 } from "@/cut/lib/types";
-import { subjectMatteSnapshot } from "@/cut/lib/behindPass";
-import { stageEffectFilter, stageEffectTransform } from "@/cut/lib/effectStack";
-import { useLiveEffects } from "./StageEffects";
 import { cn } from "@/lib/utils";
 
 // Plate geometry as CSS, kept in lockstep with the export burn-in metrics.
@@ -61,19 +56,6 @@ const ROTATE_BOX = Math.ceil(Math.hypot(ROTATE_GLYPH_W, ROTATE_GLYPH_H));
 /** The glyph's own arrows run top-to-bottom, so a quarter turn puts them
  * left-to-right — the way an unrotated element's top handle drags. */
 const ROTATE_BASE_DEG = -90;
-/** Degrees around a quarter turn where a rotate drag locks on. Wide enough to
- * feel as a detent at drag speed — a rotate drag covers several degrees per
- * pointer event, so a narrow window slips by between frames. */
-const ROTATE_SNAP_DEG = 6;
-
-/** Land an angle on the quarter turn within reach: the angle to use and the
- * detent it locked to (null when free). */
-function snapQuarter(deg: number): { deg: number; locked: number | null } {
-  for (const q of [-180, -90, 0, 90, 180]) {
-    if (Math.abs(deg - q) < ROTATE_SNAP_DEG) return { deg: q, locked: q };
-  }
-  return { deg, locked: null };
-}
 
 const rotateCursorCache = new Map<number, string>();
 
@@ -114,16 +96,20 @@ const subtitleBoxId = (lane: number) => `subtitle-caption-${lane}`;
 
 export function OverlayLayer({
   stageWidth,
-  gradeAbove = null,
+  transform,
+  filter,
   from = 0,
   to = Infinity,
   captions = true,
 }: {
   stageWidth: number;
-  /** Effects on a lane shallower than this one grade and move these elements.
-   * An effect filters what plays under it, so the ones below it wear its look
-   * and the ones above it do not (see StageEffects). Null grades nothing. */
-  gradeAbove?: number | null;
+  /** How a live effect moves the frame (shake, tearing) — the elements travel
+   * with the picture they sit on. */
+  transform?: string;
+  /** The grade of every effect above these elements. An effect filters what
+   * plays under it, so the ones below it wear its look and the ones above it
+   * do not (see StageEffects). */
+  filter?: string;
   /** The lanes this slice of the stack draws: [from, to). */
   from?: number;
   to?: number;
@@ -135,19 +121,13 @@ export function OverlayLayer({
     () => allOverlays.filter((o) => laneOf(o) >= from && laneOf(o) < to),
     [allOverlays, from, to]
   );
+  const currentTime = useEditor((s) => s.currentTime);
+  const skimTime = useEditor((s) => s.skimTime);
+  const playing = useEditor((s) => s.playing);
   const selection = useEditor((s) => s.selection);
   const aspect = useEditor((s) => s.aspect);
   // Titles preview under the skimmer too (paused only), matching the canvas.
-  const t = usePreviewTime();
-  const skimTime = useSkim();
-  const live = useLiveEffects();
-  // The grade and frame motion of every effect above this slice.
-  const graded = useMemo(
-    () => (gradeAbove === null ? [] : live.filter((e) => e.lane < gradeAbove).map((e) => e.state)),
-    [live, gradeAbove]
-  );
-  const filter = stageEffectFilter(graded);
-  const transform = stageEffectTransform(graded);
+  const t = !playing && skimTime !== null ? skimTime : currentTime;
 
   const rootRef = useRef<HTMLDivElement>(null);
   // Live box elements per on-screen item (titles and the subtitle caption), so
@@ -225,28 +205,11 @@ export function OverlayLayer({
 
   const clearGuides = useCallback(() => setGuides({ v: [], h: [] }), []);
 
-  // A rotate drag that locks onto a quarter turn paints a guide through the
-  // element's center: the horizontal line at 0°/±180°, the vertical one at
-  // ±90°, matching the axis the element's baseline runs along.
-  const rotationGuide = useCallback(
-    (p: { clientX: number; clientY: number; quarter: number } | null) => {
-      const root = rootRef.current;
-      if (!p || !root) {
-        setGuides({ v: [], h: [] });
-        return;
-      }
-      const r = root.getBoundingClientRect();
-      if (Math.abs(p.quarter) === 90) setGuides({ v: [p.clientX - r.left], h: [] });
-      else setGuides({ v: [], h: [p.clientY - r.top] });
-    },
-    []
-  );
-
   // The selected title and whether the playhead sits inside it. Selecting a
   // title off the playhead (e.g. focusing its text in the panel) edits it in
   // isolation: it shows alone so it never stacks over whatever title is live.
   // Not while scrubbing — the skimmer must still show the exact frame's titles.
-  const scrubbing = skimTime !== null;
+  const scrubbing = !playing && skimTime !== null;
   const sel =
     selection?.kind === "overlay" ? overlays.find((o) => o.id === selection.id) : undefined;
   const isolate = !!sel && !scrubbing && !(t >= sel.start && t <= sel.end);
@@ -292,7 +255,6 @@ export function OverlayLayer({
             registerBox={registerBox}
             snap={snap}
             onSnapEnd={clearGuides}
-            rotationGuide={rotationGuide}
           />
         );
       })}
@@ -355,8 +317,11 @@ function SubtitleCaption({
   onSnapEnd: () => void;
 }) {
   const subtitles = useEditor((s) => s.subtitles);
+  const currentTime = useEditor((s) => s.currentTime);
+  const skimTime = useEditor((s) => s.skimTime);
+  const playing = useEditor((s) => s.playing);
   const frame = frameOf(useEditor((s) => s.aspect));
-  const t = usePreviewTime();
+  const t = !playing && skimTime !== null ? skimTime : currentTime;
 
   const cues = laneCues(subtitles, lane);
   const cue = cueAt(cues, t);
@@ -469,7 +434,6 @@ function OverlayItem({
   registerBox,
   snap,
   onSnapEnd,
-  rotationGuide,
 }: {
   overlay: Overlay;
   selected: boolean;
@@ -480,9 +444,6 @@ function OverlayItem({
   registerBox: (id: string, el: HTMLElement | null) => void;
   snap: (id: string, x: number, y: number, ev: PointerEvent) => { x: number; y: number };
   onSnapEnd: () => void;
-  /** Paint (or clear) the guide line while a rotate drag sits on a quarter
-   * turn; the point is the rotating element's center in client coords. */
-  rotationGuide: (p: { clientX: number; clientY: number; quarter: number } | null) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const editRef = useRef<HTMLDivElement>(null);
@@ -528,27 +489,18 @@ function OverlayItem({
       : isText
         ? o.text
         : "";
-  // Behind-the-speaker elements draw inside the canvas compositor; the DOM
-  // keeps an invisible hit target (and the selection chrome) so editing
-  // still works.
-  const behindHidden = behindSubjectOverlay(o) && !editing;
+  // Behind-speaker titles draw inside the canvas compositor; the DOM keeps an
+  // invisible hit target (and the selection chrome) so editing still works.
+  const behindHidden = isText && !!o.behindSubject && !editing;
 
-  const tLocal = Math.max(0, t - o.start);
-  // The mask clips the content wrapper only, never the box itself — the
-  // selection chrome and the mask's own grips must stay visible outside it.
-  const maskCss = useMaskCss(o, boxRef, stageWidth, stageHeight, scale, tLocal, editing);
-
-  // The box carries position, rotation, and opacity; the content wrapper
-  // inside it carries a title's type styles (the edit caret inherits them)
-  // and the mask.
+  // Every kind shares position, rotation, and opacity; text carries its type
+  // styles on the same box so the edit caret inherits them.
   const style: CSSProperties = {
     // A keyframed element is placed by its pose, not by its resting x/y.
     left: `${(live?.x ?? o.x) * 100}%`,
     top: `${(live?.y ?? o.y) * 100}%`,
     transform: `translate(-50%, -50%)${animTransform}`,
     opacity: (live ? live.opacity : (o.opacity ?? 1)) * (ghost ? 0.35 : 1),
-  };
-  const contentStyle: CSSProperties = {
     ...(isText
       ? (() => {
           const shadow = resolveShadow(o.shadow);
@@ -574,13 +526,12 @@ function OverlayItem({
               : undefined,
             // A behind-speaker title paints on the canvas; the DOM box keeps
             // its footprint but no visible plate.
-            background: o.plate && !behindHidden ? plateFill(o) : undefined,
+            background: o.plate && !(o.behindSubject && !editing) ? plateFill(o) : undefined,
             padding: o.plate ? PLATE_PADDING : undefined,
             borderRadius: o.plate ? `${o.plateRadius ?? PLATE_RADIUS}em` : undefined,
           };
         })()
       : {}),
-    ...(maskCss ?? {}),
   };
 
   const commitText = () => {
@@ -696,10 +647,10 @@ function OverlayItem({
     });
   };
 
-  // The lollipop above the box rotates around the center; angles within reach
-  // of a quarter turn snap to it, and 0 stores as absence. A group orbits
-  // its shared center: positions revolve, each member's rotation shifts by
-  // the same delta, and the grabbed element's angle snaps the same way.
+  // The lollipop above the box rotates around the center; plain angles within
+  // 3° of a quarter turn snap to it, and 0 stores as absence. A group orbits
+  // its shared center: positions revolve and each member's rotation shifts by
+  // the same delta.
   const rotateFrom = (e: React.PointerEvent) => {
     const s = useEditor.getState();
     s.pushHistory();
@@ -712,9 +663,6 @@ function OverlayItem({
     const angleAt = (ev: { clientX: number; clientY: number }) =>
       (Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180) / Math.PI + 90;
     const start0 = angleAt(e);
-    // The grabbed member's start position, for placing the guide while the
-    // group orbit carries its center away from the box rect measured above.
-    const grabbed = members.find((m) => m.id === o.id) ?? o;
     const norm = (deg: number) => ((((deg + 180) % 360) + 360) % 360) - 180;
     // The cursor turns with the element for the whole drag, so its heads keep
     // pointing the way the next bit of travel will take it.
@@ -723,17 +671,16 @@ function OverlayItem({
       cursor: () => rotateCursor(liveRotation),
       onMove: (_dx, _dy, ev) => {
         if (members.length === 1) {
-          const { deg, locked } = snapQuarter(norm(angleAt(ev)));
+          let deg = norm(angleAt(ev));
+          for (const q of [-180, -90, 0, 90, 180]) {
+            if (Math.abs(deg - q) < 3) deg = q;
+          }
           const rotation = Math.round(deg);
           liveRotation = rotation;
-          rotationGuide(locked === null ? null : { clientX: cx, clientY: cy, quarter: locked });
           writeTransform([{ id: o.id, patch: { rotation: rotation === 0 ? undefined : rotation } }]);
           return;
         }
-        let delta = norm(angleAt(ev) - start0);
-        const lead = norm((o.rotation ?? 0) + delta);
-        const { locked } = snapQuarter(lead);
-        if (locked !== null) delta = norm(delta + locked - lead);
+        const delta = norm(angleAt(ev) - start0);
         liveRotation = norm((o.rotation ?? 0) + delta);
         const rad = (delta * Math.PI) / 180;
         // Positions are frame fractions with unequal axes; orbit in a square
@@ -755,21 +702,7 @@ function OverlayItem({
             };
           })
         );
-        const ox0 = (grabbed.x - gx) * ax;
-        const oy0 = (grabbed.y - gy) * ay;
-        rotationGuide(
-          locked === null
-            ? null
-            : {
-                clientX:
-                  cx + (gx + (ox0 * Math.cos(rad) - oy0 * Math.sin(rad)) / ax - grabbed.x) * stageWidth,
-                clientY:
-                  cy + (gy + (ox0 * Math.sin(rad) + oy0 * Math.cos(rad)) / ay - grabbed.y) * stageHeight,
-                quarter: locked,
-              }
-        );
       },
-      onUp: () => rotationGuide(null),
     });
   };
 
@@ -808,550 +741,57 @@ function OverlayItem({
       }}
       onDoubleClick={isText ? () => setEditing(true) : undefined}
     >
-      <div style={contentStyle}>
-        {behindHidden ? (
-          <span className="opacity-0">{shownText}</span>
-        ) : isText ? (
-          editing ? (
-            <div
-              ref={editRef}
-              className="min-w-2 outline-none select-text"
-              contentEditable
-              suppressContentEditableWarning
-              onBlur={commitText}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  commitText();
-                }
-                e.stopPropagation();
-              }}
-            >
-              {o.text}
-            </div>
-          ) : (
-            <span>{shownText}</span>
-          )
-        ) : o.kind === "shape" ? (
-          <ShapeView shape={o} stageWidth={stageWidth} stageHeight={stageHeight} scale={scale} />
-        ) : o.kind === "sticker" ? (
-          <StickerView sticker={o} stageWidth={stageWidth} t={t} />
-        ) : null}
-      </div>
+      {behindHidden ? (
+        <span className="opacity-0">{shownText}</span>
+      ) : isText ? (
+        editing ? (
+          <div
+            ref={editRef}
+            className="min-w-2 outline-none select-text"
+            contentEditable
+            suppressContentEditableWarning
+            onBlur={commitText}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                commitText();
+              }
+              e.stopPropagation();
+            }}
+          >
+            {o.text}
+          </div>
+        ) : (
+          <span>{shownText}</span>
+        )
+      ) : o.kind === "shape" ? (
+        <ShapeView shape={o} stageWidth={stageWidth} stageHeight={stageHeight} scale={scale} />
+      ) : o.kind === "sticker" ? (
+        <StickerView sticker={o} stageWidth={stageWidth} t={t} />
+      ) : null}
       {selected && !editing && (
         <>
-          {/* The lollipop clears the element's own top edge, so moving is
-              never caught by it. */}
-          <RotateGrip
+          {/* The grab zone is wider than the dot, so the rotate cursor shows
+              as the pointer approaches rather than only dead on it. It clears
+              the element's own top edge, so moving is never caught by it. */}
+          <span
             title="Drag to rotate"
-            color="#0a84ff"
-            className="overlay-rotate absolute -top-8 left-1/2 -translate-x-1/2"
+            className="overlay-rotate absolute -top-8 left-1/2 grid size-7 -translate-x-1/2 place-items-center"
             // The handle rides the element's rotation, so the cursor turns
             // with it and its heads keep pointing along the drag.
             style={{ cursor: rotateCursor(live?.rotation ?? o.rotation ?? 0) }}
             onPointerDown={rotateFrom}
-          />
-          <Grip
+          >
+            <span className="size-[13px] rounded-full border-[2.5px] border-[#0a84ff] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.4)]" />
+          </span>
+          <span
             title="Drag to resize"
-            color="#0a84ff"
-            className="overlay-resize absolute -right-2 -bottom-2 cursor-nwse-resize"
+            className="overlay-resize absolute -right-2 -bottom-2 size-[13px] cursor-nwse-resize rounded-full border-[2.5px] border-[#0a84ff] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.4)]"
             onPointerDown={resizeFrom}
           />
-          {o.mask && o.mask.kind !== "subject" && (
-            <MaskGizmo
-              overlay={o}
-              stageWidth={stageWidth}
-              stageHeight={stageHeight}
-              tLocal={tLocal}
-              rotation={live?.rotation ?? o.rotation ?? 0}
-              poseScale={live?.scale ?? 1}
-            />
-          )}
         </>
       )}
     </div>
-  );
-}
-
-/**
- * The element's mask as CSS: the kit painter draws its coverage on a small
- * box-sized canvas, and the data URL becomes the content's mask-image. The
- * mask lives in the element's own space — the box's CSS transform carries it
- * through pose, rotation and scale — so it clips exactly where the exported
- * raster clips. Regenerated when the geometry, the box, or (keyed) the
- * playhead moves; disabled while the text is being edited.
- */
-/** A keyed mask's CSS repaints on the matte cadence — enough for a soft
- * moving edge, a quarter of the per-frame PNG encodes. */
-const MASK_CSS_FPS = 15;
-/** The mask canvas's size cap; the CSS mask stretches it over the box, so a
- * big element pays a small encode. */
-const MASK_CSS_MAX = 512;
-/** Empty coverage: hides the element while a computed matte has no person. */
-const NO_COVERAGE_MASK = "linear-gradient(transparent, transparent)";
-
-function useMaskCss(
-  o: Overlay,
-  boxRef: React.RefObject<HTMLDivElement | null>,
-  stageWidth: number,
-  stageHeight: number,
-  scale: number,
-  tLocal: number,
-  disabled: boolean
-): CSSProperties | undefined {
-  const m = o.mask;
-  // A behind (inverted subject) element renders in the canvas pass; the DOM
-  // masks shapes and front subject elements.
-  const subjectFront = !!m && m.kind === "subject" && !m.invert;
-  const active = !!m && (m.kind !== "subject" || subjectFront) && !disabled;
-  const keyed = !!m && hasMaskKeys(m);
-  // The published matte refreshes at the segmentation cadence; its stamp is
-  // the memo key, so the CSS mask follows the person as the video plays.
-  const snap = subjectFront && active ? subjectMatteSnapshot() : null;
-  // The repaint keys: a keyed mask ticks at the matte cadence, and the
-  // subject branch follows the published matte's stamp.
-  const keyTick = keyed ? Math.round(tLocal * MASK_CSS_FPS) : 0;
-  const snapTick = subjectFront ? (snap?.at ?? -1) : 0;
-  // One canvas per element, reused across repaints.
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
-  useEffect(() => {
-    if (!active) return;
-    const el = boxRef.current;
-    if (!el) return;
-    const measure = () => setBox({ w: el.offsetWidth, h: el.offsetHeight });
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [active, boxRef]);
-  return useMemo(() => {
-    if (!active || !m || !box || box.w < 1 || box.h < 1) return undefined;
-    const canvas = (canvasRef.current ??= document.createElement("canvas"));
-    if (subjectFront) {
-      // Trim to the person: the published matte becomes the element's
-      // mask-image, positioned so it stays anchored to the frame while the
-      // element sits inside it. A computed matte with no person is empty
-      // coverage (the element hides, like every renderer); before the first
-      // matte lands the element stays whole.
-      if (!snap) return undefined;
-      if (!snap.canvas) {
-        return {
-          maskImage: NO_COVERAGE_MASK,
-          WebkitMaskImage: NO_COVERAGE_MASK,
-        };
-      }
-      if (canvas.width !== snap.canvas.width) canvas.width = snap.canvas.width;
-      if (canvas.height !== snap.canvas.height) canvas.height = snap.canvas.height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return undefined;
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.globalCompositeOperation = "source-over";
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const featherMatte =
-        (m.feather ?? 0) * scale * (snap.canvas.width / Math.max(1, stageWidth));
-      if (featherMatte > 0 && "filter" in ctx) ctx.filter = `blur(${featherMatte / 2}px)`;
-      ctx.drawImage(snap.canvas, 0, 0);
-      ctx.filter = "none";
-      const url = canvas.toDataURL();
-      const boxLeft = o.x * stageWidth - box.w / 2;
-      const boxTop = o.y * stageHeight - box.h / 2;
-      return {
-        maskImage: `url(${url})`,
-        WebkitMaskImage: `url(${url})`,
-        maskRepeat: "no-repeat",
-        WebkitMaskRepeat: "no-repeat",
-        maskSize: `${stageWidth}px ${stageHeight}px`,
-        WebkitMaskSize: `${stageWidth}px ${stageHeight}px`,
-        maskPosition: `${-boxLeft}px ${-boxTop}px`,
-        WebkitMaskPosition: `${-boxLeft}px ${-boxTop}px`,
-      };
-    }
-    // The canvas caps below the box size and the CSS mask stretches it back:
-    // the soft coverage survives the scale and the PNG encode stays small.
-    const s = Math.min(1, MASK_CSS_MAX / Math.max(box.w, box.h));
-    const cw = Math.max(1, Math.round(box.w * s));
-    const ch = Math.max(1, Math.round(box.h * s));
-    if (canvas.width !== cw) canvas.width = cw;
-    if (canvas.height !== ch) canvas.height = ch;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return undefined;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalCompositeOperation = "source-over";
-    ctx.clearRect(0, 0, cw, ch);
-    if (m.invert) {
-      // Keep-outside: full coverage with the shape cut out of it, because a
-      // CSS mask has no invert of its own.
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, cw, ch);
-      ctx.globalCompositeOperation = "destination-out";
-    }
-    // Map frame coordinates onto the box: the element's anchor sits at the
-    // box center, which is where the painter anchors the mask.
-    ctx.scale(s, s);
-    ctx.translate(box.w / 2 - o.x * stageWidth, box.h / 2 - o.y * stageHeight);
-    paintMaskCoverage(
-      ctx,
-      { ...m, invert: undefined },
-      tLocal,
-      { width: stageWidth, height: stageHeight, scale },
-      { x: o.x, y: o.y }
-    );
-    const url = canvas.toDataURL();
-    return {
-      maskImage: `url(${url})`,
-      WebkitMaskImage: `url(${url})`,
-      maskRepeat: "no-repeat",
-      WebkitMaskRepeat: "no-repeat",
-      maskSize: "100% 100%",
-      WebkitMaskSize: "100% 100%",
-    };
-    // The keyed tick folds a 15fps-quantized tLocal in only when the mask
-    // actually animates; the matte stamp refreshes the subject branch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, m, box, o.x, o.y, stageWidth, stageHeight, scale, keyTick, snapTick]);
-}
-
-/** On-canvas handle dot shared by every gizmo: a white dot with a colored
- * ring. The mask's amber is the default; a caller recolors it for its own
- * chrome (elements and clip regions pass selection blue). */
-export function Grip({
-  color = "#ff9f0a",
-  className,
-  style,
-  ...rest
-}: React.ComponentProps<"span"> & { color?: string }) {
-  return (
-    <span
-      {...rest}
-      className={cn(
-        "size-[13px] rounded-full border-[2.5px] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.4)]",
-        className
-      )}
-      style={{ borderColor: color, ...style }}
-    />
-  );
-}
-
-/** Rotate lollipop: the dot centered in a 28px grab zone, so the rotate
- * cursor shows as the pointer approaches the dot. */
-export function RotateGrip({
-  color,
-  className,
-  ...rest
-}: React.ComponentProps<"span"> & { color?: string }) {
-  return (
-    <span {...rest} className={cn("grid size-7 place-items-center", className)}>
-      <Grip color={color} />
-    </span>
-  );
-}
-
-/**
- * On-canvas mask editing, shared by elements and video clips: an amber
- * outline tracing the mask's edge — its interior moves the mask, a lollipop
- * above rotates it and a corner grip resizes it (the band height, for
- * mirror), with the same detents and red guide lines as the element's own
- * handles. Coordinates are local
- * px around the layer's anchor — the mount point carries the layer's own
- * transform — and screen deltas are folded back through that transform via
- * `rotation`/`poseScale`, then through the mask's own angle for the resize.
- * With mask keys in play a drag writes the key at the playhead, the same
- * contract as dragging a keyframed element.
- */
-export function MaskGizmoCore({
-  mask: m,
-  stageWidth,
-  stageHeight,
-  tLocal,
-  rotation,
-  poseScale,
-  writeGeom,
-  begin,
-}: {
-  mask: Mask;
-  stageWidth: number;
-  stageHeight: number;
-  tLocal: number;
-  rotation: number;
-  poseScale: number;
-  writeGeom: (patch: Partial<Omit<MaskKey, "t">>) => void;
-  begin: () => void;
-}) {
-  const f = maskFrameAt(m, tLocal);
-  // Guide lines while a drag sits on a detent: `rot` is the locked quarter
-  // turn, `x`/`y` mark the mask centered on an axis, `w`/`h` a size locked at
-  // exactly full frame. Local space, so on an element they ride its transform
-  // the way the mask itself does.
-  const [guide, setGuide] = useState<{
-    rot?: number;
-    x?: boolean;
-    y?: boolean;
-    w?: boolean;
-    h?: boolean;
-  } | null>(null);
-  const interiorRef = useRef<HTMLDivElement>(null);
-  // Screen deltas → the box's local space (undo the element transform).
-  const toLocal = (dx: number, dy: number) => {
-    const r = (-rotation * Math.PI) / 180;
-    const s = poseScale || 1;
-    return {
-      x: (dx * Math.cos(r) - dy * Math.sin(r)) / s,
-      y: (dx * Math.sin(r) + dy * Math.cos(r)) / s,
-    };
-  };
-  const theta = (f.rotation * Math.PI) / 180;
-  const sizable =
-    m.kind === "rect" || m.kind === "square" || m.kind === "circle" || m.kind === "mirror";
-  // The outline traces the mask's hard edge in local px; a square's side is
-  // `w` of the frame width on both axes (the painter's rule), and
-  // linear/mirror edges run wider than any frame so they always cross it.
-  const cx = f.x * stageWidth;
-  const cy = f.y * stageHeight;
-  const w = f.w * stageWidth;
-  const h = m.kind === "square" ? w : f.h * stageHeight;
-  const span = stageWidth + stageHeight;
-  // The resize grip sits on the mask's corner (mirror: its lower edge),
-  // turned by the mask's own angle.
-  const gx = m.kind === "mirror" ? 0 : w / 2;
-  const gy = h / 2;
-  const rx = gx * Math.cos(theta) - gy * Math.sin(theta);
-  const ry = gx * Math.sin(theta) + gy * Math.cos(theta);
-  // The rotate lollipop clears the top edge (linear: the line itself), turned
-  // with the mask so it stays over its top. The gap matches the element's own
-  // lollipop: its 28px grab zone sits at -top-8, putting the dot 18px out.
-  const lift = (m.kind === "linear" ? 0 : h / 2) + 18;
-  const hx = cx + lift * Math.sin(theta);
-  const hy = cy - lift * Math.cos(theta);
-  const clampSize = (v: number) => Math.min(2, Math.max(0.01, v));
-  // Detents matching the inspector's: size locks onto exactly full frame,
-  // the center onto dead center, within a couple percent of the frame.
-  const snapTo = (v: number, target: number) => (Math.abs(v - target) < 0.02 ? target : v);
-  const designScale = Math.min(stageWidth, stageHeight) / 1080;
-  const edge = {
-    className: "pointer-events-none",
-    fill: "none" as const,
-    stroke: "#ff9f0a",
-    strokeWidth: 1.5,
-    strokeDasharray: "6 4",
-    vectorEffect: "non-scaling-stroke" as const,
-  };
-  const beginMove = (e: React.PointerEvent) => {
-    e.stopPropagation();
-    begin();
-    const g0 = f;
-    startDrag(e, {
-      onMove: (dx, dy) => {
-        const l = toLocal(dx, dy);
-        const x = snapTo(g0.x + l.x / stageWidth, 0);
-        const y = snapTo(g0.y + l.y / stageHeight, 0);
-        setGuide(x === 0 || y === 0 ? { x: x === 0, y: y === 0 } : null);
-        writeGeom({ x, y });
-      },
-      onUp: () => setGuide(null),
-    });
-  };
-  // The lollipop turns the mask about its center; quarter turns detent the
-  // same way the element's own handle does. Angles are mask-local — the
-  // mount's transform carries the element's rotation, and a screen-angle
-  // delta equals a local delta under rotate + uniform scale.
-  const rotateMask = (e: React.PointerEvent) => {
-    e.stopPropagation();
-    begin();
-    const box = interiorRef.current?.getBoundingClientRect();
-    const mcx = box ? box.left + box.width / 2 : e.clientX;
-    const mcy = box ? box.top + box.height / 2 : e.clientY;
-    const angleAt = (ev: { clientX: number; clientY: number }) =>
-      (Math.atan2(ev.clientY - mcy, ev.clientX - mcx) * 180) / Math.PI;
-    const a0 = angleAt(e);
-    const g0 = f;
-    const norm = (deg: number) => ((((deg + 180) % 360) + 360) % 360) - 180;
-    let liveRot = rotation + g0.rotation;
-    startDrag(e, {
-      cursor: () => rotateCursor(liveRot),
-      onMove: (_dx, _dy, ev) => {
-        const { deg, locked } = snapQuarter(norm(g0.rotation + (angleAt(ev) - a0)));
-        const rot = Math.round(deg);
-        liveRot = rotation + rot;
-        setGuide(locked === null ? null : { rot: locked });
-        writeGeom({ rotation: rot });
-      },
-      onUp: () => setGuide(null),
-    });
-  };
-  // The whole interior moves the mask, so a drag can start anywhere inside
-  // the outline; linear/mirror get a grabbable strip along their edge line.
-  const grabW = m.kind === "linear" || m.kind === "mirror" ? span * 2 : w;
-  const grabH = m.kind === "linear" ? 28 : m.kind === "mirror" ? Math.max(h, 28) : h;
-  return (
-    <>
-      <div
-        ref={interiorRef}
-        className="absolute cursor-move"
-        style={{
-          left: `calc(50% + ${cx}px)`,
-          top: `calc(50% + ${cy}px)`,
-          width: grabW,
-          height: grabH,
-          transform: `translate(-50%, -50%) rotate(${f.rotation}deg)`,
-          borderRadius:
-            m.kind === "circle" ? "50%" : (m.radius ?? 0) * designScale,
-        }}
-        onPointerDown={beginMove}
-      />
-      <svg
-        className="pointer-events-none absolute overflow-visible"
-        width={1}
-        height={1}
-        style={{ left: `calc(50% + ${cx}px)`, top: `calc(50% + ${cy}px)` }}
-      >
-        <g transform={`rotate(${f.rotation})`}>
-          {m.kind === "rect" || m.kind === "square" ? (
-            <rect
-              x={-w / 2}
-              y={-h / 2}
-              width={w}
-              height={h}
-              rx={(m.radius ?? 0) * designScale}
-              {...edge}
-            />
-          ) : m.kind === "circle" ? (
-            <ellipse cx={0} cy={0} rx={w / 2} ry={h / 2} {...edge} />
-          ) : m.kind === "linear" ? (
-            <line x1={-span} y1={0} x2={span} y2={0} {...edge} />
-          ) : m.kind === "mirror" ? (
-            <>
-              <line x1={-span} y1={-h / 2} x2={span} y2={-h / 2} {...edge} />
-              <line x1={-span} y1={h / 2} x2={span} y2={h / 2} {...edge} />
-            </>
-          ) : null}
-        </g>
-      </svg>
-      {guide && (
-        <svg
-          className="pointer-events-none absolute z-10 overflow-visible"
-          width={1}
-          height={1}
-          style={{ left: "50%", top: "50%" }}
-        >
-          {guide.rot !== undefined && (
-            <g transform={`translate(${cx} ${cy}) rotate(${guide.rot})`}>
-              <line x1={-span} y1={0} x2={span} y2={0} stroke="#ff2d55" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-            </g>
-          )}
-          {(guide.w || guide.h) && (
-            <g transform={`translate(${cx} ${cy}) rotate(${f.rotation})`}>
-              {guide.w && (
-                <>
-                  <line x1={-stageWidth / 2} y1={-span} x2={-stageWidth / 2} y2={span} stroke="#ff2d55" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-                  <line x1={stageWidth / 2} y1={-span} x2={stageWidth / 2} y2={span} stroke="#ff2d55" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-                </>
-              )}
-              {guide.h && (
-                <>
-                  <line x1={-span} y1={-stageHeight / 2} x2={span} y2={-stageHeight / 2} stroke="#ff2d55" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-                  <line x1={-span} y1={stageHeight / 2} x2={span} y2={stageHeight / 2} stroke="#ff2d55" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-                </>
-              )}
-            </g>
-          )}
-          {guide.x && (
-            <line x1={0} y1={-span} x2={0} y2={span} stroke="#ff2d55" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-          )}
-          {guide.y && (
-            <line x1={-span} y1={0} x2={span} y2={0} stroke="#ff2d55" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-          )}
-        </svg>
-      )}
-      <RotateGrip
-        title="Drag to rotate the mask"
-        className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
-        style={{
-          left: `calc(50% + ${hx}px)`,
-          top: `calc(50% + ${hy}px)`,
-          cursor: rotateCursor(rotation + f.rotation),
-        }}
-        onPointerDown={rotateMask}
-      />
-      {sizable && (
-        <Grip
-          title="Drag to resize the mask"
-          className="absolute z-10 cursor-nwse-resize"
-          style={{
-            left: `calc(50% + ${f.x * stageWidth + rx}px)`,
-            top: `calc(50% + ${f.y * stageHeight + ry}px)`,
-            transform: "translate(-50%, -50%)",
-          }}
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            begin();
-            const g0 = f;
-            startDrag(e, {
-              onMove: (dx, dy) => {
-                const l = toLocal(dx, dy);
-                // Into the mask's own axes for width/height growth; a square
-                // has one side and a mirror band one height.
-                const mx = l.x * Math.cos(theta) + l.y * Math.sin(theta);
-                const my = -l.x * Math.sin(theta) + l.y * Math.cos(theta);
-                const nw = clampSize(snapTo(g0.w + (2 * mx) / stageWidth, 1));
-                const nh = clampSize(snapTo(g0.h + (2 * my) / stageHeight, 1));
-                const gw = m.kind !== "mirror" && nw === 1;
-                const gh = m.kind !== "square" && m.kind !== "mirror" && nh === 1;
-                const gm = m.kind === "mirror" && nh === 1;
-                setGuide(gw || gh || gm ? { w: gw, h: gh || gm } : null);
-                writeGeom(
-                  m.kind === "square"
-                    ? { w: nw }
-                    : m.kind === "mirror"
-                      ? { h: nh }
-                      : { w: nw, h: nh }
-                );
-              },
-              onUp: () => setGuide(null),
-            });
-          }}
-        />
-      )}
-    </>
-  );
-}
-
-/** The element mount: grips are children of the element box, so they ride
- * its transform; writes land on the overlay's mask (or its key at the
- * playhead). */
-function MaskGizmo({
-  overlay: o,
-  stageWidth,
-  stageHeight,
-  tLocal,
-  rotation,
-  poseScale,
-}: {
-  overlay: Overlay;
-  stageWidth: number;
-  stageHeight: number;
-  tLocal: number;
-  rotation: number;
-  poseScale: number;
-}) {
-  const st = () => useEditor.getState();
-  const writeGeom = (patch: Partial<Omit<MaskKey, "t">>) => {
-    const cur = st().overlays.find((x) => x.id === o.id)?.mask;
-    if (!cur) return;
-    if (hasMaskKeys(cur)) return st().setOverlayMaskKey(o.id, tLocal, patch, { transient: true });
-    st().updateOverlayTransient(o.id, { mask: { ...cur, ...patch } });
-  };
-  return (
-    <MaskGizmoCore
-      mask={o.mask!}
-      stageWidth={stageWidth}
-      stageHeight={stageHeight}
-      tLocal={tLocal}
-      rotation={rotation}
-      poseScale={poseScale}
-      writeGeom={writeGeom}
-      begin={() => st().pushHistory()}
-    />
   );
 }
 
@@ -1369,7 +809,7 @@ function ShapeView({
   scale: number;
 }) {
   const m = shapeMetrics(o, { width: stageWidth, height: stageHeight, scale });
-  if (lineLikeShape(o.shape)) {
+  if (o.shape === "line" || o.shape === "arrow") {
     const h = Math.max(m.thickness, m.headHalf * 2);
     const mid = h / 2;
     return (
@@ -1411,7 +851,7 @@ function ShapeView({
           stroke={o.stroke?.color}
           strokeWidth={m.strokeWidth || undefined}
         />
-      ) : o.shape === "ellipse" ? (
+      ) : (
         <ellipse
           cx={m.w / 2}
           cy={m.h / 2}
@@ -1421,15 +861,6 @@ function ShapeView({
           fillOpacity={o.fillOpacity ?? 1}
           stroke={o.stroke?.color}
           strokeWidth={m.strokeWidth || undefined}
-        />
-      ) : (
-        <path
-          d={shapePathD(o.shape, m.w, m.h)}
-          fill={o.fill}
-          fillOpacity={o.fillOpacity ?? 1}
-          stroke={o.stroke?.color}
-          strokeWidth={m.strokeWidth || undefined}
-          strokeLinejoin="round"
         />
       )}
     </svg>

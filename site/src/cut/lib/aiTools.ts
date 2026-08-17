@@ -5,7 +5,6 @@ import {
   EFFECT_IDS,
   normalizeGrade,
   type EffectId,
-  type Mask,
   OVERLAY_ANIM_DEFAULT_SECONDS,
   OVERLAY_ANIM_MAX_SECONDS,
   OVERLAY_ANIM_MIN_SECONDS,
@@ -59,10 +58,9 @@ import {
   importImage,
   importStockVideo,
   importUrlMedia,
-  composeSheets,
-  makeStillFrame,
+  makeContactSheetsClientSide,
+  makeStillSheetClientSide,
   renderAudioSpanWav,
-  sampleWatchFrames,
 } from "./media";
 import { isLottieAsset } from "./lottieAssets";
 import { BREATH, REACH, refineEdge, type SilenceSpan } from "./cutRefine";
@@ -71,14 +69,10 @@ import { blobToInlineAudio, refToInlineAudio, visualRefs, type InlineImage } fro
 import { characterPrompt, stockAspectDims, stockTitle } from "./stock";
 import { STOCK_IMAGES } from "./stockManifest";
 import { STOCK_VIDEOS } from "./stockVideoManifest";
-import { applyOverlayPatchSettled, track0Clips, laneGapAt, getClipSpans, nextFreeStart, overlayLayers, parkedTransitions, resolveTransitions, totalDuration, useEditor } from "./store";
-import { playheadAt } from "./playhead";
+import { applyOverlayPatchSettled, track0Clips, laneGapAt, getClipSpans, nextFreeStart, overlayLayers, TIMELINE_H_MAX, TIMELINE_H_MIN, totalDuration, useEditor } from "./store";
 import { buildAiContext } from "./aiContext";
 import { sampleClipFrameData } from "./previewCanvas";
 import { laneCues, subtitleLaneCount } from "./subtitles";
-import { fuseTimeline, renderFusedTimeline } from "./watch/fuse";
-import { mergeWatch } from "./watch/merge";
-import { queueWatchSweep, withSweepPaused } from "./watch/sweep";
 import { synthesizeMusic } from "./audioGen";
 import { composeMusicPrompt } from "./composeGen";
 import { stockAssetInDoc } from "./genvideo/docWriter";
@@ -91,7 +85,6 @@ import {
   ANIM_STYLE_IDS,
   frameOf,
   IMAGE_CLIP_SECONDS,
-  isEffectOverlay,
   isTextOverlay,
   LAYOUTS,
   MAX_SUBTITLE_LANES,
@@ -118,49 +111,6 @@ import {
 } from "./types";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
-
-/** The timeline rows a mutation touched, small enough to ride every result:
- * ids, starts, and lengths for track 0 and the soundtrack, read fresh after
- * the store settled. The model keeps editing from these — new ids after a
- * split, closed-up starts after a delete — with no get_state poll between
- * steps.
- *
- * `parkedTransitions` rides along: a bar the edit left lining up with
- * nothing. The model sees its own debris the moment it makes it, in the same
- * payload it already reads, so a stranded blend gets cleared or reattached
- * inside the turn instead of sitting on the row. */
-function tracksAfter() {
-  const cur = useEditor.getState();
-  const row = track0Clips(cur.clips).map((c) => ({
-    id: c.id,
-    start: round2(c.start),
-    len: round2((c.out - c.in) / (c.speed && c.speed > 0 ? c.speed : 1)),
-  }));
-  const lanes = cur.audioClips.map((a) => ({
-    id: a.id,
-    start: round2(a.start),
-    len: round2(a.out - a.in),
-  }));
-  const parked = parkedTransitions(cur.clips, cur.transitions);
-  return {
-    track0: row.slice(0, 60),
-    ...(row.length > 60 ? { track0Truncated: true } : {}),
-    soundtrack: lanes.slice(0, 60),
-    ...(lanes.length > 60 ? { soundtrackTruncated: true } : {}),
-    ...(parked.length > 0
-      ? {
-          parkedTransitions: parked.map((t) => ({
-            id: t.id,
-            start: round2(t.start),
-            seconds: round2(t.seconds),
-            style: t.style,
-          })),
-          parkedTransitionsNote:
-            "These transition bars line up with no cut or clip edge and play nothing. Clear each one with remove_transition, or reattach it with set_transition/set_animation on the edge it belongs to. If it isn't clear which the user wanted, say what's there and ask.",
-        }
-      : {}),
-  };
-}
 
 /** The model crosses the transition and animation vocabularies — the retired
  * edge styles (fadein/zoomin/…) especially. Style ids arrive as structured
@@ -376,103 +326,6 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
     return { id: o.id, keys: (kf ?? []).map((k) => ({ ...k, t: round2(k.t) })) };
   },
 
-  set_clip_keyframes: (s, input) => {
-    const clip = requireItem(s.clips, input.clipId, "video clip");
-    const raw = input.keys;
-    if (!Array.isArray(raw)) throw new ToolError("keys must be a list.");
-    const speed = clip.speed && clip.speed > 0 ? clip.speed : 1;
-    const dur = Math.max(0.1, (clip.out - clip.in) / speed);
-    let kf = clip.kf;
-    if (raw.length === 0) {
-      s.clearClipKeys(clip.id);
-      kf = undefined;
-    } else {
-      // Each key builds on the pose already at its time, so a key that only
-      // names `x` keeps whatever the clip was doing otherwise.
-      s.pushHistory();
-      for (const k of raw as Record<string, unknown>[]) {
-        if (!isNum(k.t)) throw new ToolError("Every key needs a time `t`.");
-        s.setClipKey(
-          clip.id,
-          clamp(k.t, 0, dur),
-          {
-            ...(isNum(k.x) ? { x: clamp(k.x, -0.5, 1.5) } : {}),
-            ...(isNum(k.y) ? { y: clamp(k.y, -0.5, 1.5) } : {}),
-            ...(isNum(k.scale) ? { scale: clamp(k.scale, 0.1, 4) } : {}),
-            ...(isNum(k.rotation) ? { rotation: clamp(Math.round(k.rotation), -180, 180) } : {}),
-            ...(isNum(k.opacity) ? { opacity: clamp(k.opacity, 0, 1) } : {}),
-          },
-          { transient: true }
-        );
-      }
-      kf = useEditor.getState().clips.find((c) => c.id === clip.id)?.kf;
-    }
-    return { id: clip.id, keys: (kf ?? []).map((k) => ({ ...k, t: round2(k.t) })) };
-  },
-
-  set_mask: (s, input) => {
-    // One id space: an overlay element or a video clip on any track.
-    const o = s.overlays.find((x) => x.id === input.id);
-    const clip = o ? undefined : s.clips.find((c) => c.id === input.id);
-    if (!o && !clip)
-      throw new ToolError("No overlay element or video clip with that id.");
-    if (o && isEffectOverlay(o)) throw new ToolError("Effect elements have no pixels to mask.");
-    const current = o ? o.mask : clip!.mask;
-    const setMask = (mask: Mask | undefined) =>
-      o ? s.updateOverlay(o.id, { mask }) : s.updateClip(clip!.id, { mask });
-    if (input.kind === "none") {
-      setMask(undefined);
-      return { id: input.id, mask: null };
-    }
-    const kinds = ["rect", "square", "circle", "linear", "mirror", "subject"];
-    const kind =
-      typeof input.kind === "string"
-        ? input.kind
-        : (current?.kind ?? "rect");
-    if (!kinds.includes(kind)) throw new ToolError(`Unknown mask kind. Use one of: ${kinds.join(", ")}, none.`);
-    const geom = (k: Record<string, unknown>) => ({
-      ...(isNum(k.x) ? { x: clamp(k.x, -1, 1) } : {}),
-      ...(isNum(k.y) ? { y: clamp(k.y, -1, 1) } : {}),
-      ...(isNum(k.w) ? { w: clamp(k.w, 0.01, 2) } : {}),
-      ...(isNum(k.h) ? { h: clamp(k.h, 0.01, 2) } : {}),
-      ...(isNum(k.rotation) ? { rotation: clamp(Math.round(k.rotation), -180, 180) } : {}),
-      ...(isNum(k.feather) ? { feather: clamp(k.feather, 0, 200) } : {}),
-    });
-    const mask: Mask = {
-      ...(current ?? {}),
-      ...geom(input),
-      kind: kind as Mask["kind"],
-      ...(typeof input.invert === "boolean" ? { invert: input.invert || undefined } : {}),
-      ...(isNum(input.radius) ? { radius: clamp(input.radius, 0, 400) || undefined } : {}),
-    };
-    setMask(mask);
-    // Keys layer on after the mask lands, so each one captures against the
-    // geometry the call just set.
-    const raw = input.keys;
-    if (Array.isArray(raw)) {
-      const st = useEditor.getState();
-      const dur = o
-        ? Math.max(0.1, o.end - o.start)
-        : Math.max(0.1, (clip!.out - clip!.in) / (clip!.speed && clip!.speed > 0 ? clip!.speed : 1));
-      if (raw.length === 0) {
-        if (o) st.clearOverlayMaskKeys(o.id);
-        else st.clearClipMaskKeys(clip!.id);
-      } else {
-        for (const k of raw as Record<string, unknown>[]) {
-          if (!isNum(k.t)) throw new ToolError("Every mask key needs a time `t`.");
-          const t = clamp(k.t, 0, dur);
-          if (o) st.setOverlayMaskKey(o.id, t, geom(k), { transient: true });
-          else st.setClipMaskKey(clip!.id, t, geom(k), { transient: true });
-        }
-      }
-    }
-    const after = useEditor.getState();
-    const next = o
-      ? after.overlays.find((x) => x.id === o.id)?.mask
-      : after.clips.find((c) => c.id === clip!.id)?.mask;
-    return { id: input.id, mask: next ?? null };
-  },
-
   set_transition: (s, input) => {
     const clip = requireItem(s.clips, input.clipId, "video clip");
     // A transition joins a clip to the next one on its own track.
@@ -487,27 +340,8 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       if (!style) throw new ToolError(`Unknown style. Use one of: ${TRANSITION_STYLE_IDS.join(", ")}.`);
     }
     s.setClipTransition(clip.id, input.seconds, style);
-    const after = useEditor.getState();
-    const next = after.clips.find((c) => c.id === clip.id)!;
-    // The bar's own id rides the result so remove_transition can round-trip it.
-    const roles = resolveTransitions(after.clips, after.transitions);
-    const bar = after.transitions.find((t) =>
-      (roles.get(t.id) ?? []).some((r) => r.kind !== "in" && r.clipId === clip.id)
-    );
-    return {
-      id: next.id,
-      transitionId: bar?.id ?? null,
-      transition: next.transition ?? 0,
-      style: next.transitionStyle ?? "crossfade",
-    };
-  },
-
-  remove_transition: (s, input) => {
-    const id = String(input.transitionId ?? "");
-    if (!s.transitions.some((t) => t.id === id))
-      throw new ToolError(`No transition bar with id ${id}.`);
-    s.removeTransition(id);
-    return { removed: id, ...tracksAfter() };
+    const next = useEditor.getState().clips.find((c) => c.id === clip.id)!;
+    return { id: next.id, transition: next.transition ?? 0, style: next.transitionStyle ?? "crossfade" };
   },
 
   set_animation: (s, input) => {
@@ -552,93 +386,78 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
   },
 
   watch_video: async (s, input) => {
-      const { asset, clip, speed, from, to } = resolveWatchRange(s, input);
+      const { projectId, asset, clip, speed, from, to } = resolveWatchRange(s, input);
       if (asset.type === "audio")
         throw new ToolError(`"${asset.name}" is audio — listen_audio hears it, detect_silence finds its dead air.`);
-      // One path for both backends: the browser decodes the source (the same
-      // URL the preview plays) and the shared selector keeps distinct frames.
+      interface WatchBody {
+        sheets: { image: string; frames: { t: number; scene?: number }[] }[];
+        layout: { grid: number; margin: number; padding: number };
+        sceneChanges: number[];
+        coveredTo: number;
+        truncated: boolean;
+        error?: string;
+      }
+      // A still is one sheet with no time axis.
       if (asset.type === "image") {
-        const body = await makeStillFrame(asset.url).catch((e) => {
-          throw new ToolError(e instanceof Error ? e.message : "Could not read the image.");
-        });
+        let body: WatchBody;
+        if (getBackend().kind === "cloud") {
+          body = await makeStillSheetClientSide(asset.url).catch((e) => {
+            throw new ToolError(e instanceof Error ? e.message : "Could not read the image.");
+          });
+        } else {
+          const res = await apiFetch(`/api/cut/projects/${projectId}/watch`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ file: asset.fileName, still: true }),
+          });
+          body = await apiJson<WatchBody>(res);
+          if (!res.ok) throw new ToolError(body.error ?? "Could not read the image.");
+        }
         return {
-          images: [body.frames[0].image],
+          images: body.sheets.map((sh) => sh.image),
           source: { assetId: asset.id, name: asset.name },
           note: "A still image — one frame, no time axis.",
         };
       }
-      // The sweep yields its decoders to this call for its whole duration.
-      // The budget keeps the call inside the tool bridge's 120s deadline: a
-      // slow decode salvages what it covered (truncated + coveredTo) rather
-      // than timing out with nothing.
-      const body = await withSweepPaused(() =>
-        sampleWatchFrames(asset.url, {
+      let body: WatchBody;
+      if (getBackend().kind === "cloud") {
+        // Same defaults, clamps, and caps as the engine's watch handler.
+        body = await makeContactSheetsClientSide(asset.url, {
           from,
           ...(to !== undefined ? { to } : {}),
           ...(isNum(input.interval_seconds) ? { interval: input.interval_seconds } : {}),
-          budgetMs: 90_000,
-        })
-      ).catch((e) => {
-        throw new ToolError(e instanceof Error ? e.message : "Could not watch the video.");
-      });
-      // The metadata persists on the asset (it saves with the project and
-      // dies with the asset), so what has been seen survives this thread.
-      // Merge against the asset's CURRENT record — a sweep segment may have
-      // landed while this call was decoding, and a merge computed from the
-      // pre-decode snapshot would overwrite it.
-      const st = useEditor.getState();
-      const liveAsset = st.assets.find((x) => x.id === asset.id);
-      if (liveAsset) {
-        // A pass that covered nothing records nothing.
-        if (body.coveredTo > from) {
-          st.updateAsset(asset.id, {
-            watch: mergeWatch(liveAsset.watch, {
-              from,
-              to: body.coveredTo,
-              frames: body.frames.map((f) => ({ t: f.t, via: f.via })),
-              sceneChanges: body.sceneChanges,
-            }),
-          });
-        }
-        // A first look queues the quiet background sweep of the rest of the
-        // source — metadata only, merged in as segments land.
-        queueWatchSweep(asset.id);
+        }).catch((e) => {
+          throw new ToolError(e instanceof Error ? e.message : "Could not watch the video.");
+        });
+      } else {
+        const res = await apiFetch(`/api/cut/projects/${projectId}/watch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            file: asset.fileName,
+            from,
+            ...(to !== undefined ? { to } : {}),
+            ...(isNum(input.interval_seconds) ? { interval: input.interval_seconds } : {}),
+          }),
+        });
+        body = await apiJson<WatchBody>(res);
+        if (!res.ok) throw new ToolError(body.error ?? "Could not watch the video.");
       }
-      // Tile the kept frames 3×3 and stamp each cell's source time.
-      const sheets = await composeSheets(body.frames).catch(() => null);
-      const keptTimes = body.frames.map((f) => f.t);
-      // Kept frames woven into the speech on one clock, so the model reads
-      // precomputed frame↔speech alignment. Project captions win (cue times
-      // are timeline seconds, mapped to source through the clip); with none,
-      // the asset's own transcript serves — it is already source time, so it
-      // fuses for asset-only watches too.
-      let speech: { start: number; end: number; text: string }[] = [];
-      if (clip) {
-        speech = laneCues(s.subtitles, s.subtitleLane)
-          .map((c) => ({
-            start: clip.in + (c.start - clip.start) * speed,
-            end: clip.in + (c.end - clip.start) * speed,
-            text: c.text,
-          }))
-          .filter((c) => c.end > from && c.start < body.coveredTo);
-      }
-      if (speech.length === 0) speech = (liveAsset ?? asset).speech?.segments ?? [];
-      let timelineText: string | undefined;
-      if (speech.length > 0) {
-        timelineText = renderFusedTimeline(
-          fuseTimeline(keptTimes, speech, { from, to: body.coveredTo })
-        ).slice(0, 4000);
-      }
-      // Each cell's time plus why the selector kept it — "global" a hard cut,
-      // "action" local motion, "settled" new settled detail (text, ink, UI).
-      const cellInfo = body.frames.map((f) => ({ t: round2(f.t), via: f.via }));
-      const perSheet = sheets ? sheets.map((sh) => sh.frames.length) : [cellInfo.length];
-      let cellAt = 0;
+      // The engine's ffmpeg has no text renderer; the cells get their source-
+      // time stamps here on a canvas. A sheet that fails to stamp rides plain —
+      // sheetFrames stays the authority either way.
+      let stamped = true;
+      const images = await Promise.all(
+        body.sheets.map((sh) =>
+          stampSheet(sh.image, sh.frames.map((f) => f.t), body.layout).catch(() => {
+            stamped = false;
+            return sh.image;
+          })
+        )
+      );
       return {
-        images: sheets ? sheets.map((sh) => sh.image) : body.frames.map((f) => f.image),
-        sheetFrames: perSheet.map((n) => cellInfo.slice(cellAt, (cellAt += n))),
-        distinctFrames: body.frames.length,
-        candidates: body.candidates,
+        images,
+        sheetFrames: body.sheets.map((sh) => sh.frames.map((f) => round2(f.t))),
         sceneChanges: body.sceneChanges.map(round2),
         coveredTo: round2(body.coveredTo),
         truncated: body.truncated,
@@ -655,15 +474,12 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
               },
             }
           : {}),
-        ...(timelineText ? { timeline: timelineText } : {}),
         note:
-          "Cells read left→right then top→bottom; each stamp is SOURCE seconds. " +
-          "Cells are distinct moments (near-duplicates removed), so gaps between stamps mean nothing changed there. " +
-          "sheetFrames says why each cell was kept: global = hard cut, action = local motion, settled = new settled detail (text/UI)." +
+          "Cells read left→right then top→bottom; each stamp is SOURCE seconds." +
           (body.truncated
             ? ` Coverage stopped at ${round2(body.coveredTo)}s — call again with from=${round2(body.coveredTo)} to continue.`
             : "") +
-          (sheets ? "" : " (Sheets unavailable — each image is one frame; sheetFrames lists the times.)"),
+          (stamped ? "" : " (Stamps unavailable — sheetFrames lists each cell's time.)"),
       };
   },
 
@@ -718,15 +534,12 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       const inline = wholeAudio
         ? await refToInlineAudio(refFromAsset(asset))
         : await listenToSource(projectId, asset, from, to);
-      // Listening shows interest in the source's sound — queue the background
-      // sweep so its transcript (and, for video, its visual map) fills in.
-      queueWatchSweep(asset.id);
       if (!inline)
         throw new ToolError(
           "That stretch is too long to listen to inline (≈12MB cap) — pass a narrower from/to."
         );
-      // The `audio` data URL leaves the JSON in the chat transport and rides
-      // to the model as an input_audio part, the way attachments do.
+      // The `audio` data URL leaves the JSON in geminiChat and rides to the
+      // model as an input_audio part, the way attachments do.
       return {
         name: asset.name,
         duration: round2(asset.duration),
@@ -740,7 +553,7 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
   seek: (s, input) => {
       if (!isNum(input.t)) throw new ToolError("t (seconds) is required.");
       s.seek(input.t);
-      return { playhead: playheadAt() };
+      return { playhead: useEditor.getState().currentTime };
   },
 
   set_playing: (s, input) => {
@@ -787,7 +600,7 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       const after = useEditor.getState();
       const made = after.clips.length + after.audioClips.length - before;
       if (made === 0) throw new ToolError("Nothing to split at that time.");
-      return { split: true, ...tracksAfter() };
+      return { split: true, videoClips: after.clips.length };
   },
 
   move_clip: (s, input) => {
@@ -801,7 +614,7 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       if (!isNum(input.toIndex)) throw new ToolError("toIndex is required.");
       const row = track0Clips(s.clips);
       s.moveClip(clip.id, clamp(Math.round(input.toIndex), 0, row.length - 1));
-      return { moved: clip.id, ...tracksAfter() };
+      return { order: track0Clips(useEditor.getState().clips).map((c) => c.id) };
   },
 
   place_clip: (s, input) => {
@@ -815,20 +628,14 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
           end: c.start + (c.out - c.in) / (c.speed && c.speed > 0 ? c.speed : 1),
         }));
       const at = nextFreeStart(taken, Math.max(0, input.start), len);
-      // Closing a gap is this tool's main job, so the clip's blends travel
-      // with it: a bar playing its head or its cut lands on the edge's new
-      // time instead of staying behind on the row.
-      const before = s.clips;
       s.updateClip(clip.id, { start: at });
       useEditor.getState().sortClips();
-      useEditor.getState().reanchorBars(before);
       return {
         id: clip.id,
         start: round2(at),
         ...(Math.abs(at - Math.max(0, input.start)) > 0.005
           ? { note: "That spot was taken — slid right to the next free one." }
           : {}),
-        ...tracksAfter(),
       };
   },
 
@@ -841,7 +648,7 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       const asset = requireItem(s.assets, input.asset_id, "project asset");
       if (asset.type !== "video" && asset.type !== "image")
         throw new ToolError("Only video or image assets can sit on a video track.");
-      const start = isNum(input.start) ? Math.max(0, input.start) : playheadAt();
+      const start = isNum(input.start) ? Math.max(0, input.start) : s.currentTime;
       // Tracks stack bottom-up from track 0; overlays live on 1+. A stale
       // negative (the old behind-track model) clamps to the first layer.
       const track = isNum(input.track) ? Math.max(1, Math.round(input.track)) : 1;
@@ -922,12 +729,7 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       // Trim through the store's resize path so track 0 keeps its no-overlap
       // invariant: extending a clip pushes the following run right.
       s.setClipTrim(clip.id, nextIn, nextOut);
-      return {
-        in: nextIn,
-        out: nextOut,
-        len: Math.round((nextOut - nextIn) * 100) / 100,
-        ...tracksAfter(),
-      };
+      return { in: nextIn, out: nextOut, len: Math.round((nextOut - nextIn) * 100) / 100 };
   },
 
   refine_speech_cuts: async (s, input) => {
@@ -1020,7 +822,6 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       // change — butted joints stay butted, deliberate beats keep their width,
       // and a tightened clip closes up instead of opening a gap.
       if (plans.size > 0) {
-        const before = s.clips;
         s.pushHistory();
         const patches: { id: string; patch: Partial<VideoClip> }[] = [];
         for (const row of rows.values()) {
@@ -1039,9 +840,6 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
         }
         useEditor.getState().updateClipsTransient(patches);
         useEditor.getState().sortClips();
-        // Every edge here moved because the audio said so, and the run behind
-        // each one shifted with it — a retime, so the bars ride along.
-        useEditor.getState().reanchorBars(before);
       }
 
       return {
@@ -1064,7 +862,6 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
           };
         }),
         note: `Each moved edge sits ~${BREATH}s inside a real pause; clip spacing is preserved. Listen at any flagged edge.`,
-        ...tracksAfter(),
       };
   },
 
@@ -1162,10 +959,7 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
         kind === "overlayClip" ? "clip" : kind === "text" ? "overlay" : (kind as "clip" | "audio" | "overlay");
       s.select({ kind: selKind, id });
       s.deleteSelection();
-      return {
-        deleted: { kind: selKind, id },
-        ...(selKind === "overlay" ? {} : tracksAfter()),
-      };
+      return { deleted: { kind: selKind, id } };
   },
 
   remove_gap: (s, input) => {
@@ -1175,7 +969,7 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       const gap = laneGapAt(s, lane, input.at);
       if (!gap) throw new ToolError(`No track-${track} gap at ${input.at}s — pass a time inside the empty span.`);
       s.removeLaneGap(lane, input.at);
-      return { closed: { track, ...gap }, ...tracksAfter() };
+      return { closed: { track, ...gap } };
   },
 
   add_title: (s, input) => {
@@ -1256,16 +1050,11 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       const spans = getClipSpans(s.clips, s.assets);
       if (spans.length === 0) throw new ToolError("The timeline is empty.");
       const total = totalDuration(s.clips);
-      const t = clamp(isNum(input.t) ? input.t : playheadAt(), 0, Math.max(0, total - 0.001));
+      const t = clamp(isNum(input.t) ? input.t : s.currentTime, 0, Math.max(0, total - 0.001));
       const span = spans.find((sp) => t >= sp.start && t < sp.start + sp.len) ?? spans[spans.length - 1];
-      // Timeline seconds run at the clip's speed in source time, so a sped-up
-      // clip freezes the frame the preview actually shows.
-      const srcTime =
-        span.clip.in +
-        (t - span.start) *
-          (span.clip.speed && span.clip.speed > 0 ? span.clip.speed : 1);
+      const srcTime = span.clip.in + (t - span.start);
       let body: MediaAsset;
-      if (getBackend().kind !== "local") {
+      if (getBackend().kind === "cloud") {
         // No engine to bake a still video — grab the frame in the browser and
         // store it as a project image; image clips carry their own length,
         // sized below to the requested duration, mirroring the engine's
@@ -1945,18 +1734,12 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       const cur = useEditor.getState();
       if (cur.subtitleStatus === "error")
         throw new ToolError(cur.subtitleError ?? "Transcription failed.");
-      const made = laneCues(cur.subtitles, lane);
-      if (made.length > 0 && cur.timelineH < 276) cur.setTimelineH(276);
-      // The cues ride the result — the model's next move is usually editing
-      // them, and the ids are what update_cue/delete_cue/merge_cue take.
+      const made = laneCues(cur.subtitles, lane).length;
+      if (made > 0 && cur.timelineH < 276) cur.setTimelineH(276);
       return {
         status: cur.subtitleStatus,
         track: lane,
-        count: made.length,
-        cues: made
-          .slice(0, 60)
-          .map((q) => ({ id: q.id, start: round2(q.start), end: round2(q.end), text: q.text })),
-        ...(made.length > 60 ? { cuesTruncated: true } : {}),
+        cues: made,
         note:
           cur.subtitleStatus === "empty"
             ? "No speech found — no subtitles were added to the video."
@@ -2081,7 +1864,7 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
   voiceover_generate: (s, input) => {
       if (typeof input.script !== "string" || !input.script.trim())
         throw new ToolError("script is required.");
-      const start = isNum(input.start) ? Math.max(0, input.start) : playheadAt();
+      const start = isNum(input.start) ? Math.max(0, input.start) : s.currentTime;
       // Label with the spoken line (capped) so its preview fills across the row.
       const lead = input.script.replace(/\s+/g, " ").trim().slice(0, 200);
       const place = wantsTimeline(input, "start");
@@ -2155,7 +1938,7 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
           note: "The music previews in this chat — the user can play it and drag it onto the soundtrack; pass add_to_timeline or start when they ask for it in the cut.",
         };
       }
-      const start = isNum(input.start) ? Math.max(0, input.start) : playheadAt();
+      const start = isNum(input.start) ? Math.max(0, input.start) : cur.currentTime;
       cur.addAudioFromAsset(asset.id, start);
       // Sits under speech at a soft bed volume by default; the model can raise it.
       const volume = isNum(input.volume) ? clamp(input.volume, 0, 1.5) : 0.4;
@@ -2261,7 +2044,7 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
         out.pxPerSec = useEditor.getState().pxPerSec;
       }
       if (isNum(input.timelineH)) {
-        s.setTimelineH(input.timelineH);
+        s.setTimelineH(clamp(input.timelineH, TIMELINE_H_MIN, TIMELINE_H_MAX));
         out.timelineH = useEditor.getState().timelineH;
       }
       return out;
@@ -2354,35 +2137,6 @@ class ToolError extends Error {}
  * Execute an assistant tool call against the live editor store.
  * Returns a small JSON-safe result; throws ToolError with a readable message.
  */
-/** Tools whose whole effect is the editor UI in an open tab — panel focus,
- * scroll, playback, the preview snapshot. A headless session answers them
- * with a typed no-op so the model keeps its footing. */
-export const UI_TOOLS: ReadonlySet<string> = new Set([
-  "capture_frame",
-  "set_side_panel",
-  "set_view",
-  "open_export",
-  "set_playing",
-]);
-
-/** Tools that decode or rasterize media with browser APIs today — frame
- * grabs, audio scans, image decodes, the transcription mixdown. A headless
- * session refuses them with a typed error until the runner grows ffmpeg
- * equivalents. Membership is about page decoding; tools that only call
- * servers run headless through the bound transports and stay out. */
-export const BROWSER_MEDIA_TOOLS: ReadonlySet<string> = new Set([
-  "watch_video",
-  "listen_audio",
-  "detect_silence",
-  "refine_speech_cuts",
-  "freeze_frame",
-  "create_sticker",
-  "subtitles_generate",
-  "captions_generate",
-  "subtitles_from_visuals",
-  "stock_add",
-]);
-
 export async function runAiTool(
   name: string,
   input: Record<string, unknown>
@@ -2455,6 +2209,45 @@ async function synthesizeVoiceover(
   };
 }
 
+/** Draw each cell's source-time stamp onto a contact sheet. The bundled
+ * ffmpeg ships without a text renderer (LGPL build, no freetype), so the
+ * stamps land here, where a canvas always can. */
+async function stampSheet(
+  image: string,
+  times: number[],
+  layout: { grid: number; margin: number; padding: number }
+): Promise<string> {
+  const img = new Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("Bad sheet image."));
+    img.src = image;
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("No 2d context.");
+  ctx.drawImage(img, 0, 0);
+  const { grid, margin, padding } = layout;
+  const cellW = (canvas.width - 2 * margin - (grid - 1) * padding) / grid;
+  const cellH = (canvas.height - 2 * margin - (grid - 1) * padding) / grid;
+  const size = Math.max(13, Math.round(cellH / 12));
+  ctx.font = `bold ${size}px ui-monospace, monospace`;
+  ctx.textBaseline = "bottom";
+  times.forEach((t, i) => {
+    const x = margin + (i % grid) * (cellW + padding);
+    const y = margin + Math.floor(i / grid) * (cellH + padding);
+    const label = `${round2(t)}s`;
+    const w = ctx.measureText(label).width;
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillRect(x + 4, y + cellH - size - 10, w + 10, size + 8);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(label, x + 9, y + cellH - 6);
+  });
+  return canvas.toDataURL("image/jpeg", 0.8);
+}
+
 /** Resolve a watch/listen target: a timeline clip (its source plus trim and
  * placement) or a bare project asset. */
 function resolveWatchTarget(
@@ -2525,7 +2318,7 @@ async function fetchSilences(
   // Same defaults and clamps as the engine's silence handler.
   const thresholdDb = clamp(opts.thresholdDb ?? -30, -90, 0);
   const minSilence = clamp(opts.minSilence ?? 0.35, 0.05, 10);
-  if (getBackend().kind !== "local") {
+  if (getBackend().kind === "cloud") {
     return detectSilenceClientSide(asset.url, {
       from: opts.from,
       ...(opts.to !== undefined ? { to: opts.to } : {}),
@@ -2563,7 +2356,7 @@ async function listenToSource(
   from: number,
   to: number | undefined,
 ): Promise<InlineImage | null> {
-  if (getBackend().kind !== "local") {
+  if (getBackend().kind === "cloud") {
     const wav = await renderAudioSpanWav(asset.url, from, to).catch((e) => {
       throw new ToolError(e instanceof Error ? e.message : "Could not read the audio.");
     });
@@ -2799,6 +2592,7 @@ function overlayPatch(input: Record<string, unknown>, kind: "text" | "shape" | "
       patch.lineHeight = Math.abs(input.line_height - 1.25) < 0.01 ? undefined : clamp(input.line_height, 0.7, 2.5);
     if (typeof input.shadow === "boolean") patch.shadow = input.shadow;
     if (typeof input.plate === "boolean") patch.plate = input.plate;
+    if (typeof input.behind_subject === "boolean") patch.behindSubject = input.behind_subject || undefined;
     if (isNum(input.plateRadius)) patch.plateRadius = clamp(input.plateRadius, 0, 1);
     if (typeof input.stroke_color === "string" || isNum(input.stroke_width)) {
       const width = isNum(input.stroke_width) ? clamp(input.stroke_width, 0, 0.3) : 0.04;

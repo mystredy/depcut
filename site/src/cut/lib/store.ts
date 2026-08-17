@@ -4,12 +4,9 @@ import {
   groupRemap,
   KEY_EPSILON,
   keyAt,
-  lineLikeShape,
-  maskKeyAt,
   removeKeyAt,
   upsertKey,
   type EffectId,
-  type MaskKey,
   type OverlayKey,
 } from "@donkeycut/effects-kit";
 import { create } from "zustand";
@@ -44,9 +41,7 @@ import type { VideoProject } from "./genvideo/types";
 import { fillSlot } from "./genvideo/fillSlot";
 import { apiFetch, apiJson, getBackend, hasLocalCompute } from "./backend";
 import { fetchSignedMediaUrls, pinDocBase } from "./backend/cloud";
-import { cancelRevoke, resolveRegisteredBlob, revokeRegistered } from "./backend/browser/registry";
 import { markSignedBatch } from "./mediaLinks";
-import { dropLocalMedia, localMediaUrl, prefetchCloudMedia } from "./mediaSync";
 import {
   dropCachedDoc,
   readCachedDoc,
@@ -57,10 +52,9 @@ import {
 import { renderMix, transcribeSamples, type CloudTranscribeSpec } from "./cloudTranscribe";
 import { alignCues } from "./cueAlign";
 import { useGenNotify } from "./genNotify";
-import { clampPlayhead, playheadAt, previewAt, setPlayhead, setSkim } from "./playhead";
-import { engineTranscribeSamples, withEngineStt } from "./localStt";
+import { engineTranscribeSamples } from "./localStt";
 import { trackLocale } from "./subtitles";
-import { ANIM_STYLE_IDS, animStyleOfTransition, clipPoseAt, emptySubtitles, frameOf, IMAGE_CLIP_SECONDS, isEffectOverlay, isStickerOverlay, MAX_SUBTITLE_LANES, mediaUrl, migrateBehindSubject, migrateLegacyTransitions, normalizeAspect, overlayAnimStyle, SPEED_FLOOR, SPEED_MIN, stampOverlayKinds, stripDefaultOverlayKinds, TRANSITION_MAX, TRANSITION_STYLE_IDS, transitionStyleOfAnim } from "./types";
+import { ANIM_STYLE_IDS, animStyleOfTransition, emptySubtitles, frameOf, IMAGE_CLIP_SECONDS, isEffectOverlay, isStickerOverlay, MAX_SUBTITLE_LANES, mediaUrl, migrateLegacyTransitions, normalizeAspect, overlayAnimStyle, SPEED_FLOOR, SPEED_MIN, stampOverlayKinds, stripDefaultOverlayKinds, TRANSITION_MAX, TRANSITION_STYLE_IDS, transitionStyleOfAnim } from "./types";
 import { readTextStyle } from "./textStyle";
 import { loadUiState, saveUiState, type ProjectUiState } from "./uiState";
 import { captureTimelineFrames } from "./visualFrames";
@@ -109,51 +103,9 @@ const shiftTracksUp = (clips: VideoClip[], place: VideoTrackPlacement): VideoCli
  * this so the two can never drift apart. */
 const sole = (sel: NonNullable<Selection>) => ({ selection: sel, multiSelection: [sel] });
 
-/** Where a `len`-long clip aimed at `place`/`start` lands: the resolved track,
- * the landing start, and the ripple shifts it pushes onto that row. An
- * existing track has residents — insert at the pointer and ripple that
- * track's later clips right. An inserted track is brand-new, so the start
- * holds as-is. `exclude` is the clip being moved (left out of the ripple). */
-function landOnPlacement(
-  clips: VideoClip[],
-  place: VideoTrackPlacement,
-  start: number,
-  len: number,
-  exclude?: string
-): { track: number; start: number; shifts: { id: string; start: number }[] } {
-  const track = place.kind === "insert" ? place.level : place.track;
-  const landing =
-    place.kind === "track"
-      ? rippleInsert(
-          clips.filter((c) => c.track === track && c.id !== exclude),
-          Math.max(0, start),
-          len
-        )
-      : { start: Math.max(0, start), shifts: [] as { id: string; start: number }[] };
-  return { track, ...landing };
-}
-
-/** The state patch every placement commits: clips sorted by start, transitions
- * re-anchored to the cuts they sat on, and the placed clip selected. */
-function placedState(
-  s: { clips: VideoClip[]; transitions: TimelineTransition[] },
-  next: VideoClip[],
-  id: string
-) {
-  const clips = [...next].sort((a, b) => a.start - b.start);
-  return {
-    clips,
-    transitions: reanchorTransitions(s.clips, clips, s.transitions),
-    ...sole({ kind: "clip", id }),
-  };
-}
-
 export const TIMELINE_H_DEFAULT = 248;
 export const TIMELINE_H_MIN = 170;
-/** Tallest the timeline may grow: the window height less room for the top bar
- * and a usable preview. The constant covers code running without a window. */
-export const timelineHMax = () =>
-  typeof window === "undefined" ? 600 : Math.max(TIMELINE_H_MIN, window.innerHeight - 220);
+export const TIMELINE_H_MAX = 600;
 
 interface DocSnapshot {
   clips: VideoClip[];
@@ -178,6 +130,12 @@ export interface EditorState {
   loadEpoch: number;
   loadError: string | null;
   saveState: SaveState;
+  /** Whether the undo/redo stacks have anything to step to — kept in sync
+   * with the module-level history/future arrays on every push/pop/reset, so
+   * a toolbar button can disable itself reactively instead of reading the
+   * arrays (which live outside the store) directly. */
+  canUndo: boolean;
+  canRedo: boolean;
   /** Raised when an open resumed unsaved edits from the dirty disk snapshot:
    * autosave sees it, clears it, and pushes the resumed document up. */
   resumePush: boolean;
@@ -188,11 +146,6 @@ export interface EditorState {
   sharedFeatures: ShareFeatures | null;
 
   assets: MediaAsset[];
-  /** Media files still streaming into the browser store, by fileName.
-   * Timeline items on these show a loading chip and hold their hover
-   * controls until the local bytes land — or the prefetch gives up and
-   * signed URLs carry the file. */
-  loadingMedia: Set<string>;
   /** Every video clip, on any track. Tracks number 0..N bottom-up: track 0
    * carries the transition sequence, higher tracks composite in front. A
    * clip's `track` field is the only thing that places it. */
@@ -217,16 +170,12 @@ export interface EditorState {
   /** Everything selected, including `selection` (the primary that drives the
    * inspector). Bulk actions — delete, copy — act on this whole set. */
   multiSelection: Selection[];
-  /** The keyframe picked on a timeline bar — an element's or a video
-   * clip's, on its pose track or its mask's — if any. It rides alongside
-   * the item selection: the item is still what the inspector edits, but
-   * Delete takes the key. Any other selection clears it. */
-  selectedKey: {
-    kind: "overlay" | "clip";
-    id: string;
-    t: number;
-    track: "pose" | "mask";
-  } | null;
+  /** The keyframe picked on an element's timeline bar, if any. It rides
+   * alongside the element selection rather than inside it: an element is still
+   * what the inspector edits, but Delete takes the key. Any other selection
+   * clears it. */
+  selectedKey: { overlayId: string; t: number } | null;
+  currentTime: number;
   playing: boolean;
   /** While playing a scoped effect preview, the time playback auto-pauses at;
    * null otherwise. Manual seek/play/pause clears it. */
@@ -234,6 +183,8 @@ export interface EditorState {
   pxPerSec: number;
   /** Timeline panel height in px (drag the panel's top border to change). */
   timelineH: number;
+  /** Timeline time under the mouse (the skimmer); null when off the timeline. */
+  skimTime: number | null;
   /** TikTok publishing metadata (caption, hashtags, sound title). */
   publish: { caption: string; tags: string; soundTitle: string; handle: string };
   /** Free-form maker notes: published date, source links, reminders. */
@@ -267,14 +218,6 @@ export interface EditorState {
    * the stored copy has moved on, so the head-start snapshot is skipped and
    * only the live document is applied. */
   loadProject: (id: string, opts?: { inPlace?: boolean }) => Promise<void>;
-  /** Apply one project document to the store: the legacy migrations and the
-   * state swap, shared by every hydration path — the snapshot paint, the live
-   * load, a conflict reload, and a headless open. */
-  applyDocState: (doc: Partial<ProjectDoc>, assets: MediaAsset[], ui: ProjectUiState) => void;
-  /** Open a project from an already-fetched document. The headless runner's
-   * open: resets the store, drains pending doc writes, and hydrates straight
-   * from the given document. */
-  openProjectDoc: (id: string, doc: Partial<ProjectDoc>, assets: MediaAsset[]) => Promise<void>;
   setProjectName: (name: string) => void;
   setSaveState: (s: SaveState) => void;
   /** Enter read-only shared mode; call before loadProject. */
@@ -295,16 +238,16 @@ export interface EditorState {
   /** Add a video clip from an asset onto video track 0 — at `start` (sliding
    * to the track's next free slot), or appended at the end when omitted. */
   addClipFromAsset: (assetId: string, start?: number) => void;
+  /** Drop a video/still onto track 0 at pointer-time `t`: inserts at the
+   * drop and ripples later clips right, so a drop into a leading gap or between
+   * clips lands there instead of sliding to the end (the drop gesture's
+   * placement, distinct from `addClipFromAsset`'s slide-to-end). */
+  dropClipFromAsset: (assetId: string, t: number) => void;
   /** Add a soundtrack clip from an audio asset at `start` (default: the
    * playhead). `opts.duck` marks it a voiceover that lowers everything else
    * to that gain while it plays; `opts.lane` picks the audio track it lands
    * on (default: the first one). */
   addAudioFromAsset: (assetId: string, start?: number, opts?: { duck?: number; lane?: number }) => void;
-  /** The panel “+” add: the asset lands at the preview time (the skimmer while
-   * one is live, the playhead otherwise), on the lowest video track or audio
-   * lane with room for its whole length there. When every existing row is
-   * occupied at that moment it opens a new row above. */
-  addAssetAtPlayhead: (assetId: string) => void;
   /** Set (or clear) the persisted brief-to-video run. Replaces the object by
    * reference so autosave detects the change. */
   setGenvideo: (project: VideoProject | undefined) => void;
@@ -367,11 +310,6 @@ export interface EditorState {
   /** The same, with no undo checkpoint — for mid-gesture updates. */
   updateTransitionTransient: (id: string, patch: Partial<Omit<TimelineTransition, "id">>) => void;
   removeTransition: (id: string) => void;
-  /** Carry the bars through a retime the caller just wrote: given the clip row
-   * as it stood before, every bar keeps playing the boundary it played, at
-   * wherever that boundary moved to. No undo checkpoint — the caller's own
-   * push covers the whole edit. For the retiming paths outside this store. */
-  reanchorBars: (before: VideoClip[]) => void;
   /** Set (or clear with null) a clip's preset filter look; amount 0..1. */
   updateAudio: (id: string, patch: Partial<AudioClip>) => void;
   /** Hide or show every clip on one video track, in one undo step. Showing a
@@ -413,54 +351,6 @@ export interface EditorState {
     opts?: { transient?: boolean }
   ) => void;
   clearOverlayKeys: (id: string) => void;
-  /** Mask keyframes, the mask's own track beside the pose track. Same rules:
-   * adding a key captures the mask's live geometry, `patch` edits it in
-   * place, and a key already sitting at `tLocal` is replaced. */
-  setOverlayMaskKey: (
-    id: string,
-    tLocal: number,
-    patch?: Partial<Omit<MaskKey, "t">>,
-    opts?: { transient?: boolean }
-  ) => void;
-  removeOverlayMaskKey: (id: string, tLocal: number) => void;
-  selectOverlayMaskKey: (id: string, tLocal: number) => void;
-  moveOverlayMaskKey: (
-    id: string,
-    fromT: number,
-    toT: number,
-    opts?: { transient?: boolean }
-  ) => void;
-  clearOverlayMaskKeys: (id: string) => void;
-  /** The same mask-key track on a video clip; `tLocal` is seconds from the
-   * clip's timeline start. */
-  setClipMaskKey: (
-    id: string,
-    tLocal: number,
-    patch?: Partial<Omit<MaskKey, "t">>,
-    opts?: { transient?: boolean }
-  ) => void;
-  removeClipMaskKey: (id: string, tLocal: number) => void;
-  selectClipMaskKey: (id: string, tLocal: number) => void;
-  moveClipMaskKey: (
-    id: string,
-    fromT: number,
-    toT: number,
-    opts?: { transient?: boolean }
-  ) => void;
-  clearClipMaskKeys: (id: string) => void;
-  /** The pose-key track on a video clip, the overlay contract over the
-   * clip's anchor: adding a key captures the clip's pose at that moment,
-   * `patch` edits it in place, and a key already at `tLocal` is replaced. */
-  setClipKey: (
-    id: string,
-    tLocal: number,
-    patch?: Partial<Omit<OverlayKey, "t">>,
-    opts?: { transient?: boolean }
-  ) => void;
-  removeClipKey: (id: string, tLocal: number) => void;
-  selectClipKey: (id: string, tLocal: number) => void;
-  moveClipKey: (id: string, fromT: number, toT: number, opts?: { transient?: boolean }) => void;
-  clearClipKeys: (id: string) => void;
   /** Patch several items in one commit — the lane coordinator's gestures part
    * and push whole lanes at a time (one bulk patcher per lane-track kind). */
   updateOverlaysTransient: (patches: { id: string; patch: OverlayPatch }[]) => void;
@@ -488,6 +378,7 @@ export interface EditorState {
   detachAudio: () => void;
   /** Split at the given time, or the playhead when omitted. */
   splitAtPlayhead: (at?: number) => void;
+  setSkimTime: (t: number | null) => void;
   setPublish: (patch: Partial<{ caption: string; tags: string; soundTitle: string; handle: string }>) => void;
   setNotes: (patch: Partial<{ text: string; publishedAt: string; links: string[] }>) => void;
   /** Kick off (and poll) an on-device transcription of the current cut. */
@@ -570,8 +461,6 @@ export interface EditorState {
   /** ⌘/⇧-click: add the item to the selection (or remove it if already in),
    * making it the new primary. */
   toggleSelect: (sel: NonNullable<Selection>) => void;
-  /** Marquee sweep: replace the whole selection at once, last item primary. */
-  setMultiSelection: (sels: NonNullable<Selection>[]) => void;
   seek: (t: number) => void;
   setPlaying: (p: boolean) => void;
   /** Play just the [start, end] stretch in the preview: seek to `start`,
@@ -594,9 +483,8 @@ export interface EditorState {
   endHistoryBatch: () => void;
   /** Copy the selected clip/audio/overlay/title(s) to the timeline clipboard. */
   copySelection: () => boolean;
-  /** Paste the clipboard at the preview time (the skimmer while one is live,
-   * the playhead otherwise) — sliding past anything already on the target
-   * lane — and select the pasted item(s). */
+  /** Paste the clipboard at the playhead — sliding past anything already on
+   * the target lane — and select the pasted item(s). */
   paste: () => boolean;
 }
 
@@ -633,14 +521,8 @@ const genAudioIds = new Set<string>();
 type ClipboardItem =
   | { kind: "clip"; item: VideoClip }
   | { kind: "audio"; item: AudioClip }
-  | { kind: "overlay"; item: Overlay }
-  | { kind: "transition"; item: TimelineTransition };
+  | { kind: "overlay"; item: Overlay };
 let clipboard: ClipboardItem[] = [];
-
-/** How far (seconds) a pasted transition bar reaches for a cut or clip edge
- * around the playhead. Within it the bar lands playing that boundary, like a
- * drop from the panel; past it the bar parks exactly at the playhead. */
-const BAR_PASTE_REACH = 1;
 
 /** Bumped whenever subtitle lanes renumber (a track removal). Async work that
  * captured a lane index checks it before landing, so a result can't write to
@@ -972,13 +854,12 @@ export function rippleInsert(
  * null when the user switches projects mid-run. Throws user-facing errors.
  * Shared with the brief-to-video transcribe adapter. */
 export async function runTranscription(projectId: string, spec: object): Promise<SubtitleCue[] | null> {
-  // A cloud or browser project's media isn't on the engine's disk, so the
-  // engine can't render the mix — the browser does, and then hands it to
-  // whoever can transcribe it: this Mac when the app is running (on-device,
-  // free, real word timings), the hosted route otherwise (included up to the
-  // account's allowance, metered past it). A local project skips all of it;
-  // the engine already holds the media and runs the whole job.
-  if (getBackend().kind !== "local") {
+  // A cloud project's media isn't on this Mac, so the engine can't render the
+  // mix — the browser does, and then hands it to whoever can transcribe it:
+  // this Mac when the app is running (on-device, free, real word timings), the
+  // metered hosted route otherwise. A local project skips all of it; the
+  // engine already holds the media and runs the whole job.
+  if (getBackend().kind === "cloud") {
     const s = spec as CloudTranscribeSpec;
     if (s.clips.length === 0 && s.audio.length === 0) {
       throw new Error("Add audio or video to the timeline first.");
@@ -1001,29 +882,24 @@ export async function runTranscription(projectId: string, spec: object): Promise
     const cues = await transcribeSamples(samples, s.locale, stale);
     return cues && alignCues(cues, samples, mix.sampleRate, { snap: 0.6 });
   }
-  // The engine runs one transcription at a time; the client-side turn queue
-  // keeps this job from colliding with a background sweep chunk (or vice
-  // versa) and failing on the busy slot.
-  return withEngineStt(async () => {
-    const res = await apiFetch(`/api/cut/projects/${projectId}/transcribe`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(spec),
-    });
-    const body = await apiJson<{ id?: string }>(res);
-    if (!res.ok || !body.id) throw new Error(body.error ?? "Transcription failed to start.");
-    for (;;) {
-      await new Promise((r) => setTimeout(r, 600));
-      if (useEditor.getState().projectId !== projectId) return null;
-      const st = await apiFetch(`/api/cut/projects/${projectId}/transcribe?job=${body.id}`);
-      if (!st.ok) throw new Error("The transcription job was lost — try again.");
-      const status = (await st.json()) as { status: string; error?: string; cues?: SubtitleCue[] };
-      if (status.status === "error") throw new Error(status.error ?? "Transcription failed.");
-      if (status.status === "done") {
-        return useEditor.getState().projectId === projectId ? (status.cues ?? []) : null;
-      }
-    }
+  const res = await apiFetch(`/api/cut/projects/${projectId}/transcribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(spec),
   });
+  const body = await apiJson<{ id?: string }>(res);
+  if (!res.ok || !body.id) throw new Error(body.error ?? "Transcription failed to start.");
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 600));
+    if (useEditor.getState().projectId !== projectId) return null;
+    const st = await apiFetch(`/api/cut/projects/${projectId}/transcribe?job=${body.id}`);
+    if (!st.ok) throw new Error("The transcription job was lost — try again.");
+    const status = (await st.json()) as { status: string; error?: string; cues?: SubtitleCue[] };
+    if (status.status === "error") throw new Error(status.error ?? "Transcription failed.");
+    if (status.status === "done") {
+      return useEditor.getState().projectId === projectId ? (status.cues ?? []) : null;
+    }
+  }
 }
 
 // Doc-mutating state: in a read-only shared view the set wrapper drops these
@@ -1049,64 +925,46 @@ const DOC_KEYS = [
 ] as const;
 let hydrating = false;
 
-/**
- * The invariants every write to the store passes through, wherever it comes
- * from: a read-only project takes no doc changes, the track stack stays
- * grounded, the per-clip transition/anim fields stay caches of the bars, and
- * the playhead stays inside the timeline.
- *
- * The clip fields are what the preview and the export actually render from,
- * so a write that moved clips or bars without re-deriving them would ship a
- * blend at a joint that no longer has one. This runs inside `setState`
- * itself, so no caller — action, module helper, or anything outside this
- * file — can write past it.
- */
-function normalizeWrite(prev: EditorState, incoming: Partial<EditorState>): Partial<EditorState> {
-  let next = incoming;
-  if (prev.readOnly && !hydrating) {
-    next = { ...next };
-    for (const k of DOC_KEYS) delete (next as Record<string, unknown>)[k];
-  }
-  if (next.clips) next = { ...next, clips: groundTracks(next.clips) };
-  if (next.clips || next.transitions) {
-    const clips = next.clips ?? prev.clips;
-    const derived = deriveTransitionFields(clips, next.transitions ?? prev.transitions);
-    if (derived !== clips) next = { ...next, clips: derived };
-  }
-  // The playhead cannot outlive the timeline. Deleting the last of a long
-  // row shortens the project under a playhead standing past the new end,
-  // which leaves the readout ahead of the total and — since the playhead is
-  // placed with a transform, and transforms count toward scrollable
-  // overflow — stretches the scroll area into empty space. Clamping here
-  // covers every edit that shortens anything, present and future.
-  if (next.clips || next.audioClips || next.overlays) {
-    clampPlayhead(
-      projectDuration({
-        clips: next.clips ?? prev.clips,
-        audioClips: next.audioClips ?? prev.audioClips,
-        overlays: next.overlays ?? prev.overlays,
-      })
-    );
-  }
-  return next;
-}
-
-export const useEditor = create<EditorState>((baseSet, get, api) => {
-  // Normalizing is bolted onto setState itself, not onto a local helper the
-  // actions happen to use: the store's own module-level helpers write through
-  // `useEditor.setState`, and one of those skipping the derive is how a clip
-  // kept rendering a transition its bar had already left.
+export const useEditor = create<EditorState>((baseSet, get) => {
+  // Every write that touches clips grounds the stack, so the spine invariant
+  // holds by construction — across deletes, drops, undo, and doc loads.
   const set = (
     partial:
       | Partial<EditorState>
       | ((s: EditorState) => Partial<EditorState>),
     replace?: boolean
   ) =>
-    baseSet(
-      (prev) => normalizeWrite(prev, typeof partial === "function" ? partial(prev) : partial),
-      replace as false | undefined
-    );
-  api.setState = set as typeof api.setState;
+    baseSet((prev) => {
+      let next = typeof partial === "function" ? partial(prev) : partial;
+      if (prev.readOnly && !hydrating) {
+        next = { ...next };
+        for (const k of DOC_KEYS) delete (next as Record<string, unknown>)[k];
+      }
+      if (next.clips) next = { ...next, clips: groundTracks(next.clips) };
+      // The per-clip transition/anim fields are caches of the transition bars:
+      // any write that moves a clip or a bar re-derives them here, so the two
+      // can never disagree.
+      if (next.clips || next.transitions) {
+        const clips = next.clips ?? prev.clips;
+        const derived = deriveTransitionFields(clips, next.transitions ?? prev.transitions);
+        if (derived !== clips) next = { ...next, clips: derived };
+      }
+      // The playhead cannot outlive the timeline. Deleting the last of a long
+      // row shortens the project under a playhead standing past the new end,
+      // which leaves the readout ahead of the total and — since the playhead is
+      // placed with a transform, and transforms count toward scrollable
+      // overflow — stretches the scroll area into empty space. Clamping here
+      // covers every edit that shortens anything, present and future.
+      if (next.clips || next.audioClips || next.overlays) {
+        const total = projectDuration({
+          clips: next.clips ?? prev.clips,
+          audioClips: next.audioClips ?? prev.audioClips,
+          overlays: next.overlays ?? prev.overlays,
+        });
+        if ((next.currentTime ?? prev.currentTime) > total) next = { ...next, currentTime: total };
+      }
+      return next;
+    }, replace as false | undefined);
 
   const snapshot = (): DocSnapshot => {
     const { clips, transitions, audioClips, overlays, subtitles } = get();
@@ -1140,6 +998,12 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
     });
   };
 
+  /** Mirror the module-level history/future arrays into reactive state, so a
+   * toolbar button can disable itself without reading outside the store. */
+  const syncHistoryFlags = () => {
+    set({ canUndo: history.length > 0, canRedo: future.length > 0 });
+  };
+
   /** Seal the deferred checkpoint: commit it to history only if the doc
    * changed since it was taken; otherwise drop it and leave redo intact. */
   const flush = () => {
@@ -1150,6 +1014,7 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       history.push(p.snap);
       if (history.length > HISTORY_CAP) history.shift();
       future.length = 0; // a real edit invalidates the redo branch
+      syncHistoryFlags();
     }
   };
 
@@ -1208,81 +1073,18 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
     const rest = place.shiftDown
       ? get().overlays.map((o) => ({ ...o, lane: (o.lane ?? 0) + 1 }))
       : get().overlays;
-    const t = aim.at ?? playheadAt();
+    const t = aim.at ?? get().currentTime;
     const total = totalDuration(get().clips);
     const taken = rest
       .filter((o) => (o.lane ?? 0) === place.lane)
       .map((o) => ({ start: o.start, end: o.end }));
     const len = aim.len ?? 3;
-    // Keep the element within the film; with no clips yet there is no film
-    // to stay inside, so it lands where it was aimed.
-    const start = nextFreeStart(taken, total > 0 ? Math.min(t, Math.max(0, total - 0.5)) : t, len);
+    const start = nextFreeStart(taken, Math.min(t, Math.max(0, total - 0.5)), len);
     const overlay = build(start, Math.min(start + len, Math.max(total, start + len)), place.lane);
     set(() => ({
       overlays: [...rest, overlay],
       ...sole({ kind: "overlay", id: overlay.id }),
     }));
-  };
-
-  /** Reset to an empty, loading project and drain any background doc writes
-   * still queued for it, so no open ever reads a half-written document. */
-  const resetForOpen = async (id: string) => {
-    // Blob URLs minted for the project being left go with it; the next open
-    // of that project re-registers what its store holds. A re-open of the
-    // same project keeps them — its state still points at them.
-    const prev = get().projectId;
-    if (prev && prev !== id) revokeRegistered(`/api/cut/projects/${prev}/`);
-    // Coming back to a project whose revoke is still waiting on an in-flight
-    // render's hold: the subtree is live again, so the revoke no longer
-    // applies — hydration is about to reuse those registrations.
-    cancelRevoke(`/api/cut/projects/${id}/`);
-    history.length = 0;
-    future.length = 0;
-    pending = null;
-    // A fresh project owns no live run — any prior run's render-owned ids are
-    // stale, and the loaded clips are ordinary, fully-undoable content.
-    genClipIds.clear();
-    genAudioIds.clear();
-    hydrating = true;
-    set({
-      projectId: id,
-      loaded: false,
-      loadError: null,
-      saveState: "saved",
-      resumePush: false,
-      assets: [],
-      loadingMedia: new Set<string>(),
-      clips: [],
-      transitions: [],
-      audioClips: [],
-      overlays: [],
-      templates: [],
-      aspect: "9:16",
-      aspectTouched: false,
-      fadeIn: 0,
-      fadeOut: 0,
-      selection: null,
-      multiSelection: [],
-      playing: false,
-      previewStopAt: null,
-      subtitles: emptySubtitles(),
-      subtitleLane: 0,
-      subtitleStatus: "idle",
-      subtitleError: null,
-      exportOpen: false,
-      genvideo: undefined,
-      renders: [],
-      firstOpen: undefined,
-    });
-    hydrating = false;
-    // A background scene run may still be writing this project's doc — drain
-    // its queued writes so the open never reads a half-written doc. Ordering
-    // matters: projectId is set (loaded false) BEFORE this await, so a write
-    // arriving during the drain waits for the load (projectWriteMode) instead
-    // of queueing a doc write the drain would miss — nothing can land between
-    // the drain and the fetch that follows. Lazy import: docWriter reads store
-    // helpers, so a static import would be a cycle.
-    await import("./genvideo/docWriter").then((m) => m.docWriterIdle(id)).catch(() => {});
   };
 
   return {
@@ -1292,12 +1094,13 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
     loadEpoch: 0,
     loadError: null,
     saveState: "saved",
+    canUndo: false,
+    canRedo: false,
     resumePush: false,
     readOnly: false,
     sharedFeatures: null,
 
     assets: [],
-    loadingMedia: new Set<string>(),
     clips: [],
     transitions: [],
     audioClips: [],
@@ -1310,10 +1113,12 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
     selection: null,
     multiSelection: [],
     selectedKey: null,
+    currentTime: 0,
     playing: false,
     previewStopAt: null,
     pxPerSec: 60,
     timelineH: TIMELINE_H_DEFAULT,
+    skimTime: null,
     publish: { caption: "", tags: "", soundTitle: "", handle: "" },
     notes: { text: "", publishedAt: "", links: [] },
     subtitles: emptySubtitles(),
@@ -1335,13 +1140,154 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       // clicking back in — is not a re-read, and gets the snapshot's head
       // start like any other open.
       const inPlace = opts?.inPlace === true;
-      await resetForOpen(id);
+      history.length = 0;
+      future.length = 0;
+      pending = null;
+      syncHistoryFlags();
+      // A fresh project owns no live run — any prior run's render-owned ids are
+      // stale, and the loaded clips are ordinary, fully-undoable content.
+      genClipIds.clear();
+      genAudioIds.clear();
+      hydrating = true;
+      set({
+        projectId: id,
+        loaded: false,
+        loadError: null,
+        saveState: "saved",
+        resumePush: false,
+        assets: [],
+        clips: [],
+        transitions: [],
+        audioClips: [],
+        overlays: [],
+        templates: [],
+        aspect: "9:16",
+        aspectTouched: false,
+        fadeIn: 0,
+        fadeOut: 0,
+        selection: null,
+        multiSelection: [],
+        currentTime: 0,
+        playing: false,
+        previewStopAt: null,
+        subtitles: emptySubtitles(),
+        subtitleLane: 0,
+        subtitleStatus: "idle",
+        subtitleError: null,
+        exportOpen: false,
+        genvideo: undefined,
+        renders: [],
+        firstOpen: undefined,
+      });
+      hydrating = false;
+      // A background scene run may still be writing this project's doc — drain
+      // its queued writes so the load never reads a half-written doc. Ordering
+      // matters: projectId is set (loaded false) BEFORE this await, so a write
+      // arriving during the drain waits for the load (projectWriteMode) instead
+      // of queueing a doc write the drain would miss — nothing can land between
+      // the drain and the fetch below. Lazy import: docWriter reads store
+      // helpers, so a static import would be a cycle.
+      await import("./genvideo/docWriter").then((m) => m.docWriterIdle(id)).catch(() => {});
 
       // One shape of hydration, used by both the snapshot painted below and
       // the live document that replaces it, so the legacy migrations happen
       // once per document rather than once per code path.
-      const hydrate = (doc: Partial<ProjectDoc>, assets: MediaAsset[], ui: ProjectUiState) =>
-        get().applyDocState(doc, assets, ui);
+      const hydrate = (doc: Partial<ProjectDoc>, assets: MediaAsset[], ui: ProjectUiState) => {
+        const docClips = doc.clips ?? [];
+        // Older docs stored video track 0 packed (array order implied the
+        // position); bake explicit starts in once so every clip is free-placed.
+        const legacy = (docClips as LegacyClip[]).some((c) => typeof c.start !== "number");
+        const folded = (legacy ? packStarts(docClips as LegacyClip[]) : docClips).map((c) => ({
+          ...c,
+          track: c.track ?? 0,
+        }));
+        // Older docs kept tracks other than 0 in a separate `overlayClips` array;
+        // fold them into the one clip list (each already carries its `track`).
+        // Entries whose id already sits in `clips` are the same clip persisted
+        // twice by a version-skewed save (an older engine keeps overlayClips
+        // after a merged client writes the folded list) — keep the folded copy.
+        // Entries with track 0 were unreachable dead data under the split shape
+        // (never rendered, never played); promoting them would insert them into
+        // track 0's sequence, so they stay dropped.
+        const seen = new Set(folded.map((c) => c.id));
+        const legacyLayers = (doc.overlayClips ?? []).filter(
+          (c) => c.track !== 0 && !seen.has(c.id)
+        );
+        // Tracks number 0..N bottom-up. Docs saved when tracks could go
+        // negative (backdrop rows below the spine) lift wholesale so the
+        // lowest row becomes track 0 — the bottom row is the spine now.
+        const joined = [...folded, ...legacyLayers];
+        const lift = Math.max(0, ...joined.map((c) => -c.track));
+        const lifted = lift ? joined.map((c) => ({ ...c, track: c.track + lift })) : joined;
+        // Stamp `kind: "text"` on pre-union titles so every in-memory element
+        // carries its discriminant; the serializer strips it back. Effects
+        // saved onto a shared row move to one of their own, and a clip graded
+        // back when a look was a clip property gets that grade as an element
+        // over it — so a project made before either rule reads like a new one.
+        const stamped = normalizeElementLanes(stampOverlayKinds(doc.overlays ?? []));
+        const subtitles = doc.subtitles ?? emptySubtitles();
+        // Docs saved when edge transition styles existed convert them into the
+        // equivalent clip animations, and docs saved when a transition was a
+        // physical overlap pull their intruding clips apart — clips never
+        // overlap, whatever wrote the file. Pulling them apart lengthens the
+        // cut, so the whole document goes through it together.
+        const merged = separateOverlaps({
+          clips: migrateLegacyTransitions(lifted),
+          audioClips: doc.audioClips ?? [],
+          overlays: stamped,
+          cues: subtitles.cues,
+        });
+        const withLooks =
+          liftClipLooks(merged.clips, merged.overlays, getClipSpans(merged.clips, assets)) ?? {
+            clips: merged.clips,
+            overlays: merged.overlays,
+          };
+        hydrating = true;
+        set({
+          projectName: doc.name ?? "",
+          assets,
+          clips: withLooks.clips,
+          // Bars from the doc, plus one adopted for each transition/animation
+          // a pre-bar doc stored as a clip field.
+          transitions: adoptTransitionFields(
+            withLooks.clips,
+            sanitizeTransitions(doc.transitions)
+          ),
+          audioClips: merged.audioClips,
+          overlays: withLooks.overlays,
+          templates: doc.templates ?? [],
+          aspect: normalizeAspect(doc.aspect) ?? "9:16",
+          aspectTouched: doc.aspect !== undefined,
+          fadeIn: doc.fadeIn ?? 0,
+          fadeOut: doc.fadeOut ?? 0,
+          // View state lives in IndexedDB; doc.ui covers projects saved
+          // before the move.
+          pxPerSec: Math.max(12, Math.min(800, ui.pxPerSec ?? doc.ui?.pxPerSec ?? 60)),
+          timelineH: Math.max(
+            TIMELINE_H_MIN,
+            Math.min(TIMELINE_H_MAX, ui.timelineH ?? TIMELINE_H_DEFAULT)
+          ),
+          publish: {
+            caption: doc.publish?.caption ?? "",
+            tags: doc.publish?.tags ?? "",
+            soundTitle: doc.publish?.soundTitle ?? "",
+            handle: doc.publish?.handle ?? "",
+          },
+          notes: {
+            text: doc.notes?.text ?? "",
+            publishedAt: doc.notes?.publishedAt ?? "",
+            links: doc.notes?.links ?? [],
+          },
+          subtitles: { ...subtitles, cues: merged.cues },
+          subtitleStatus: merged.cues.length > 0 ? "ready" : "idle",
+          genvideo: doc.genvideo ?? undefined,
+          renders: Array.isArray(doc.renders) ? doc.renders : [],
+          firstOpen: doc.firstOpen,
+          loaded: true,
+          loadEpoch: get().loadEpoch + 1,
+        });
+        hydrating = false;
+      };
 
       // The live document goes out first, so everything below is a head start
       // on it and never a substitute for it.
@@ -1373,12 +1319,9 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
           const stale = stored.assets ?? [];
           // Signed R2 links are cached alongside the doc, so a snapshot open
           // hands its clips the very URLs the live load is about to hand
-          // them: identical strings, so nothing reloads when it lands. Local
-          // and browser projects serve their own bytes; their URLs are minted
-          // per session and never cached.
-          const kind = getBackend().kind;
+          // them: identical strings, so nothing reloads when it lands.
           const links =
-            kind === "local" || kind === "browser"
+            getBackend().kind === "local"
               ? null
               : await readCachedMediaLinks(id, stale.map((a) => a.fileName));
           if (openable()) {
@@ -1430,74 +1373,13 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
         // load; the /media route's 302 stays the fallback for anything the
         // mint misses. mediaLinks re-mints the batch as it nears expiry.
         if (getBackend().kind !== "local") {
-          // A cloud project plays what this browser already holds — imports
-          // that haven't drained plus files cached from earlier reads — so
-          // only the rest asks for signed links.
-          const held = new Map<string, string>();
-          if (getBackend().kind === "cloud") {
-            await Promise.all(
-              assets.map(async (a) => {
-                const url = await localMediaUrl(id, a.fileName);
-                if (url) held.set(a.fileName, url);
-              })
-            );
-          }
-          const missing = assets.filter((a) => !held.has(a.fileName));
-          const signed = await fetchSignedMediaUrls(id, missing.map((a) => a.fileName));
-          for (const a of assets) {
-            a.url = held.get(a.fileName) ?? signed.urls.get(a.fileName) ?? a.url;
-          }
+          const signed = await fetchSignedMediaUrls(id, assets.map((a) => a.fileName));
+          for (const a of assets) a.url = signed.urls.get(a.fileName) ?? a.url;
           markSignedBatch(id, signed.expiresAt);
-          // A browser project's "mint" hands back session blob URLs, dead on
-          // the next load — only time-limited signed links are worth caching.
-          if (getBackend().kind !== "browser") {
-            writeCachedMediaLinks(id, signed.urls, signed.expiresAt);
-          }
-          if (getBackend().kind === "cloud") {
-            // Pull every missing file into the browser store behind the
-            // editor, nearest timeline use first, and swap each asset onto
-            // its local bytes as it lands — scrubbing goes local front to
-            // back, and the next open plays entirely from disk.
-            const firstUse = new Map<string, number>();
-            for (const c of [...doc.clips, ...doc.audioClips]) {
-              const asset = doc.assets.find((x) => x.id === c.assetId);
-              if (!asset) continue;
-              firstUse.set(
-                asset.fileName,
-                Math.min(firstUse.get(asset.fileName) ?? Infinity, c.start)
-              );
-            }
-            const queue = missing
-              .flatMap((a) => {
-                const url = signed.urls.get(a.fileName);
-                return url ? [{ fileName: a.fileName, url }] : [];
-              })
-              .sort(
-                (x, y) =>
-                  (firstUse.get(x.fileName) ?? Infinity) - (firstUse.get(y.fileName) ?? Infinity)
-              );
-            set({ loadingMedia: new Set(queue.map((f) => f.fileName)) });
-            prefetchCloudMedia(id, queue, (fileName, url) => {
-              const st = get();
-              if (st.projectId !== id) return;
-              if (url) st.applyMediaUrls(new Map([[fileName, url]]));
-              set((s) => {
-                const next = new Set(s.loadingMedia);
-                next.delete(fileName);
-                return { loadingMedia: next };
-              });
-            });
-          }
+          writeCachedMediaLinks(id, signed.urls, signed.expiresAt);
         } else {
           markSignedBatch(id, null);
         }
-        // Ledger pins survive the reload; once the document is in hand, its
-        // unsynced imports re-enter the upload queue. Lazy import: media.ts
-        // reaches back into the store.
-        const resumeUploads = () =>
-          void import("./media")
-            .then((m) => m.resumePendingUploads(id))
-            .catch(() => {});
         // A dirty snapshot resumes only onto the version its edits were made
         // on top of. The server having moved past that base is a conflict,
         // and the server wins it the way it wins any conflict — even over
@@ -1524,12 +1406,10 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
           (paintedDirty || history.length > 0 || get().saveState !== "saved")
         ) {
           get().applyMediaUrls(new Map(assets.map((a) => [a.fileName, a.url])));
-          resumeUploads();
           return;
         }
         writeCachedDoc(id, doc);
         hydrate(doc, assets, ui);
-        resumeUploads();
       } catch (err) {
         // Couldn't reach the server. A snapshot already on screen is the
         // better answer than an error page: the project is open and editable,
@@ -1541,117 +1421,6 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       } finally {
         hydrating = false;
       }
-    },
-
-    applyDocState: (doc, assets, ui) => {
-      const docClips = doc.clips ?? [];
-      // Older docs stored video track 0 packed (array order implied the
-      // position); bake explicit starts in once so every clip is free-placed.
-      const legacy = (docClips as LegacyClip[]).some((c) => typeof c.start !== "number");
-      const folded = (legacy ? packStarts(docClips as LegacyClip[]) : docClips).map((c) => ({
-        ...c,
-        track: c.track ?? 0,
-      }));
-      // Older docs kept tracks other than 0 in a separate `overlayClips` array;
-      // fold them into the one clip list (each already carries its `track`).
-      // Entries whose id already sits in `clips` are the same clip persisted
-      // twice by a version-skewed save (an older engine keeps overlayClips
-      // after a merged client writes the folded list) — keep the folded copy.
-      // Entries with track 0 were unreachable dead data under the split shape
-      // (never rendered, never played); promoting them would insert them into
-      // track 0's sequence, so they stay dropped.
-      const seen = new Set(folded.map((c) => c.id));
-      const legacyLayers = (doc.overlayClips ?? []).filter(
-        (c) => c.track !== 0 && !seen.has(c.id)
-      );
-      // Tracks number 0..N bottom-up. Docs saved when tracks could go
-      // negative (backdrop rows below the spine) lift wholesale so the
-      // lowest row becomes track 0 — the bottom row is the spine now.
-      const joined = [...folded, ...legacyLayers];
-      const lift = Math.max(0, ...joined.map((c) => -c.track));
-      const lifted = lift ? joined.map((c) => ({ ...c, track: c.track + lift })) : joined;
-      // Stamp `kind: "text"` on pre-union titles so every in-memory element
-      // carries its discriminant; the serializer strips it back. Effects
-      // saved onto a shared row move to one of their own, and a clip graded
-      // back when a look was a clip property gets that grade as an element
-      // over it — so a project made before either rule reads like a new one.
-      // The behind-speaker boolean becomes an inverted subject mask on load,
-      // so one mask model covers it everywhere in memory and on save.
-      const stamped = normalizeElementLanes(
-        migrateBehindSubject(stampOverlayKinds(doc.overlays ?? []))
-      );
-      const subtitles = doc.subtitles ?? emptySubtitles();
-      // Docs saved when edge transition styles existed convert them into the
-      // equivalent clip animations, and docs saved when a transition was a
-      // physical overlap pull their intruding clips apart — clips never
-      // overlap, whatever wrote the file. Pulling them apart lengthens the
-      // cut, so the whole document goes through it together.
-      const merged = separateOverlaps({
-        clips: migrateLegacyTransitions(lifted),
-        audioClips: doc.audioClips ?? [],
-        overlays: stamped,
-        cues: subtitles.cues,
-      });
-      const withLooks =
-        liftClipLooks(merged.clips, merged.overlays, getClipSpans(merged.clips, assets)) ?? {
-          clips: merged.clips,
-          overlays: merged.overlays,
-        };
-      hydrating = true;
-      try {
-        set({
-          projectName: doc.name ?? "",
-          assets,
-          clips: withLooks.clips,
-          // Bars from the doc, plus one adopted for each transition/animation
-          // a pre-bar doc stored as a clip field.
-          transitions: adoptTransitionFields(
-            withLooks.clips,
-            sanitizeTransitions(doc.transitions)
-          ),
-          audioClips: merged.audioClips,
-          overlays: withLooks.overlays,
-          templates: doc.templates ?? [],
-          aspect: normalizeAspect(doc.aspect) ?? "9:16",
-          aspectTouched: doc.aspect !== undefined,
-          fadeIn: doc.fadeIn ?? 0,
-          fadeOut: doc.fadeOut ?? 0,
-          // View state lives in IndexedDB; doc.ui covers projects saved
-          // before the move.
-          pxPerSec: Math.max(12, Math.min(800, ui.pxPerSec ?? doc.ui?.pxPerSec ?? 60)),
-          timelineH: Math.max(
-            TIMELINE_H_MIN,
-            Math.min(timelineHMax(), ui.timelineH ?? TIMELINE_H_DEFAULT)
-          ),
-          publish: {
-            caption: doc.publish?.caption ?? "",
-            tags: doc.publish?.tags ?? "",
-            soundTitle: doc.publish?.soundTitle ?? "",
-            handle: doc.publish?.handle ?? "",
-          },
-          notes: {
-            text: doc.notes?.text ?? "",
-            publishedAt: doc.notes?.publishedAt ?? "",
-            links: doc.notes?.links ?? [],
-          },
-          subtitles: { ...subtitles, cues: merged.cues },
-          subtitleStatus: merged.cues.length > 0 ? "ready" : "idle",
-          genvideo: doc.genvideo ?? undefined,
-          renders: Array.isArray(doc.renders) ? doc.renders : [],
-          firstOpen: doc.firstOpen,
-          loaded: true,
-          loadEpoch: get().loadEpoch + 1,
-        });
-      } finally {
-        // Reset on every path: a doc bad enough to throw inside set() must
-        // never leave the store treating ordinary writes as hydration.
-        hydrating = false;
-      }
-    },
-
-    openProjectDoc: async (id, doc, assets) => {
-      await resetForOpen(id);
-      get().applyDocState(doc, assets, {});
     },
 
     setProjectName: (name) => set({ projectName: name }),
@@ -1886,10 +1655,8 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
         set((s) => ({
           assets: s.assets.map((a) => {
             // An import still uploading plays from local bytes; a signed URL
-            // for an object that hasn't landed would only 404. An asset the
-            // browser store serves keeps its blob URL — link rotation is for
-            // links that expire.
-            if (a.upload || resolveRegisteredBlob(a.url)) return a;
+            // for an object that hasn't landed would only 404.
+            if (a.upload) return a;
             const url = urls.get(a.fileName);
             return url && url !== a.url ? { ...a, url } : a;
           }),
@@ -1922,9 +1689,6 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
           `/api/cut/projects/${s.projectId}/media/${encodeURIComponent(gone.fileName)}`,
           { method: "DELETE" }
         ).catch(() => {});
-        // A cloud project's browser-store copy — pin, bytes, and blob URL —
-        // dies with the cloud object.
-        if (getBackend().kind === "cloud") void dropLocalMedia(s.projectId, gone.fileName);
       };
       // An unreferenced asset is no doc edit: history snapshots don't cover
       // the asset list, so removing one must not open a checkpoint or churn
@@ -1987,13 +1751,35 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       }));
     },
 
+    dropClipFromAsset: (assetId, t) => {
+      const asset = get().assets.find((a) => a.id === assetId);
+      if (!asset || (asset.type !== "video" && asset.type !== "image")) return;
+      push();
+      const out = asset.type === "image" ? IMAGE_CLIP_SECONDS : asset.duration;
+      const len = Math.max(MIN_LEN, out);
+      const { start, shifts } = rippleInsert(track0Clips(get().clips), Math.max(0, t), len);
+      const move = new Map(shifts.map((sh) => [sh.id, sh.start]));
+      const clip: VideoClip = { id: uid(), assetId, track: 0, start, in: 0, out, muted: false };
+      set((s) => {
+        const clips = [
+          ...s.clips.map((c) => (move.has(c.id) ? { ...c, start: move.get(c.id)! } : c)),
+          clip,
+        ].sort((a, b) => a.start - b.start);
+        return {
+          clips,
+          transitions: reanchorTransitions(s.clips, clips, s.transitions),
+          ...sole({ kind: "clip", id: clip.id }),
+        };
+      });
+    },
+
     addAudioFromAsset: (assetId, start, opts) => {
       const asset = get().assets.find((a) => a.id === assetId);
       if (!asset || asset.type !== "audio") return;
       push();
       // Within its lane the clip slides to the next free slot at or after the
       // target so it never lands on top of an existing sound.
-      const want = Math.max(0, start ?? playheadAt());
+      const want = Math.max(0, start ?? get().currentTime);
       const len = Math.max(MIN_LEN, asset.duration);
       const lane = opts?.lane ?? 0;
       const taken = footprints(get().audioClips.filter((a) => (a.lane ?? 0) === lane));
@@ -2013,40 +1799,6 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
         audioClips: [...s.audioClips, clip],
         ...sole({ kind: "audio", id: clip.id }),
       }));
-    },
-
-    addAssetAtPlayhead: (assetId) => {
-      const asset = get().assets.find((a) => a.id === assetId);
-      if (!asset) return;
-      const t = Math.max(0, previewAt());
-      // A row fits when `nextFreeStart` keeps the clip at the preview time
-      // itself; the scan climbs until one does. A brand-new row always fits,
-      // so the clip lands under the indicator no matter how full the stack is.
-      // The add itself delegates to the placement actions (which checkpoint
-      // history themselves), landing exactly at `t` on the fitting row.
-      const firstFit = <T extends VideoClip | AudioClip>(
-        all: T[],
-        rowOf: (c: T) => number,
-        len: number
-      ) => {
-        const top = all.reduce((m, c) => Math.max(m, rowOf(c)), 0);
-        let row = 0;
-        while (
-          row <= top &&
-          nextFreeStart(footprints(all.filter((c) => rowOf(c) === row)), t, len) >= t + 1e-3
-        )
-          row++;
-        return row;
-      };
-      if (asset.type === "audio") {
-        const lane = firstFit(get().audioClips, (c) => c.lane ?? 0, Math.max(MIN_LEN, asset.duration));
-        get().addAudioFromAsset(assetId, t, { lane });
-        return;
-      }
-      if (asset.type !== "video" && asset.type !== "image") return;
-      const out = asset.type === "image" ? IMAGE_CLIP_SECONDS : asset.duration;
-      const track = firstFit(get().clips, (c) => c.track, Math.max(MIN_LEN, out));
-      get().addVideoFromAsset(assetId, { kind: "track", track }, t);
     },
 
     addOverlay: () => {
@@ -2083,7 +1835,7 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       const frame = frameOf(get().aspect);
       // A square-reading default box whatever the aspect; lines/arrows are a
       // wider box whose height is the stroke thickness.
-      const w = lineLikeShape(shape) ? 0.42 : 0.3;
+      const w = shape === "line" || shape === "arrow" ? 0.42 : 0.3;
       const h =
         shape === "line"
           ? 6 / frame.h
@@ -2134,7 +1886,7 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       // people mean: dropped anywhere over one, it opens covering that clip.
       // Off the end of the cut it falls back to the standard length.
       const s0 = get();
-      const t = aim?.at ?? playheadAt();
+      const t = aim?.at ?? s0.currentTime;
       const span = getClipSpans(s0.clips, s0.assets).find(
         (sp) => t >= sp.start - 1e-6 && t < sp.start + sp.len
       );
@@ -2191,27 +1943,20 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       const s = get();
       const clip = s.clips.find((c) => c.id === id);
       if (!clip) return;
-      // The bar playing this clip's tail — its cut, or its open end. Failing
-      // that, a parked bar already ending on the tail: with several tracks
-      // cutting at the same instant, this clip's bar can lose its boundary
-      // claim to a newer neighbour, and writing a fresh bar on top of it
-      // would stack identical twins.
+      // The bar playing this clip's tail — its cut, or its open end.
       const roles = resolveTransitions(s.clips, s.transitions);
-      const tail = clip.start + clipLen(clip);
-      const existing =
-        s.transitions.find((t) =>
-          (roles.get(t.id) ?? []).some((r) => r.kind !== "in" && r.clipId === id)
-        ) ??
-        s.transitions.find(
-          (t) => !roles.has(t.id) && Math.abs(t.start + t.seconds - tail) <= TOUCH_EPS
-        );
+      const existing = s.transitions.find((t) => {
+        const r = roles.get(t.id);
+        return !!r && r.kind !== "in" && r.clipId === id;
+      });
       const value = Math.max(0, Math.min(TRANSITION_MAX, seconds));
       if (value <= 0) {
         if (existing) get().removeTransition(existing.id);
         return;
       }
+      const end = clip.start + clipLen(clip);
       const bar = {
-        start: tail - value,
+        start: end - value,
         seconds: value,
         style: style ?? existing?.style ?? "crossfade",
       };
@@ -2227,29 +1972,20 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       const s = get();
       const clip = s.clips.find((c) => c.id === id);
       if (!clip) return;
-      // The bar riding this edge, whichever role it resolved to there — or a
-      // parked bar already sitting exactly on it, so a lost boundary claim
-      // (another track cutting at the same instant) never stacks a twin.
+      // The bar riding this edge, whichever role it resolved to there.
       const roles = resolveTransitions(s.clips, s.transitions);
-      const edgeAt = which === "in" ? clip.start : clip.start + clipLen(clip);
-      const existing =
-        s.transitions.find((t) =>
-          (roles.get(t.id) ?? []).some(
-            (r) => r.clipId === id && (which === "in" ? r.kind === "in" : r.kind !== "in")
-          )
-        ) ??
-        s.transitions.find(
-          (t) =>
-            !roles.has(t.id) &&
-            Math.abs((which === "in" ? t.start : t.start + t.seconds) - edgeAt) <= TOUCH_EPS
-        );
+      const existing = s.transitions.find((t) => {
+        const r = roles.get(t.id);
+        return !!r && r.clipId === id && (which === "in" ? r.kind === "in" : r.kind !== "in");
+      });
       if (!anim || !ANIM_STYLE_IDS.includes(anim.style)) {
         if (existing) get().removeTransition(existing.id);
         return;
       }
       const seconds = Math.max(0.1, Math.min(TRANSITION_MAX, anim.seconds));
+      const edge = which === "in" ? clip.start : clip.start + clipLen(clip);
       const bar = {
-        start: which === "in" ? edgeAt : edgeAt - seconds,
+        start: which === "in" ? edge : edge - seconds,
         seconds,
         style: transitionStyleOfAnim(anim.style),
       };
@@ -2259,13 +1995,6 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
           ? s2.transitions.map((t) => (t.id === existing.id ? { ...t, ...bar } : t))
           : [...s2.transitions, { id: uid(), ...bar }],
       }));
-    },
-
-    reanchorBars: (before) => {
-      const s = get();
-      if (s.transitions.length === 0) return;
-      const next = reanchorTransitions(before, s.clips, s.transitions);
-      if (next !== s.transitions) set({ transitions: next });
     },
 
     addTransition: (bar) => {
@@ -2392,7 +2121,7 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       if (kf.length === o.kf.length) return;
       push();
       // The last key going means the element holds its own resting pose
-      // again, so the track leaves with it.
+      // again, so the track leaves rather than lingering empty.
       get().updateOverlayTransient(id, { kf: kf.length ? kf : undefined });
     },
 
@@ -2400,7 +2129,7 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       const o = get().overlays.find((x) => x.id === id);
       if (!o) return;
       get().select({ kind: "overlay", id });
-      set({ selectedKey: { kind: "overlay", id, t: tLocal, track: "pose" } });
+      set({ selectedKey: { overlayId: id, t: tLocal } });
     },
 
     moveOverlayKey: (id, fromT, toT, opts) => {
@@ -2415,14 +2144,8 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       });
       // The pick follows the key it is on, so dragging never drops it.
       const picked = get().selectedKey;
-      if (
-        picked &&
-        picked.kind === "overlay" &&
-        picked.track === "pose" &&
-        picked.id === id &&
-        Math.abs(picked.t - fromT) <= KEY_EPSILON
-      ) {
-        set({ selectedKey: { kind: "overlay", id, t, track: "pose" } });
+      if (picked && picked.overlayId === id && Math.abs(picked.t - fromT) <= KEY_EPSILON) {
+        set({ selectedKey: { overlayId: id, t } });
       }
     },
 
@@ -2431,181 +2154,6 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       if (!o?.kf?.length) return;
       push();
       get().updateOverlayTransient(id, { kf: undefined });
-    },
-
-    setOverlayMaskKey: (id, tLocal, patch, opts) => {
-      const o = get().overlays.find((x) => x.id === id);
-      if (!o?.mask) return;
-      const t = Math.max(0, Math.min(tLocal, Math.max(0.1, o.end - o.start)));
-      const existing = o.mask.kf?.find((k) => Math.abs(k.t - t) <= KEY_EPSILON);
-      // A brand-new key holds the geometry the mask already had at `t`, so
-      // adding one changes nothing until something edits it.
-      const next = { ...(existing ?? maskKeyAt(o.mask, t)), ...patch, t };
-      if (!opts?.transient) push();
-      get().updateOverlayTransient(id, { mask: { ...o.mask, kf: upsertKey(o.mask.kf, next) } });
-    },
-
-    removeOverlayMaskKey: (id, tLocal) => {
-      const o = get().overlays.find((x) => x.id === id);
-      if (!o?.mask?.kf?.length) return;
-      const kf = removeKeyAt(o.mask.kf, tLocal);
-      if (kf.length === o.mask.kf.length) return;
-      push();
-      // The last key going means the mask holds its own resting geometry
-      // again, so the track leaves with it.
-      get().updateOverlayTransient(id, { mask: { ...o.mask, kf: kf.length ? kf : undefined } });
-    },
-
-    selectOverlayMaskKey: (id, tLocal) => {
-      const o = get().overlays.find((x) => x.id === id);
-      if (!o) return;
-      get().select({ kind: "overlay", id });
-      set({ selectedKey: { kind: "overlay", id, t: tLocal, track: "mask" } });
-    },
-
-    moveOverlayMaskKey: (id, fromT, toT, opts) => {
-      const o = get().overlays.find((x) => x.id === id);
-      if (!o?.mask?.kf?.length) return;
-      const key = o.mask.kf.find((k) => Math.abs(k.t - fromT) <= KEY_EPSILON);
-      if (!key) return;
-      const t = Math.max(0, Math.min(toT, Math.max(0.1, o.end - o.start)));
-      if (!opts?.transient) push();
-      get().updateOverlayTransient(id, {
-        mask: { ...o.mask, kf: upsertKey(removeKeyAt(o.mask.kf, fromT), { ...key, t }) },
-      });
-      // The pick follows the key it is on, so dragging never drops it.
-      const picked = get().selectedKey;
-      if (
-        picked &&
-        picked.kind === "overlay" &&
-        picked.track === "mask" &&
-        picked.id === id &&
-        Math.abs(picked.t - fromT) <= KEY_EPSILON
-      ) {
-        set({ selectedKey: { kind: "overlay", id, t, track: "mask" } });
-      }
-    },
-
-    clearOverlayMaskKeys: (id) => {
-      const o = get().overlays.find((x) => x.id === id);
-      if (!o?.mask?.kf?.length) return;
-      push();
-      get().updateOverlayTransient(id, { mask: { ...o.mask, kf: undefined } });
-    },
-
-    setClipMaskKey: (id, tLocal, patch, opts) => {
-      const c = get().clips.find((x) => x.id === id);
-      if (!c?.mask) return;
-      const len = Math.max(0.1, (c.out - c.in) / clipSpeed(c));
-      const t = Math.max(0, Math.min(tLocal, len));
-      const existing = c.mask.kf?.find((k) => Math.abs(k.t - t) <= KEY_EPSILON);
-      const next = { ...(existing ?? maskKeyAt(c.mask, t)), ...patch, t };
-      if (!opts?.transient) push();
-      get().updateClipTransient(id, { mask: { ...c.mask, kf: upsertKey(c.mask.kf, next) } });
-    },
-
-    removeClipMaskKey: (id, tLocal) => {
-      const c = get().clips.find((x) => x.id === id);
-      if (!c?.mask?.kf?.length) return;
-      const kf = removeKeyAt(c.mask.kf, tLocal);
-      if (kf.length === c.mask.kf.length) return;
-      push();
-      get().updateClipTransient(id, { mask: { ...c.mask, kf: kf.length ? kf : undefined } });
-    },
-
-    selectClipMaskKey: (id, tLocal) => {
-      const c = get().clips.find((x) => x.id === id);
-      if (!c) return;
-      get().select({ kind: "clip", id });
-      set({ selectedKey: { kind: "clip", id, t: tLocal, track: "mask" } });
-    },
-
-    moveClipMaskKey: (id, fromT, toT, opts) => {
-      const c = get().clips.find((x) => x.id === id);
-      if (!c?.mask?.kf?.length) return;
-      const key = c.mask.kf.find((k) => Math.abs(k.t - fromT) <= KEY_EPSILON);
-      if (!key) return;
-      const t = Math.max(0, Math.min(toT, clipLen(c)));
-      if (!opts?.transient) push();
-      get().updateClipTransient(id, {
-        mask: { ...c.mask, kf: upsertKey(removeKeyAt(c.mask.kf, fromT), { ...key, t }) },
-      });
-      // The pick follows the key it is on, so dragging never drops it.
-      const picked = get().selectedKey;
-      if (
-        picked &&
-        picked.kind === "clip" &&
-        picked.track === "mask" &&
-        picked.id === id &&
-        Math.abs(picked.t - fromT) <= KEY_EPSILON
-      ) {
-        set({ selectedKey: { kind: "clip", id, t, track: "mask" } });
-      }
-    },
-
-    clearClipMaskKeys: (id) => {
-      const c = get().clips.find((x) => x.id === id);
-      if (!c?.mask?.kf?.length) return;
-      push();
-      get().updateClipTransient(id, { mask: { ...c.mask, kf: undefined } });
-    },
-
-    setClipKey: (id, tLocal, patch, opts) => {
-      const c = get().clips.find((x) => x.id === id);
-      if (!c) return;
-      const t = Math.max(0, Math.min(tLocal, clipLen(c)));
-      const existing = c.kf?.find((k) => Math.abs(k.t - t) <= KEY_EPSILON);
-      // A brand-new key holds the pose the clip already had at `t`, so
-      // adding one changes nothing until something edits it.
-      const next = { ...(existing ?? { t, ...clipPoseAt(c, t) }), ...patch, t };
-      if (!opts?.transient) push();
-      get().updateClipTransient(id, { kf: upsertKey(c.kf, next) });
-    },
-
-    removeClipKey: (id, tLocal) => {
-      const c = get().clips.find((x) => x.id === id);
-      if (!c?.kf?.length) return;
-      const kf = removeKeyAt(c.kf, tLocal);
-      if (kf.length === c.kf.length) return;
-      push();
-      // The last key going means the clip rests in its region again, so the
-      // track leaves with it.
-      get().updateClipTransient(id, { kf: kf.length ? kf : undefined });
-    },
-
-    selectClipKey: (id, tLocal) => {
-      const c = get().clips.find((x) => x.id === id);
-      if (!c) return;
-      get().select({ kind: "clip", id });
-      set({ selectedKey: { kind: "clip", id, t: tLocal, track: "pose" } });
-    },
-
-    moveClipKey: (id, fromT, toT, opts) => {
-      const c = get().clips.find((x) => x.id === id);
-      if (!c?.kf?.length) return;
-      const key = c.kf.find((k) => Math.abs(k.t - fromT) <= KEY_EPSILON);
-      if (!key) return;
-      const t = Math.max(0, Math.min(toT, clipLen(c)));
-      if (!opts?.transient) push();
-      get().updateClipTransient(id, { kf: upsertKey(removeKeyAt(c.kf, fromT), { ...key, t }) });
-      // The pick follows the key it is on, so dragging never drops it.
-      const picked = get().selectedKey;
-      if (
-        picked &&
-        picked.kind === "clip" &&
-        picked.track === "pose" &&
-        picked.id === id &&
-        Math.abs(picked.t - fromT) <= KEY_EPSILON
-      ) {
-        set({ selectedKey: { kind: "clip", id, t, track: "pose" } });
-      }
-    },
-
-    clearClipKeys: (id) => {
-      const c = get().clips.find((x) => x.id === id);
-      if (!c?.kf?.length) return;
-      push();
-      get().updateClipTransient(id, { kf: undefined });
     },
 
     updateOverlayTransient: (id, patch) =>
@@ -2709,28 +2257,49 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       if (!asset || (asset.type !== "video" && asset.type !== "image")) return;
       const out = asset.type === "image" ? IMAGE_CLIP_SECONDS : asset.duration;
       push();
-      const { track, start: at, shifts } = landOnPlacement(
-        get().clips,
-        place,
-        start,
-        Math.max(MIN_LEN, out)
-      );
-      const move = new Map(shifts.map((sh) => [sh.id, sh.start]));
+      if (place.kind === "track" && place.track === 0) {
+        const taken = footprints(track0Clips(get().clips));
+        const v: VideoClip = {
+          id: uid(),
+          assetId,
+          track: 0,
+          start: nextFreeStart(taken, Math.max(0, start), Math.max(MIN_LEN, out)),
+          in: 0,
+          out,
+          muted: false,
+        };
+        set((s) => ({
+          clips: [...s.clips, v].sort((a, b) => a.start - b.start),
+          ...sole({ kind: "clip", id: v.id }),
+        }));
+        return;
+      }
       // Full-frame by default: covers track 0 ("topmost plays"); the inspector
       // regions it (split half / corner PiP).
-      const v: VideoClip = { id: uid(), assetId, track, start: at, in: 0, out, muted: false };
-      set((s) =>
-        placedState(
-          s,
-          [
-            ...shiftTracksUp(s.clips, place).map((c) =>
-              move.has(c.id) ? { ...c, start: move.get(c.id)! } : c
-            ),
-            v,
-          ],
-          v.id
-        )
-      );
+      const track = place.kind === "insert" ? place.level : place.track;
+      // An existing track has residents: slide to its next free slot, like the
+      // track-0 add. An inserted track is brand-new, so the start holds as-is.
+      const at =
+        place.kind === "track"
+          ? nextFreeStart(
+              footprints(get().clips.filter((c) => c.track === track)),
+              Math.max(0, start),
+              Math.max(MIN_LEN, out)
+            )
+          : Math.max(0, start);
+      const ov: VideoClip = {
+        id: uid(),
+        assetId,
+        track,
+        start: at,
+        in: 0,
+        out,
+        muted: false,
+      };
+      set((s) => ({
+        clips: [...shiftTracksUp(s.clips, place), ov],
+        ...sole({ kind: "clip", id: ov.id }),
+      }));
     },
 
     dropVideoClip: (id, place, start) => {
@@ -2738,44 +2307,44 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       if (!src) return;
       // No checkpoint here: the lane coordinator's drag gesture already pushed
       // one at pointer-down, so the whole move is a single undo step.
-      if (place.kind === "track" && place.track === src.track) {
-        return; // a same-track move commits through the lane coordinator
+      const onTrack0 = src.track === 0;
+
+      if (place.kind === "track" && place.track === 0) {
+        if (onTrack0) return; // a same-track move commits through the lane coordinator
+        // Drop a layer clip down onto track 0: slide to its next free slot.
+        const taken = footprints(track0Clips(get().clips));
+        const at = nextFreeStart(taken, Math.max(0, start), clipLen(src));
+        set((st) => ({
+          clips: st.clips.map((c) =>
+            c.id === id ? { ...c, track: 0, start: at } : c
+          ).sort((a, b) => a.start - b.start),
+          ...sole({ kind: "clip", id }),
+        }));
+        return;
       }
 
-      // The clip leaves its track, so the hole it leaves closes behind it:
-      // the source row's later clips slide left by its length. Matching by id
-      // keeps the closure correct through an insert's track renumbering.
-      const srcLen = clipLen(src);
-      const closing: [string, number][] = get()
-        .clips.filter(
-          (c) => c.track === src.track && c.id !== id && c.start > src.start + 1e-9
-        )
-        .map((c) => [c.id, Math.max(0, c.start - srcLen)]);
-
-      const { track, start: at, shifts } = landOnPlacement(
-        get().clips,
-        place,
-        start,
-        srcLen,
-        id
-      );
-      const move = new Map([...shifts.map((sh) => [sh.id, sh.start] as const), ...closing]);
+      const track = place.kind === "insert" ? place.level : place.track;
+      // An existing track has residents: slide to its next free slot, like the
+      // track-0 drop. An inserted track is brand-new, so the start holds as-is.
+      const at =
+        place.kind === "track"
+          ? nextFreeStart(
+              footprints(get().clips.filter((c) => c.track === track && c.id !== id)),
+              Math.max(0, start),
+              clipLen(src)
+            )
+          : Math.max(0, start);
       set((st) => {
         // Inserting a new track opens the slot by renumbering the others; the
         // moved clip itself is excluded from the shift, then placed at `track`.
         const shifted =
           place.kind === "insert" ? openInsertSlot(st.clips, place.level, id) : st.clips;
-        return placedState(
-          st,
-          shifted.map((c) =>
-            c.id === id
-              ? { ...c, track, start: at }
-              : move.has(c.id)
-                ? { ...c, start: move.get(c.id)! }
-                : c
-          ),
-          id
-        );
+        return {
+          clips: shifted
+            .map((c) => (c.id === id ? { ...c, track, start: at } : c))
+            .sort((a, b) => a.start - b.start),
+          ...sole({ kind: "clip", id }),
+        };
       });
     },
 
@@ -2806,8 +2375,8 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
     },
 
     splitAtPlayhead: (at) => {
-      const { clips, audioClips, assets, selection } = get();
-      const t = at ?? playheadAt();
+      const { clips, audioClips, assets, currentTime, selection } = get();
+      const t = at ?? currentTime;
 
       // With a soundtrack clip selected, ⌘B slices it instead.
       if (selection?.kind === "audio") {
@@ -2931,21 +2500,13 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
     deleteSelection: () => {
       const st = get();
       // A picked keyframe is the smaller thing under the cursor: Delete takes
-      // the key and leaves the item it belongs to alone.
+      // the key and leaves the element it belongs to alone.
       const key = st.selectedKey;
       if (key) {
         set({ selectedKey: null });
-        const item =
-          key.kind === "overlay"
-            ? st.overlays.find((x) => x.id === key.id)
-            : st.clips.find((x) => x.id === key.id);
-        const keys = key.track === "mask" ? item?.mask?.kf : item?.kf;
-        if (keys?.some((k) => Math.abs(k.t - key.t) <= KEY_EPSILON)) {
-          if (key.kind === "overlay") {
-            if (key.track === "mask") st.removeOverlayMaskKey(key.id, key.t);
-            else st.removeOverlayKey(key.id, key.t);
-          } else if (key.track === "mask") st.removeClipMaskKey(key.id, key.t);
-          else st.removeClipKey(key.id, key.t);
+        const o = st.overlays.find((x) => x.id === key.overlayId);
+        if (o?.kf?.some((k) => Math.abs(k.t - key.t) <= KEY_EPSILON)) {
+          st.removeOverlayKey(key.overlayId, key.t);
           return;
         }
       }
@@ -3009,24 +2570,9 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
         // rest ride the ripple to wherever their cut ended up.
         const roles = s.transitions.length
           ? resolveTransitions(s.clips, s.transitions)
-          : new Map<string, TransitionRole[]>();
-        // A deleted clip's edges take their parked bars along: a bar aligned
-        // with the clip's head or tail that lost its boundary claim (a twin)
-        // is this clip's leftover, and it would otherwise sit on the row as
-        // an orphan forever. A playing bar goes when every clip it plays is
-        // going; one still serving a surviving track's boundary stays.
-        const edges: number[] = [];
-        for (const c of s.clips) {
-          if (!clipIds.has(c.id)) continue;
-          edges.push(c.start, c.start + clipLen(c));
-        }
-        const onEdge = (x: number) => edges.some((e) => Math.abs(e - x) <= TOUCH_EPS);
-        const dropped = (t: TimelineTransition) => {
-          if (barIds.has(t.id)) return true;
-          const rs = roles.get(t.id);
-          if (rs && rs.length > 0) return rs.every((r) => clipIds.has(r.clipId));
-          return onEdge(t.start) || onEdge(t.start + t.seconds);
-        };
+          : new Map<string, TransitionRole>();
+        const dropped = (t: TimelineTransition) =>
+          barIds.has(t.id) || clipIds.has(roles.get(t.id)?.clipId ?? "");
         const kept = s.transitions.some(dropped)
           ? s.transitions.filter((t) => !dropped(t))
           : s.transitions;
@@ -3297,13 +2843,12 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
           ...(a.duck !== undefined && a.duck < 1 ? { duck: a.duck } : {}),
           ...(a.lane ? { lane: a.lane } : {}),
         }));
-      // Templates saved before the union carry bare titles — same stamp and
-      // behind-speaker migration as the doc loader, so every in-memory
-      // element has its discriminant and one mask model. Groups are remapped
-      // per application, so adding the same template twice gives two
-      // independent groups.
+      // Templates saved before the union carry bare titles — same stamp as
+      // the doc loader, so every in-memory element has its discriminant.
+      // Groups are remapped per application, so adding the same template
+      // twice gives two independent groups instead of one welded set.
       const regroup = groupRemap(uid);
-      const newTexts: Overlay[] = migrateBehindSubject(stampOverlayKinds(template.texts)).map((o) => ({
+      const newTexts: Overlay[] = stampOverlayKinds(template.texts).map((o) => ({
         ...o,
         id: uid(),
         start: o.start + shift,
@@ -3373,39 +2918,23 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
         return { multiSelection: next, selection: primary };
       }),
 
-    setMultiSelection: (sels) =>
-      set({
-        multiSelection: sels,
-        selection: sels[sels.length - 1] ?? null,
-        selectedKey: null,
-      }),
-
     seek: (t) => {
       const total = projectDuration(get());
-      setPlayhead(Math.max(0, Math.min(total, t)));
       // A manual seek cancels any scoped effect preview.
-      if (get().previewStopAt !== null) set({ previewStopAt: null });
+      set({ currentTime: Math.max(0, Math.min(total, t)), previewStopAt: null });
     },
 
-    // A manual play/pause cancels any scoped effect preview. Starting playback
-    // also drops the skimmer: the picture belongs to the playhead again, and a
-    // pointer left standing over the timeline would otherwise keep claiming it.
-    setPlaying: (p) => {
-      if (p) setSkim(null);
-      set({ playing: p, previewStopAt: null });
-    },
+    // A manual play/pause cancels any scoped effect preview.
+    setPlaying: (p) => set({ playing: p, previewStopAt: null }),
 
     previewRange: (start, end) => {
       const total = projectDuration(get());
       const from = Math.max(0, Math.min(total, start));
       const to = Math.max(from + 0.05, Math.min(total, end));
-      setPlayhead(from);
-      // Starting playback drops the skimmer, same as setPlaying: while the
-      // cut plays, the playhead owns the picture everywhere — a skim left
-      // standing would freeze the DOM surfaces on one frame while the canvas
-      // runs.
-      setSkim(null);
-      set({ playing: true, previewStopAt: to });
+      set({ currentTime: from, playing: true, previewStopAt: to });
+    },
+    setSkimTime: (t) => {
+      if (get().skimTime !== t) set({ skimTime: t });
     },
     setPublish: (patch) => set((s) => ({ publish: { ...s.publish, ...patch } })),
     setNotes: (patch) => set((s) => ({ notes: { ...s.notes, ...patch } })),
@@ -4072,7 +3601,7 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       if (id) saveUiState(id, { pxPerSec: Math.round(pxPerSec * 100) / 100 });
     },
     setTimelineH: (h) => {
-      const timelineH = Math.round(Math.max(TIMELINE_H_MIN, Math.min(timelineHMax(), h)));
+      const timelineH = Math.round(Math.max(TIMELINE_H_MIN, Math.min(TIMELINE_H_MAX, h)));
       set({ timelineH });
       const id = get().projectId;
       if (id) saveUiState(id, { timelineH });
@@ -4102,9 +3631,6 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
         } else if (sel?.kind === "overlay") {
           const o = s.overlays.find((x) => x.id === sel.id);
           if (o) items.push({ kind: "overlay", item: { ...o } });
-        } else if (sel?.kind === "transition") {
-          const t = s.transitions.find((x) => x.id === sel.id);
-          if (t) items.push({ kind: "transition", item: { ...t } });
         }
       }
       if (items.length === 0) return false;
@@ -4120,38 +3646,29 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       if (
         clipboard.some((cb) => {
           const assetId =
-            cb.kind === "transition"
-              ? undefined
-              : cb.kind === "overlay"
-                ? isStickerOverlay(cb.item)
-                  ? cb.item.assetId
-                  : undefined
-                : cb.item.assetId;
+            cb.kind === "overlay"
+              ? isStickerOverlay(cb.item)
+                ? cb.item.assetId
+                : undefined
+              : cb.item.assetId;
           return assetId !== undefined && !s.assets.some((a) => a.id === assetId);
         })
       )
         return false;
       push();
-      // The paste lands under the skimmer while one is live, at the playhead
-      // otherwise — the same moment the preview is showing.
-      const t = Math.max(0, previewAt());
+      const t = Math.max(0, s.currentTime);
       const newSel: Selection[] = [];
       set((cur) => {
         let clips = cur.clips;
         let audioClips = cur.audioClips;
         let overlays = cur.overlays;
-        let transitions = cur.transitions;
         // A copy is its own thing: pasted group members stay grouped with each
         // other and join nothing that was already on the timeline.
         const regroup = groupRemap(uid);
-        // When clips ride the same paste, their transition bars follow them by
-        // this shift, so a copied sequence keeps its blends on its own cuts.
-        let clipDelta: number | null = null;
-        // Every item aims for the paste point but respects what already sits on
+        // Every item aims for the playhead but respects what already sits on
         // its lane: an occupied spot slides the paste right to the next gap
         // that fits. Earlier items of this same paste count too.
         for (const cb of clipboard) {
-          if (cb.kind === "transition") continue; // placed below, once clips landed
           if (cb.kind === "clip") {
             // Collision is per-track: a clip lands clear of others on its own
             // row only.
@@ -4161,7 +3678,6 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
               id: uid(),
               start: nextFreeStart(taken, t, clipLen(cb.item)),
             };
-            clipDelta ??= clip.start - cb.item.start;
             clips = [...clips, clip].sort((a, b) => a.start - b.start);
             newSel.push({ kind: "clip", id: clip.id });
           } else if (cb.kind === "audio") {
@@ -4188,51 +3704,7 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
             newSel.push({ kind: "overlay", id: item.id });
           }
         }
-        // Transition bars land last, against the row as this paste left it.
-        // Bars copied together with clips keep their place in the copied
-        // sequence; a bar-only paste lands like a drop from the panel — onto
-        // the boundary nearest the paste point when one is in reach (replacing
-        // whatever played there), parked exactly at the paste point otherwise. A
-        // multi-bar paste keeps the bars' spacing, anchored by the earliest.
-        const barItems = clipboard
-          .flatMap((cb) => (cb.kind === "transition" ? [cb.item] : []))
-          .sort((a, b) => a.start - b.start);
-        if (barItems.length > 0) {
-          let delta = clipDelta;
-          if (delta === null) {
-            const first = barItems[0];
-            const bounds = transitionBoundaries(clips);
-            const near = bounds.reduce<TransitionBoundary | null>(
-              (found, b) => (!found || Math.abs(b.at - t) < Math.abs(found.at - t) ? b : found),
-              null
-            );
-            if (near && Math.abs(near.at - t) <= BAR_PASTE_REACH) {
-              delta =
-                (near.kind === "in" ? near.at : near.at - first.seconds) - first.start;
-              // The landed bar takes over the boundary; the bar that played
-              // it leaves with it, the way a drop replaces the incumbent.
-              const roles = resolveTransitions(clips, transitions);
-              const incumbent = transitions.find((x) =>
-                (roles.get(x.id) ?? []).some(
-                  (r) => r.kind === near.kind && r.clipId === near.clipId
-                )
-              );
-              if (incumbent) transitions = transitions.filter((x) => x.id !== incumbent.id);
-            } else {
-              delta = t - first.start;
-            }
-          }
-          for (const item of barItems) {
-            const bar: TimelineTransition = {
-              ...item,
-              id: uid(),
-              start: Math.max(0, item.start + delta),
-            };
-            transitions = [...transitions, bar];
-            newSel.push({ kind: "transition", id: bar.id });
-          }
-        }
-        return { clips, audioClips, overlays, transitions, selection: newSel[newSel.length - 1] ?? null, multiSelection: newSel };
+        return { clips, audioClips, overlays, selection: newSel[newSel.length - 1] ?? null, multiSelection: newSel };
       });
       return true;
     },
@@ -4243,6 +3715,7 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       if (!prev) return;
       future.push(snapshot());
       restoreDoc(prev);
+      syncHistoryFlags();
     },
 
     redo: () => {
@@ -4252,6 +3725,7 @@ export const useEditor = create<EditorState>((baseSet, get, api) => {
       history.push(snapshot());
       if (history.length > HISTORY_CAP) history.shift();
       restoreDoc(next);
+      syncHistoryFlags();
     },
   };
 });
@@ -4279,31 +3753,26 @@ useEditor.subscribe((s, prev) => {
     useGenNotify.getState().landed("subtitles", `subs-${Date.now()}`);
 });
 
-/** An upload whose bytes exist only in this tab. One backed by the browser
- * store survives a reload, so it may reach the document like a landed file. */
-const tabOnlyUpload = (a: MediaAsset) => a.upload !== undefined && !a.upload.stored;
-
-/** Ids of the assets still uploading from tab-scoped bytes, as a comparable
- * key ("" when none). An import is on screen before its bytes are stored, and
- * nothing about it may reach the document until they are. */
+/** Ids of the assets still uploading, as a comparable key ("" when none). An
+ * import is on screen before its bytes are stored, and nothing about it may
+ * reach the document until they are. */
 function pendingKey(assets: MediaAsset[]): string {
   let key = "";
-  for (const a of assets) if (tabOnlyUpload(a)) key += `${a.id},`;
+  for (const a of assets) if (a.upload) key += `${a.id},`;
   return key;
 }
 
-/** Clips are held back from the document while their asset is still uploading
- * from tab-scoped bytes: one pointing at bytes this tab never finished sending
- * would reopen broken. Memoized, so autosave's change detector can compare the
- * projection by reference and an upload in flight doesn't read as a stream of
- * edits. */
+/** Clips are held back from the document while their asset is still uploading:
+ * one pointing at bytes this tab never finished sending would reopen broken.
+ * Memoized, so autosave's change detector can compare the projection by
+ * reference and an upload in flight doesn't read as a stream of edits. */
 function docClipFilter<T extends { assetId: string }>() {
   let memo: { clips: T[]; key: string; out: T[] } | null = null;
   return (clips: T[], assets: MediaAsset[]): T[] => {
     const key = pendingKey(assets);
     if (memo && memo.clips === clips && memo.key === key) return memo.out;
     const out = key
-      ? clips.filter((c) => !assets.some((a) => a.id === c.assetId && tabOnlyUpload(a)))
+      ? clips.filter((c) => !assets.some((a) => a.id === c.assetId && a.upload))
       : clips;
     memo = { clips, key, out };
     return out;
@@ -4329,13 +3798,12 @@ export const docOverlays = (() => {
 
 /** The asset fields persisted in project.json — the projection autosave
  * writes, and the one its change detector compares (runtime fields like
- * thumbs/peaks must not mark the doc dirty). Assets whose bytes live only in
- * this tab are left out entirely; they join the document when they land — or
- * straight away when the browser store holds their bytes. */
+ * thumbs/peaks must not mark the doc dirty). Assets whose bytes are still
+ * uploading are left out entirely; they join the document when they land. */
 export function storedAssets(assets: MediaAsset[]): StoredAsset[] {
   return assets
-    .filter((a) => !tabOnlyUpload(a))
-    .map(({ id, fileName, name, type, duration, width, height, origin, chatId, language, watch, speech }) => ({
+    .filter((a) => !a.upload)
+    .map(({ id, fileName, name, type, duration, width, height, origin, chatId, language }) => ({
       id,
       fileName,
       name,
@@ -4346,8 +3814,6 @@ export function storedAssets(assets: MediaAsset[]): StoredAsset[] {
       ...(origin !== undefined ? { origin } : {}),
       ...(chatId !== undefined ? { chatId } : {}),
       ...(language !== undefined ? { language } : {}),
-      ...(watch !== undefined ? { watch } : {}),
-      ...(speech !== undefined ? { speech } : {}),
     }));
 }
 
@@ -4460,56 +3926,34 @@ function transitionBoundaries(clips: VideoClip[]): TransitionBoundary[] {
 }
 
 /**
- * Match each transition bar to the boundaries it lines up with, by time
- * alone: a bar plays every cut or open tail its end sits on and every open
- * head its start sits on — several tracks cutting at the same instant share
- * the one bar, so a simultaneous multi-track handover never needs a stack of
- * identical bars. A bar aligned with nothing is inert — it stays on the row,
+ * Match each transition bar to the boundary it lines up with, by time alone:
+ * a bar plays the cut or open tail its end sits on, or the open head its
+ * start sits on. A bar aligned with nothing is inert — it stays on the row,
  * does nothing, and starts playing the moment a boundary lines up with it.
- * One bar per boundary; when two claim the same one, the newest wins. A
- * bar's list is rank-ordered, so its first role (cut before in before out)
- * is the one that names it.
+ * One bar per boundary; when two claim the same one, the newest wins.
  */
 export function resolveTransitions(
   clips: VideoClip[],
   transitions: TimelineTransition[]
-): Map<string, TransitionRole[]> {
+): Map<string, TransitionRole> {
   const bounds = transitionBoundaries(clips);
   const rank = { cut: 0, in: 1, out: 2 } as const;
   const taken = new Set<TransitionBoundary>();
-  const roles = new Map<string, TransitionRole[]>();
+  const roles = new Map<string, TransitionRole>();
   for (let i = transitions.length - 1; i >= 0; i--) {
     const t = transitions[i];
-    const fits = bounds
+    const fit = bounds
       .filter(
         (b) =>
           !taken.has(b) &&
           Math.abs((b.kind === "in" ? t.start : t.start + t.seconds) - b.at) <= TOUCH_EPS
       )
-      .sort((a, b) => rank[a.kind] - rank[b.kind]);
-    if (fits.length === 0) continue;
-    for (const b of fits) taken.add(b);
-    roles.set(
-      t.id,
-      fits.map((b) => ({ kind: b.kind, clipId: b.clipId }))
-    );
+      .sort((a, b) => rank[a.kind] - rank[b.kind])[0];
+    if (!fit) continue;
+    taken.add(fit);
+    roles.set(t.id, { kind: fit.kind, clipId: fit.clipId });
   }
   return roles;
-}
-
-/**
- * The bars lining up with nothing: on the row, playing no cut and no clip
- * edge. A user who drags a clip away sees the bar it left and can drag it
- * back; an assistant edit has no such eye, so the tool layer reports these
- * after every timeline mutation and the model clears or reattaches them.
- */
-export function parkedTransitions(
-  clips: VideoClip[],
-  transitions: TimelineTransition[]
-): TimelineTransition[] {
-  if (transitions.length === 0) return [];
-  const roles = resolveTransitions(clips, transitions);
-  return transitions.filter((t) => !(roles.get(t.id) ?? []).length);
 }
 
 /**
@@ -4534,9 +3978,7 @@ export function reanchorTransitions(
   const byId = new Map(after.map((c) => [c.id, c]));
   let changed = false;
   const out = transitions.map((t) => {
-    // The primary role decides where a multi-boundary bar travels to; the
-    // other tracks' boundaries moved with the same retime.
-    const role = roles.get(t.id)?.[0];
+    const role = roles.get(t.id);
     const clip = role && byId.get(role.clipId);
     if (!clip) return t;
     const at = role.kind === "in" ? clip.start : clip.start + clipLen(clip);
@@ -4565,7 +4007,8 @@ export function deriveTransitionFields(
   const roles = resolveTransitions(clips, transitions);
   const byBoundary = new Map<string, TimelineTransition>();
   for (const t of transitions) {
-    for (const r of roles.get(t.id) ?? []) byBoundary.set(`${r.kind}:${r.clipId}`, t);
+    const r = roles.get(t.id);
+    if (r) byBoundary.set(`${r.kind}:${r.clipId}`, t);
   }
   let changed = false;
   const next = clips.map((c) => {
@@ -4597,12 +4040,9 @@ export function deriveTransitionFields(
   return changed ? next : clips;
 }
 
-/** Bring a stored bar list back to the shape the editor expects. Exact twins
- * — same footprint, same style — collapse to one: at most one bar can play a
- * boundary, so the copies stack invisibly under it and read as a bar that
- * refuses to delete. */
+/** Bring a stored bar list back to the shape the editor expects. */
 function sanitizeTransitions(raw: TimelineTransition[] | undefined): TimelineTransition[] {
-  const bars = (raw ?? [])
+  return (raw ?? [])
     .filter((t) => t && typeof t.start === "number" && typeof t.seconds === "number")
     .map((t) => ({
       id: t.id || uid(),
@@ -4610,15 +4050,6 @@ function sanitizeTransitions(raw: TimelineTransition[] | undefined): TimelineTra
       seconds: clampBarSeconds(t.seconds),
       style: TRANSITION_STYLE_IDS.includes(t.style) ? t.style : "crossfade",
     }));
-  return bars.filter(
-    (t, i) =>
-      bars.findIndex(
-        (u) =>
-          u.style === t.style &&
-          Math.abs(u.start - t.start) < 0.001 &&
-          Math.abs(u.seconds - t.seconds) < 0.001
-      ) === i
-  );
 }
 
 /**
@@ -4632,7 +4063,7 @@ export function adoptTransitionFields(
   transitions: TimelineTransition[]
 ): TimelineTransition[] {
   const roles = resolveTransitions(clips, transitions);
-  const claimed = new Set([...roles.values()].flat().map((r) => `${r.kind}:${r.clipId}`));
+  const claimed = new Set([...roles.values()].map((r) => `${r.kind}:${r.clipId}`));
   const out = [...transitions];
   const add = (key: string, bar: Omit<TimelineTransition, "id">) => {
     claimed.add(key);
@@ -4763,37 +4194,11 @@ export function separateOverlaps<
   };
 }
 
-/**
- * Spans for one track, cached until the document moves.
- *
- * Every frame of playback and every pixel of a scrub asks for these, and some
- * of the askers are React selectors that run on every store write. Rebuilding
- * the list each time meant an asset `Map`, a filter/map/sort and a `ClipSpan`
- * per clip — several times a frame, discarded. Clips and assets are replaced
- * wholesale on an edit, so identity is a sound cache key: same arrays, same
- * answer.
- *
- * Callers treat the result as read-only. Nothing sorts or pushes into it, and
- * anything that wants to would be handing the next caller a different timeline.
- */
-let spansClips: VideoClip[] | null = null;
-let spansAssets: MediaAsset[] | null = null;
-const spansByTrack = new Map<number, ClipSpan[]>();
-
-export function getClipSpans(clips: VideoClip[], assets: MediaAsset[], track = 0): ClipSpan[] {
-  if (clips !== spansClips || assets !== spansAssets) {
-    spansClips = clips;
-    spansAssets = assets;
-    spansByTrack.clear();
-  }
-  const hit = spansByTrack.get(track);
-  if (hit) return hit;
-  const built = buildClipSpans(clips, assets, track);
-  spansByTrack.set(track, built);
-  return built;
-}
-
-function buildClipSpans(clips: VideoClip[], assets: MediaAsset[], track: number): ClipSpan[] {
+export function getClipSpans(
+  clips: VideoClip[],
+  assets: MediaAsset[],
+  track = 0
+): ClipSpan[] {
   // One track's clips in sequence, each with its live dissolve overlap into
   // the next. Track 0 is the spine that drives playback; upper tracks carry
   // their own transitions between their own clips.
@@ -5160,24 +4565,11 @@ export function elementPlacement(
  * runs past it on another video track, the soundtrack, or an element row.
  * Drives the timeline extent, the seek clamp, and export length so content
  * past track 0's end is reachable. */
-let durClips: VideoClip[] | null = null;
-let durAudio: AudioClip[] | null = null;
-let durOverlays: Overlay[] | null = null;
-let durValue = 0;
-
 export function projectDuration(s: {
   clips: VideoClip[];
   audioClips: AudioClip[];
   overlays: Overlay[];
 }): number {
-  // Cached on the same identity rule as the spans above: every seek clamps
-  // against this, so a drag used to walk all three lists per pointer move.
-  if (s.clips === durClips && s.audioClips === durAudio && s.overlays === durOverlays) {
-    return durValue;
-  }
-  durClips = s.clips;
-  durAudio = s.audioClips;
-  durOverlays = s.overlays;
   let end = 0;
   // Anything on any row extends the timeline: a layer or soundtrack running
   // past track 0's end is still reachable, and so is a title or sticker left
@@ -5185,8 +4577,7 @@ export function projectDuration(s: {
   for (const c of s.clips) end = Math.max(end, c.start + clipLen(c));
   for (const a of s.audioClips) end = Math.max(end, a.start + clipLen(a));
   for (const o of s.overlays) end = Math.max(end, o.end);
-  durValue = Math.max(0, end);
-  return durValue;
+  return Math.max(0, end);
 }
 
 /** Spread a cue's words across [start, end], each word's slice proportional to

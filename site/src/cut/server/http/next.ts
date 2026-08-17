@@ -1,16 +1,6 @@
 import { hostedApiBlock } from "../local-only";
-import { flattenCutUsers } from "../migrateDataDir";
-import { reconcileProjectDirs } from "../projects";
 import { ensureToolPath } from "../tool-path";
 import { matchCutRoute, runCutRoute } from "./routes";
-
-let flattened = false;
-function flattenOnce() {
-  if (flattened) return;
-  flattened = true;
-  flattenCutUsers();
-  reconcileProjectDirs();
-}
 
 /**
  * The Cut API surface as a Next route handler. A single optional-catch-all route
@@ -24,10 +14,8 @@ export async function cutCatchAll(req: Request): Promise<Response> {
   if (blocked) return blocked;
 
   // The dev server spawns tools (yt-dlp, ffmpeg, …) in-process, so it needs
-  // the same widened PATH the packaged engine builds at startup, and it runs
-  // the same users/-dir flatten the engine runs before serving data routes.
+  // the same widened PATH the packaged engine builds at startup.
   await ensureToolPath();
-  flattenOnce();
 
   const { pathname } = new URL(req.url);
   const match = matchCutRoute(req.method, pathname);

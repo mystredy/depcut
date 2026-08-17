@@ -18,8 +18,6 @@ type WorkerEnv = MediaEnv & {
   CUT_WAKE_SECRET: string;
   CUT_COPY_EXECUTE_URL: string;
   CUT_COPY_EXECUTE_SECRET: string;
-  JOBS_EXECUTE_URL: string;
-  JOBS_EXECUTE_SECRET: string;
   CLOUDFLARE_KV_API_TOKEN: string;
 };
 
@@ -30,7 +28,7 @@ type QueueMessage = {
   ack(): void;
   retry(opts?: { delaySeconds?: number }): void;
 };
-type QueueBatch = { queue: string; messages: QueueMessage[] };
+type QueueBatch = { messages: QueueMessage[] };
 
 // How many container replicas the render pool runs. Each one takes a single
 // job at a time, so this is also the number of renders that can be in flight
@@ -69,14 +67,20 @@ export default {
     ctx: { waitUntil(p: Promise<unknown>): void }
   ): Promise<Response> {
     const url = new URL(request.url);
-    // Two hostnames, two jobs (both claimed in wrangler.jsonc): media is the
-    // only public traffic this Worker takes, and the control plane is where the
-    // hosted API wakes the container. The control host is matched first — the
-    // media branch returns, so a /wake arriving there would be swallowed.
-    if (url.hostname !== CUT_WORKER_HOST && url.hostname === CUT_MEDIA_HOST) {
+    // Two jobs on one Worker: media is the only public traffic it takes, and
+    // the control plane is where the hosted API wakes the container. On a
+    // zone with both custom domains claimed (wrangler.jsonc), the hostname
+    // tells them apart; on a single workers.dev URL there is only one
+    // hostname, so /wake is matched by path first and everything else falls
+    // to media — the two paths never collide.
+    const isWakeRequest = request.method === "POST" && url.pathname === "/wake";
+    const onMediaHost = url.hostname === CUT_MEDIA_HOST;
+    const onWorkerHost = url.hostname === CUT_WORKER_HOST;
+    const onKnownHost = onMediaHost || onWorkerHost;
+    if (!isWakeRequest && (onMediaHost || !onKnownHost)) {
       return serveMedia(request, env, ctx);
     }
-    if (request.method === "POST" && url.pathname === "/wake") {
+    if (isWakeRequest) {
       // Starting the container bills CPU, so the wake is not public: callers
       // present the shared secret the hosted API holds.
       const auth = request.headers.get("authorization") ?? "";
@@ -105,16 +109,12 @@ export default {
     return new Response("donkey-cut-worker", { status: 200 });
   },
 
-  // Queue consumer for both queues in wrangler.jsonc — share copies
-  // (donkey-cut-copy) and the site's generic async jobs (donkey-jobs). Each
-  // drains serially: one message per batch, one batch at a time. The work
-  // itself runs on the hosted API — this handler only paces it and carries the
-  // queue's retry semantics: 2xx acks, anything else redelivers after a delay.
+  // Share-copy queue consumer (donkey-cut-copy, wrangler.jsonc): one message
+  // per batch, one batch at a time, so copies drain serially no matter how
+  // many viewers ask at once. The copy itself runs on the hosted API — this
+  // handler only paces it and carries the queue's retry semantics: 2xx acks,
+  // anything else redelivers after a delay.
   async queue(batch: QueueBatch, env: WorkerEnv): Promise<void> {
-    const target =
-      batch.queue === "donkey-jobs"
-        ? { url: env.JOBS_EXECUTE_URL, secret: env.JOBS_EXECUTE_SECRET }
-        : { url: env.CUT_COPY_EXECUTE_URL, secret: env.CUT_COPY_EXECUTE_SECRET };
     for (const message of batch.messages) {
       const jobId = (message.body as { jobId?: unknown } | null)?.jobId;
       if (typeof jobId !== "string" || !jobId) {
@@ -122,10 +122,10 @@ export default {
         continue;
       }
       try {
-        const res = await fetch(target.url, {
+        const res = await fetch(env.CUT_COPY_EXECUTE_URL, {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${target.secret}`,
+            Authorization: `Bearer ${env.CUT_COPY_EXECUTE_SECRET}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ jobId }),

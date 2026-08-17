@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 import { create } from "zustand";
 import { engineOrigin, servedFromEngine } from "./api";
 import { getBackend, type CutBackend, type CutMode } from "./backend";
-import { browserBackend } from "./backend/browser";
 import { cloudBackend } from "./backend/cloud";
 import { localBackend } from "./backend/local";
 import {
@@ -47,9 +46,7 @@ export interface ExportJob {
 /** The backend a dock row lives on; per-row actions hit this, never the
  * globally bound mode. */
 export function exportBackend(residency: CutMode): CutBackend {
-  if (residency === "cloud") return cloudBackend;
-  if (residency === "browser") return browserBackend;
-  return localBackend;
+  return residency === "cloud" ? cloudBackend : localBackend;
 }
 
 /** A client-only dock row for work no server job covers: the window before the
@@ -109,13 +106,9 @@ export const useExports = create<ExportsState>((set, get) => ({
     const backend = getBackend();
     // A cloud project renders in the tab: no upload of the cut to a container,
     // no queue behind other accounts, and the file matches the preview because
-    // the same compositor drew both. A browser that can't carry the render —
-    // no encoder at these dimensions, no scratch storage — sends it to the
-    // worker, which has a whole machine. A browser-resident project renders in
-    // the tab too; the tab is its machine.
-    const inBrowser =
-      (backend.kind === "cloud" || backend.kind === "browser") &&
-      (await canRenderInBrowser(doc, settings));
+    // the same compositor drew both. Past what a tab can hold — a long cut, a
+    // very large frame — it goes to the worker, which has a whole machine.
+    const inBrowser = backend.kind === "cloud" && (await canRenderInBrowser(doc, settings));
     const abort = inBrowser ? new AbortController() : undefined;
     set((s) => ({
       local: [
@@ -132,33 +125,22 @@ export const useExports = create<ExportsState>((set, get) => ({
         },
       ],
     }));
-    // The loop may have been idling minutes deep; this export needs the fast
-    // cadence from its first frame.
-    wake();
     let claimedId: string | null = null;
     const release = () => {
       if (claimedId) set((s) => ({ rendering: s.rendering.filter((id) => id !== claimedId) }));
     };
     const fail = (err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
-      // A browser-resident project has exactly one other renderer, so a failed
-      // render says where to take it.
-      const hint = " Move the project to Cloud to export.";
-      const full = backend.kind === "browser" && !msg.includes(hint) ? msg + hint : msg;
       set((s) => ({
         local: s.local.map((r) =>
-          r.id === localId ? { ...r, status: "error" as const, error: full, abort: undefined } : r
+          r.id === localId ? { ...r, status: "error" as const, error: msg, abort: undefined } : r
         ),
       }));
     };
     try {
-      if (backend.kind === "browser" && !inBrowser) {
-        throw new Error("This browser can't render this export.");
-      }
       if (inBrowser) {
         await runBrowserExport(projectId, doc, settings, {
           signal: abort!.signal,
-          projectName,
           // The reservation is a real job row, so the feed would show it beside
           // the local row that carries the progress. Hide it until this tab is
           // done with it.
@@ -175,17 +157,13 @@ export const useExports = create<ExportsState>((set, get) => ({
         await createExportJob(projectId, doc, settings);
       }
       // Pull the finished (or queued) job into the feed *before* retiring the
-      // placeholder — dropping the local row first left a round-trip with
-      // neither row on screen — and while the job row is still hidden, since
-      // showing it early stacked two identical cards for the same round-trip.
-      // One set() then swaps the placeholder for the job row. A failed poll
-      // must not mark a started export as a start error, so it never reaches
-      // the catch below.
+      // placeholder. Dropping the local row first left a round-trip with
+      // neither row on screen, which read as the export card flashing away and
+      // back. A failed poll must not mark a started export as a start error, so
+      // it never reaches the catch below.
+      release();
       await get().refresh().catch(() => {});
-      set((s) => ({
-        rendering: s.rendering.filter((id) => id !== claimedId),
-        local: s.local.filter((r) => r.id !== localId),
-      }));
+      set((s) => ({ local: s.local.filter((r) => r.id !== localId) }));
     } catch (err) {
       release();
       // A render the user stopped leaves no row at all — the dock already
@@ -266,38 +244,18 @@ export const useExports = create<ExportsState>((set, get) => ({
       }
     };
     // Jobs of both residencies can run at once, so poll every feed this
-    // browser can reach: local once an engine has answered, the cloud while
-    // the browser is online and the feed isn't backing off after failures.
-    // The local engine is on localhost, so it stays reachable offline.
+    // browser can reach: the cloud always, local once an engine has answered.
     const pollLocal = engineOrigin() !== "" || servedFromEngine();
-    const pollCloud =
-      (typeof navigator === "undefined" || navigator.onLine) &&
-      Date.now() >= cloudRetryAt;
-    // The browser feed is this tab's own memory, so it always answers.
-    const [localRows, cloudRows, browserRows] = await Promise.all([
+    const [localRows, cloudRows] = await Promise.all([
       pollLocal ? fetchFeed(localBackend) : Promise.resolve(null),
-      pollCloud ? fetchFeed(cloudBackend) : Promise.resolve(null),
-      fetchFeed(browserBackend),
+      fetchFeed(cloudBackend),
     ]);
-    if (pollCloud) {
-      if (cloudRows === null) {
-        cloudFailures++;
-        cloudRetryAt = Date.now() + Math.min(3000 * 2 ** cloudFailures, 60_000);
-      } else {
-        cloudFailures = 0;
-        cloudRetryAt = 0;
-      }
-    }
     set((s) => {
       // A failed or skipped feed keeps its previous rows; only a fresh answer
       // replaces that backend's slice.
       const slice = (kind: CutMode, fresh: ExportJob[] | null) =>
         fresh ?? s.jobs.filter((j) => j.residency === kind);
-      const jobs = [
-        ...slice("local", localRows),
-        ...slice("cloud", cloudRows),
-        ...slice("browser", browserRows),
-      ];
+      const jobs = [...slice("local", localRows), ...slice("cloud", cloudRows)];
       return {
         jobs,
         dismissed: s.dismissed.filter((id) => jobs.some((j) => j.id === id)),
@@ -332,111 +290,32 @@ export function useWatchExportLands(projectId: string) {
 }
 
 // The dock is mounted app-wide, so polling runs the whole time the Cut app is
-// open. Three cadences: fast while this tab has work in flight, a widening idle
-// interval otherwise, and parked while the tab is hidden with nothing running.
-//
-// The idle poll exists to find jobs this tab never started — another tab, an
-// engine job that outlived a reload, the cloud render worker — so it can't stop
-// on an empty feed. It widens instead, and anything that means the user is back
-// (the tab shown, the window focused, the network returning) or that work just
-// started snaps it to the floor and polls immediately.
-const ACTIVE_MS = 700;
-const IDLE_MIN_MS = 3000;
-const IDLE_MAX_MS = 30_000;
-
-// The cloud feed drops out while the browser is offline and backs off while the
-// server is unreachable; coming back online resets both and polls right away.
-let cloudFailures = 0;
-let cloudRetryAt = 0;
+// open. It quickens while work is in flight and idles between exports.
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
-let ticking = false;
 let mounts = 0;
-let idleMs = IDLE_MIN_MS;
-
-const hidden = () => typeof document !== "undefined" && document.hidden;
-
-/** Work this tab is showing progress for: its own rows plus any unfinished job
- * in either feed. */
-const inFlight = () => {
-  const s = useExports.getState();
-  return (
-    s.local.length > 0 || s.jobs.some((j) => j.status === "queued" || j.status === "running")
-  );
-};
-
-const schedule = (ms: number) => {
-  if (pollTimer !== null) clearTimeout(pollTimer);
-  pollTimer = setTimeout(tick, ms);
-};
-
-const tick = async () => {
-  pollTimer = null;
-  if (mounts === 0 || ticking) return;
-  ticking = true;
-  try {
-    await useExports.getState().refresh();
-  } finally {
-    ticking = false;
-  }
-  if (mounts === 0) return;
-  if (inFlight()) {
-    idleMs = IDLE_MIN_MS;
-    schedule(ACTIVE_MS);
-    return;
-  }
-  // Idle and out of sight: park. A visibility, focus, or online event restarts
-  // the loop at the floor, and a tab still tracking an export never gets here.
-  if (hidden()) return;
-  schedule(idleMs);
-  idleMs = Math.min(idleMs * 2, IDLE_MAX_MS);
-};
-
-/** Snap back to the fast cadence and poll now. */
-const wake = () => {
-  idleMs = IDLE_MIN_MS;
-  // A tick already in flight schedules the next one off the reset interval.
-  if (mounts === 0 || ticking) return;
-  schedule(0);
-};
-
-const handleOnline = () => {
-  cloudFailures = 0;
-  cloudRetryAt = 0;
-  wake();
-};
-
-const handleVisibility = () => {
-  if (hidden()) {
-    // Park immediately rather than waiting out the pending interval; work in
-    // flight keeps polling so its landing still registers.
-    if (!inFlight() && pollTimer !== null) {
-      clearTimeout(pollTimer);
-      pollTimer = null;
-    }
-    return;
-  }
-  wake();
-};
 
 export function beginExportPolling() {
   mounts++;
-  if (mounts > 1) return;
-  window.addEventListener("online", handleOnline);
-  window.addEventListener("focus", handleVisibility);
-  document.addEventListener("visibilitychange", handleVisibility);
-  idleMs = IDLE_MIN_MS;
-  schedule(0);
+  if (pollTimer !== null) return;
+  const tick = async () => {
+    await useExports.getState().refresh();
+    if (mounts === 0) {
+      pollTimer = null;
+      return;
+    }
+    const s = useExports.getState();
+    const active =
+      s.local.length > 0 ||
+      s.jobs.some((j) => j.status === "queued" || j.status === "running");
+    pollTimer = setTimeout(tick, active ? 700 : 3000);
+  };
+  pollTimer = setTimeout(tick, 0);
 }
 
 export function endExportPolling() {
   mounts = Math.max(0, mounts - 1);
-  if (mounts === 0) {
-    window.removeEventListener("online", handleOnline);
-    window.removeEventListener("focus", handleVisibility);
-    document.removeEventListener("visibilitychange", handleVisibility);
-    if (pollTimer !== null) {
-      clearTimeout(pollTimer);
-      pollTimer = null;
-    }
+  if (mounts === 0 && pollTimer !== null) {
+    clearTimeout(pollTimer);
+    pollTimer = null;
   }
 }

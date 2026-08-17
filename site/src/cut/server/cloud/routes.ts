@@ -14,11 +14,9 @@ import { jobsCloud } from "./jobs";
 import { libraryCloud } from "./library";
 import { mediaCloud } from "./media";
 import { projectsCloud } from "./projects";
-import { turnsCloud } from "./turns";
 import { shareCloud } from "./share";
 import { transcribeCloud } from "./transcribe";
 import { usageApi } from "./usage";
-import { wantsDownload } from "./util";
 
 type CloudHandler = (
   req: Request,
@@ -38,15 +36,16 @@ const CUT_CLOUD_ROUTES: CloudRoute[] = [
   { method: "PUT", path: "/api/cut-cloud/projects/folders/:id", handler: (r, u, p) => projectsCloud.renameFolder(u, p.id, r) },
   { method: "DELETE", path: "/api/cut-cloud/projects/folders/:id", handler: (_r, u, p) => projectsCloud.deleteFolder(u, p.id) },
   { method: "POST", path: "/api/cut-cloud/projects/:id/move", handler: (r, u, p) => projectsCloud.move(u, p.id, r) },
+  { method: "PUT", path: "/api/cut-cloud/projects/:id/favorite", handler: (r, u, p) => projectsCloud.favorite(u, p.id, r) },
   { method: "GET", path: "/api/cut-cloud/projects/:id", handler: (_r, u, p) => projectsCloud.get(u, p.id) },
   { method: "PUT", path: "/api/cut-cloud/projects/:id", handler: (r, u, p) => projectsCloud.put(u, p.id, r) },
   { method: "DELETE", path: "/api/cut-cloud/projects/:id", handler: (_r, u, p) => projectsCloud.remove(u, p.id) },
   { method: "POST", path: "/api/cut-cloud/projects/:id/duplicate", handler: (_r, u, p) => copyJobs.requestDuplicate(u, p.id) },
   { method: "GET", path: "/api/cut-cloud/copy-jobs/:jobId", handler: (_r, u, p) => copyJobs.ownerStatus(u, p.jobId) },
   { method: "GET", path: "/api/cut-cloud/projects/:id/exports", handler: (_r, u, p) => projectsCloud.listExports(u, p.id) },
-  { method: "GET", path: "/api/cut-cloud/projects/:id/exports/:file", handler: (r, u, p) => projectsCloud.serveExport(u, p.id, p.file, wantsDownload(r)) },
+  { method: "GET", path: "/api/cut-cloud/projects/:id/exports/:file", handler: (r, u, p) => projectsCloud.serveExport(u, p.id, p.file, new URL(r.url).searchParams.has("download")) },
   { method: "DELETE", path: "/api/cut-cloud/projects/:id/exports/:file", handler: (_r, u, p) => projectsCloud.removeExport(u, p.id, p.file) },
-  { method: "GET", path: "/api/cut-cloud/projects/:id/media/:file", handler: (r, u, p) => projectsCloud.serveMedia(u, p.id, p.file, wantsDownload(r)) },
+  { method: "GET", path: "/api/cut-cloud/projects/:id/media/:file", handler: (_r, u, p) => projectsCloud.serveMedia(u, p.id, p.file) },
   { method: "DELETE", path: "/api/cut-cloud/projects/:id/media/:file", handler: (_r, u, p) => projectsCloud.removeMedia(u, p.id, p.file) },
   { method: "GET", path: "/api/cut-cloud/projects/:id/preview", handler: (_r, u, p) => projectsCloud.servePreview(u, p.id) },
   { method: "GET", path: "/api/cut-cloud/projects/:id/share", handler: (_r, u, p) => shareCloud.get(u, p.id) },
@@ -75,7 +74,7 @@ const CUT_CLOUD_ROUTES: CloudRoute[] = [
   { method: "POST", path: "/api/cut-cloud/library/folders", handler: (r, u) => libraryCloud.createFolder(u, r) },
   { method: "PUT", path: "/api/cut-cloud/library/folders/:id", handler: (r, u, p) => libraryCloud.renameFolder(u, p.id, r) },
   { method: "DELETE", path: "/api/cut-cloud/library/folders/:id", handler: (_r, u, p) => libraryCloud.deleteFolder(u, p.id) },
-  { method: "GET", path: "/api/cut-cloud/library/media/:file", handler: (r, u, p) => libraryCloud.serveMedia(u, p.file, wantsDownload(r)) },
+  { method: "GET", path: "/api/cut-cloud/library/media/:file", handler: (_r, u, p) => libraryCloud.serveMedia(u, p.file) },
   { method: "DELETE", path: "/api/cut-cloud/library/:id", handler: (_r, u, p) => libraryCloud.remove(u, p.id) },
 
   { method: "GET", path: "/api/cut-cloud/export-jobs", handler: (_r, u) => jobsCloud.exportFeed(u) },
@@ -90,8 +89,6 @@ const CUT_CLOUD_ROUTES: CloudRoute[] = [
   { method: "DELETE", path: "/api/cut-cloud/export/:jobId", handler: (_r, u, p) => jobsCloud.exportCancel(u, p.jobId) },
   { method: "GET", path: "/api/cut-cloud/export/:jobId/file", handler: (_r, u, p) => jobsCloud.exportFile(u, p.jobId) },
   { method: "GET", path: "/api/cut-cloud/jobs/:jobId", handler: (_r, u, p) => jobsCloud.status(u, p.jobId) },
-  { method: "POST", path: "/api/cut-cloud/projects/:id/turns", handler: (r, u, p) => turnsCloud.queue(u, p.id, r) },
-  { method: "POST", path: "/api/cut-cloud/turns/:jobId/cancel", handler: (_r, u, p) => turnsCloud.cancel(u, p.jobId) },
 
   { method: "POST", path: "/api/cut-cloud/transcribe", handler: (r, u) => transcribeCloud.transcribe(u, r) },
   { method: "POST", path: "/api/cut-cloud/ai/captions", handler: (r, u) => captionsCloud.captions(u, r) },
@@ -99,7 +96,7 @@ const CUT_CLOUD_ROUTES: CloudRoute[] = [
   { method: "GET", path: "/api/cut-cloud/usage", handler: (_r, u) => usageApi.get(u) },
 
   // GC also runs unauthenticated from the Vercel cron — see the catch-all
-  // route, which checks the CRON_SECRET bearer token before auth. Any other
+  // route, which checks the x-vercel-cron header before auth. Any other
   // non-superuser caller sees a plain 404.
   {
     method: "GET",

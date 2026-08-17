@@ -21,7 +21,7 @@ export const TIMELINE_TOOLS = [
   {
     name: "split_at",
     description:
-      "Split the video (or a selected soundtrack/overlay clip) at a time, like pressing S. Omit t to split at the playhead. Splits don't move times, so issue every planned split together in one round. The result carries the updated track-0 and soundtrack rows (ids, starts, lengths) — read the new ids from there.",
+      "Split the video (or a selected soundtrack/overlay clip) at a time, like pressing S. Omit t to split at the playhead.",
     inputSchema: obj({ t: num("Timeline seconds to cut at (optional)") }),
   },
   {
@@ -176,6 +176,7 @@ export const TIMELINE_TOOLS = [
       stroke_width: num("Text outline width in em (0..0.15; 0 removes it)"),
       shadow: bool("Drop shadow (default true)"),
       plate: bool("Translucent plate behind text (default false)"),
+      behind_subject: bool("Sit the text behind the person in the shot (needs a clearly separated speaker)"),
       rotation: num("Degrees clockwise, -180..180"),
       opacity: num("Whole-element opacity 0..1"),
     }, ["text"]),

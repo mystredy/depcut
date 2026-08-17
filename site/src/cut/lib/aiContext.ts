@@ -3,10 +3,8 @@
 import { hasOverlayAnim } from "@donkeycut/effects-kit";
 import { chatOwner } from "./chatAssets";
 import { useGenerate } from "./generate";
-import { getClipSpans, overlayLayers, resolveTransitions, totalDuration, useEditor } from "./store";
-import { playheadAt, skimAt } from "./playhead";
+import { getClipSpans, overlayLayers, totalDuration, useEditor } from "./store";
 import { laneCues, subtitleLaneCount } from "./subtitles";
-import { watchSweepActive } from "./watch/sweep";
 import { frameOf, rectOf, regionLabel, type ClipSpan, type Overlay, type VideoClip } from "./types";
 
 const r = (n: number) => Math.round(n * 100) / 100;
@@ -123,8 +121,8 @@ export function buildAiContext(opts?: { fullCues?: boolean; chatId?: string | nu
       ...(s.fadeIn > 0 ? { fadeIn: r(s.fadeIn) } : {}),
       ...(s.fadeOut > 0 ? { fadeOut: r(s.fadeOut) } : {}),
     },
-    playhead: r(playheadAt()),
-    skimmer: skimAt() === null ? null : r(skimAt()!),
+    playhead: r(s.currentTime),
+    skimmer: s.skimTime === null ? null : r(s.skimTime),
     playing: s.playing,
     selection,
     // Every project asset visible to this chat, timeline-placed or not (media
@@ -137,32 +135,6 @@ export function buildAiContext(opts?: { fullCues?: boolean; chatId?: string | nu
       type: a.type,
       duration: r(a.duration),
       ...(a.origin ? { origin: a.origin } : {}),
-      // Source spans whose frame map exists (persisted with the project):
-      // distinct-moment times and cut candidates recorded by an earlier watch
-      // or by the background sweep. The map aims a watch — it is not seen
-      // footage; only sheets returned in this chat are. `watching` marks the
-      // sweep still filling the rest; the spans grow as segments land.
-      ...(a.watch && a.watch.ranges.length > 0
-        ? { mapped: a.watch.ranges.map((rg) => ({ from: r(rg.from), to: r(rg.to) })) }
-        : {}),
-      ...(watchSweepActive(a.id) ? { watching: true } : {}),
-      // The source's own transcript (built quietly by the sweep; no subtitle
-      // track involved). The snapshot carries the verdict; get_state carries
-      // the segments — read those for the words instead of inlining audio.
-      ...(a.speech
-        ? {
-            speech: a.speech.noSpeech ? "none" : "transcribed",
-            ...(opts?.fullCues && a.speech.segments.length > 0
-              ? {
-                  transcript: a.speech.segments.map((sg) => ({
-                    start: r(sg.start),
-                    end: r(sg.end),
-                    text: sg.text,
-                  })),
-                }
-              : {}),
-          }
-        : {}),
     })),
     mediaTruncated: visibleAssets.length > cueCap,
     // AI video renders for this project, live from the job store — what
@@ -223,10 +195,6 @@ export function buildAiContext(opts?: { fullCues?: boolean; chatId?: string | nu
         ? { panX: r(sp.clip.panX ?? 0), panY: r(sp.clip.panY ?? 0) }
         : {}),
       ...(sp.clip.grade ? { colorGrade: sp.clip.grade } : {}),
-      ...(sp.clip.mask ? { mask: sp.clip.mask } : {}),
-      ...(sp.clip.kf?.length
-        ? { keyframes: sp.clip.kf.map((k) => ({ ...k, t: r(k.t), x: r(k.x), y: r(k.y) })) }
-        : {}),
       ...clipEffects(sp.clip),
     })),
     // Video layers composited over track 0 in track order (the topmost
@@ -244,29 +212,6 @@ export function buildAiContext(opts?: { fullCues?: boolean; chatId?: string | nu
         ...clipEffects(sp.clip),
       }));
     }),
-    // Every transition bar in the doc. A bar is its own object on the
-    // transitions row: it plays whatever cut or clip edge its window lines up
-    // with, and one lining up with nothing sits parked, playing nothing. The
-    // clip-level transitionToNext above only shows bars that landed on a cut,
-    // so this is where a parked leftover — the debris a move or a retime
-    // leaves — is visible and addressable by id.
-    transitions: (() => {
-      const roles = resolveTransitions(s.clips, s.transitions);
-      return [...s.transitions]
-        .sort((a, b) => a.start - b.start)
-        .map((t) => {
-          const plays = roles.get(t.id) ?? [];
-          return {
-            id: t.id,
-            start: r(t.start),
-            seconds: r(t.seconds),
-            style: t.style,
-            ...(plays.length > 0
-              ? { plays: plays.map((p) => ({ at: p.kind, clipId: p.clipId })) }
-              : { parked: true }),
-          };
-        });
-    })(),
     soundtrack: s.audioClips.map((a) => ({ id: a.id, ...describeAudio(a, assetById) })),
     // Every overlay element on the title lanes: titles, shapes, stickers —
     // each entry carries its `kind`.
@@ -348,10 +293,6 @@ function describeOverlayClip(c: VideoClip, assets: Map<string, { name: string }>
     fit: c.fit ?? "fit",
     ...(speed !== 1 ? { speed: r(speed) } : {}),
     ...(c.grade ? { colorGrade: c.grade } : {}),
-    ...(c.mask ? { mask: c.mask } : {}),
-    ...(c.kf?.length
-      ? { keyframes: c.kf.map((k) => ({ ...k, t: r(k.t), x: r(k.x), y: r(k.y) })) }
-      : {}),
   };
 }
 
@@ -368,7 +309,6 @@ function describeOverlay(o: Overlay) {
     ...(o.kf?.length
       ? { keyframes: o.kf.map((k) => ({ ...k, t: r(k.t), x: r(k.x), y: r(k.y) })) }
       : {}),
-    ...(o.mask ? { mask: o.mask } : {}),
     ...(o.lane ? { lane: o.lane } : {}),
     ...(o.hidden ? { hidden: true } : {}),
   };
@@ -406,6 +346,7 @@ function describeOverlay(o: Overlay) {
     color: o.color,
     shadow: o.shadow,
     plate: o.plate,
+    ...(o.behindSubject ? { behindSubject: true } : {}),
     ...(o.groupId ? { groupId: o.groupId } : {}),
     ...(o.plateRadius !== undefined && { plateRadius: r(o.plateRadius) }),
   };

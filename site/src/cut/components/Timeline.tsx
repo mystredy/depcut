@@ -1,8 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowLeftToLine, ArrowRight, ArrowRightToLine, ArrowUp, ArrowUpToLine, AudioLines, Blend, Check, Circle, Clapperboard, Copy, Diamond, Download, Droplets, EllipsisVertical, Expand, Eye, EyeOff, FolderOpen, FolderPlus, FoldHorizontal, Fullscreen, Loader2, Moon, MoreHorizontal, Pause, Play, Scissors, SkipBack, Sparkles, Sticker, Sun, Target, Trash2, Type, UnfoldHorizontal, Volume2, VolumeX, type LucideIcon } from "lucide-react";
-import { SHAPE_CHIP_ICONS } from "@/cut/components/entityIcons";
+import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowLeftToLine, ArrowRight, ArrowRightToLine, ArrowUp, ArrowUpToLine, AudioLines, Blend, Check, Circle, Clapperboard, Copy, Diamond, Droplets, EllipsisVertical, Expand, Eye, EyeOff, FolderOpen, FolderPlus, FoldHorizontal, Fullscreen, Loader2, Minus, Moon, MoreHorizontal, MoveRight, Pause, Play, Scissors, SkipBack, Sparkles, Square, Sticker, Sun, Target, Trash2, Type, UnfoldHorizontal, Volume2, VolumeX, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -41,15 +40,14 @@ import { originalSettings, type ExportDoc } from "@/cut/lib/exportClient";
 import { useExports } from "@/cut/lib/exportStore";
 import { isDragActive, startDrag, subscribeDragActive } from "@/cut/lib/drag";
 import { CLIP_GAP, startLaneMove, startLaneTrim, type LaneDrag } from "@/cut/lib/laneTracks";
-import { downloadMedia, ensurePeaks, importImage, importStockMusic, importStockVideo, peekEdgeFrame, requestEdgeFrame, revealMedia } from "@/cut/lib/media";
-import { track0Clips, laneGapAt, sameLane, type LaneRef, clipLen, clipSpeed, getClipSpans, overlayLaneOrder, overlayLayers, projectDuration, resolveTransitions, rippleInsert, useEditor } from "@/cut/lib/store";
+import { ensurePeaks, importImage, importStockMusic, importStockVideo, peekEdgeFrame, requestEdgeFrame, revealMedia } from "@/cut/lib/media";
+import { track0Clips, laneGapAt, sameLane, type LaneRef, clipLen, clipSpeed, footprints, getClipSpans, nextFreeStart, overlayLaneOrder, overlayLayers, projectDuration, resolveTransitions, rippleInsert, TIMELINE_H_MAX, useEditor } from "@/cut/lib/store";
 import type { VideoTrackPlacement } from "@/cut/lib/store";
-import { playheadAt, setSkim, skimAt, subscribePlayhead, usePlayhead, useSkim } from "@/cut/lib/playhead";
 import { laneHidden, subtitleLaneCount } from "@/cut/lib/subtitles";
 import { formatTime, formatTimecode } from "@/cut/lib/time";
 import { EFFECT_LABELS } from "@donkeycut/effects-kit";
-import { emptySubtitles, IMAGE_CLIP_SECONDS, SHAPE_LABELS, TRANSITION_DEFAULT_SECONDS, TRANSITION_MAX, TRANSITION_STYLE_LABELS, type ShapeKind } from "@/cut/lib/types";
-import type { AudioClip, ClipSpan, ColorGrade, MediaAsset, Overlay, Selection, StickerOverlay, SubtitleCue, TimelineTransition, TransitionStyle, VideoClip } from "@/cut/lib/types";
+import { emptySubtitles, IMAGE_CLIP_SECONDS, SHAPE_LABELS, TRANSITION_DEFAULT_SECONDS, TRANSITION_MAX, TRANSITION_STYLE_LABELS } from "@/cut/lib/types";
+import type { AudioClip, ClipSpan, ColorGrade, MediaAsset, Overlay, StickerOverlay, SubtitleCue, TimelineTransition, TransitionStyle, VideoClip } from "@/cut/lib/types";
 import { isLottieAsset } from "@/cut/lib/lottieAssets";
 import { gradeTint, gradeToCssFilter } from "@donkeycut/effects-kit";
 import { cn } from "@/lib/utils";
@@ -75,17 +73,7 @@ const TRANSITION_ICONS: Record<TransitionStyle, LucideIcon> = {
 };
 
 const VIDEO_H = 64;
-/** Band at a video row's top and bottom edge where a drag aims at the seam —
- * the would-be new track between rows. A drag's own home row keeps no bands,
- * so a horizontal slide along the row stays a slide however close to the edge
- * it runs; the seams engage once the pointer crosses out of the row. */
-const SEAM_PX = 10;
 const OVERLAY_H = VIDEO_H; // every video track shares the same row height
-/** Extra row height under a video row whose clips carry mask keys: room for
- * the key rail below the bars. The diamonds read as part of the clip, so the
- * row's separator line sits clear under them — a picked key's ring included —
- * and the next row keeps its usual distance below the line. */
-const KEYRAIL_EXTRA = 20;
 const AUDIO_H = 44;
 
 /** Where a dragged video clip can land. Re-exported name for the store's
@@ -187,10 +175,6 @@ const XBAR_MAGNET_PX = 16;
 
 const overlayFamily = (o: Overlay): OverlayFamily =>
   o.kind === "effect" ? "effect" : o.kind === "shape" || o.kind === "sticker" ? "element" : "text";
-
-/** The stretch a panel element takes when dropped — `addElement`'s default
- * length — so the landing ghost matches what the drop makes. */
-const ELEMENT_DROP_SECONDS = 3;
 
 const FAMILY_STYLE: Record<
   OverlayFamily,
@@ -346,26 +330,6 @@ export function Timeline() {
     const rect = innerRef.current!.getBoundingClientRect();
     return (clientX - rect.left) / pps;
   };
-  // Selection made elsewhere (a chat pill click) lands offscreen: scroll the
-  // selected item's bar into view. In-view selections stay put.
-  useEffect(
-    () =>
-      useEditor.subscribe((s, prev) => {
-        if (!s.selection || s.selection === prev.selection) return;
-        const scroller = scrollRef.current;
-        const el = scroller?.querySelector(
-          `[data-tl-sel="${s.selection.kind}:${s.selection.id}"]`
-        );
-        if (!scroller || !el) return;
-        const r = el.getBoundingClientRect();
-        const v = scroller.getBoundingClientRect();
-        if (r.right < v.left) scroller.scrollLeft += r.left - v.left - 48;
-        else if (r.left > v.right) scroller.scrollLeft += r.right - v.right + 48;
-        if (r.top < v.top) scroller.scrollTop += r.top - v.top - 12;
-        else if (r.bottom > v.bottom) scroller.scrollTop += r.bottom - v.bottom + 12;
-      }),
-    []
-  );
   // The rail copies behind the scroller follow vertical scroll so they stay
   // glued under the live rails; overscroll can't move them, so the surface
   // runs unbroken through the bounce. (Horizontal position is moot — every
@@ -502,11 +466,6 @@ export function Timeline() {
   );
 
   const spans = useMemo(() => getClipSpans(clips, assets), [clips, assets]);
-  // A row whose clips carry mask keys grows by the rail band, so the diamonds
-  // sit fully below the clips with the usual row gap kept under them.
-  const railFor = (list: { clip: VideoClip }[]) =>
-    list.some((sp) => sp.clip.mask?.kf?.length) ? KEYRAIL_EXTRA : 0;
-  const rail0 = railFor(spans);
   // Per-upper-track spans: each track carries its own transitions, so its row
   // needs the same overlap-aware geometry (insets, badges) as track 0's.
   const overlayTrackSpans = useMemo(() => {
@@ -531,119 +490,66 @@ export function Timeline() {
   // clip would land, how long it runs, and what the source looks like, so the
   // preview reads as the segment itself sliding along the row rather than an
   // empty slot.
-  const [assetDrop, setAssetDrop] = useState<{
-    t: number;
-    len: number;
-    ghost?: DropGhost;
-    shifts?: { id: string; start: number }[];
-  } | null>(null);
+  const [assetDrop, setAssetDrop] = useState<{ t: number; len: number; ghost?: DropGhost } | null>(
+    null
+  );
   // Kind of external media being dragged over the timeline (audio vs video).
   const [dropType, setDropType] = useState<"video" | "audio" | null>(null);
   // A video clip is being dragged (internal or external): reveals the
   // would-be new tracks past the stack's edges.
   const [videoDragging, setVideoDragging] = useState(false);
-  // The pending drop preview: which track/gap, at what time, for how long —
-  // and which resident clips slide right to open the room, so the row can
-  // paint them parting ahead of the drop.
-  const [overlayDrop, setOverlayDrop] = useState<{
-    target: TrackTarget;
-    t: number;
-    len: number;
-    shifts?: { id: string; start: number }[];
-    /** External media paints its landing as the segment itself — filmstrip at
-     * true length; without one the slot is the plain highlight (internal drags
-     * already carry their own clip). */
-    ghost?: DropGhost;
-  } | null>(null);
+  // The pending drop preview: which track/gap, at what time, for how long.
+  const [overlayDrop, setOverlayDrop] = useState<
+    { target: TrackTarget; t: number; len: number } | null
+  >(null);
   // Stage-x pixel a snapped title edge sits at, for the guide line (null = off).
   const [snapX, setSnapX] = useState<number | null>(null);
   const videoDragActive = videoDragging || dropType === "video";
 
-  // Residents sliding ahead of an in-flight drop: clip id → the start it
-  // previews at. Painted as an animated left offset, so the row opens room
-  // while the drop hovers and flows back the moment the drag aims elsewhere.
-  const dropPartAt = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const sh of assetDrop?.shifts ?? []) m.set(sh.id, sh.start);
-    for (const sh of overlayDrop?.shifts ?? []) m.set(sh.id, sh.start);
-    return m;
-  }, [assetDrop, overlayDrop]);
-
-  // Which drop the cursor is over: an existing track (0 included), or a
-  // would-be new track — past the stack's edges, or at a seam between rows.
-  // Hit-test live via elementFromPoint — rows (new-track rows included) carry
-  // a `data-drop` placement; a pointer near a row's edge aims at the seam, so
-  // the new-track row there reveals only while the drag is close and folds
-  // away when it leaves. Every drag flavor resolves through here — clips
-  // grabbed off the timeline and all external media alike.
-  const resolveDropTrack = useCallback(
-    (clientX: number, clientY: number, homeTrack?: number): TrackTarget => {
+  // Which drop the cursor is over: an existing track (0 included) or a
+  // would-be new track past the stack's edges. Hit-test live via
+  // elementFromPoint — rows (new-track rows included) carry a `data-drop`
+  // placement.
+  const resolveDropTrack = useCallback((clientX: number, clientY: number): TrackTarget => {
     // An empty video timeline has no base yet: the first clip always lands on
     // track 0, whatever height the pointer is at. Otherwise a drop above the
     // thin empty row resolves to an overlay track, leaving track 0 empty — and
     // an empty track 0 plays black (the compositor's master lives there).
     const st = useEditor.getState();
     if (st.clips.length === 0) return TRACK_ZERO;
-    const rows = Array.from(
-      innerRef.current?.querySelectorAll<HTMLElement>("[data-drop]") ?? []
-    );
-    // The seam under a row opens a new track directly below it: below a track
-    // row that is z-level `track` (level 0 under track 0 — the spine
-    // transplants onto the drop); under an already-open new-track row it is
-    // that row's own placement.
-    const topInsertLevelNow = () =>
-      Math.max(0, ...overlayLayers(useEditor.getState().clips).map((c) => c.track)) + 1;
-    const seamUnder = (row: HTMLElement | undefined): TrackTarget => {
-      const p = row ? parsePlacement(row.dataset.drop!) : null;
-      if (!p) return { kind: "insert", level: topInsertLevelNow() };
-      return p.kind === "track" ? { kind: "insert", level: p.track } : p;
-    };
     const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
     const zone = el?.closest<HTMLElement>("[data-drop]");
     const parsed = zone ? parsePlacement(zone.dataset.drop!) : null;
-    if (parsed?.kind === "insert") return parsed;
-    if (parsed && zone) {
-      // The drag's own row keeps no seam bands: a horizontal slide near the
-      // row's edge stays on the row, and the adjacent seams stay reachable
-      // through the neighboring row's band or the gap between rows.
-      if (parsed.track === homeTrack) return parsed;
-      const r = zone.getBoundingClientRect();
-      if (clientY <= r.top + SEAM_PX) return seamUnder(rows[rows.indexOf(zone) - 1]);
-      if (clientY >= r.bottom - SEAM_PX) return { kind: "insert", level: parsed.track };
-      return parsed;
-    }
-    // No row under the pointer: past the stack's ends, or in a gap between
-    // rows — the seam of the row above it.
-    if (rows.length) {
+    if (parsed) return parsed;
+    // Past the ends of the stack → above opens a new top track; below the
+    // bottom row opens a new track 0 (the spine transplants onto the drop).
+    const rows = innerRef.current?.querySelectorAll<HTMLElement>("[data-drop]");
+    const tracks = overlayLayers(useEditor.getState().clips).map((c) => c.track);
+    if (rows && rows.length) {
       if (clientY < rows[0].getBoundingClientRect().top)
-        return { kind: "insert", level: topInsertLevelNow() };
+        return { kind: "insert", level: Math.max(0, ...tracks) + 1 };
       if (clientY > rows[rows.length - 1].getBoundingClientRect().bottom)
         return { kind: "insert", level: 0 };
-      const below = rows.findIndex((r) => r.getBoundingClientRect().top > clientY);
-      if (below > 0) return seamUnder(rows[below - 1]);
     }
     return TRACK_ZERO;
   }, []);
 
   // Drive the drop preview while a clip is dragged across tracks: highlight the
   // target track's slot or a between-track insertion line. An existing track
-  // takes the drop as an insert at the pointer — its later clips ripple right —
-  // so the slot previews the ripple landing the drop will actually take.
-  const previewCross = useCallback(
-    (target: TrackTarget | null, start = 0, len = 0, ghost?: DropGhost) => {
-      if (target === null) return setOverlayDrop(null);
-      const landing =
-        target.kind === "track"
-          ? rippleInsert(
-              useEditor.getState().clips.filter((c) => c.track === target.track),
-              Math.max(0, start),
-              len
-            )
-          : { start, shifts: [] };
-      setOverlayDrop({ target, t: landing.start, len, shifts: landing.shifts, ghost });
-    },
-    []
-  );
+  // slides the drop to its next free slot, so the slot previews where the clip
+  // will actually land, not the raw pointer time.
+  const previewCross = useCallback((target: TrackTarget | null, start = 0, len = 0) => {
+    if (target === null) return setOverlayDrop(null);
+    const t =
+      target.kind === "track"
+        ? nextFreeStart(
+            footprints(useEditor.getState().clips.filter((c) => c.track === target.track)),
+            Math.max(0, start),
+            len
+          )
+        : start;
+    setOverlayDrop({ target, t, len });
+  }, []);
 
   // Releasing a track-0 clip on any other track lifts it out onto that track
   // (or a new one); on its own track the lane coordinator commits the move.
@@ -742,19 +648,14 @@ export function Timeline() {
       menuPointer.current = { x: e.clientX, y: e.clientY };
     };
     window.addEventListener("pointermove", track);
-    setSkim(frameMenu.t);
+    useEditor.getState().setSkimTime(frameMenu.t);
     return () => {
       window.removeEventListener("pointermove", track);
       const p = menuPointer.current;
       const r = scrollEl?.getBoundingClientRect();
       const inside =
         !!p && !!r && p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom;
-      // Resuming playback while the menu was up (Space) hands the picture
-      // back to the playhead; re-arming the skimmer then would freeze every
-      // DOM surface on the held frame while the canvas plays on.
-      setSkim(
-        inside && !useEditor.getState().playing ? Math.max(0, timeAt(p.x)) : null,
-      );
+      useEditor.getState().setSkimTime(inside ? Math.max(0, timeAt(p.x)) : null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- timeAt reads live refs
   }, [frameMenu]);
@@ -955,9 +856,7 @@ export function Timeline() {
     () =>
       bars
         .map((t) => {
-          // A bar can play several same-instant boundaries; the rank-first
-          // one names it on the row.
-          const role = barRoles.get(t.id)?.[0] ?? null;
+          const role = barRoles.get(t.id) ?? null;
           const base = TRANSITION_STYLE_LABELS[t.style];
           const label =
             role?.kind === "in" ? `${base} in` : role?.kind === "out" ? `${base} out` : base;
@@ -971,13 +870,10 @@ export function Timeline() {
    * entrance starts at the clip's head, everything else ends on its edge. */
   const anchorBarStart = (a: Anchor, len: number) => (a.kind === "in" ? a.at : a.at - len);
 
-  /** The bar already playing this anchor's boundary, if any — through any of
-   * its roles, so a bar serving several same-instant boundaries is the
-   * incumbent at each of them. */
+  /** The bar already playing this anchor's boundary, if any. */
   const barAt = (a: Anchor) =>
-    bars.find((t) =>
-      (barRoles.get(t.id) ?? []).some((r) => r.kind === a.kind && r.clipId === a.clipId)
-    ) ?? null;
+    transitions.find((x) => x.role && x.role.kind === a.kind && x.role.clipId === a.clipId)?.t ??
+    null;
 
   /** Land a new bar from the panel: it takes the nearest anchor when one is
    * around, replacing whatever played there, and sits free anywhere else. */
@@ -1007,8 +903,6 @@ export function Timeline() {
     e.stopPropagation();
     const s = useEditor.getState();
     if (s.readOnly) return;
-    // ⌘/⇧-click folds the bar into the multi-selection, like any lane bar.
-    const additive = e.metaKey || e.shiftKey;
     let landing: { start: number; anchor: Anchor | null } | null = null;
     startDrag(e, {
       onMove: (dx) => {
@@ -1030,10 +924,7 @@ export function Timeline() {
         setJointDrop(null);
         setTransitionDrag(null);
         const st = useEditor.getState();
-        if (!moved || !landing) {
-          if (additive) return st.toggleSelect({ kind: "transition", id: x.t.id });
-          return st.select({ kind: "transition", id: x.t.id });
-        }
+        if (!moved || !landing) return st.select({ kind: "transition", id: x.t.id });
         st.beginHistoryBatch();
         const incumbent = landing.anchor ? barAt(landing.anchor) : null;
         if (incumbent && incumbent.id !== x.t.id) st.removeTransition(incumbent.id);
@@ -1067,13 +958,9 @@ export function Timeline() {
     });
   };
 
-  // The landing preview for a shape, sticker or effect dragged out of a
-  // panel, drawn the way a bar drag is: the slot outline on the target row
-  // where the drop lands, and the bar itself carried at the pointer (`y` is
-  // the bar's top in band pixels).
-  const [elementDrop, setElementDrop] = useState<{ row: number; t: number; y: number } | null>(
-    null
-  );
+  // The row a shape or effect dragged out of a panel would land on, so the
+  // band shows where it is going.
+  const [elementDropRow, setElementDropRow] = useState<number | null>(null);
   // The place a dragged transition would land on, marked with the footprint it
   // would take while it is in flight.
   const [jointDrop, setJointDrop] = useState<Anchor | null>(null);
@@ -1093,91 +980,29 @@ export function Timeline() {
   const dropTimeAt = (clientX: number) => (total <= 0 ? 0 : Math.max(0, timeAt(clientX)));
 
   // Scrub with auto-scroll when the pointer nears the viewport edges.
-  //
-  // Both boxes are measured once, at the press. Reading a rect forces the
-  // browser to lay the page out, and a drag that measured per event paid for
-  // two layouts before it could work out what time the pointer was over.
   const scrub = (e: React.PointerEvent) => {
     const s = useEditor.getState();
     if (s.playing) s.setPlaying(false);
+    s.seek(timeAt(e.clientX));
     const el = scrollRef.current;
-    const innerLeft = innerRef.current?.getBoundingClientRect().left ?? 0;
-    const view = el?.getBoundingClientRect() ?? null;
-    // The inner box travels with the scroller, so an auto-scroll shifts what
-    // a given screen x means; tracking the shift keeps the measurement true
-    // without re-reading the layout.
-    const scroll0 = el?.scrollLeft ?? 0;
-    const at = (clientX: number) =>
-      Math.max(0, (clientX - innerLeft + ((el?.scrollLeft ?? 0) - scroll0)) / pps);
-    useEditor.getState().seek(at(e.clientX));
     startDrag(e, {
       onMove: (_dx, _dy, ev) => {
-        if (el && view) {
-          if (ev.clientX > view.right - 36) el.scrollLeft += 14;
-          else if (ev.clientX < view.left + 36) el.scrollLeft -= 14;
+        if (el) {
+          const r = el.getBoundingClientRect();
+          if (ev.clientX > r.right - 36) el.scrollLeft += 14;
+          else if (ev.clientX < r.left + 36) el.scrollLeft -= 14;
         }
-        useEditor.getState().seek(at(ev.clientX));
+        useEditor.getState().seek(timeAt(ev.clientX));
       },
     });
   };
 
-  // A press on empty track space: a click deselects and moves the playhead;
-  // a drag sweeps a rubber-band that selects every bar it touches — the same
-  // blue band the projects home uses. ⇧/⌘ keeps the prior selection under it.
-  const [marquee, setMarquee] = useState<{
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  } | null>(null);
+  // Clicking empty track space deselects AND moves the playhead.
   const deselectIfSelf = (e: React.PointerEvent) => {
-    if (e.target !== e.currentTarget) return;
-    const st = useEditor.getState();
-    if (st.playing) st.setPlaying(false);
-    st.seek(Math.max(0, timeAt(e.clientX)));
-    const additive = e.shiftKey || e.metaKey;
-    const base = additive
-      ? st.multiSelection.filter((m): m is NonNullable<Selection> => !!m)
-      : [];
-    const startX = e.clientX;
-    const startY = e.clientY;
-    let sweeping = false;
-    startDrag(e, {
-      onMove: (dx, dy, ev) => {
-        if (!sweeping && Math.hypot(dx, dy) < 4) return;
-        sweeping = true;
-        const r = {
-          left: Math.min(startX, ev.clientX),
-          top: Math.min(startY, ev.clientY),
-          width: Math.abs(ev.clientX - startX),
-          height: Math.abs(ev.clientY - startY),
-        };
-        setMarquee(r);
-        const hit = [...base];
-        const seen = new Set(hit.map((m) => `${m.kind}:${m.id}`));
-        scrollRef.current?.querySelectorAll<HTMLElement>("[data-tl-sel]").forEach((el) => {
-          const b = el.getBoundingClientRect();
-          const overlaps =
-            b.left < r.left + r.width &&
-            b.right > r.left &&
-            b.top < r.top + r.height &&
-            b.bottom > r.top;
-          if (!overlaps) return;
-          const tag = el.dataset.tlSel!;
-          const cut = tag.indexOf(":");
-          const kind = tag.slice(0, cut) as NonNullable<Selection>["kind"];
-          const id = tag.slice(cut + 1);
-          if (seen.has(tag)) return;
-          seen.add(tag);
-          hit.push({ kind, id });
-        });
-        useEditor.getState().setMultiSelection(hit);
-      },
-      onUp: (_dx, _dy, moved) => {
-        setMarquee(null);
-        if (!moved && !additive) useEditor.getState().select(null);
-      },
-    });
+    if (e.target === e.currentTarget) {
+      useEditor.getState().select(null);
+      scrub(e);
+    }
   };
 
   // Zoom that keeps a chosen time pinned under a chosen viewport x.
@@ -1198,7 +1023,7 @@ export function Timeline() {
     const clamped = Math.max(floor, Math.min(ZOOM_MAX, next));
     if (Math.abs(clamped - cur.pxPerSec) < 0.01) return;
     if (el) {
-      const t = anchorT ?? playheadAt();
+      const t = anchorT ?? cur.currentTime;
       const px = anchorPx ?? PAD_SIDE + t * cur.pxPerSec - el.scrollLeft;
       pendingAnchor.current = { t, px };
     }
@@ -1214,7 +1039,8 @@ export function Timeline() {
 
   // The editing tools, as the toolbar button and its menu row both invoke them.
   const split = useCallback(() => {
-    useEditor.getState().splitAtPlayhead(skimAt() ?? undefined);
+    const s = useEditor.getState();
+    s.splitAtPlayhead(s.skimTime ?? undefined);
   }, []);
   const addText = useCallback(() => useEditor.getState().addOverlay(), []);
   const deleteSelection = useCallback(() => useEditor.getState().deleteSelection(), []);
@@ -1312,9 +1138,10 @@ export function Timeline() {
       return;
     }
     if (isClipMedia(type)) {
-      // A track drop lands at the pointer, rippling later clips right, so a
-      // drop into a leading gap or between clips lands there.
-      s.addVideoFromAsset(assetId, place, t);
+      if (place.kind === "insert") s.addVideoFromAsset(assetId, place, t);
+      // Drop at the pointer, rippling later clips right — so a drop into a
+      // leading gap or between clips lands there instead of sliding to the end.
+      else s.dropClipFromAsset(assetId, t);
     } else {
       const used = [...new Set(s.audioClips.map((a) => a.lane ?? 0))].sort((a, b) => a - b);
       const lane =
@@ -1324,67 +1151,28 @@ export function Timeline() {
   };
 
   // The video being dragged — project media, a library clip, or an image ref
-  // (which lands as a still) — with the ghost its landing segment paints.
-  const draggedVideo = (e: React.DragEvent): { duration: number; ghost: DropGhost } | null => {
+  // (which lands as a still).
+  const draggedVideo = (e: React.DragEvent): { duration: number } | null => {
     if (hasLibraryDrag(e)) {
       const lib = draggingLibrary();
       if (!lib || !isClipMedia(lib.type)) return null;
-      return {
-        duration: lib.type === "image" ? STILL_SECONDS : lib.duration,
-        ghost: {
-          url: libraryMediaUrl(lib.fileName, lib.residency),
-          kind: lib.type,
-          aspect: lib.width && lib.height ? lib.width / lib.height : undefined,
-        },
-      };
+      return { duration: lib.type === "image" ? STILL_SECONDS : lib.duration };
     }
     const id = draggingAssetId();
     if (id) {
       const asset = useEditor.getState().assets.find((a) => a.id === id);
       if (!asset || stickerOf(asset) || !isClipMedia(asset.type)) return null;
-      return {
-        duration: asset.type === "image" ? STILL_SECONDS : asset.duration,
-        ghost:
-          asset.type === "image"
-            ? { url: asset.url, kind: "image" }
-            : {
-                url: asset.url,
-                kind: "video",
-                aspect:
-                  asset.width && asset.height ? asset.width / asset.height : undefined,
-                thumbs: asset.thumbs,
-                thumbStep: asset.thumbStep,
-                poster: asset.thumbs?.[0],
-              },
-      };
+      return { duration: asset.type === "image" ? STILL_SECONDS : asset.duration };
     }
     const stockVideo = draggingStockVideo(e);
-    if (stockVideo) {
-      return {
-        duration: stockVideo.duration ?? 0,
-        ghost: {
-          url: stockVideo.url,
-          kind: "video",
-          aspect:
-            stockVideo.width && stockVideo.height
-              ? stockVideo.width / stockVideo.height
-              : undefined,
-          poster: stockVideo.thumb,
-        },
-      };
-    }
-    const still = draggingStill(e);
-    return still
-      ? { duration: STILL_SECONDS, ghost: { url: still.url, kind: "image" } }
-      : null;
+    if (stockVideo) return { duration: stockVideo.duration ?? 0 };
+    return draggingStill(e) ? { duration: STILL_SECONDS } : null;
   };
 
-  // Drop targets for the upper tracks and between-track seams: dragging a
-  // video onto a lane adds it there; near a row's edge it aims at the seam and
-  // opens a fresh track at that z-level. The pointer resolves through
-  // `resolveDropTrack` — the same resolver internal clip drags use — so every
-  // media flavor lands by one rule.
-  const overlayDropHandlers = {
+  // Drop targets for the upper tracks and between-track gaps: dragging a video
+  // onto a lane adds it there; onto a gap opens a fresh track at that z-level.
+  // Works the same for project media and library clips.
+  const overlayDropHandlers = (place: TrackTarget) => ({
     onDragOver: (e: React.DragEvent) => {
       const vid = draggedVideo(e);
       if (!vid) return;
@@ -1393,12 +1181,7 @@ export function Timeline() {
       e.dataTransfer.dropEffect = "copy";
       setAssetDrop(null);
       setDropType("video"); // keep the insertion zones lit however the drag entered
-      previewCross(
-        resolveDropTrack(e.clientX, e.clientY),
-        Math.max(0, timeAt(e.clientX)),
-        vid.duration,
-        vid.ghost
-      );
+      previewCross(place, Math.max(0, timeAt(e.clientX)), vid.duration);
     },
     onDragLeave: (e: React.DragEvent) => {
       if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOverlayDrop(null);
@@ -1409,7 +1192,6 @@ export function Timeline() {
       if (draggedSticker()) return;
       e.preventDefault();
       e.stopPropagation();
-      const place = resolveDropTrack(e.clientX, e.clientY);
       const t = Math.max(0, timeAt(e.clientX));
       setOverlayDrop(null);
       setDropType(null);
@@ -1449,7 +1231,7 @@ export function Timeline() {
           .catch(() => {});
       }
     },
-  };
+  });
 
   // Drag the panel's top border to resize; the border itself stays as-is,
   // only an invisible grab strip sits on top of it.
@@ -1457,45 +1239,24 @@ export function Timeline() {
     const h0 = useEditor.getState().timelineH;
     startDrag(e, {
       onMove: (_dx, dy) => {
-        useEditor.getState().setTimelineH(h0 - dy);
+        const max = Math.min(TIMELINE_H_MAX, window.innerHeight - 220);
+        useEditor.getState().setTimelineH(Math.min(max, h0 - dy));
       },
     });
   };
 
-  // The dragged media as a floating segment: its filmstrip fills it at true
-  // length and it rides above the row's clips (z-20), so the drag reads as a
-  // placed segment sliding to its landing spot.
-  const dropSegment = (t: number, len: number, h: number, ghost?: DropGhost) => (
-    <div
-      className="tl-asset-drop-slot pointer-events-none absolute top-0.5 z-20 overflow-hidden rounded-lg bg-black opacity-90 shadow-2xl ring-[1.5px] ring-[#0a84ff]/70 transition-[left] duration-100 ease-out"
-      style={{ left: t * pps, width: Math.max(10, len * pps - CLIP_GAP), height: h }}
-    >
-      {ghost && (
-        <DropGhostFilm ghost={ghost} w={Math.max(10, len * pps - CLIP_GAP)} h={h} pps={pps} />
-      )}
-      <span className="absolute top-1 left-1 rounded-[5px] bg-black/65 px-1.5 py-px font-mono text-[10px] tabular-nums text-white">
-        {len.toFixed(1)}s
-      </span>
-    </div>
-  );
-
-  // The landing preview on a video row while the drag targets it. External
-  // media paints the segment itself; an internal drag paints the plain slot —
-  // the same chrome as the lane slots — since the dragged clip is its own ghost.
+  // The landing-slot preview on a video row while the drag targets it — the
+  // same chrome as the lane slots.
   const trackSlot = (place: TrackTarget, h: number) =>
     samePlacement(overlayDrop?.target ?? null, place) ? (
-      overlayDrop!.ghost ? (
-        dropSegment(overlayDrop!.t, overlayDrop!.len, h, overlayDrop!.ghost)
-      ) : (
-        <div
-          className="pointer-events-none absolute top-0.5 rounded-lg bg-[#0a84ff]/10 shadow-[inset_0_0_0_1.5px_rgba(10,132,255,0.4)] transition-[left] duration-150 ease-out"
-          style={{
-            left: overlayDrop!.t * pps,
-            width: Math.max(10, overlayDrop!.len * pps - CLIP_GAP),
-            height: h,
-          }}
-        />
-      )
+      <div
+        className="pointer-events-none absolute top-0.5 rounded-lg bg-[#0a84ff]/10 shadow-[inset_0_0_0_1.5px_rgba(10,132,255,0.4)] transition-[left] duration-150 ease-out"
+        style={{
+          left: overlayDrop!.t * pps,
+          width: Math.max(10, overlayDrop!.len * pps - CLIP_GAP),
+          height: h,
+        }}
+      />
     ) : null;
 
   // Only empty space gets the menu: a right-click on an item sits on a
@@ -1533,14 +1294,6 @@ export function Timeline() {
       />
     ) : null;
 
-  // A rail mounts only while the in-flight video drag targets its seam:
-  // `resolveDropTrack` turns a pointer near a row edge into that seam's
-  // insert placement, and the mounted rail's own drop zone then holds the
-  // target while the pointer stays inside it. One gate for every rail and
-  // every drag flavor — internal segments and external media alike.
-  const railOpen = (place: TrackTarget) =>
-    videoDragActive && samePlacement(overlayDrop?.target ?? null, place);
-
   // The would-be new video track, one row past the stack's edge — the same
   // grown-row experience as the audio and title lanes. Dropping here opens a
   // brand-new track at z-level `level`.
@@ -1551,22 +1304,17 @@ export function Timeline() {
         className="relative mt-1.5"
         style={{ height: OVERLAY_H }}
         data-drop={placementAttr(place)}
-        {...overlayDropHandlers}
+        {...overlayDropHandlers(place)}
       >
-        {laneRail(OVERLAY_H - 2)}
         {trackSlot(place, OVERLAY_H - 4)}
       </div>
     );
   };
 
-
   return (
     <footer
       className="relative flex min-w-0 shrink-0 flex-col overflow-hidden border-t border-border bg-card select-none"
       style={{ height: timelineH }}
-      // The floating object ghost (`setObjectDragImage`) hands over to this
-      // surface's own landing previews while a drag is over it.
-      data-segment-drop
       onDragOver={(e) => {
         // A template materializes as a whole arrangement, so it accepts the
         // drop without a single-clip landing preview.
@@ -1591,34 +1339,12 @@ export function Timeline() {
         // An element — a sticker, or a shape or effect from a panel — lands on
         // the element rows, so none of the clip previews apply to it.
         if (element || draggedSticker()) {
-          // The band paints the bar being carried; a "move" cursor keeps the
-          // copy badge off it.
-          e.dataTransfer.dropEffect = "move";
           setAssetDrop(null);
           setOverlayDrop(null);
           setAudioDrop(null);
           setDropType(null);
-          // An empty band has no rows to hit; the drag opens the first one,
-          // where the drop will land.
-          const hit = overlayRowAt(e.clientY);
-          const row =
-            !element || element.kind !== "transition"
-              ? hit ?? (overlayLanes.count === 0 ? 0 : null)
-              : null;
-          // The pointer's own time, not `dropTimeAt`: an empty timeline pins
-          // clip drops to 0, but an element rides wherever it is held.
-          const bandTop = overlayRef.current?.getBoundingClientRect().top;
-          setElementDrop(
-            row !== null
-              ? {
-                  row,
-                  t: Math.max(0, timeAt(e.clientX)),
-                  y:
-                    bandTop !== undefined
-                      ? e.clientY - bandTop - (TEXT_H - 6) / 2
-                      : row * TEXT_H + 2,
-                }
-              : null
+          setElementDropRow(
+            element && element.kind !== "transition" ? overlayRowAt(e.clientY) ?? null : null
           );
           setXTileDrag(element?.kind === "transition");
           setJointDrop(
@@ -1628,34 +1354,64 @@ export function Timeline() {
           );
           return;
         }
-        setElementDrop(null);
+        setElementDropRow(null);
         setJointDrop(null);
         setXTileDrag(false);
         // Preview where a video would land; audio drops free-form. Library and
         // stock drags carry their own shape since they aren't in the project yet.
         let type: "video" | "audio" | "image" | undefined;
         let duration = 0;
+        // What the ghost paints: the source's frames, from wherever it lives.
+        let ghost: DropGhost | undefined;
         if (isLib) {
           const lib = draggingLibrary();
           type = lib?.type;
           duration = lib?.duration ?? 0;
+          if (lib && isClipMedia(lib.type)) {
+            ghost = {
+              url: libraryMediaUrl(lib.fileName, lib.residency),
+              kind: lib.type,
+              aspect: lib.width && lib.height ? lib.width / lib.height : undefined,
+            };
+          }
         } else if (stockMusic) {
           type = "audio";
           duration = stockMusic.duration ?? 0;
         } else if (stockVideo) {
           type = "video";
           duration = stockVideo.duration ?? 0;
+          ghost = {
+            url: stockVideo.url,
+            kind: "video",
+            aspect:
+              stockVideo.width && stockVideo.height
+                ? stockVideo.width / stockVideo.height
+                : undefined,
+            poster: stockVideo.thumb,
+          };
         } else if (still) {
           type = "video";
           duration = STILL_SECONDS;
+          ghost = { url: still.url, kind: "image" };
         } else {
           const id = draggingAssetId();
           const asset = id ? useEditor.getState().assets.find((a) => a.id === id) : null;
           type = asset && asset.type !== "font" ? asset.type : undefined;
           duration = asset?.type === "image" ? STILL_SECONDS : asset?.duration ?? 0;
+          if (asset && !stickerOf(asset) && isClipMedia(asset.type)) {
+            ghost =
+              asset.type === "image"
+                ? { url: asset.url, kind: "image" }
+                : {
+                    url: asset.url,
+                    kind: "video",
+                    aspect: asset.width && asset.height ? asset.width / asset.height : undefined,
+                    thumbs: asset.thumbs,
+                    thumbStep: asset.thumbStep,
+                    poster: asset.thumbs?.[0],
+                  };
+          }
         }
-        // What the ghost paints: the source's frames, from wherever it lives.
-        const ghost = draggedVideo(e)?.ghost;
         // A still rides the video tracks: reveal their guides and new-track rows.
         setDropType(isClipMedia(type) ? "video" : type ?? null);
         if (type === "audio") {
@@ -1678,7 +1434,7 @@ export function Timeline() {
         const place = resolveDropTrack(e.clientX, e.clientY);
         if (place.kind === "insert") {
           setAssetDrop(null);
-          setOverlayDrop({ target: place, t: dropTimeAt(e.clientX), len: duration, ghost });
+          setOverlayDrop({ target: place, t: dropTimeAt(e.clientX), len: duration });
           return;
         }
         setOverlayDrop(null);
@@ -1686,12 +1442,8 @@ export function Timeline() {
         // rippling later clips right, so the ghost sits where the segment will
         // actually land — a box under the pointer that lands minutes away lies.
         const cur = useEditor.getState();
-        const { start, shifts } = rippleInsert(
-          track0Clips(cur.clips),
-          dropTimeAt(e.clientX),
-          duration
-        );
-        setAssetDrop({ t: start, len: duration, ghost, shifts });
+        const { start } = rippleInsert(track0Clips(cur.clips), dropTimeAt(e.clientX), duration);
+        setAssetDrop({ t: start, len: duration, ghost });
       }}
       onDragLeave={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
@@ -1699,7 +1451,7 @@ export function Timeline() {
           setOverlayDrop(null);
           setAudioDrop(null);
           setDropType(null);
-          setElementDrop(null);
+          setElementDropRow(null);
           setJointDrop(null);
           setXTileDrag(false);
         }
@@ -1708,7 +1460,7 @@ export function Timeline() {
         // Resolve the hovered rows before the previews (and their rows) clear.
         const audioRow = audioRowAt(e.clientY);
         const elementLane = overlayLaneAt(e.clientY);
-        setElementDrop(null);
+        setElementDropRow(null);
         setJointDrop(null);
         setXTileDrag(false);
         const videoPlace = resolveDropTrack(e.clientX, e.clientY);
@@ -1729,16 +1481,9 @@ export function Timeline() {
         const projectId = useEditor.getState().projectId;
         clearAssetDrag();
         clearElementDrag();
-        // Elements land at the pointer's own time, not `dropTimeAt`, which
-        // pins everything to 0 on an empty timeline — a clip starts the film
-        // there, but an element lands where it was dropped.
-        const atElement = Math.max(0, timeAt(e.clientX));
         if (element) {
           e.preventDefault();
-          const aim = {
-            at: atElement,
-            ...(elementLane !== undefined ? { lane: elementLane } : {}),
-          };
+          const aim = { at: t, ...(elementLane !== undefined ? { lane: elementLane } : {}) };
           if (element.kind === "shape") useEditor.getState().addShape(element.shape, aim);
           else if (element.kind === "effect") useEditor.getState().addEffect(element.effect, aim);
           else dropTransitionAt(t, element.style);
@@ -1754,14 +1499,7 @@ export function Timeline() {
           e.preventDefault();
           void importLibraryAsset(projectId, lib)
             .then((asset) => {
-              if (asset.type !== "font")
-                placeAssetAt(
-                  asset.id,
-                  asset.type,
-                  stickerOf(asset) ? atElement : t,
-                  audioRow,
-                  videoPlace
-                );
+              if (asset.type !== "font") placeAssetAt(asset.id, asset.type, t, audioRow, videoPlace);
             })
             .catch(() => {});
           return;
@@ -1772,14 +1510,7 @@ export function Timeline() {
           e.preventDefault();
           const asset = useEditor.getState().assets.find((a) => a.id === id);
           if (asset && asset.type !== "font")
-            placeAssetAt(
-              id,
-              asset.type,
-              stickerOf(asset) ? atElement : t,
-              audioRow,
-              videoPlace,
-              elementLane
-            );
+            placeAssetAt(id, asset.type, t, audioRow, videoPlace, elementLane);
           return;
         }
 
@@ -1930,12 +1661,6 @@ export function Timeline() {
         </div>
       </div>
       <RulerBand />
-      {marquee && (
-        <div
-          className="pointer-events-none fixed z-50 rounded-[3px] border-2 border-[#0a84ff]"
-          style={marquee}
-        />
-      )}
       <div
         ref={scrollRef}
         data-tl-scroll
@@ -1984,7 +1709,7 @@ export function Timeline() {
           {/* Elements ride above the clip stack, the way they sit over the
               picture. New effects open the top row; a drag moves any of them
               to any row. */}
-          {(overlays.length > 0 || elementDrop !== null) && (
+          {overlays.length > 0 && (
             <div
               ref={overlayRef}
               data-tl-trows=""
@@ -1995,10 +1720,7 @@ export function Timeline() {
                     overlayLanes.count,
                     // An in-flight element drag shows the whole landing area,
                     // the would-be new row below included.
-                    laneDrag?.kind === "overlay" ? overlayLanes.count + 1 : 0,
-                    // A panel drag over an empty band opens the first row for
-                    // its landing preview.
-                    elementDrop !== null ? elementDrop.row + 1 : 0
+                    laneDrag?.kind === "overlay" ? overlayLanes.count + 1 : 0
                   ) *
                     TEXT_H +
                   topRowShift,
@@ -2018,83 +1740,17 @@ export function Timeline() {
                   )}
                 </Fragment>
               ))}
-              {elementDrop !== null &&
-                (() => {
-                  const el = draggingElement();
-                  const family = el?.kind === "effect" ? "effect" : "element";
-                  const sticker = el ? null : draggedSticker();
-                  const chip =
-                    el?.kind === "shape" ? (
-                      <>
-                        {(() => {
-                          const Icon = SHAPE_CHIP_ICONS[el.shape];
-                          return <Icon className="mr-1 size-2.5 shrink-0" />;
-                        })()}
-                        {SHAPE_LABELS[el.shape]}
-                      </>
-                    ) : el?.kind === "effect" ? (
-                      <>
-                        <Sparkles className="mr-1 size-2.5 shrink-0" />
-                        {EFFECT_LABELS[el.effect]}
-                      </>
-                    ) : (
-                      <>
-                        {sticker && !isLottieAsset(sticker) ? (
-                          // eslint-disable-next-line @next/next/no-img-element -- project media URL
-                          <img
-                            src={sticker.url}
-                            alt=""
-                            className="mr-1 size-4 shrink-0 object-contain"
-                          />
-                        ) : (
-                          <Sticker className="mr-1 size-2.5 shrink-0" />
-                        )}
-                        Sticker
-                      </>
-                    );
-                  return (
-                    <>
-                      <div
-                        className={cn(
-                          "pointer-events-none absolute inset-x-0 rounded-md border border-dashed",
-                          FAMILY_STYLE[family].row
-                        )}
-                        style={{ top: elementDrop.row * TEXT_H + 2, height: TEXT_H - 6 }}
-                      />
-                      {/* The slot the drop takes on its row... */}
-                      <div
-                        className={cn(
-                          "pointer-events-none absolute rounded-md",
-                          FAMILY_STYLE[family].slot
-                        )}
-                        style={{
-                          top: elementDrop.row * TEXT_H + 2,
-                          height: TEXT_H - 6,
-                          left: elementDrop.t * pps,
-                          width: Math.max(14, ELEMENT_DROP_SECONDS * pps - CLIP_GAP),
-                        }}
-                      />
-                      {/* ...and the bar itself carried at the pointer, the
-                          way a bar drag's ghost rides. */}
-                      <div
-                        className={cn(
-                          "pointer-events-none absolute z-20 flex items-center overflow-hidden rounded-md opacity-80 shadow-2xl",
-                          FAMILY_STYLE[family].bar
-                        )}
-                        style={{
-                          top: elementDrop.y,
-                          height: TEXT_H - 6,
-                          left: elementDrop.t * pps,
-                          width: Math.max(14, ELEMENT_DROP_SECONDS * pps - CLIP_GAP),
-                        }}
-                      >
-                        <span className="pointer-events-none flex min-w-0 items-center truncate px-2 text-[10.5px] font-medium text-white">
-                          {chip}
-                        </span>
-                      </div>
-                    </>
-                  );
-                })()}
+              {elementDropRow !== null && (
+                <div
+                  className={cn(
+                    "pointer-events-none absolute inset-x-0 rounded-md border border-dashed",
+                    FAMILY_STYLE[
+                      draggingElement()?.kind === "effect" ? "effect" : "element"
+                    ].row
+                  )}
+                  style={{ top: elementDropRow * TEXT_H + 2, height: TEXT_H - 6 }}
+                />
+              )}
               {/* The new row above, revealed once the drag heads past the top
                   edge — showing it any earlier would push every row down
                   under a freshly grabbed bar. */}
@@ -2221,7 +1877,6 @@ export function Timeline() {
                       width: Math.max(14, x.t.seconds * pps - CLIP_GAP),
                       height: TEXT_H - 6,
                     }}
-                    data-tl-sel={`transition:${x.t.id}`}
                     onPointerDown={(e) => moveTransition(e, x)}
                   >
                     <Icon className="size-2.5 shrink-0" />
@@ -2243,27 +1898,24 @@ export function Timeline() {
             </div>
           )}
 
-          {/* New-track rails reveal on approach: a drag near a row edge (or
-              past the stack) resolves to that seam's insert level, the rail
-              mounts as a full row there, and it folds away the moment the
-              drag aims elsewhere. The dragged clip's ghost anchors to its row
-              live, so the mount-time shift never pulls it off the pointer. */}
-          {railOpen({ kind: "insert", level: topInsertLevel }) &&
+          {/* The top-side new track reveals once the drag heads past the
+              stack's upper edge; mounting it earlier would shift every row
+              down under a freshly grabbed clip. */}
+          {videoDragActive &&
+            samePlacement(overlayDrop?.target ?? null, { kind: "insert", level: topInsertLevel }) &&
             newTrackRow(topInsertLevel)}
-          {aboveTracks.map((track) => {
-            const railH = railFor(overlayTrackSpans.get(track) ?? []);
-            return (
-            <Fragment key={`ov-${track}`}>
+          {aboveTracks.map((track) => (
             <div
+              key={`ov-${track}`}
               className="relative mt-1.5"
-              style={{ height: OVERLAY_H + railH }}
+              style={{ height: OVERLAY_H }}
               data-tl-vrow={track}
               data-drop={placementAttr({ kind: "track", track })}
               onPointerDown={deselectIfSelf}
               onContextMenu={openGapMenu({ kind: "video", index: track })}
-              {...overlayDropHandlers}
+              {...overlayDropHandlers({ kind: "track", track })}
             >
-              {laneRail(OVERLAY_H - 2 + railH)}
+              {laneRail(OVERLAY_H - 2)}
               {gapHighlight({ kind: "video", index: track }, OVERLAY_H - 4)}
               {draggedOverlayTrack === track && laneDrag && (
                 <LaneSlot
@@ -2286,11 +1938,7 @@ export function Timeline() {
                       ? laneDrag
                       : null
                   }
-                  parting={
-                    (laneDrag?.kind === "overlayClip" && laneDrag.id !== span.clip.id) ||
-                    videoDragActive
-                  }
-                  partAt={dropPartAt.get(span.clip.id)}
+                  parting={laneDrag?.kind === "overlayClip" && laneDrag.id !== span.clip.id}
                   onDrag={setLaneDrag}
                   onSnap={setSnapX}
                   resolveTarget={resolveDropTrack}
@@ -2302,12 +1950,7 @@ export function Timeline() {
               ))}
               {trackSlot({ kind: "track", track }, OVERLAY_H - 4)}
             </div>
-            {/* The would-be new track under this row: a drop opens it between
-                this track and the one below. */}
-            {railOpen({ kind: "insert", level: track }) && newTrackRow(track)}
-            </Fragment>
-            );
-          })}
+          ))}
 
           {/* An empty track 0 disappears like any other empty track. It
               renders while it has clips, while the whole project is empty
@@ -2320,13 +1963,13 @@ export function Timeline() {
             samePlacement(overlayDrop?.target ?? null, TRACK_ZERO)) && (
           <div
             className="relative mt-1.5"
-            style={{ height: VIDEO_H + rail0 }}
+            style={{ height: VIDEO_H }}
             data-tl-vrow={0}
             data-drop={placementAttr(TRACK_ZERO)}
             onPointerDown={deselectIfSelf}
             onContextMenu={openGapMenu({ kind: "video", index: 0 })}
           >
-            {spans.length > 0 && laneRail(VIDEO_H - 2 + rail0)}
+            {spans.length > 0 && laneRail(VIDEO_H - 2)}
             {gapHighlight({ kind: "video", index: 0 }, VIDEO_H - 4)}
             {trackSlot(TRACK_ZERO, VIDEO_H - 4)}
             {laneDrag?.kind === "clip" && !laneDrag.away && (
@@ -2338,8 +1981,31 @@ export function Timeline() {
                 className="rounded-lg bg-[#0a84ff]/10 shadow-[inset_0_0_0_1.5px_rgba(10,132,255,0.4),inset_0_2px_10px_rgba(10,60,140,0.08)]"
               />
             )}
-            {assetDrop &&
-              dropSegment(assetDrop.t, assetDrop.len, VIDEO_H - 4, assetDrop.ghost)}
+            {assetDrop && (
+              // The dragged clip as a floating segment: its filmstrip fills it
+              // and it rides above the row's clips (z-20), so a drag reads as a
+              // placed segment sliding to its landing spot, not a hole to fill.
+              <div
+                className="tl-asset-drop-slot pointer-events-none absolute top-0.5 z-20 overflow-hidden rounded-lg bg-neutral-200 opacity-90 shadow-2xl ring-[1.5px] ring-[#0a84ff]/70 transition-[left] duration-100 ease-out"
+                style={{
+                  left: assetDrop.t * pps,
+                  width: Math.max(10, assetDrop.len * pps - CLIP_GAP),
+                  height: VIDEO_H - 4,
+                }}
+              >
+                {assetDrop.ghost && (
+                  <DropGhostFilm
+                    ghost={assetDrop.ghost}
+                    w={Math.max(10, assetDrop.len * pps - CLIP_GAP)}
+                    h={VIDEO_H - 4}
+                    pps={pps}
+                  />
+                )}
+                <span className="absolute top-1 left-1 rounded-[5px] bg-black/65 px-1.5 py-px font-mono text-[10px] tabular-nums text-white">
+                  {assetDrop.len.toFixed(1)}s
+                </span>
+              </div>
+            )}
             {spans.map((span, i) => (
               <ClipView
                 key={span.clip.id}
@@ -2348,10 +2014,7 @@ export function Timeline() {
                 pps={pps}
                 selected={selKeys.has(`clip:${span.clip.id}`)}
                 drag={laneDrag?.kind === "clip" && laneDrag.id === span.clip.id ? laneDrag : null}
-                parting={
-                  (laneDrag?.kind === "clip" && laneDrag.id !== span.clip.id) || videoDragActive
-                }
-                partAt={dropPartAt.get(span.clip.id)}
+                parting={laneDrag?.kind === "clip" && laneDrag.id !== span.clip.id}
                 onDrag={setLaneDrag}
                 onSnap={setSnapX}
                 resolveTarget={resolveDropTrack}
@@ -2368,8 +2031,7 @@ export function Timeline() {
               audio and title lanes' extra row — nothing above it moves.
               Dropping here opens a new track 0: the whole stack renumbers up
               and the spine (ripple, transitions) transplants onto the drop. */}
-          {railOpen({ kind: "insert", level: bottomInsertLevel }) &&
-            newTrackRow(bottomInsertLevel)}
+          {videoDragActive && newTrackRow(bottomInsertLevel)}
 
           {(audioClips.length > 0 || audioDrop !== null) && (
             <div
@@ -2824,40 +2486,22 @@ function HoverLine({
    * it, and the line darkens — the marker is the skimmer, held. */
   hold: boolean;
 }) {
-  const skimTime = useSkim();
-  useEffect(() => () => setSkim(null), []);
+  const skimTime = useEditor((s) => s.skimTime);
+  useEffect(() => () => useEditor.getState().setSkimTime(null), []);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || hold) return;
-    // The inner box only moves when the timeline scrolls or zooms, so its left
-    // edge is read once per gesture instead of once per pointer event — the
-    // read forces a layout, and a scrub issues hundreds of them.
-    let left = 0;
-    let measured = false;
-    const remeasure = () => {
-      measured = false;
-    };
     const move = (e: PointerEvent) => {
       const inner = innerRef.current;
-      // The skimmer is a paused affordance: while the cut is playing the
-      // picture belongs to the playhead, wherever the pointer happens to rest.
-      if (!inner || e.buttons || useEditor.getState().playing) return setSkim(null);
-      if (!measured) {
-        left = inner.getBoundingClientRect().left;
-        measured = true;
-      }
-      const t = (e.clientX - left) / useEditor.getState().pxPerSec;
-      setSkim(Math.max(0, t));
+      const s = useEditor.getState();
+      if (!inner || e.buttons) return s.setSkimTime(null);
+      const t = (e.clientX - inner.getBoundingClientRect().left) / s.pxPerSec;
+      s.setSkimTime(Math.max(0, t));
     };
-    const leave = () => {
-      remeasure();
-      setSkim(null);
-    };
-    el.addEventListener("scroll", remeasure, { passive: true });
+    const leave = () => useEditor.getState().setSkimTime(null);
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerleave", leave);
     return () => {
-      el.removeEventListener("scroll", remeasure);
       el.removeEventListener("pointermove", move);
       el.removeEventListener("pointerleave", leave);
     };
@@ -3053,19 +2697,15 @@ function SaveSelectionButton({ labels = true }: { labels?: boolean }) {
   );
 }
 
-/** The running time, on its own so the transport's buttons stay off the clock. */
-function Timecode() {
-  return <span className="tc-now">{formatTimecode(usePlayhead())}</span>;
-}
-
 /** Playback transport, centered in the timeline toolbar. */
 function Transport({ total }: { total: number }) {
   const playing = useEditor((s) => s.playing);
+  const currentTime = useEditor((s) => s.currentTime);
   const hasClips = total > 0;
 
   const toggle = () => {
     const s = useEditor.getState();
-    if (!s.playing && playheadAt() >= total - 0.01) s.seek(0);
+    if (!s.playing && s.currentTime >= total - 0.01) s.seek(0);
     s.setPlaying(!s.playing);
   };
 
@@ -3096,7 +2736,7 @@ function Transport({ total }: { total: number }) {
         )}
       </button>
       <div className="flex min-w-30 items-baseline gap-1.5 font-mono text-xs tabular-nums">
-        <Timecode />
+        <span className="tc-now">{formatTimecode(currentTime)}</span>
         <span className="text-muted-foreground">/</span>
         <span className="text-muted-foreground">{formatTimecode(total)}</span>
       </div>
@@ -3144,13 +2784,14 @@ function Playhead({
   scrollRef: React.RefObject<HTMLDivElement | null>;
   onScrub: (e: React.PointerEvent) => void;
 }) {
+  const t = useEditor((s) => s.currentTime);
   const playing = useEditor((s) => s.playing);
-  const ref = useRef<HTMLDivElement>(null);
+  const x = t * pps;
 
   // Follow the playhead while playing, but yield to the user: any manual
   // scroll pauses following, which resumes after 5s of scroll idle. The
-  // follow's own writes are told apart from user scrolls by matching the
-  // scroll-event echo against the value it just wrote.
+  // follow effect's own writes are told apart from user scrolls by matching
+  // the scroll-event echo against the value it just wrote.
   const manualUntil = useRef(0);
   const followWrote = useRef<number | null>(null);
   useEffect(() => {
@@ -3168,36 +2809,24 @@ function Playhead({
     return () => el.removeEventListener("scroll", onScroll);
   }, [scrollRef]);
 
-  // The marker is one transform. Rendering a component sixty times a second to
-  // write one style property costs a reconcile per frame and moves the same
-  // pixel, so the subscription writes it directly and the scroll-follow rides
-  // along in the same callback.
   useEffect(() => {
-    const move = () => {
-      const el = ref.current;
-      if (!el) return;
-      const x = playheadAt() * pps;
-      el.style.transform = `translateX(${x}px)`;
-      const scroller = scrollRef.current;
-      if (!scroller || !playing) return;
-      if (performance.now() < manualUntil.current) return;
-      const sx = x + PAD_SIDE; // playhead position in scroll coordinates
-      if (sx < scroller.scrollLeft + 24 || sx > scroller.scrollLeft + scroller.clientWidth - 80) {
-        scroller.scrollLeft = Math.max(0, sx - 80);
-        followWrote.current = scroller.scrollLeft; // read back: the browser clamps
-      }
-    };
-    move();
-    return subscribePlayhead(move);
-  }, [pps, playing, scrollRef]);
+    const el = scrollRef.current;
+    if (!el || !playing) return;
+    if (performance.now() < manualUntil.current) return;
+    const sx = x + PAD_SIDE; // playhead position in scroll coordinates
+    if (sx < el.scrollLeft + 24 || sx > el.scrollLeft + el.clientWidth - 80) {
+      el.scrollLeft = Math.max(0, sx - 80);
+      followWrote.current = el.scrollLeft; // read back: the browser clamps
+    }
+  }, [x, playing, scrollRef]);
 
   return (
     <div
-      ref={ref}
       // Over the gutter as well as the clips: at 0 the playhead stands on the
       // gutter's own edge. The clips pass under the gutter; the time it is
       // showing does not. The grab cap lives in the pinned ruler.
       className="pointer-events-none absolute top-0 bottom-0 left-0 z-50 w-[1.5px] bg-[#0a84ff] shadow-[0_0_8px_rgba(10,132,255,0.6)]"
+      style={{ transform: `translateX(${x}px)` }}
     />
   );
 }
@@ -3211,18 +2840,11 @@ function PlayheadCap({
   pps: number;
   onScrub: (e: React.PointerEvent) => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const move = () => {
-      if (ref.current) ref.current.style.transform = `translateX(${playheadAt() * pps}px)`;
-    };
-    move();
-    return subscribePlayhead(move);
-  }, [pps]);
+  const t = useEditor((s) => s.currentTime);
   return (
     <div
-      ref={ref}
       className="tl-playhead-cap absolute top-0 left-[-7px] h-5 w-4 cursor-ew-resize"
+      style={{ transform: `translateX(${t * pps}px)` }}
       onPointerDown={onScrub}
     >
       <div className="mx-auto h-3 w-2.5 rounded-t-[3px] bg-[#0a84ff] [clip-path:polygon(0_0,100%_0,100%_58%,50%_100%,0_58%)]" />
@@ -3238,7 +2860,6 @@ function ClipView({
   selected,
   drag,
   parting,
-  partAt,
   onDrag,
   onSnap,
   resolveTarget,
@@ -3257,13 +2878,10 @@ function ClipView({
   drag: LaneDrag | null;
   /** Another track-0 clip is dragging: animate this one's parting shifts. */
   parting: boolean;
-  /** The start this clip previews at while a hovering drop parts its row. */
-  partAt?: number;
   onDrag: (d: LaneDrag | null) => void;
   onSnap: (x: number | null) => void;
-  /** Which drop the given screen point is over (a track / an insert gap);
-   * `homeTrack` marks the drag's own row, which keeps no seam bands. */
-  resolveTarget: (clientX: number, clientY: number, homeTrack?: number) => TrackTarget;
+  /** Which drop the given screen point is over (a track / an insert gap). */
+  resolveTarget: (clientX: number, clientY: number) => TrackTarget;
   /** Preview a cross-track drop (null clears it). */
   onCrossMove: (target: TrackTarget | null, start?: number, len?: number) => void;
   /** Commit a cross-track drop of this clip at `start`. */
@@ -3277,7 +2895,6 @@ function ClipView({
   ) => void;
 }) {
   const { clip, asset } = span;
-  const loading = useEditor((s) => s.loadingMedia.has(asset.fileName));
   const speed = clipSpeed(clip);
   // Every box is its clip's whole footprint. Clips never overlap — a
   // transition is a render-time blend at the cut, drawn as the bar above the
@@ -3309,7 +2926,7 @@ function ClipView({
     onDrag,
     onSnap,
     vertical: {
-      resolve: (ev: PointerEvent) => resolveTarget(ev.clientX, ev.clientY, clip.track),
+      resolve: (ev: PointerEvent) => resolveTarget(ev.clientX, ev.clientY),
       isHome: (t: TrackTarget) => samePlacement(t, TRACK_ZERO),
       preview: (t: TrackTarget | null, start: number, len: number) =>
         t ? onCrossMove(t, start, len) : onCrossMove(null),
@@ -3319,10 +2936,9 @@ function ClipView({
   };
 
   return (
-    <>
     <div
       className={cn(
-        "tl-clip group absolute top-0.5 cursor-grab overflow-hidden rounded-lg bg-black shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)]",
+        "tl-clip group absolute top-0.5 cursor-grab overflow-hidden rounded-lg bg-neutral-200 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)]",
         selected && SELECTED_SHADOW,
         clip.hidden && "opacity-40 grayscale",
         drag
@@ -3330,14 +2946,13 @@ function ClipView({
           : parting && "transition-[left] duration-150 ease-out"
       )}
       style={{
-        left: drag ? drag.ghostX : (partAt ?? span.start) * pps,
+        left: drag ? drag.ghostX : span.start * pps,
         top: drag ? 2 + drag.ghostY : undefined,
         width: Math.max(10, w - CLIP_GAP),
         height: VIDEO_H - 4,
         // Inline so it beats SELECTED_SHADOW's z-10 class on the same element.
         zIndex: drag ? 20 : undefined,
       }}
-      data-tl-sel={`clip:${clip.id}`}
       onPointerDown={(e) => startLaneMove(e, "clip", clip.id, ui)}
       onContextMenu={(e) => {
         if (asset.type !== "video") return;
@@ -3359,13 +2974,12 @@ function ClipView({
         <span className="tl-dur-chip pointer-events-none absolute top-1 left-1 z-2 rounded-[5px] bg-black/65 px-1.5 py-px font-mono text-[10px] tabular-nums text-white">
           {(Math.round(span.len * 10) / 10).toFixed(1)}s
         </span>
-      ) : loading ? null : (
+      ) : (
         <span className="tl-mention-chip pointer-events-none absolute top-1 left-1 z-2 rounded-[5px] bg-black/65 px-1.5 py-px font-mono text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
           {mention}
         </span>
       )}
-      {loading && <LoadingChip />}
-      {asset.type === "video" && !loading && (
+      {asset.type === "video" && (
         <MuteChip
           muted={clip.muted}
           className="bottom-1 left-1"
@@ -3380,42 +2994,26 @@ function ClipView({
           {+(clip.speed ?? 1).toFixed(2)}×
         </span>
       )}
-      {!loading && (
-        <HideChip
-          hidden={!!clip.hidden}
-          className="bottom-1 right-2"
-          onToggle={() => useEditor.getState().updateClip(clip.id, { hidden: !clip.hidden })}
-        />
-      )}
-      {!loading && (
-        <ClipMenu asset={asset} clip={clip}>
-          {asset.type === "video" ? (
-            <DropdownMenuItem
-              disabled={clip.muted}
-              onClick={() => {
-                const s = useEditor.getState();
-                s.select({ kind: "clip", id: clip.id });
-                s.detachAudio();
-                void ensurePeaks(asset);
-              }}
-            >
-              <AudioLines /> Detach audio
-            </DropdownMenuItem>
-          ) : null}
-        </ClipMenu>
-      )}
-      {/* Keys sit on the bar where they fall — pose and mask tracks both —
-          so the animation is visible without opening the inspector. */}
-      {(clip.kf ?? []).map((k) => (
-        <KeyMarker
-          key={k.t}
-          item={{ id: clip.id, start: span.start, end: span.start + span.len }}
-          kind="clip"
-          t={k.t}
-          pps={pps}
-          width={w}
-        />
-      ))}
+      <HideChip
+        hidden={!!clip.hidden}
+        className="bottom-1 right-2"
+        onToggle={() => useEditor.getState().updateClip(clip.id, { hidden: !clip.hidden })}
+      />
+      <ClipMenu asset={asset} clip={clip}>
+        {asset.type === "video" ? (
+          <DropdownMenuItem
+            disabled={clip.muted}
+            onClick={() => {
+              const s = useEditor.getState();
+              s.select({ kind: "clip", id: clip.id });
+              s.detachAudio();
+              void ensurePeaks(asset);
+            }}
+          >
+            <AudioLines /> Detach audio
+          </DropdownMenuItem>
+        ) : null}
+      </ClipMenu>
       <span
         className={cn(trimHandle, "tl-trim-l left-0")}
         onPointerDown={(e) => startLaneTrim(e, "clip", clip.id, "l", ui)}
@@ -3424,57 +3022,6 @@ function ClipView({
         className={cn(trimHandle, "tl-trim-r right-0")}
         onPointerDown={(e) => startLaneTrim(e, "clip", clip.id, "r", ui)}
       />
-    </div>
-    <ClipMaskKeyStrip clip={clip} start={span.start} len={span.len} pps={pps} w={w} hidden={!!drag} />
-    </>
-  );
-}
-
-/** The clip's mask keys, on a thin rail under its box: a hairline spanning
- * the clip's width with a diamond on it per key. The bar itself clips its
- * children (rounded corners), so the rail is a sibling that follows the
- * clip's own left edge. It hides while the clip rides a drag ghost and comes
- * back where the clip lands. */
-function ClipMaskKeyStrip({
-  clip,
-  start,
-  len,
-  pps,
-  w,
-  hidden,
-}: {
-  clip: VideoClip;
-  start: number;
-  len: number;
-  pps: number;
-  w: number;
-  hidden: boolean;
-}) {
-  if (hidden || !clip.mask?.kf?.length) return null;
-  return (
-    <div
-      className="pointer-events-none absolute z-5"
-      style={{
-        left: start * pps,
-        // A hair below the bar's bottom edge, deep enough that the diamonds —
-        // the picked one's ring included — never touch the clip's box.
-        top: VIDEO_H - 1,
-        width: Math.max(10, w - CLIP_GAP),
-        height: 16,
-      }}
-    >
-      <div className="absolute inset-x-0 top-1/2 h-[2px] -translate-y-1/2 rounded-full bg-[#ff9f0a]/45" />
-      {clip.mask.kf.map((k) => (
-        <KeyMarker
-          key={`m${k.t}`}
-          item={{ id: clip.id, start, end: start + len }}
-          kind="clip"
-          track="mask"
-          t={k.t}
-          pps={pps}
-          width={w}
-        />
-      ))}
     </div>
   );
 }
@@ -3561,17 +3108,6 @@ function ClipMenu({
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => exportSegment(asset, clip)}>
           <ArrowDownToLine /> Export segment
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={!!asset.upload}
-          onClick={() => {
-            // The source file whole, as it was imported — the trimmed version
-            // is what "Export segment" renders.
-            const projectId = useEditor.getState().projectId;
-            if (projectId) downloadMedia(projectId, asset);
-          }}
-        >
-          <Download /> Download
         </DropdownMenuItem>
         {caps.revealInFinder && (
           <DropdownMenuItem
@@ -3768,13 +3304,6 @@ function Filmstrip({
   grade?: ColorGrade;
 }) {
   const tint = gradeTint(grade);
-  // No thumbs yet — the media is still streaming into the browser store. A
-  // pulsing skeleton fills the box until the strip can draw real frames.
-  if (!frames.length) {
-    return (
-      <div className="tl-filmstrip-skeleton pointer-events-none absolute inset-0 animate-pulse bg-muted" />
-    );
-  }
   return (
     <div
       className="tl-filmstrip pointer-events-none absolute inset-0 isolate"
@@ -3889,17 +3418,6 @@ function HideChip({
   );
 }
 
-/** Corner chip for a timeline item whose media is still streaming into the
- * browser store. It sits where the hover controls live — the controls stay
- * off until the bytes land and the item scrubs, plays, and edits instantly. */
-function LoadingChip() {
-  return (
-    <span className="tl-loading-chip pointer-events-none absolute bottom-1 left-1 z-4 grid size-[18px] place-items-center rounded-[5px] bg-black/55 text-white">
-      <Loader2 className="size-3 animate-spin" />
-    </span>
-  );
-}
-
 /** Hover chip that toggles a clip's own audio. Stays visible while the clip is
  * muted so unmuting is one click. */
 function MuteChip({
@@ -3964,7 +3482,6 @@ function AudioView({
   onSnap: (x: number | null) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const loading = useEditor((s) => (asset ? s.loadingMedia.has(asset.fileName) : false));
   const len = clipLen(clip);
   const w = Math.max(10, len * pps);
 
@@ -4015,7 +3532,6 @@ function AudioView({
         // Inline so it beats SELECTED_SHADOW's z-10 class on the same element.
         zIndex: drag ? 20 : undefined,
       }}
-      data-tl-sel={`audio:${clip.id}`}
       onPointerDown={(e) => startLaneMove(e, "audio", clip.id, ui)}
     >
       <canvas ref={canvasRef} className="pointer-events-none absolute inset-x-0 inset-y-1 w-full" />
@@ -4040,20 +3556,17 @@ function AudioView({
       >
         {asset.name}
       </span>
-      {mention && !drag && !loading && (
+      {mention && !drag && (
         <span className="tl-mention-chip pointer-events-none absolute top-1 left-1 z-2 rounded-[5px] bg-black/65 px-1.5 py-px font-mono text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
           {mention}
         </span>
       )}
-      {loading && <LoadingChip />}
-      {!loading && <ClipMenu asset={asset} clip={clip} />}
-      {!loading && (
-        <MuteChip
-          muted={!!clip.hidden}
-          className="bottom-1 left-1"
-          onToggle={() => useEditor.getState().updateAudio(clip.id, { hidden: !clip.hidden })}
-        />
-      )}
+      <ClipMenu asset={asset} clip={clip} />
+      <MuteChip
+        muted={!!clip.hidden}
+        className="bottom-1 left-1"
+        onToggle={() => useEditor.getState().updateAudio(clip.id, { hidden: !clip.hidden })}
+      />
       <span
         className={cn(trimHandle, "tl-trim-l left-0")}
         onPointerDown={(e) => startLaneTrim(e, "audio", clip.id, "l", ui)}
@@ -4085,7 +3598,6 @@ function OverlayClipView({
   selected,
   drag,
   parting,
-  partAt,
   onDrag,
   onSnap,
   resolveTarget,
@@ -4102,13 +3614,9 @@ function OverlayClipView({
   drag: LaneDrag | null;
   /** Another upper-layer clip is dragging: animate this one's parting shifts. */
   parting: boolean;
-  /** The start this clip previews at while a hovering drop parts its row. */
-  partAt?: number;
   onDrag: (d: LaneDrag | null) => void;
   onSnap: (x: number | null) => void;
-  /** Which drop the given screen point is over (a track / an insert gap);
-   * `homeTrack` marks the drag's own row, which keeps no seam bands. */
-  resolveTarget: (clientX: number, clientY: number, homeTrack?: number) => TrackTarget;
+  resolveTarget: (clientX: number, clientY: number) => TrackTarget;
   onCrossMove: (target: TrackTarget | null, start?: number, len?: number) => void;
   onCrossDrop: (id: string, target: TrackTarget, start: number) => void;
   onDragActive: (active: boolean) => void;
@@ -4120,7 +3628,6 @@ function OverlayClipView({
 }) {
   // Its whole footprint, like a track-0 box: clips never overlap, and a
   // transition is the bar above the tracks, never a bite out of a box.
-  const loading = useEditor((s) => (asset ? s.loadingMedia.has(asset.fileName) : false));
   const speed = clip.speed && clip.speed > 0 ? clip.speed : 1;
   const w = Math.max(10, overlayLen(clip) * pps);
   const filmIn = clip.in;
@@ -4153,7 +3660,7 @@ function OverlayClipView({
     onDrag,
     onSnap,
     vertical: {
-      resolve: (ev: PointerEvent) => resolveTarget(ev.clientX, ev.clientY, clip.track),
+      resolve: (ev: PointerEvent) => resolveTarget(ev.clientX, ev.clientY),
       isHome: (t: TrackTarget) => samePlacement(t, { kind: "track", track: clip.track }),
       preview: (t: TrackTarget | null, start: number, len: number) =>
         t ? onCrossMove(t, start, len) : onCrossMove(null),
@@ -4163,10 +3670,9 @@ function OverlayClipView({
   };
 
   return (
-    <>
     <div
       className={cn(
-        "tl-overlay-clip group absolute top-0.5 cursor-grab overflow-hidden rounded-lg bg-black shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)]",
+        "tl-overlay-clip group absolute top-0.5 cursor-grab overflow-hidden rounded-lg bg-neutral-200 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.12)]",
         selected && SELECTED_SHADOW,
         clip.hidden && "opacity-40 grayscale",
         drag
@@ -4174,14 +3680,13 @@ function OverlayClipView({
           : parting && "transition-[left] duration-150 ease-out"
       )}
       style={{
-        left: drag ? drag.ghostX : (partAt ?? clip.start) * pps,
+        left: drag ? drag.ghostX : clip.start * pps,
         top: drag ? 2 + drag.ghostY : undefined,
         width: Math.max(10, w - CLIP_GAP),
         height: OVERLAY_H - 4,
         // Inline so it beats SELECTED_SHADOW's z-10 class on the same element.
         zIndex: drag ? 20 : undefined,
       }}
-      data-tl-sel={`clip:${clip.id}`}
       onPointerDown={(e) => startLaneMove(e, "overlayClip", clip.id, ui)}
       onContextMenu={(e) => {
         if (asset.type !== "video") return;
@@ -4197,8 +3702,7 @@ function OverlayClipView({
       {selected && (
         <div className="pointer-events-none absolute inset-0 z-[1] bg-[#0a84ff]/25" />
       )}
-      {loading && <LoadingChip />}
-      {asset.type === "video" && !loading && (
+      {asset.type === "video" && (
         <MuteChip
           muted={clip.muted}
           className="bottom-1 left-1"
@@ -4213,25 +3717,12 @@ function OverlayClipView({
           {+(clip.speed ?? 1).toFixed(2)}×
         </span>
       )}
-      {!loading && <ClipMenu asset={asset} clip={clip} />}
-      {!loading && (
-        <HideChip
-          hidden={!!clip.hidden}
-          className="bottom-1 right-2"
-          onToggle={() => useEditor.getState().updateClip(clip.id, { hidden: !clip.hidden })}
-        />
-      )}
-      {/* Keys sit on the bar where they fall, same as the element bars. */}
-      {(clip.kf ?? []).map((k) => (
-        <KeyMarker
-          key={k.t}
-          item={{ id: clip.id, start: clip.start, end: clip.start + overlayLen(clip) }}
-          kind="clip"
-          t={k.t}
-          pps={pps}
-          width={w}
-        />
-      ))}
+      <ClipMenu asset={asset} clip={clip} />
+      <HideChip
+        hidden={!!clip.hidden}
+        className="bottom-1 right-2"
+        onToggle={() => useEditor.getState().updateClip(clip.id, { hidden: !clip.hidden })}
+      />
       <span
         className={cn(trimHandle, "tl-trim-l left-0")}
         onPointerDown={(e) => startLaneTrim(e, "overlayClip", clip.id, "l", ui)}
@@ -4241,15 +3732,6 @@ function OverlayClipView({
         onPointerDown={(e) => startLaneTrim(e, "overlayClip", clip.id, "r", ui)}
       />
     </div>
-    <ClipMaskKeyStrip
-      clip={clip}
-      start={clip.start}
-      len={overlayLen(clip)}
-      pps={pps}
-      w={w}
-      hidden={!!drag}
-    />
-    </>
   );
 }
 
@@ -4258,39 +3740,27 @@ function OverlayClipView({
 const KEY_HIT = 14;
 
 /**
- * One keyframe on an item's bar — an element's or a video clip's, on its
- * pose track (white diamond) or its mask's (amber): a diamond where the key
- * falls, dragged left and right to retime it. The grab is kept off the bar
- * underneath, so moving a key never moves the item it belongs to. `kind`
- * and `track` pick which store actions the gestures write.
+ * One keyframe on an element's bar: a diamond where the key falls, dragged
+ * left and right to retime it. The grab is kept off the bar underneath, so
+ * moving a key never moves the element it belongs to.
  */
 function KeyMarker({
-  item,
-  kind,
-  track = "pose",
+  overlay: o,
   t,
   pps,
   width,
   onMenu,
 }: {
-  item: { id: string; start: number; end: number };
-  kind: "overlay" | "clip";
-  track?: "pose" | "mask";
+  overlay: Overlay;
   t: number;
   pps: number;
   width: number;
   /** The bar's right-click menu; a key click carries its time, so the menu
-   * offers to remove it. Absent (clip bars), the bar's own menu handles the
-   * click and Delete removes the picked key. */
-  onMenu?: (m: { x: number; y: number; id: string; key?: number }) => void;
+   * offers to remove it. */
+  onMenu: (m: { x: number; y: number; id: string; key?: number }) => void;
 }) {
   const picked = useEditor(
-    (s) =>
-      !!s.selectedKey &&
-      s.selectedKey.kind === kind &&
-      s.selectedKey.track === track &&
-      s.selectedKey.id === item.id &&
-      s.selectedKey.t === t
+    (s) => !!s.selectedKey && s.selectedKey.overlayId === o.id && s.selectedKey.t === t
   );
   // Park clear of the trim handles: a key dragged to the very end would
   // otherwise sit under one and stop being grabbable. Those last few pixels
@@ -4298,43 +3768,20 @@ function KeyMarker({
   const inset = Math.min(TRIM_W + KEY_HIT / 2, Math.max(3, (width - 8) / 2));
   return (
     <span
-      // Above the hover chips (z-4): a key parked at the bar's end must stay
-      // grabbable — retiming lives only here, while hide/mute also live in
-      // the inspector.
-      className="tl-key pointer-events-auto absolute top-1/2 z-5 grid size-3.5 cursor-ew-resize place-items-center"
+      className="tl-key absolute top-1/2 z-3 grid size-3.5 cursor-ew-resize place-items-center"
       style={{
         left: Math.min(width - inset, Math.max(inset, t * pps)),
         transform: "translate(-50%, -50%)",
       }}
       title="Drag to retime, Delete to remove"
-      onContextMenu={
-        onMenu
-          ? (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onMenu({ x: e.clientX, y: e.clientY, id: item.id, key: t });
-            }
-          : undefined
-      }
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onMenu({ x: e.clientX, y: e.clientY, id: o.id, key: t });
+      }}
       onPointerDown={(e) => {
         const s = useEditor.getState();
-        const select =
-          kind === "overlay"
-            ? track === "mask"
-              ? s.selectOverlayMaskKey
-              : s.selectOverlayKey
-            : track === "mask"
-              ? s.selectClipMaskKey
-              : s.selectClipKey;
-        const move =
-          kind === "overlay"
-            ? track === "mask"
-              ? s.moveOverlayMaskKey
-              : s.moveOverlayKey
-            : track === "mask"
-              ? s.moveClipMaskKey
-              : s.moveClipKey;
-        select(item.id, t);
+        s.selectOverlayKey(o.id, t);
         let live = t;
         // The undo step opens on the first movement, so a click that only
         // seeks does not leave one behind.
@@ -4346,21 +3793,20 @@ function KeyMarker({
               s.pushHistory();
             }
             const next = Math.max(0, t + dx / pps);
-            move(item.id, live, next, { transient: true });
-            live = Math.max(0, Math.min(next, Math.max(0.1, item.end - item.start)));
+            s.moveOverlayKey(o.id, live, next, { transient: true });
+            live = Math.max(0, Math.min(next, Math.max(0.1, o.end - o.start)));
           },
           // A click that never moved reads as "show me this key": the playhead
           // goes there, and the inspector's rows follow it.
           onUp: (_dx, _dy, moved) => {
-            if (!moved) s.seek(item.start + live);
+            if (!moved) s.seek(o.start + live);
           },
         });
       }}
     >
       <span
         className={cn(
-          "pointer-events-none rotate-45 shadow-[0_0_0_1px_rgba(0,0,0,0.35)] transition-[width,height]",
-          track === "mask" ? "bg-[#ff9f0a]" : "bg-white",
+          "pointer-events-none rotate-45 bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.35)] transition-[width,height]",
           picked ? "size-[9px] ring-[1.5px] ring-[#0a84ff]" : "size-[6px]"
         )}
       />
@@ -4421,11 +3867,18 @@ function TextBar({
   const ui = { pps, rowH: TEXT_H, laneCount, homeRow, topInsert: true, onDrag, onSnap };
   // Per-kind chip content: a title shows its text, a shape its name behind a
   // shape glyph, a sticker its glyph and name.
-  const ShapeIcon = SHAPE_CHIP_ICONS[o.kind === "shape" ? o.shape : "rect"];
   const chip =
     o.kind === "shape" ? (
       <>
-        <ShapeIcon className="mr-1 size-2.5 shrink-0" />
+        {o.shape === "ellipse" ? (
+          <Circle className="mr-1 size-2.5 shrink-0" />
+        ) : o.shape === "line" ? (
+          <Minus className="mr-1 size-2.5 shrink-0" />
+        ) : o.shape === "arrow" ? (
+          <MoveRight className="mr-1 size-2.5 shrink-0" />
+        ) : (
+          <Square className="mr-1 size-2.5 shrink-0" />
+        )}
         {SHAPE_LABELS[o.shape]}
       </>
     ) : o.kind === "sticker" ? (
@@ -4461,7 +3914,6 @@ function TextBar({
         // Inline so it beats SELECTED_SHADOW's z-10 class on the same element.
         zIndex: drag ? 20 : undefined,
       }}
-      data-tl-sel={`overlay:${o.id}`}
       onPointerDown={(e) => startLaneMove(e, "overlay", o.id, ui)}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -4474,10 +3926,7 @@ function TextBar({
       {/* Keys sit on the bar where they fall, so a track is visible without
           opening the inspector. */}
       {(o.kf ?? []).map((k) => (
-        <KeyMarker key={k.t} item={o} kind="overlay" t={k.t} pps={pps} width={w} onMenu={onMenu} />
-      ))}
-      {(o.mask?.kf ?? []).map((k) => (
-        <KeyMarker key={`m${k.t}`} item={o} kind="overlay" track="mask" t={k.t} pps={pps} width={w} />
+        <KeyMarker key={k.t} overlay={o} t={k.t} pps={pps} width={w} onMenu={onMenu} />
       ))}
       <HideChip
         hidden={!!o.hidden}
@@ -4548,7 +3997,6 @@ function SubBar({
         zIndex: drag ? 20 : undefined,
       }}
       title={cue.text}
-      data-tl-sel={`cue:${cue.id}`}
       onPointerDown={(e) => startLaneMove(e, "cue", cue.id, ui)}
     >
       <span className="pointer-events-none truncate px-1.5 text-[9.5px] font-medium text-amber-950/90">

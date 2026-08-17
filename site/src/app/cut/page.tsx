@@ -4,16 +4,14 @@ import { CutLanding } from "@/app/cut/_components/landing/CutLanding";
 import { DONKEYCUT_CANONICAL } from "@/cut/lib/hosts";
 
 export const metadata: Metadata = {
-  title: "Donkey Cut — Free, Open Source Video Editor, CapCut Alternative",
+  title: "Donkey Cut — the AI video editor on your Mac",
   description:
-    "A free, open source CapCut alternative. Edit with Chat, generate video, images, voiceovers and music, and keep your projects local.",
-  alternates: {
-    canonical: `${DONKEYCUT_CANONICAL}/`,
-  },
+    "Cut video with AI on your own Mac. Generate images, clips, voiceover, and music in the timeline; every edit and export renders locally.",
+  alternates: { canonical: `${DONKEYCUT_CANONICAL}/` },
   openGraph: {
-    title: "Donkey Cut — Free, Open Source Video Editor, CapCut Alternative",
+    title: "Donkey Cut — the AI video editor on your Mac",
     description:
-      "A free, open source CapCut alternative. Edit with Chat, generate video, images, voiceovers and music, and keep your projects local.",
+      "Cut video with AI on your own Mac. Generation in the timeline, editing and export fully local.",
     url: `${DONKEYCUT_CANONICAL}/`,
     siteName: "Donkey Cut",
     type: "website",
@@ -21,9 +19,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Donkey Cut — Free, Open Source Video Editor, CapCut Alternative",
+    title: "Donkey Cut — the AI video editor on your Mac",
     description:
-      "A free, open source CapCut alternative. Edit with Chat, generate video, images, voiceovers and music, and keep your projects local.",
+      "Cut video with AI on your own Mac. Generation in the timeline, editing and export fully local.",
     images: ["/cut/landing/og.png"],
   },
 };

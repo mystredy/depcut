@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
@@ -21,16 +22,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import {
   EFFECT_LABELS,
-  hasMaskKeys,
   hasOverlayKeys,
   KEY_EPSILON,
   keyIndexAt,
-  lineLikeShape,
-  maskFrameAt,
   poseAt,
-  type Mask,
-  type MaskKey,
-  type MaskKind,
   type OverlayKey,
   OVERLAY_ANIM_DEFAULT_SECONDS,
   OVERLAY_ANIM_MAX_SECONDS,
@@ -43,8 +38,6 @@ import {
   type OverlayLoopStyle,
 } from "@donkeycut/effects-kit";
 import { clipWindow, useEditor, type EditorState } from "@/cut/lib/store";
-import { usePreviewTime } from "@/cut/lib/playhead";
-import { clipKeyed, clipPoseAt } from "@/cut/lib/types";
 import { AnimationTiles } from "@/cut/components/AnimationTiles";
 import { GenerateSubtitlesAudio } from "@/cut/components/VoicePicker";
 import {
@@ -55,7 +48,6 @@ import {
   parseTimeInput,
   ScrubValue,
 } from "@/cut/components/ScrubValue";
-import { ValueSlider } from "@/cut/components/ValueSlider";
 import { PLATE_COLOR, PLATE_OPACITY, PLATE_RADIUS, plateFill } from "@/cut/lib/textRender";
 import {
   deleteStylePreset,
@@ -84,7 +76,6 @@ import {
   SPEED_MIN,
   clampOverlayPos,
   type AudioClip,
-  type BoxStyle,
   type ColorGrade,
   type FrameRect,
   type LayoutId,
@@ -477,20 +468,28 @@ function ClipPanel({ clip }: { clip: VideoClip }) {
           />
         </Row>
         <Row label="Speed">
-          <ValueSlider
-            label="Speed"
-            sliderClassName="clip-speed data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
-            value={speed}
+          <Slider
+            className="clip-speed data-horizontal:w-24"
             min={SPEED_MIN}
             max={SPEED_MAX}
             step={0.05}
-            snap={[1]}
-            scrubMin={SPEED_FLOOR}
-            scrubMax={Infinity}
+            value={speed}
+            onValueChange={(v) => setSpeedDraft(Number(v))}
+            onValueCommitted={() => {
+              if (speedDraft != null) useEditor.getState().setClipSpeed(clip.id, speedDraft);
+              setSpeedDraft(null);
+            }}
+          />
+          <ScrubValue
+            label="Speed"
+            className="w-9 text-muted-foreground"
+            value={speed}
+            min={SPEED_FLOOR}
+            max={Infinity}
+            step={0.05}
             format={formatSpeed}
             parse={parseSpeedInput}
-            onDraft={setSpeedDraft}
+            onScrub={setSpeedDraft}
             onCommit={(v) => {
               useEditor.getState().setClipSpeed(clip.id, v);
               setSpeedDraft(null);
@@ -525,18 +524,30 @@ function ClipPanel({ clip }: { clip: VideoClip }) {
         {/* Audio */}
         <div className="my-1.5 h-px bg-border" />
         <Row label="Clip volume">
-          <ValueSlider
+          <Slider
+            className="clip-volume data-horizontal:w-24"
+            min={0}
+            max={1.5}
+            step={0.05}
+            value={volume}
+            onValueChange={(v) => setVolumeDraft(Number(v))}
+            onValueCommitted={() => {
+              if (volumeDraft != null) {
+                updateClip(clip.id, { volume: volumeDraft === 1 ? undefined : volumeDraft });
+              }
+              setVolumeDraft(null);
+            }}
+          />
+          <ScrubValue
             label="Clip volume"
-            sliderClassName="clip-volume data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
+            className="w-9 text-muted-foreground"
             value={volume}
             min={0}
             max={1.5}
             step={0.05}
-            snap={[1]}
             format={formatPercent}
             parse={parsePercentInput}
-            onDraft={setVolumeDraft}
+            onScrub={setVolumeDraft}
             onCommit={(v) => {
               updateClip(clip.id, { volume: v === 1 ? undefined : v });
               setVolumeDraft(null);
@@ -591,9 +602,6 @@ function ClipPanel({ clip }: { clip: VideoClip }) {
           rect={rectOf(clip)}
           onPick={(frame, fit) => updateClip(clip.id, { frame, fit })}
         />
-        <ClipTransformSection clip={clip} />
-        <ClipBorderSection clip={clip} />
-        <ClipMaskSection clip={clip} />
         <ClipGeneratedAudio clip={clip} />
       </div>
     </>
@@ -659,18 +667,25 @@ function ColorPanel({ clip, onBack }: { clip: VideoClip; onBack: () => void }) {
           const value = clip.grade?.[f.key] ?? 0;
           return (
             <Row key={f.key} label={f.label}>
-              <ValueSlider
+              <Slider
+                className={`clip-grade-${f.key} data-horizontal:w-24`}
+                min={-f.max}
+                max={f.max}
+                step={1}
+                value={value}
+                onValueChange={(v) => setField(f.key, Number(v))}
+                onValueCommitted={() => ck.end()}
+              />
+              <ScrubValue
                 label={f.label}
-                sliderClassName={`clip-grade-${f.key} data-horizontal:w-24`}
-                valueClassName="w-9 text-muted-foreground"
+                className="w-9 text-muted-foreground"
                 value={value}
                 min={-f.max}
                 max={f.max}
                 step={1}
-                snap={[0]}
                 format={(v) => formatGradeValue(f.key, v)}
                 parse={parseNumberInput}
-                onDraft={(v) => setField(f.key, v)}
+                onScrub={(v) => setField(f.key, v)}
                 onCommit={(v) => {
                   setField(f.key, v);
                   ck.end();
@@ -824,18 +839,33 @@ function ClipGeneratedAudio({ clip }: { clip: VideoClip }) {
       />
       {genAudioIds.length > 0 && (
         <Row label="Volume">
-          <ValueSlider
+          <Slider
+            className="clip-gen-volume data-horizontal:w-24"
+            min={0}
+            max={1.5}
+            step={0.05}
+            value={genVol}
+            onValueChange={(v) => {
+              genCk.begin();
+              setGenVolDraft(Number(v));
+              const s = useEditor.getState();
+              genAudioIds.forEach((id) => s.updateAudioTransient(id, { volume: Number(v) }));
+            }}
+            onValueCommitted={() => {
+              genCk.end();
+              setGenVolDraft(null);
+            }}
+          />
+          <ScrubValue
             label="Generated audio volume"
-            sliderClassName="clip-gen-volume data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
+            className="w-9 text-muted-foreground"
             value={genVol}
             min={0}
             max={1.5}
             step={0.05}
-            snap={[1]}
             format={formatPercent}
             parse={parsePercentInput}
-            onDraft={(v) => {
+            onScrub={(v) => {
               genCk.begin();
               setGenVolDraft(v);
               const s = useEditor.getState();
@@ -922,20 +952,28 @@ function AudioPanel({ clip }: { clip: AudioClip }) {
           />
         </Row>
         <Row label="Speed">
-          <ValueSlider
-            label="Speed"
-            sliderClassName="audio-speed data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
-            value={speed}
+          <Slider
+            className="audio-speed data-horizontal:w-24"
             min={SPEED_MIN}
             max={SPEED_MAX}
             step={0.05}
-            snap={[1]}
-            scrubMin={SPEED_FLOOR}
-            scrubMax={Infinity}
+            value={speed}
+            onValueChange={(v) => {
+              const n = Number(v);
+              setAudio({ speed: Math.abs(n - 1) < 1e-4 ? undefined : n });
+            }}
+            onValueCommitted={ck.end}
+          />
+          <ScrubValue
+            label="Speed"
+            className="w-9 text-muted-foreground"
+            value={speed}
+            min={SPEED_FLOOR}
+            max={Infinity}
+            step={0.05}
             format={formatSpeed}
             parse={parseSpeedInput}
-            onDraft={(v) => setAudio({ speed: Math.abs(v - 1) < 1e-4 ? undefined : v })}
+            onScrub={(v) => setAudio({ speed: Math.abs(v - 1) < 1e-4 ? undefined : v })}
             onCommit={(v) => commitAudio({ speed: Math.abs(v - 1) < 1e-4 ? undefined : v })}
           />
           <ResetButton
@@ -945,48 +983,71 @@ function AudioPanel({ clip }: { clip: AudioClip }) {
           />
         </Row>
         <Row label="Volume">
-          <ValueSlider
+          <Slider
+            className="data-horizontal:w-24"
+            min={0}
+            max={1.5}
+            step={0.05}
+            value={clip.volume}
+            onValueChange={(v) => setAudio({ volume: Number(v) })}
+            onValueCommitted={ck.end}
+          />
+          <ScrubValue
             label="Volume"
-            sliderClassName="data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
+            className="w-9 text-muted-foreground"
             value={clip.volume}
             min={0}
             max={1.5}
             step={0.05}
-            snap={[1]}
             format={formatPercent}
             parse={parsePercentInput}
-            onDraft={(v) => setAudio({ volume: v })}
+            onScrub={(v) => setAudio({ volume: v })}
             onCommit={(v) => commitAudio({ volume: v })}
           />
         </Row>
         <Row label="Fade in">
-          <ValueSlider
+          <Slider
+            className="fade-in-slider data-horizontal:w-24"
+            min={0}
+            max={maxFade}
+            step={0.1}
+            value={clip.fadeIn ?? 0}
+            onValueChange={(v) => setAudio({ fadeIn: Number(v) })}
+            onValueCommitted={ck.end}
+          />
+          <ScrubValue
             label="Fade in"
-            sliderClassName="fade-in-slider data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
+            className="w-9 text-muted-foreground"
             value={clip.fadeIn ?? 0}
             min={0}
             max={maxFade}
             step={0.1}
             format={(v) => `${v.toFixed(1)}s`}
             parse={parseSecondsInput}
-            onDraft={(v) => setAudio({ fadeIn: v })}
+            onScrub={(v) => setAudio({ fadeIn: v })}
             onCommit={(v) => commitAudio({ fadeIn: v })}
           />
         </Row>
         <Row label="Fade out">
-          <ValueSlider
+          <Slider
+            className="fade-out-slider data-horizontal:w-24"
+            min={0}
+            max={maxFade}
+            step={0.1}
+            value={clip.fadeOut ?? 0}
+            onValueChange={(v) => setAudio({ fadeOut: Number(v) })}
+            onValueCommitted={ck.end}
+          />
+          <ScrubValue
             label="Fade out"
-            sliderClassName="fade-out-slider data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
+            className="w-9 text-muted-foreground"
             value={clip.fadeOut ?? 0}
             min={0}
             max={maxFade}
             step={0.1}
             format={(v) => `${v.toFixed(1)}s`}
             parse={parseSecondsInput}
-            onDraft={(v) => setAudio({ fadeOut: v })}
+            onScrub={(v) => setAudio({ fadeOut: v })}
             onCommit={(v) => commitAudio({ fadeOut: v })}
           />
         </Row>
@@ -998,17 +1059,28 @@ function AudioPanel({ clip }: { clip: AudioClip }) {
               : "While this clip plays, drop everything else to this volume."
           }
         >
-          <ValueSlider
+          <Slider
+            className="duck-slider data-horizontal:w-24"
+            min={0}
+            max={1}
+            step={0.05}
+            value={clip.duck ?? 1}
+            onValueChange={(v) => {
+              const n = Number(v);
+              setAudio({ duck: n < 0.999 ? n : undefined });
+            }}
+            onValueCommitted={ck.end}
+          />
+          <ScrubValue
             label="Duck others"
-            sliderClassName="duck-slider data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
+            className="w-9 text-muted-foreground"
             value={clip.duck ?? 1}
             min={0}
             max={1}
             step={0.05}
             format={(v) => (v >= 0.999 ? "Off" : formatPercent(v))}
             parse={(raw) => (raw.trim().toLowerCase() === "off" ? 1 : parsePercentInput(raw))}
-            onDraft={(v) => setAudio({ duck: v < 0.999 ? v : undefined })}
+            onScrub={(v) => setAudio({ duck: v < 0.999 ? v : undefined })}
             onCommit={(v) => commitAudio({ duck: v < 0.999 ? v : undefined })}
           />
         </Row>
@@ -1169,17 +1241,27 @@ function TextPanel({ overlay: o }: { overlay: TextOverlay }) {
           })}
         </Row>
         <Row label="Size">
-          <ValueSlider
+          <Slider
+            className="data-horizontal:w-24"
+            min={24}
+            max={240}
+            value={o.size}
+            onValueChange={(v) => {
+              sizeCk.begin();
+              useEditor.getState().updateOverlayTransient(o.id, { size: Number(v) });
+            }}
+            onValueCommitted={sizeCk.end}
+          />
+          <ScrubValue
             label="Text size"
-            sliderClassName="data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
+            className="w-9 text-muted-foreground"
             value={o.size}
             min={24}
             max={240}
             step={1}
             format={(v) => String(Math.round(v))}
             parse={parseNumberInput}
-            onDraft={(v) => {
+            onScrub={(v) => {
               sizeCk.begin();
               useEditor.getState().updateOverlayTransient(o.id, { size: v });
             }}
@@ -1199,58 +1281,40 @@ function TextPanel({ overlay: o }: { overlay: TextOverlay }) {
           />
         </Row>
         <Row label="Spacing">
-          <ValueSlider
-            label="Letter spacing"
-            sliderClassName="data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
-            value={(o.letterSpacing ?? 0) * 100}
-            min={-5}
-            max={30}
-            step={0.5}
-            snap={[0]}
-            format={(v) => String(Math.round(v))}
-            parse={parseNumberInput}
-            onDraft={(v) => {
+          <Slider
+            className="data-horizontal:w-24"
+            min={-0.05}
+            max={0.3}
+            step={0.005}
+            value={o.letterSpacing ?? 0}
+            onValueChange={(v) => {
               spacingCk.begin();
               useEditor.getState().updateOverlayTransient(o.id, {
-                letterSpacing: Math.abs(v) < 0.25 ? undefined : v / 100,
+                letterSpacing: Math.abs(Number(v)) < 0.0025 ? undefined : Number(v),
               });
             }}
-            onCommit={(v) => {
-              spacingCk.begin();
-              useEditor.getState().updateOverlayTransient(o.id, {
-                letterSpacing: Math.abs(v) < 0.25 ? undefined : v / 100,
-              });
-              spacingCk.end();
-            }}
+            onValueCommitted={spacingCk.end}
           />
+          <Value className="w-9 text-muted-foreground">
+            {Math.round((o.letterSpacing ?? 0) * 100)}
+          </Value>
         </Row>
         <Row label="Line height">
-          <ValueSlider
-            label="Line height"
-            sliderClassName="data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
-            value={o.lineHeight ?? 1.25}
+          <Slider
+            className="data-horizontal:w-24"
             min={0.8}
             max={2}
             step={0.05}
-            snap={[1.25]}
-            format={(v) => v.toFixed(2)}
-            parse={parseNumberInput}
-            onDraft={(v) => {
+            value={o.lineHeight ?? 1.25}
+            onValueChange={(v) => {
               lineHeightCk.begin();
               useEditor.getState().updateOverlayTransient(o.id, {
-                lineHeight: Math.abs(v - 1.25) < 0.025 ? undefined : v,
+                lineHeight: Math.abs(Number(v) - 1.25) < 0.025 ? undefined : Number(v),
               });
             }}
-            onCommit={(v) => {
-              lineHeightCk.begin();
-              useEditor.getState().updateOverlayTransient(o.id, {
-                lineHeight: Math.abs(v - 1.25) < 0.025 ? undefined : v,
-              });
-              lineHeightCk.end();
-            }}
+            onValueCommitted={lineHeightCk.end}
           />
+          <Value className="w-9 text-muted-foreground">{(o.lineHeight ?? 1.25).toFixed(2)}</Value>
         </Row>
         <Section
           title="Outline"
@@ -1274,31 +1338,23 @@ function TextPanel({ overlay: o }: { overlay: TextOverlay }) {
                 />
               </Row>
               <Row label="Width">
-                <ValueSlider
-                  label="Outline width"
-                  sliderClassName="data-horizontal:w-24"
-                  valueClassName="w-9 text-muted-foreground"
-                  value={o.stroke.width * 100}
-                  min={1}
-                  max={15}
-                  step={0.5}
-                  snap={[4]}
-                  format={(v) => String(Math.round(v))}
-                  parse={parseNumberInput}
-                  onDraft={(v) => {
+                <Slider
+                  className="data-horizontal:w-24"
+                  min={0.01}
+                  max={0.15}
+                  step={0.005}
+                  value={o.stroke.width}
+                  onValueChange={(v) => {
                     strokeCk.begin();
                     useEditor.getState().updateOverlayTransient(o.id, {
-                      stroke: { ...o.stroke!, width: v / 100 },
+                      stroke: { ...o.stroke!, width: Number(v) },
                     });
                   }}
-                  onCommit={(v) => {
-                    strokeCk.begin();
-                    useEditor.getState().updateOverlayTransient(o.id, {
-                      stroke: { ...o.stroke!, width: v / 100 },
-                    });
-                    strokeCk.end();
-                  }}
+                  onValueCommitted={strokeCk.end}
                 />
+                <Value className="w-9 text-muted-foreground">
+                  {Math.round(o.stroke.width * 100)}
+                </Value>
               </Row>
             </>
           )}
@@ -1326,58 +1382,45 @@ function TextPanel({ overlay: o }: { overlay: TextOverlay }) {
               />
             </Row>
             <Row label="Blur">
-              <ValueSlider
-                label="Shadow blur"
-                sliderClassName="data-horizontal:w-24"
-                valueClassName="w-9 text-muted-foreground"
-                value={(typeof o.shadow === "object" ? o.shadow.blur : undefined) ?? 14}
+              <Slider
+                className="data-horizontal:w-24"
                 min={0}
                 max={60}
                 step={1}
-                snap={[14]}
-                format={(v) => String(Math.round(v))}
-                parse={parseNumberInput}
-                onDraft={(v) => {
+                value={(typeof o.shadow === "object" ? o.shadow.blur : undefined) ?? 14}
+                onValueChange={(v) => {
                   shadowCk.begin();
                   useEditor.getState().updateOverlayTransient(o.id, {
-                    shadow: { ...(typeof o.shadow === "object" ? o.shadow : {}), blur: v },
+                    shadow: { ...(typeof o.shadow === "object" ? o.shadow : {}), blur: Number(v) },
                   });
                 }}
-                onCommit={(v) => {
-                  shadowCk.begin();
-                  useEditor.getState().updateOverlayTransient(o.id, {
-                    shadow: { ...(typeof o.shadow === "object" ? o.shadow : {}), blur: v },
-                  });
-                  shadowCk.end();
-                }}
+                onValueCommitted={shadowCk.end}
               />
+              <Value className="w-9 text-muted-foreground">
+                {(typeof o.shadow === "object" ? o.shadow.blur : undefined) ?? 14}
+              </Value>
             </Row>
             <Row label="Opacity">
-              <ValueSlider
-                label="Shadow opacity"
-                sliderClassName="data-horizontal:w-24"
-                valueClassName="w-9 text-muted-foreground"
-                value={(typeof o.shadow === "object" ? o.shadow.opacity : undefined) ?? 0.65}
+              <Slider
+                className="data-horizontal:w-24"
                 min={0}
                 max={1}
                 step={0.01}
-                snap={[0.65]}
-                format={(v) => String(Math.round(v * 100))}
-                parse={parsePercentInput}
-                onDraft={(v) => {
+                value={(typeof o.shadow === "object" ? o.shadow.opacity : undefined) ?? 0.65}
+                onValueChange={(v) => {
                   shadowCk.begin();
                   useEditor.getState().updateOverlayTransient(o.id, {
-                    shadow: { ...(typeof o.shadow === "object" ? o.shadow : {}), opacity: v },
+                    shadow: {
+                      ...(typeof o.shadow === "object" ? o.shadow : {}),
+                      opacity: Number(v),
+                    },
                   });
                 }}
-                onCommit={(v) => {
-                  shadowCk.begin();
-                  useEditor.getState().updateOverlayTransient(o.id, {
-                    shadow: { ...(typeof o.shadow === "object" ? o.shadow : {}), opacity: v },
-                  });
-                  shadowCk.end();
-                }}
+                onValueCommitted={shadowCk.end}
               />
+              <Value className="w-9 text-muted-foreground">
+                {Math.round(((typeof o.shadow === "object" ? o.shadow.opacity : undefined) ?? 0.65) * 100)}
+              </Value>
             </Row>
           </>
         </Section>
@@ -1396,18 +1439,28 @@ function TextPanel({ overlay: o }: { overlay: TextOverlay }) {
               />
             </Row>
             <Row label="Opacity">
-              <ValueSlider
+              <Slider
+                className="data-horizontal:w-24"
+                min={0}
+                max={1}
+                step={0.01}
+                value={o.plateOpacity ?? PLATE_OPACITY}
+                onValueChange={(v) => {
+                  opacityCk.begin();
+                  useEditor.getState().updateOverlayTransient(o.id, { plateOpacity: Number(v) });
+                }}
+                onValueCommitted={opacityCk.end}
+              />
+              <ScrubValue
                 label="Backdrop opacity"
-                sliderClassName="data-horizontal:w-24"
-                valueClassName="w-9 text-muted-foreground"
+                className="w-9 text-muted-foreground"
                 value={o.plateOpacity ?? PLATE_OPACITY}
                 min={0}
                 max={1}
                 step={0.01}
-                snap={[PLATE_OPACITY]}
                 format={(v) => String(Math.round(v * 100))}
                 parse={parsePercentInput}
-                onDraft={(v) => {
+                onScrub={(v) => {
                   opacityCk.begin();
                   useEditor.getState().updateOverlayTransient(o.id, { plateOpacity: v });
                 }}
@@ -1419,18 +1472,28 @@ function TextPanel({ overlay: o }: { overlay: TextOverlay }) {
               />
             </Row>
             <Row label="Radius">
-              <ValueSlider
+              <Slider
+                className="data-horizontal:w-24"
+                min={0}
+                max={1}
+                step={0.01}
+                value={o.plateRadius ?? PLATE_RADIUS}
+                onValueChange={(v) => {
+                  radiusCk.begin();
+                  useEditor.getState().updateOverlayTransient(o.id, { plateRadius: Number(v) });
+                }}
+                onValueCommitted={radiusCk.end}
+              />
+              <ScrubValue
                 label="Backdrop radius"
-                sliderClassName="data-horizontal:w-24"
-                valueClassName="w-9 text-muted-foreground"
+                className="w-9 text-muted-foreground"
                 value={o.plateRadius ?? PLATE_RADIUS}
                 min={0}
                 max={1}
                 step={0.01}
-                snap={[PLATE_RADIUS]}
                 format={(v) => String(Math.round(v * 100))}
                 parse={parsePercentInput}
-                onDraft={(v) => {
+                onScrub={(v) => {
                   radiusCk.begin();
                   useEditor.getState().updateOverlayTransient(o.id, { plateRadius: v });
                 }}
@@ -1443,7 +1506,12 @@ function TextPanel({ overlay: o }: { overlay: TextOverlay }) {
             </Row>
           </>
         </Section>
-        <OverlayMaskSection overlay={o} />
+        <Section
+          title="Behind speaker"
+          info="Sit the text behind the person in the shot. Needs a clearly separated subject; with no person detected it shows as a normal title."
+          enabled={!!o.behindSubject}
+          onEnabledChange={(v) => update(o.id, { behindSubject: v || undefined })}
+        />
         <TransformRows overlay={o} />
         <GroupRow overlay={o} />
         <AnimationRows overlay={o} />
@@ -1647,49 +1715,38 @@ function AnimationRows({ overlay: o }: { overlay: Overlay }) {
       />
       {slot !== "loop" && active && (
         <Row label="Length">
-          <ValueSlider
-            label="Animation length"
-            sliderClassName="data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
-            value={seconds ?? OVERLAY_ANIM_DEFAULT_SECONDS}
+          <Slider
+            className="data-horizontal:w-24"
             min={OVERLAY_ANIM_MIN_SECONDS}
             max={Math.min(OVERLAY_ANIM_MAX_SECONDS, dur)}
             step={0.05}
-            snap={[OVERLAY_ANIM_DEFAULT_SECONDS]}
-            format={(v) => `${v.toFixed(2)}s`}
-            parse={parseSecondsInput}
-            onDraft={(v) =>
+            value={seconds ?? OVERLAY_ANIM_DEFAULT_SECONDS}
+            onValueChange={(v) =>
               dragAnim(lengthCk, {
-                [slot]: { style: active.style as OverlayAnimStyle, seconds: v },
+                [slot]: { style: active.style as OverlayAnimStyle, seconds: Number(v) },
               })
             }
-            onCommit={(v) => {
-              dragAnim(lengthCk, {
-                [slot]: { style: active.style as OverlayAnimStyle, seconds: v },
-              });
-              lengthCk.end();
-            }}
+            onValueCommitted={lengthCk.end}
           />
+          <Value className="w-9 text-muted-foreground">
+            {(seconds ?? OVERLAY_ANIM_DEFAULT_SECONDS).toFixed(2)}s
+          </Value>
         </Row>
       )}
       {slot === "loop" && anim.loop && (
         <Row label="Speed">
-          <ValueSlider
-            label="Loop speed"
-            sliderClassName="data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
-            value={anim.loop.speed}
+          <Slider
+            className="data-horizontal:w-24"
             min={0.25}
             max={4}
             step={0.25}
-            format={(v) => `${v.toFixed(2)}×`}
-            parse={parseSpeedInput}
-            onDraft={(v) => dragAnim(speedCk, { loop: { ...anim.loop!, speed: v } })}
-            onCommit={(v) => {
-              dragAnim(speedCk, { loop: { ...anim.loop!, speed: v } });
-              speedCk.end();
-            }}
+            value={anim.loop.speed}
+            onValueChange={(v) =>
+              dragAnim(speedCk, { loop: { ...anim.loop!, speed: Number(v) } })
+            }
+            onValueCommitted={speedCk.end}
           />
+          <Value className="w-9 text-muted-foreground">{anim.loop.speed.toFixed(2)}×</Value>
         </Row>
       )}
     </Section>
@@ -1728,28 +1785,12 @@ function GroupRow({ overlay: o }: { overlay: Overlay }) {
 
 /** Rotation and opacity, shared by every overlay kind. Neutral values store
  * as absence so untouched elements carry nothing. */
-/** The element twin of the clip panels' Hidden row: parked on the timeline,
- * out of the played and exported picture. It closes the Transform section
- * (the effect panel, which has no Transform, mounts it alone), so the
- * timeline chip always has an inspector fallback. */
-function HiddenRow({ overlay: o }: { overlay: Overlay }) {
-  const update = useEditor((s) => s.updateOverlay);
-  return (
-    <Row label="Hidden">
-      <Switch
-        checked={!!o.hidden}
-        onCheckedChange={(v) => update(o.id, { hidden: v || undefined })}
-      />
-    </Row>
-  );
-}
-
 function TransformRows({ overlay: o }: { overlay: Overlay }) {
   const rotationCk = useSliderCheckpoint();
   const opacityCk = useSliderCheckpoint();
   const scaleCk = useSliderCheckpoint();
   const posCk = useSliderCheckpoint();
-  const now = usePreviewTime();
+  const now = useEditor((s) => s.currentTime);
   // With keys in play these rows edit the pose at the playhead rather than the
   // element's resting fields — which is what makes them a track.
   const keyed = hasOverlayKeys(o);
@@ -1790,7 +1831,6 @@ function TransformRows({ overlay: o }: { overlay: Overlay }) {
               max={98}
               step={0.5}
               keyStep={1}
-              snap={[50]}
               format={(v) => String(Math.round(v))}
               parse={parseNumberInput}
               onScrub={(v) => {
@@ -1808,43 +1848,44 @@ function TransformRows({ overlay: o }: { overlay: Overlay }) {
       </Row>
       {keyed && (
         <Row label="Scale">
-          <ValueSlider
-            label="Scale"
-            sliderClassName="data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
-            value={pose.scale}
+          <Slider
+            className="data-horizontal:w-24"
             min={0.1}
             max={4}
             step={0.01}
-            snap={[1]}
-            keyStep={0.05}
-            format={(v) => `${Math.round(v * 100)}%`}
-            parse={parsePercentInput}
-            onDraft={(v) => {
+            value={pose.scale}
+            onValueChange={(v) => {
               scaleCk.begin();
-              setKey({ scale: v });
+              setKey({ scale: Number(v) });
             }}
-            onCommit={(v) => {
-              scaleCk.begin();
-              setKey({ scale: v });
-              scaleCk.end();
-            }}
+            onValueCommitted={scaleCk.end}
           />
+          <Value className="w-9 text-muted-foreground">{Math.round(pose.scale * 100)}%</Value>
         </Row>
       )}
       <Row label="Rotation">
-        <ValueSlider
+        <Slider
+          className="data-horizontal:w-24"
+          min={-180}
+          max={180}
+          step={1}
+          value={keyed ? pose.rotation : (o.rotation ?? 0)}
+          onValueChange={(v) => {
+            rotationCk.begin();
+            setRotation(Number(v));
+          }}
+          onValueCommitted={rotationCk.end}
+        />
+        <ScrubValue
           label="Rotation"
-          sliderClassName="data-horizontal:w-24"
-          valueClassName="w-9 text-muted-foreground"
+          className="w-9 text-muted-foreground"
           value={keyed ? pose.rotation : (o.rotation ?? 0)}
           min={-180}
           max={180}
           step={1}
-          snap={[-90, 0, 90]}
           format={(v) => `${Math.round(v)}°`}
           parse={parseNumberInput}
-          onDraft={(v) => {
+          onScrub={(v) => {
             rotationCk.begin();
             setRotation(v);
           }}
@@ -1856,17 +1897,28 @@ function TransformRows({ overlay: o }: { overlay: Overlay }) {
         />
       </Row>
       <Row label="Opacity">
-        <ValueSlider
+        <Slider
+          className="data-horizontal:w-24"
+          min={0}
+          max={1}
+          step={0.01}
+          value={keyed ? pose.opacity : (o.opacity ?? 1)}
+          onValueChange={(v) => {
+            opacityCk.begin();
+            setOpacity(Number(v));
+          }}
+          onValueCommitted={opacityCk.end}
+        />
+        <ScrubValue
           label="Opacity"
-          sliderClassName="data-horizontal:w-24"
-          valueClassName="w-9 text-muted-foreground"
+          className="w-9 text-muted-foreground"
           value={keyed ? pose.opacity : (o.opacity ?? 1)}
           min={0}
           max={1}
           step={0.01}
           format={(v) => String(Math.round(v * 100))}
           parse={parsePercentInput}
-          onDraft={(v) => {
+          onScrub={(v) => {
             opacityCk.begin();
             setOpacity(v);
           }}
@@ -1877,13 +1929,12 @@ function TransformRows({ overlay: o }: { overlay: Overlay }) {
           }}
         />
       </Row>
-      <HiddenRow overlay={o} />
     </Section>
   );
 }
 
 /** Seconds into the element at the playhead, clamped to its own window. */
-function localTimeOf(o: { start: number; end: number }, now: number): number {
+function localTimeOf(o: Overlay, now: number): number {
   return Math.max(0, Math.min(now - o.start, Math.max(0.1, o.end - o.start)));
 }
 
@@ -1895,50 +1946,15 @@ function localTimeOf(o: { start: number; end: number }, now: number): number {
  * element or pulling those same rows.
  */
 function KeyframeControls({ overlay: o }: { overlay: Overlay }) {
-  const now = usePreviewTime();
+  const now = useEditor((s) => s.currentTime);
   const seek = useEditor((s) => s.seek);
-  const st = () => useEditor.getState();
-  return (
-    <KeyRow
-      element={o}
-      now={now}
-      keys={o.kf ?? []}
-      onAdd={(tLocal) => st().setOverlayKey(o.id, tLocal)}
-      onRemove={(tLocal) => st().removeOverlayKey(o.id, tLocal)}
-      onSeek={seek}
-    />
-  );
-}
-
-/** The key track row itself — diamond, walkers, count, bin — over whichever
- * key list it is handed. The pose track and the mask track both mount it;
- * the mask track's diamond wears the timeline's amber so the two tracks
- * read apart everywhere. */
-function KeyRow({
-  element,
-  now,
-  keys,
-  track = "pose",
-  onAdd,
-  onRemove,
-  onSeek,
-}: {
-  element: { start: number; end: number };
-  now: number;
-  keys: { t: number }[];
-  track?: "pose" | "mask";
-  onAdd: (tLocal: number) => void;
-  onRemove: (tLocal: number) => void;
-  onSeek: (t: number) => void;
-}) {
-  const inWindow = now >= element.start - 1e-6 && now <= element.end + 1e-6;
-  const tLocal = Math.max(
-    0,
-    Math.min(now - element.start, Math.max(0.1, element.end - element.start))
-  );
+  const keys = o.kf ?? [];
+  const inWindow = now >= o.start - 1e-6 && now <= o.end + 1e-6;
+  const tLocal = localTimeOf(o, now);
   const here = keyIndexAt(keys, tLocal);
-  const prev = [...keys].sort((a, b) => a.t - b.t).reverse().find((k) => k.t < tLocal - KEY_EPSILON);
-  const next = [...keys].sort((a, b) => a.t - b.t).find((k) => k.t > tLocal + KEY_EPSILON);
+  const prev = [...keys].reverse().find((k) => k.t < tLocal - KEY_EPSILON);
+  const next = keys.find((k) => k.t > tLocal + KEY_EPSILON);
+  const st = () => useEditor.getState();
   return (
     <Row label="Keyframes">
       <Button
@@ -1948,15 +1964,9 @@ function KeyRow({
         disabled={!inWindow}
         title={here >= 0 ? "Update the key here" : "Add a key at the playhead"}
         aria-label={here >= 0 ? "Update the key here" : "Add a key at the playhead"}
-        onClick={() => onAdd(tLocal)}
+        onClick={() => st().setOverlayKey(o.id, tLocal)}
       >
-        <Diamond
-          className={cn(
-            "size-3.5",
-            track === "mask" && "text-[#ff9f0a]",
-            here >= 0 && "fill-current"
-          )}
-        />
+        <Diamond className={cn("size-3.5", here >= 0 && "fill-current")} />
       </Button>
       <Button
         size="sm"
@@ -1965,7 +1975,7 @@ function KeyRow({
         disabled={!prev}
         title="Previous key"
         aria-label="Previous key"
-        onClick={() => prev && onSeek(element.start + prev.t)}
+        onClick={() => prev && seek(o.start + prev.t)}
       >
         <ChevronLeft className="size-3.5" />
       </Button>
@@ -1976,7 +1986,7 @@ function KeyRow({
         disabled={!next}
         title="Next key"
         aria-label="Next key"
-        onClick={() => next && onSeek(element.start + next.t)}
+        onClick={() => next && seek(o.start + next.t)}
       >
         <ChevronRight className="size-3.5" />
       </Button>
@@ -1990,510 +2000,11 @@ function KeyRow({
         disabled={here < 0}
         title="Remove the key here"
         aria-label="Remove the key here"
-        onClick={() => onRemove(tLocal)}
+        onClick={() => st().removeOverlayKey(o.id, tLocal)}
       >
         <Trash2 className="size-3.5" />
       </Button>
     </Row>
-  );
-}
-
-const MASK_SHAPES: { id: MaskKind; label: string }[] = [
-  { id: "rect", label: "Rectangle" },
-  { id: "square", label: "Square" },
-  { id: "circle", label: "Circle" },
-  { id: "linear", label: "Linear" },
-  { id: "mirror", label: "Mirror" },
-  { id: "subject", label: "Subject" },
-];
-
-/** How a panel's mask section reads and writes its owner's mask — the same
- * section serves overlay elements and video clips through this. */
-interface MaskTarget {
-  /** Timeline window for the keyframe row and playhead-local time. */
-  element: { start: number; end: number };
-  mask?: Mask;
-  /** Replace the mask outright (or remove it), as one undo step. */
-  set: (mask: Mask | undefined) => void;
-  /** Live-drag mask update, no undo entry. */
-  setTransient: (mask: Mask) => void;
-  setKey: (
-    tLocal: number,
-    patch?: Partial<Omit<MaskKey, "t">>,
-    opts?: { transient?: boolean }
-  ) => void;
-  removeKey: (tLocal: number) => void;
-}
-
-/**
- * A video clip's pose track: the keyframe row plus, once keys exist, the
- * position/scale/rotation/opacity rows editing the key at the playhead — the
- * element Transform contract over the clip's anchor. A clip with no keys
- * rests in its region, so the rows appear with the first key.
- */
-function ClipTransformSection({ clip }: { clip: VideoClip }) {
-  const clips = useEditor((s) => s.clips);
-  const assets = useEditor((s) => s.assets);
-  const now = usePreviewTime();
-  const seek = useEditor((s) => s.seek);
-  const posCk = useSliderCheckpoint();
-  const scaleCk = useSliderCheckpoint();
-  const rotationCk = useSliderCheckpoint();
-  const opacityCk = useSliderCheckpoint();
-  const st = () => useEditor.getState();
-  const win = clipWindow(clips, assets, clip.id);
-  if (!win) return null;
-  const el = { start: win.start, end: win.start + win.len };
-  const tLocal = localTimeOf(el, now);
-  const keyed = clipKeyed(clip);
-  const pose = clipPoseAt(clip, tLocal);
-  const setKey = (patch: Partial<Omit<OverlayKey, "t">>) =>
-    st().setClipKey(clip.id, tLocal, patch, { transient: true });
-  return (
-    <Section title="Transform">
-      <KeyRow
-        element={el}
-        now={now}
-        keys={clip.kf ?? []}
-        onAdd={(t) => st().setClipKey(clip.id, t)}
-        onRemove={(t) => st().removeClipKey(clip.id, t)}
-        onSeek={seek}
-      />
-      {keyed && (
-        <>
-          <Row label="Position">
-            {(["x", "y"] as const).map((axis) => (
-              <span key={axis} className="flex items-center gap-1">
-                <span className="text-[11px] text-muted-foreground/70 uppercase">{axis}</span>
-                <ScrubValue
-                  label={`${axis.toUpperCase()} position`}
-                  className="w-9 text-muted-foreground"
-                  value={pose[axis] * 100}
-                  min={-50}
-                  max={150}
-                  step={0.5}
-                  keyStep={1}
-                  snap={[50]}
-                  format={(v) => String(Math.round(v))}
-                  parse={parseNumberInput}
-                  onScrub={(v) => {
-                    posCk.begin();
-                    setKey({ [axis]: v / 100 });
-                  }}
-                  onCommit={(v) => {
-                    posCk.begin();
-                    setKey({ [axis]: v / 100 });
-                    posCk.end();
-                  }}
-                />
-              </span>
-            ))}
-          </Row>
-          <Row label="Scale">
-            <ValueSlider
-              label="Scale"
-              sliderClassName="data-horizontal:w-24"
-              valueClassName="w-9 text-muted-foreground"
-              value={pose.scale}
-              min={0.1}
-              max={4}
-              step={0.01}
-              snap={[1]}
-              keyStep={0.05}
-              format={(v) => `${Math.round(v * 100)}%`}
-              parse={parsePercentInput}
-              onDraft={(v) => {
-                scaleCk.begin();
-                setKey({ scale: v });
-              }}
-              onCommit={(v) => {
-                scaleCk.begin();
-                setKey({ scale: v });
-                scaleCk.end();
-              }}
-            />
-          </Row>
-          <Row label="Rotation">
-            <ValueSlider
-              label="Rotation"
-              sliderClassName="data-horizontal:w-24"
-              valueClassName="w-9 text-muted-foreground"
-              value={pose.rotation}
-              min={-180}
-              max={180}
-              step={1}
-              snap={[-90, 0, 90]}
-              format={(v) => `${Math.round(v)}°`}
-              parse={parseNumberInput}
-              onDraft={(v) => {
-                rotationCk.begin();
-                setKey({ rotation: Math.round(v) });
-              }}
-              onCommit={(v) => {
-                rotationCk.begin();
-                setKey({ rotation: Math.round(v) });
-                rotationCk.end();
-              }}
-            />
-          </Row>
-          <Row label="Opacity">
-            <ValueSlider
-              label="Opacity"
-              sliderClassName="data-horizontal:w-24"
-              valueClassName="w-9 text-muted-foreground"
-              value={pose.opacity}
-              min={0}
-              max={1}
-              step={0.01}
-              format={(v) => String(Math.round(v * 100))}
-              parse={parsePercentInput}
-              onDraft={(v) => {
-                opacityCk.begin();
-                setKey({ opacity: v });
-              }}
-              onCommit={(v) => {
-                opacityCk.begin();
-                setKey({ opacity: v });
-                opacityCk.end();
-              }}
-            />
-          </Row>
-        </>
-      )}
-    </Section>
-  );
-}
-
-/** The overlay inspector's mask target, over the overlay store actions. */
-function OverlayMaskSection({ overlay: o }: { overlay: Overlay }) {
-  const st = () => useEditor.getState();
-  return (
-    <MaskSection
-      target={{
-        element: o,
-        mask: o.mask,
-        set: (mask) => st().updateOverlay(o.id, { mask }),
-        setTransient: (mask) => st().updateOverlayTransient(o.id, { mask }),
-        setKey: (t, patch, opts) => st().setOverlayMaskKey(o.id, t, patch, opts),
-        removeKey: (t) => st().removeOverlayMaskKey(o.id, t),
-      }}
-    />
-  );
-}
-
-/** The clip inspector's mask target, over the clip store actions. The clip's
- * timeline window comes through `clipWindow` (track-0 starts derive from the
- * span layout). */
-/** Rounded corners and a border stroke on the clip's box. The section's
- * switch turns the style on with visible defaults; off returns the clip to a
- * plain box. */
-function ClipBorderSection({ clip }: { clip: VideoClip }) {
-  const widthCk = useSliderCheckpoint();
-  const radiusCk = useSliderCheckpoint();
-  const bs = clip.boxStyle;
-  const st = () => useEditor.getState();
-  const write = (patch: Partial<BoxStyle>) =>
-    st().updateClipTransient(clip.id, { boxStyle: { ...st().clips.find((c) => c.id === clip.id)?.boxStyle, ...patch } });
-  return (
-    <Section
-      title="Border"
-      info="Round the clip's corners and stroke a border along its box edge. Sizes are design pixels, matched between preview and export."
-      enabled={!!bs}
-      onEnabledChange={(v) =>
-        st().updateClip(clip.id, {
-          boxStyle: v ? { radius: 16, borderWidth: 6, borderColor: "#FFFFFF" } : undefined,
-        })
-      }
-    >
-      {bs && (
-        <>
-          <Row label="Width">
-            <ScrubValue
-              label="Border width"
-              className="w-9 text-muted-foreground"
-              value={bs.borderWidth ?? 0}
-              min={0}
-              max={60}
-              step={1}
-              format={(v) => String(Math.round(v))}
-              parse={parseNumberInput}
-              onScrub={(v) => {
-                widthCk.begin();
-                write({ borderWidth: v });
-              }}
-              onCommit={(v) => {
-                widthCk.begin();
-                write({ borderWidth: v });
-                widthCk.end();
-              }}
-            />
-          </Row>
-          <Row label="Radius">
-            <ScrubValue
-              label="Corner radius"
-              className="w-9 text-muted-foreground"
-              value={bs.radius ?? 0}
-              min={0}
-              max={200}
-              step={1}
-              format={(v) => String(Math.round(v))}
-              parse={parseNumberInput}
-              onScrub={(v) => {
-                radiusCk.begin();
-                write({ radius: v });
-              }}
-              onCommit={(v) => {
-                radiusCk.begin();
-                write({ radius: v });
-                radiusCk.end();
-              }}
-            />
-          </Row>
-          <Row label="Color" grow>
-            <ColorSwatches
-              value={bs.borderColor ?? "#FFFFFF"}
-              onBegin={() => st().pushHistory()}
-              onLive={(c) => write({ borderColor: c })}
-              onCommit={(c) => st().updateClip(clip.id, { boxStyle: { ...bs, borderColor: c } })}
-            />
-          </Row>
-        </>
-      )}
-    </Section>
-  );
-}
-
-function ClipMaskSection({ clip }: { clip: VideoClip }) {
-  const clips = useEditor((s) => s.clips);
-  const assets = useEditor((s) => s.assets);
-  const st = () => useEditor.getState();
-  const win = clipWindow(clips, assets, clip.id);
-  if (!win) return null;
-  return (
-    <MaskSection
-      target={{
-        element: { start: win.start, end: win.start + win.len },
-        mask: clip.mask,
-        set: (mask) => st().updateClip(clip.id, { mask }),
-        setTransient: (mask) => st().updateClipTransient(clip.id, { mask }),
-        setKey: (t, patch, opts) => st().setClipMaskKey(clip.id, t, patch, opts),
-        removeKey: (t) => st().removeClipMaskKey(clip.id, t),
-      }}
-    />
-  );
-}
-
-/**
- * The mask itself: shape picker, its own keyframe track, and the geometry
- * rows. With mask keys in play the rows edit the key at the playhead, the
- * same contract as Transform; otherwise they edit the mask's resting fields.
- */
-function MaskSection({ target }: { target: MaskTarget }) {
-  const now = usePreviewTime();
-  const seek = useEditor((s) => s.seek);
-  const posCk = useSliderCheckpoint();
-  const sizeCk = useSliderCheckpoint();
-  const rotationCk = useSliderCheckpoint();
-  const featherCk = useSliderCheckpoint();
-  const radiusCk = useSliderCheckpoint();
-  const m = target.mask;
-  const tLocal = localTimeOf(target.element, now);
-  const geom = m ? maskFrameAt(m, tLocal) : null;
-  const writeGeom = (patch: Partial<Omit<MaskKey, "t">>) => {
-    if (!m) return;
-    if (hasMaskKeys(m)) return target.setKey(tLocal, patch, { transient: true });
-    target.setTransient({ ...m, ...patch });
-  };
-  // Which size axes the shape has: a square has one side, a mirror band one
-  // height, linear none.
-  const sizeAxes: ("w" | "h")[] =
-    m?.kind === "rect" || m?.kind === "circle"
-      ? ["w", "h"]
-      : m?.kind === "square"
-        ? ["w"]
-        : m?.kind === "mirror"
-          ? ["h"]
-          : [];
-  const subject = m?.kind === "subject";
-  return (
-    <Section
-      title="Mask"
-      info="Trim the picture to a shape, or to the person in the shot (Subject). Feather softens the edge, and invert keeps what the shape leaves out — an inverted Subject mask sits the picture behind the speaker."
-      enabled={!!m}
-      onEnabledChange={(v) => target.set(v ? { kind: "rect" } : undefined)}
-    >
-      {m && geom && (
-        <>
-          <Row label="Shape">
-            <Select
-              value={m.kind}
-              onValueChange={(kind) => target.set({ ...m, kind: kind as MaskKind })}
-            >
-              <SelectTrigger className="h-8 w-36 text-[12px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MASK_SHAPES.map((s) => (
-                  <SelectItem key={s.id} value={s.id} className="text-[12px]">
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Row>
-          {!subject && (
-            <KeyRow
-              element={target.element}
-              now={now}
-              keys={m.kf ?? []}
-              track="mask"
-              onAdd={(t) => target.setKey(t)}
-              onRemove={(t) => target.removeKey(t)}
-              onSeek={seek}
-            />
-          )}
-          {!subject && (
-            <Row label="Position">
-              {(["x", "y"] as const).map((axis) => (
-                <span key={axis} className="flex items-center gap-1">
-                  <span className="text-[11px] text-muted-foreground/70 uppercase">{axis}</span>
-                  <ScrubValue
-                    label={`Mask ${axis.toUpperCase()} offset`}
-                    className="w-9 text-muted-foreground"
-                    value={geom[axis] * 100}
-                    min={-100}
-                    max={100}
-                    step={0.5}
-                    keyStep={1}
-                    snap={[0]}
-                    format={(v) => String(Math.round(v))}
-                    parse={parseNumberInput}
-                    onScrub={(v) => {
-                      posCk.begin();
-                      writeGeom({ [axis]: v / 100 });
-                    }}
-                    onCommit={(v) => {
-                      posCk.begin();
-                      writeGeom({ [axis]: v / 100 });
-                      posCk.end();
-                    }}
-                  />
-                </span>
-              ))}
-            </Row>
-          )}
-          {sizeAxes.length > 0 && (
-            <Row label="Size">
-              {sizeAxes.map((axis) => (
-                <span key={axis} className="flex items-center gap-1">
-                  <span className="text-[11px] text-muted-foreground/70 uppercase">{axis}</span>
-                  <ScrubValue
-                    label={`Mask ${axis === "w" ? "width" : "height"}`}
-                    className="w-9 text-muted-foreground"
-                    value={geom[axis] * 100}
-                    min={1}
-                    max={200}
-                    step={1}
-                    snap={[100]}
-                    format={(v) => String(Math.round(v))}
-                    parse={parseNumberInput}
-                    onScrub={(v) => {
-                      sizeCk.begin();
-                      writeGeom({ [axis]: v / 100 });
-                    }}
-                    onCommit={(v) => {
-                      sizeCk.begin();
-                      writeGeom({ [axis]: v / 100 });
-                      sizeCk.end();
-                    }}
-                  />
-                </span>
-              ))}
-            </Row>
-          )}
-          {!subject && (
-            <Row label="Rotation">
-              <ValueSlider
-                label="Mask rotation"
-                sliderClassName="data-horizontal:w-24"
-                valueClassName="w-9 text-muted-foreground"
-                value={geom.rotation}
-                min={-180}
-                max={180}
-                step={1}
-                snap={[-90, 0, 90]}
-                format={(v) => `${Math.round(v)}°`}
-                parse={parseNumberInput}
-                onDraft={(v) => {
-                  rotationCk.begin();
-                  writeGeom({ rotation: Math.round(v) });
-                }}
-                onCommit={(v) => {
-                  rotationCk.begin();
-                  writeGeom({ rotation: Math.round(v) });
-                  rotationCk.end();
-                }}
-              />
-            </Row>
-          )}
-          <Row label="Feather">
-            <ValueSlider
-              label="Feather"
-              sliderClassName="data-horizontal:w-24"
-              valueClassName="w-9 text-muted-foreground"
-              value={geom.feather}
-              min={0}
-              max={120}
-              step={1}
-              format={(v) => String(Math.round(v))}
-              parse={parseNumberInput}
-              onDraft={(v) => {
-                featherCk.begin();
-                writeGeom({ feather: Math.round(v) });
-              }}
-              onCommit={(v) => {
-                featherCk.begin();
-                writeGeom({ feather: Math.round(v) });
-                featherCk.end();
-              }}
-            />
-          </Row>
-          {(m.kind === "rect" || m.kind === "square") && (
-            <Row label="Radius">
-              <ValueSlider
-                label="Mask corner radius"
-                sliderClassName="data-horizontal:w-24"
-                valueClassName="w-9 text-muted-foreground"
-                value={m.radius ?? 0}
-                min={0}
-                max={200}
-                step={1}
-                format={(v) => String(Math.round(v))}
-                parse={parseNumberInput}
-                onDraft={(v) => {
-                  radiusCk.begin();
-                  const radius = Math.round(v);
-                  target.setTransient({ ...m, radius: radius === 0 ? undefined : radius });
-                }}
-                onCommit={(v) => {
-                  radiusCk.begin();
-                  const radius = Math.round(v);
-                  target.setTransient({ ...m, radius: radius === 0 ? undefined : radius });
-                  radiusCk.end();
-                }}
-              />
-            </Row>
-          )}
-          <Row label="Invert">
-            <Switch
-              checked={!!m.invert}
-              onCheckedChange={(v) => target.set({ ...m, invert: v || undefined })}
-              aria-label="Invert mask"
-            />
-          </Row>
-        </>
-      )}
-    </Section>
   );
 }
 
@@ -2502,7 +2013,7 @@ function ShapePanel({ overlay: o }: { overlay: ShapeOverlay }) {
   const fillCk = useSliderCheckpoint();
   const radiusCk = useSliderCheckpoint();
   const strokeCk = useSliderCheckpoint();
-  const boxShape = !lineLikeShape(o.shape);
+  const boxShape = o.shape === "rect" || o.shape === "ellipse";
   return (
     <>
       <PanelTitle>{SHAPE_LABELS[o.shape]}</PanelTitle>
@@ -2517,60 +2028,42 @@ function ShapePanel({ overlay: o }: { overlay: ShapeOverlay }) {
         </Row>
         {boxShape && (
           <Row label="Fill opacity">
-            <ValueSlider
-              label="Fill opacity"
-              sliderClassName="data-horizontal:w-24"
-              valueClassName="w-9 text-muted-foreground"
-              value={o.fillOpacity ?? 1}
+            <Slider
+              className="data-horizontal:w-24"
               min={0}
               max={1}
               step={0.01}
-              format={(v) => String(Math.round(v * 100))}
-              parse={parsePercentInput}
-              onDraft={(v) => {
+              value={o.fillOpacity ?? 1}
+              onValueChange={(v) => {
                 fillCk.begin();
                 useEditor.getState().updateOverlayTransient(o.id, {
-                  fillOpacity: v >= 0.995 ? undefined : v,
+                  fillOpacity: Number(v) >= 0.995 ? undefined : Number(v),
                 });
               }}
-              onCommit={(v) => {
-                fillCk.begin();
-                useEditor.getState().updateOverlayTransient(o.id, {
-                  fillOpacity: v >= 0.995 ? undefined : v,
-                });
-                fillCk.end();
-              }}
+              onValueCommitted={fillCk.end}
             />
+            <Value className="w-9 text-muted-foreground">
+              {Math.round((o.fillOpacity ?? 1) * 100)}
+            </Value>
           </Row>
         )}
         {o.shape === "rect" && (
           <Row label="Corner radius">
-            <ValueSlider
-              label="Corner radius"
-              sliderClassName="data-horizontal:w-24"
-              valueClassName="w-9 text-muted-foreground"
-              value={o.radius ?? 0}
+            <Slider
+              className="data-horizontal:w-24"
               min={0}
               max={120}
               step={1}
-              format={(v) => String(Math.round(v))}
-              parse={parseNumberInput}
-              onDraft={(v) => {
+              value={o.radius ?? 0}
+              onValueChange={(v) => {
                 radiusCk.begin();
-                const radius = Math.round(v);
                 useEditor.getState().updateOverlayTransient(o.id, {
-                  radius: radius === 0 ? undefined : radius,
+                  radius: Number(v) === 0 ? undefined : Number(v),
                 });
               }}
-              onCommit={(v) => {
-                radiusCk.begin();
-                const radius = Math.round(v);
-                useEditor.getState().updateOverlayTransient(o.id, {
-                  radius: radius === 0 ? undefined : radius,
-                });
-                radiusCk.end();
-              }}
+              onValueCommitted={radiusCk.end}
             />
+            <Value className="w-9 text-muted-foreground">{Math.round(o.radius ?? 0)}</Value>
           </Row>
         )}
         {boxShape && (
@@ -2596,37 +2089,26 @@ function ShapePanel({ overlay: o }: { overlay: ShapeOverlay }) {
                   />
                 </Row>
                 <Row label="Width">
-                  <ValueSlider
-                    label="Outline width"
-                    sliderClassName="data-horizontal:w-24"
-                    valueClassName="w-9 text-muted-foreground"
-                    value={o.stroke.width}
+                  <Slider
+                    className="data-horizontal:w-24"
                     min={1}
                     max={40}
                     step={1}
-                    snap={[6]}
-                    format={(v) => String(Math.round(v))}
-                    parse={parseNumberInput}
-                    onDraft={(v) => {
+                    value={o.stroke.width}
+                    onValueChange={(v) => {
                       strokeCk.begin();
                       useEditor.getState().updateOverlayTransient(o.id, {
-                        stroke: { ...o.stroke!, width: Math.round(v) },
+                        stroke: { ...o.stroke!, width: Number(v) },
                       });
                     }}
-                    onCommit={(v) => {
-                      strokeCk.begin();
-                      useEditor.getState().updateOverlayTransient(o.id, {
-                        stroke: { ...o.stroke!, width: Math.round(v) },
-                      });
-                      strokeCk.end();
-                    }}
+                    onValueCommitted={strokeCk.end}
                   />
+                  <Value className="w-9 text-muted-foreground">{o.stroke.width}</Value>
                 </Row>
               </>
             )}
           </Section>
         )}
-        <OverlayMaskSection overlay={o} />
         <TransformRows overlay={o} />
         <GroupRow overlay={o} />
         <AnimationRows overlay={o} />
@@ -2647,30 +2129,23 @@ function EffectPanel({ overlay: o }: { overlay: EffectOverlay }) {
           <ZoomTarget overlay={o} />
         ) : (
           <Row label="Amount">
-            <ValueSlider
-              label="Effect amount"
-              sliderClassName="data-horizontal:w-24"
-              valueClassName="w-9 text-muted-foreground"
-              value={o.amount ?? 0.5}
+            <Slider
+              className="data-horizontal:w-24"
               min={0.05}
               max={1}
               step={0.01}
-              snap={[0.5]}
-              format={(v) => String(Math.round(v * 100))}
-              parse={parsePercentInput}
-              onDraft={(v) => {
+              value={o.amount ?? 0.5}
+              onValueChange={(v) => {
                 amountCk.begin();
-                useEditor.getState().updateOverlayTransient(o.id, { amount: v });
+                useEditor.getState().updateOverlayTransient(o.id, { amount: Number(v) });
               }}
-              onCommit={(v) => {
-                amountCk.begin();
-                useEditor.getState().updateOverlayTransient(o.id, { amount: v });
-                amountCk.end();
-              }}
+              onValueCommitted={amountCk.end}
             />
+            <Value className="w-9 text-muted-foreground">
+              {Math.round((o.amount ?? 0.5) * 100)}
+            </Value>
           </Row>
         )}
-        <HiddenRow overlay={o} />
         <GroupRow overlay={o} />
       </div>
     </>
@@ -2785,23 +2260,33 @@ function ZoomTarget({ overlay: o }: { overlay: EffectOverlay }) {
           </div>
         </Row>
         <Row label="Speed">
-          <ValueSlider
+          <Slider
+            className="data-horizontal:w-24"
+            min={0}
+            max={ZOOM_RAMP_MAX}
+            step={0.1}
+            value={ramp}
+            onValueChange={(v) => {
+              rampCk.begin();
+              useEditor.getState().updateOverlayTransient(o.id, { ramp: Number(v) });
+            }}
+            onValueCommitted={rampCk.end}
+          />
+          <ScrubValue
             label="Zoom speed"
-            sliderClassName="data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
+            className="w-9 text-muted-foreground"
             value={ramp}
             min={0}
             max={ZOOM_RAMP_MAX}
             step={0.1}
             format={(v) => `${v.toFixed(1)}s`}
             parse={parseSecondsInput}
-            onDraft={(v) => {
+            onScrub={(v) => {
               rampCk.begin();
               useEditor.getState().updateOverlayTransient(o.id, { ramp: v });
             }}
             onCommit={(v) => {
-              rampCk.begin();
-              useEditor.getState().updateOverlayTransient(o.id, { ramp: v });
+              useEditor.getState().updateOverlay(o.id, { ramp: v });
               rampCk.end();
             }}
           />
@@ -2826,28 +2311,20 @@ function StickerPanel({ overlay: o }: { overlay: StickerOverlay }) {
           </div>
         ) : null}
         <Row label="Size">
-          <ValueSlider
-            label="Sticker size"
-            sliderClassName="data-horizontal:w-24"
-            valueClassName="w-9 text-muted-foreground"
-            value={o.w}
+          <Slider
+            className="data-horizontal:w-24"
             min={0.02}
             max={1}
             step={0.01}
-            format={(v) => String(Math.round(v * 100))}
-            parse={parsePercentInput}
-            onDraft={(v) => {
+            value={o.w}
+            onValueChange={(v) => {
               widthCk.begin();
-              useEditor.getState().updateOverlayTransient(o.id, { w: v });
+              useEditor.getState().updateOverlayTransient(o.id, { w: Number(v) });
             }}
-            onCommit={(v) => {
-              widthCk.begin();
-              useEditor.getState().updateOverlayTransient(o.id, { w: v });
-              widthCk.end();
-            }}
+            onValueCommitted={widthCk.end}
           />
+          <Value className="w-9 text-muted-foreground">{Math.round(o.w * 100)}</Value>
         </Row>
-        <OverlayMaskSection overlay={o} />
         <TransformRows overlay={o} />
         <GroupRow overlay={o} />
         <AnimationRows overlay={o} />

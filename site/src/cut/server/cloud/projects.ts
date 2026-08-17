@@ -15,6 +15,7 @@ type ProjectRow = {
   name: string;
   doc: unknown;
   folderId: string | null;
+  favorite: boolean;
   version: number;
   previewKey: string | null;
   createdAt: Date;
@@ -67,8 +68,8 @@ function summarize(row: ProjectRow, sizeBytes: number): ProjectSummary {
     previewIsImage: previewAsset?.type === "image",
     previewStart,
     hasPreview: row.previewKey != null,
-    aspect: normalizeAspect(doc.aspect) ?? undefined,
     folderId: row.folderId ?? null,
+    favorite: row.favorite,
     sizeBytes,
   };
 }
@@ -269,6 +270,18 @@ export const projectsCloud = {
     }
   },
 
+  async favorite(userId: string, id: string, req: Request) {
+    try {
+      const { favorite } = (await req.json()) as { favorite: boolean };
+      const row = await getProject(userId, id);
+      if (!row) return err("Project not found.", 404);
+      await prisma.cutProject.update({ where: { id }, data: { favorite } });
+      return Response.json({ ok: true });
+    } catch (e) {
+      return caught(e, "Could not update the project.");
+    }
+  },
+
   async folders(userId: string) {
     const rows = await prisma.cutFolder.findMany({
       where: { userId, scope: "project" },
@@ -332,7 +345,7 @@ export const projectsCloud = {
 
   // --- Media / export / preview bytes: 302 to a signed R2 GET. ---
 
-  async serveMedia(userId: string, id: string, file: string, download = false) {
+  async serveMedia(userId: string, id: string, file: string) {
     try {
       const fileName = decodeFileParam(file);
       const row = await prisma.cutMediaObject.findFirst({
@@ -343,7 +356,6 @@ export const projectsCloud = {
       return redirect(
         mediaObjectUrl(projectMediaKey(userId, id, fileName), {
           version: String(row.updatedAt.getTime()),
-          ...(download ? { downloadName: fileName } : {}),
         })
       );
     } catch (e) {

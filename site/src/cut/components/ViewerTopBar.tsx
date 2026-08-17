@@ -69,7 +69,7 @@ export function ViewerTopBar() {
       <div className="flex min-w-0 items-center gap-1">
         <span className="grid size-[22px] shrink-0 place-items-center">
           <img
-            src="/donkey-logo.svg"
+            src="/deepw-logo.svg"
             alt="Donkey"
             width={22}
             height={22}

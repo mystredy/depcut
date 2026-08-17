@@ -13,7 +13,9 @@ export const DONKEYCUT_CANONICAL = "https://donkeycut.com";
 // Shared media is served from its own hostname by the Cut Worker's R2 binding
 // (src/cut/worker/cf/media.ts), never by this app. The Worker claims it as a
 // custom domain in wrangler.jsonc; change that route and this together.
-export const CUT_MEDIA_HOST = "media.donkeycut.com";
+// Overridable per deployment: a fork without that custom domain points this at
+// its own Worker (e.g. its workers.dev URL) via env instead.
+export const CUT_MEDIA_HOST = process.env.CUT_MEDIA_HOST || "media.donkeycut.com";
 export const CUT_MEDIA_ORIGIN = `https://${CUT_MEDIA_HOST}`;
 
 // The Cut Worker's control plane — the /wake the hosted API posts to when it
@@ -21,14 +23,9 @@ export const CUT_MEDIA_ORIGIN = `https://${CUT_MEDIA_HOST}`;
 // media route, so it cannot be revoked by a deploy default the way the
 // workers.dev address was: adding the media route turned workers.dev off and
 // stranded every render for two days, with nothing to see but queued jobs.
-export const CUT_WORKER_HOST = "worker.donkeycut.com";
+// Overridable the same way as CUT_MEDIA_HOST above.
+export const CUT_WORKER_HOST = process.env.CUT_WORKER_HOST || "worker.donkeycut.com";
 export const CUT_WORKER_WAKE_URL = `https://${CUT_WORKER_HOST}/wake`;
-
-// Where the worker's runner calls the hosted API back: production containers
-// (NODE_ENV=production in the image) talk to the canonical host, a dev worker
-// run by hand talks to the local dev server.
-export const CUT_HOSTED_ORIGIN =
-  process.env.NODE_ENV === "production" ? DONKEYCUT_CANONICAL : "http://localhost:3000";
 
 function hostname(host: string | null | undefined): string {
   return host ? host.split(":")[0] : "";

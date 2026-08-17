@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { getBackend, type CutBackend, type CutMode } from "./backend";
-import { browserBackend } from "./backend/browser";
 import { cloudBackend } from "./backend/cloud";
 import { localBackend } from "./backend/local";
 import { normalizeRef, type AssetRef } from "./assetRef";
@@ -17,7 +16,7 @@ import {
   upsertRenderInDoc,
 } from "./genvideo/docWriter";
 import { CUT_APP_BASE } from "./nav";
-import { hostedFetch, hostedPost } from "./hosted";
+import { hostedPost } from "./hosted";
 import { enrichAsset, importFileToProject, uploadProjectImage } from "./media";
 import { refsToInlineImages, videoSafeInline, visualRefs, type InlineImage } from "./refMedia";
 import { useGenNotify } from "./genNotify";
@@ -202,13 +201,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** The backend a job's results land on: its pinned residency; jobs persisted
  * before residency existed fall back to the active backend. */
 const jobBackend = (job: { residency?: CutMode }): CutBackend =>
-  job.residency === "cloud"
-    ? cloudBackend
-    : job.residency === "local"
-      ? localBackend
-      : job.residency === "browser"
-        ? browserBackend
-        : getBackend();
+  job.residency === "cloud" ? cloudBackend : job.residency === "local" ? localBackend : getBackend();
 
 /** Display name for the asset: the prompt, tidied and capped. */
 const promptName = (prompt: string) => {
@@ -718,7 +711,7 @@ export const useGenerate = create<GenerateState>((set, get) => {
     },
 
     probeNow: () => {
-      probing ??= hostedFetch("/api/auth/get-session", { cache: "no-store" })
+      probing ??= fetch("/api/auth/get-session", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
         .then((s) => {
           const signedIn = Boolean((s as { user?: unknown } | null)?.user);

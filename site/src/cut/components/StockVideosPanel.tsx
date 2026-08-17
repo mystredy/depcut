@@ -3,7 +3,6 @@
 import { useRef, useState } from "react";
 import { ChevronRight, Maximize2, Search } from "lucide-react";
 import { clearRefDrag, refFromStockVideo, setRefDragData } from "@/cut/lib/assetRef";
-import { setObjectDragImage } from "@/cut/lib/assetDrag";
 import { useLightbox } from "@/cut/lib/lightbox";
 import { useRevealEffect, useRevealFlash } from "@/cut/lib/refReveal";
 import { useVideoGen } from "@/cut/lib/videoGen";
@@ -241,10 +240,7 @@ function StockTile({ item }: { item: StockVideo }) {
       <button
         className="block w-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
         draggable
-        onDragStart={(e) => {
-          setRefDragData(e, refFromStockVideo(item));
-          setObjectDragImage(e);
-        }}
+        onDragStart={(e) => setRefDragData(e, refFromStockVideo(item))}
         onDragEnd={clearRefDrag}
         onClick={() =>
           item.category === "Characters"

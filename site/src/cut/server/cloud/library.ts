@@ -400,15 +400,9 @@ export const libraryCloud = {
     }
   },
 
-  async serveMedia(userId: string, file: string, download = false) {
+  async serveMedia(userId: string, file: string) {
     try {
-      const fileName = decodeFileParam(file);
-      return redirect(
-        mediaObjectUrl(
-          libraryKey(userId, fileName),
-          download ? { downloadName: fileName } : undefined
-        )
-      );
+      return redirect(mediaObjectUrl(libraryKey(userId, decodeFileParam(file))));
     } catch (e) {
       return caught(e, "Bad request.", 400);
     }

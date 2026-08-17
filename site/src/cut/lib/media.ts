@@ -4,8 +4,7 @@ import { scanSilence, type PcmChunk } from "./audioScan";
 import { apiFetch, apiJson, getBackend, type CutBackend } from "./backend";
 import { quotaErrorMessage } from "./backend/cloud";
 import { encodeWav } from "./cloudTranscribe";
-import { downloadFromUrl } from "./download";
-import { startUpload, uploadInFlight } from "./importQueue";
+import { startUpload } from "./importQueue";
 import {
   audioChunks,
   audioPeaks,
@@ -19,23 +18,9 @@ import {
   UnreadableMediaError,
   videoTrackOf,
 } from "./mediaRead";
-import {
-  clearPendingUpload,
-  dropLocalMedia,
-  localMediaFile,
-  localMediaUrl,
-  pendingUploadsFor,
-  renameLocalMedia,
-  stashCloudMedia,
-  stashUnclaimedMedia,
-} from "./mediaSync";
-import { decodeRasterImage } from "./raster";
 import { useEditor } from "./store";
-import type { AssetType, AudioClip, MediaAsset, ProjectSummary, StoredAsset, VideoClip, WatchKeepReason } from "./types";
+import type { AssetType, AudioClip, MediaAsset, ProjectSummary, StoredAsset, VideoClip } from "./types";
 import { IMAGE_CLIP_SECONDS, mediaUrl } from "./types";
-import { createDedupSelector, DEDUP_TUNING } from "./watch/dedupSelector";
-import { diffCellPct, frameSig } from "./watch/signatures";
-import { SIGNATURE_SIZE } from "./watch/types";
 
 const uid = () => crypto.randomUUID().slice(0, 8);
 
@@ -100,20 +85,6 @@ export async function createProjectFromFile(
   return project.id;
 }
 
-/** Save a project media file to the user's Downloads folder — the everywhere
- * counterpart to revealing it in Finder.
- *
- * What lands is the source file itself: import stores the bytes it was handed
- * and every derivative (proxy, ladder, filmstrip, export) is a separate file,
- * so the media route is already the original. An asset whose bytes are still
- * uploading has no server copy to serve, so it has nothing to download yet.
- * `backend` pins the shelf the asset lives on when the ambient one may have
- * moved on. */
-export function downloadMedia(projectId: string, asset: MediaAsset, backend?: CutBackend) {
-  if (asset.upload) return;
-  downloadFromUrl(mediaUrl(projectId, asset.fileName, backend), asset.fileName);
-}
-
 /** Reveal a project media file in Finder (local engine only). */
 export async function revealMedia(projectId: string, fileName: string) {
   await apiFetch(
@@ -145,22 +116,17 @@ export async function presignUpload(
   presignPath: string,
   file: Blob,
   name: string,
-  backend: CutBackend = getBackend(),
-  extra: Record<string, unknown> = {}
+  backend: CutBackend = getBackend()
 ): Promise<{ key: string; url: string; fileName: string }> {
   const mime = file.type || "application/octet-stream";
   const res = await backend.fetch(presignPath, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fileName: name, mime, bytes: file.size, ...extra }),
+    body: JSON.stringify({ fileName: name, mime, bytes: file.size }),
   });
   const body = await apiJson<{ key?: string; url?: string; fileName?: string }>(res);
   if (!res.ok || !body.key || !body.url) {
-    const err = new Error(
-      quotaErrorMessage(res.status, body) ?? body.error ?? "Upload failed."
-    ) as Error & { status?: number };
-    err.status = res.status;
-    throw err;
+    throw new Error(quotaErrorMessage(res.status, body) ?? body.error ?? "Upload failed.");
   }
   return { key: body.key, url: body.url, fileName: body.fileName ?? name };
 }
@@ -179,26 +145,15 @@ export async function presignedUpload(
   return signed.key;
 }
 
-/** PUT a blob to a presigned R2 URL. XHR because it is the only way to watch
- * the bytes leave, which is what an upload running behind the editor has to
- * report. A headless runtime has no XHR and nobody watching; fetch covers it. */
+/** PUT a blob to a presigned R2 URL. XHR rather than fetch: it is the only way
+ * to watch the bytes leave, which is what an upload running behind the editor
+ * has to report. */
 export function putSigned(
   url: string,
   file: Blob,
   mime?: string,
   opts?: { onProgress?: (fraction: number) => void; signal?: AbortSignal }
 ): Promise<void> {
-  if (typeof XMLHttpRequest === "undefined") {
-    return fetch(url, {
-      method: "PUT",
-      headers: { "Content-Type": mime ?? (file.type || "application/octet-stream") },
-      body: file,
-      signal: opts?.signal,
-    }).then((res) => {
-      if (!res.ok) throw new Error("Upload failed.");
-      opts?.onProgress?.(1);
-    });
-  }
   return new Promise((resolve, reject) => {
     if (opts?.signal?.aborted) return reject(new DOMException("Upload cancelled.", "AbortError"));
     const xhr = new XMLHttpRequest();
@@ -345,13 +300,6 @@ async function probeMedia(type: AssetType, src: string | Blob): Promise<ProbedMe
     // Images have no intrinsic duration; the timeline clip carries its length.
     // Stills are the one kind read through the browser's image decoder rather
     // than the container reader, which does not do them.
-    if (typeof Image === "undefined") {
-      // Headless runtime: decode through the raster seam (skia in the worker).
-      const blob = typeof src === "string" ? await (await fetch(src)).blob() : src;
-      const img = await decodeRasterImage(blob);
-      if (!img) throw new UnreadableMediaError();
-      return { type, duration: 0, width: img.width, height: img.height };
-    }
     const url = typeof src === "string" ? src : URL.createObjectURL(src);
     try {
       const dims = await loadImageMeta(url);
@@ -410,52 +358,19 @@ export async function prepareImport(
   const type = assetTypeOf(file);
   if (!type) return null;
 
-  const objectUrl = URL.createObjectURL(file);
+  const localUrl = URL.createObjectURL(file);
   try {
     // Probing and claiming the name are independent, so the asset is ready
     // after whichever is slower rather than after both in turn. The probe
     // reads the dropped bytes rather than the object URL, so it never goes
     // back through the network stack for a file already in hand.
-    const metaP = probeMedia(type, file);
-    let signed: { key: string; url: string; fileName: string } | null = null;
-    let stashed: { fileName: string; url: string } | null = null;
-    // Names this browser already pinned locally (413-era stashes with no cloud
-    // row): the cloud can't see them, so its dedupe is told to steer clear —
-    // a claim on one of them would overwrite the only copy of another file.
-    const avoid = (await pendingUploadsFor(projectId)).map((p) => p.fileName);
-    try {
-      signed = await presignUpload(
-        `/api/cut/projects/${projectId}/media/presign`,
-        file,
-        file.name,
-        backend,
-        avoid.length > 0 ? { avoid } : {}
-      );
-    } catch (err) {
-      // A full account still imports: the bytes stay in the browser store
-      // under a locally deduped name, pinned until the drain claims a cloud
-      // name for them once there is room.
-      const status = (err as { status?: number }).status;
-      stashed = status === 413 ? await stashUnclaimedMedia(projectId, file) : null;
-      if (!stashed) {
-        await metaP.catch(() => {});
-        throw err;
-      }
-    }
-    // Local-first: the bytes land in the browser store under the claimed name
-    // before they leave it, so the asset saves into the document now and the
-    // upload drains behind it, surviving reloads through the store's ledger.
-    // A browser that can't hold the store keeps the tab-scoped object URL.
-    const storedUrl = signed
-      ? await stashCloudMedia(projectId, file, signed.fileName)
-      : stashed!.url;
-    const meta = await metaP;
-    const fileName = signed ? signed.fileName : stashed!.fileName;
-    const localUrl = storedUrl ?? objectUrl;
-    if (storedUrl) URL.revokeObjectURL(objectUrl);
+    const [meta, signed] = await Promise.all([
+      probeMedia(type, file),
+      presignUpload(`/api/cut/projects/${projectId}/media/presign`, file, file.name, backend),
+    ]);
     const asset: MediaAsset = {
       id: uid(),
-      fileName,
+      fileName: signed.fileName,
       name: file.name,
       type: meta.type,
       duration: meta.duration,
@@ -463,123 +378,26 @@ export async function prepareImport(
       ...(meta.height !== undefined ? { height: meta.height } : {}),
       ...(meta.peaks ? { peaks: meta.peaks } : {}),
       url: localUrl,
-      upload: { progress: 0, ...(storedUrl ? { stored: true } : {}) },
+      upload: { progress: 0 },
     };
-    const claim = signed;
-    const send = claim
-      ? async (opts?: { onProgress?: (fraction: number) => void; signal?: AbortSignal }) => {
-          await putSigned(claim.url, file, file.type || "application/octet-stream", opts);
-          const res = await backend.fetch(`/api/cut/projects/${projectId}/media/complete`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ key: claim.key }),
-          });
-          const body = await apiJson<{ fileName?: string }>(res);
-          if (!res.ok || !body.fileName) throw new Error(body.error ?? "Upload failed.");
-          await clearPendingUpload(projectId, body.fileName);
-          return body.fileName;
-        }
-      : sendStoredUpload(backend, projectId, stashed!.fileName);
-    return { asset, localUrl, send };
-  } catch (err) {
-    URL.revokeObjectURL(objectUrl);
-    throw err;
-  }
-}
-
-/** The drain for a store-backed upload, built from the stored bytes alone so
- * a reload can resume it: reclaim the cloud name, PUT the file, complete, and
- * unpin. The cloud's answer is the final name; when it drifts from the local
- * one (a 413-era stash claiming its first cloud name), the local copy is
- * renamed to match and the new name flows back to the asset. */
-export function sendStoredUpload(
-  backend: CutBackend,
-  projectId: string,
-  fileName: string
-): PendingImport["send"] {
-  return async (opts) => {
-    const file = await localMediaFile(projectId, fileName);
-    if (!file) throw new Error("The local copy of this file is gone.");
-    const mime = file.type || "application/octet-stream";
-    // Steer the cloud's dedupe around the other pinned names, never this one:
-    // this drain is the pin's own claim.
-    const avoid = (await pendingUploadsFor(projectId))
-      .map((p) => p.fileName)
-      .filter((n) => n !== fileName);
-    const res = await backend.fetch(`/api/cut/projects/${projectId}/media/presign`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        fileName,
-        mime,
-        bytes: file.size,
-        resume: true,
-        ...(avoid.length > 0 ? { avoid } : {}),
-      }),
-    });
-    const body = await apiJson<{ key?: string; url?: string; fileName?: string; done?: boolean }>(
-      res
-    );
-    if (!res.ok || !body.fileName || (!body.done && !(body.url && body.key))) {
-      throw new Error(quotaErrorMessage(res.status, body) ?? body.error ?? "Upload failed.");
-    }
-    let finalName = body.fileName;
-    if (!body.done) {
-      await putSigned(body.url!, file, mime, opts);
-      // A claim that resolved to a different name (a 413-era stash drifting)
-      // has to flow back into the open asset. If the user left the project,
-      // pause instead of completing: the rename would move the local copy out
-      // from under the saved document's reference. The claim stays pending
-      // and the next open of the project resumes it. A same-name claim can't
-      // drift, so it completes regardless.
-      if (body.fileName !== fileName && useEditor.getState().projectId !== projectId) {
-        throw Object.assign(new Error("Paused: the project closed."), { paused: true });
-      }
-      const cres = await backend.fetch(`/api/cut/projects/${projectId}/media/complete`, {
+    const send = async (opts?: {
+      onProgress?: (fraction: number) => void;
+      signal?: AbortSignal;
+    }) => {
+      await putSigned(signed.url, file, file.type || "application/octet-stream", opts);
+      const res = await backend.fetch(`/api/cut/projects/${projectId}/media/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: body.key }),
+        body: JSON.stringify({ key: signed.key }),
       });
-      const cbody = await apiJson<{ fileName?: string }>(cres);
-      if (!cres.ok || !cbody.fileName) throw new Error(cbody.error ?? "Upload failed.");
-      finalName = cbody.fileName;
-    }
-    await renameLocalMedia(projectId, fileName, finalName);
-    await clearPendingUpload(projectId, finalName);
-    return finalName;
-  };
-}
-
-/** Re-arm a cloud project's unsynced imports after a reload: every ledger pin
- * whose asset is still in the document gets its blob URL back, is re-marked
- * uploading, and re-enters the queue; a pin whose asset left the document
- * releases its bytes; a pin whose bytes are gone releases itself. */
-export async function resumePendingUploads(
-  projectId: string,
-  backend: CutBackend = getBackend()
-): Promise<void> {
-  if (backend.kind !== "cloud") return;
-  for (const p of await pendingUploadsFor(projectId)) {
-    const s = useEditor.getState();
-    if (s.projectId !== projectId) return;
-    const asset = s.assets.find((a) => a.fileName === p.fileName);
-    if (!asset) {
-      void dropLocalMedia(projectId, p.fileName);
-      continue;
-    }
-    if (uploadInFlight(asset.id)) continue;
-    const url = await localMediaUrl(projectId, p.fileName);
-    if (!url) {
-      void clearPendingUpload(projectId, p.fileName);
-      continue;
-    }
-    const upload = { progress: 0, stored: true };
-    useEditor.getState().updateAsset(asset.id, { url, upload });
-    startUpload(projectId, {
-      asset: { ...asset, url, upload },
-      localUrl: url,
-      send: sendStoredUpload(backend, projectId, p.fileName),
-    });
+      const body = await apiJson<{ fileName?: string }>(res);
+      if (!res.ok || !body.fileName) throw new Error(body.error ?? "Upload failed.");
+      return body.fileName;
+    };
+    return { asset, localUrl, send };
+  } catch (err) {
+    URL.revokeObjectURL(localUrl);
+    throw err;
   }
 }
 
@@ -595,9 +413,7 @@ export async function importFileToProject(
 
   const fileName = await uploadProjectMediaTo(backend, projectId, file, file.name);
   const url = mediaUrl(projectId, fileName, backend);
-  // Probe the bytes in hand: the same file the upload just wrote, with no
-  // second network read — which also lets a headless process import media.
-  const meta = await probeMedia(type, file);
+  const meta = await probeMedia(type, url);
   return {
     id: uid(),
     fileName,
@@ -1009,24 +825,18 @@ export async function renderAudioSpanWav(
   return encodeWav((await ctx.startRendering()).getChannelData(0));
 }
 
-// Watch geometry: cells at a fixed long side, tiled and stamped by
-// composeSheets. One sampler serves the local and cloud backends alike — the
-// browser decodes the source (local media rides the engine's media URL, cloud
-// media the CDN) and the shared selector keeps the frames that differ.
+// The engine's contact-sheet geometry (server/frames.ts), mirrored exactly so
+// the tool's stampSheet lands each cell's time stamp in the same place in
+// both modes.
 const SHEET_GRID = 3; // cells per row and column
 const SHEET_CELL = 480; // cell long side, px
 const SHEET_GAP = 4; // tile margin and padding, px
 const SHEET_MAX = 4; // sheets per call
 const SHEET_QUALITY = 0.8; // jpeg encode
-const CANDIDATE_CAP = 150; // decodes per call — the densest sweep
-const REFINE_TARGET_S = 0.35; // localize each hard cut to about this window
-const REFINE_MAX_PROBES = 48; // extra seeks the refinement pass may spend per call
 
-/** The watch sample: kept frames, ascending source time, each carrying why
- * the selector kept it (WatchKeepReason in types.ts). */
-export interface WatchFrames {
-  frames: { t: number; image: string; via: WatchKeepReason }[];
-  candidates: number;
+export interface WatchSheets {
+  sheets: { image: string; frames: { t: number }[] }[];
+  layout: { grid: number; margin: number; padding: number };
   sceneChanges: number[];
   coveredTo: number;
   truncated: boolean;
@@ -1034,14 +844,16 @@ export interface WatchFrames {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-// Round the cell's short side to even, so encoded dimensions stay codec-safe.
+// The engine scales with ffmpeg's scale=480:-2, which rounds the short side
+// to even; mirror it so cell geometry matches to the pixel.
 const cellDims = (w: number, h: number): [number, number] =>
   w >= h
     ? [SHEET_CELL, Math.max(2, 2 * Math.round((SHEET_CELL * h) / w / 2))]
     : [Math.max(2, 2 * Math.round((SHEET_CELL * w) / h / 2)), SHEET_CELL];
 
-/** Watch a still image: one downscaled frame, no time axis. */
-export async function makeStillFrame(sourceUrl: string): Promise<WatchFrames> {
+/** Cloud twin of the engine's watch route for a still image: one downscaled
+ * cell, no time axis. */
+export async function makeStillSheetClientSide(sourceUrl: string): Promise<WatchSheets> {
   const img = new Image();
   img.crossOrigin = "anonymous";
   await new Promise<void>((resolve, reject) => {
@@ -1060,43 +872,23 @@ export async function makeStillFrame(sourceUrl: string): Promise<WatchFrames> {
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, 0, 0, w, h);
   return {
-    frames: [{ t: 0, image: canvas.toDataURL("image/jpeg", SHEET_QUALITY), via: "first" }],
-    candidates: 1,
+    sheets: [{ image: canvas.toDataURL("image/jpeg", SHEET_QUALITY), frames: [{ t: 0 }] }],
+    layout: { grid: 1, margin: 0, padding: 0 },
     sceneChanges: [],
     coveredTo: 0,
     truncated: false,
   };
 }
 
-/** Watch a video source: decode candidates on a dense steady floor, then let
- * the shared selector keep the frames that actually differ. sceneChanges are
- * hard-cut times: each "global" keep says a cut lies inside the grid step
- * before it, and a short bisection pass narrows that window to about
- * REFINE_TARGET_S — the reported time is where the new shot is first seen.
- * A shot shorter than the candidate step can still fall between samples; a
- * narrow re-watch with a small interval is the recall pass.
- *
- * Coverage is honest by construction: the keep-cap, a pause, and the time
- * budget all END the pass (coveredTo says where) instead of thinning or
- * guessing — everything inside [from, coveredTo] was decoded and judged, and
- * every kept frame in it is returned. A source that decodes no frames at all
- * throws; it is never reported as watched.
- *
- * metadataOnly skips the cell copies and JPEG encodes — frames come back with
- * an empty image — for the background sweep, which only wants the numbers.
- * shouldPause is polled per candidate; budgetMs bounds the whole call the
- * same way, for callers racing a tool deadline. */
-export async function sampleWatchFrames(
+/** Cloud twin of the engine's watch route: seek the source in the browser and
+ * tile downscaled frames into timestamped contact sheets, with the route's
+ * defaults, clamps, and per-call caps. Frames land on the steady interval
+ * only — scene detection needs a decoder — so sceneChanges stays empty and
+ * scene fields are omitted. */
+export async function makeContactSheetsClientSide(
   sourceUrl: string,
-  opts: {
-    from: number;
-    to?: number;
-    interval?: number;
-    metadataOnly?: boolean;
-    shouldPause?: () => boolean;
-    budgetMs?: number;
-  }
-): Promise<WatchFrames> {
+  opts: { from: number; to?: number; interval?: number }
+): Promise<WatchSheets> {
   const input = openMedia(sourceUrl);
   try {
     const track = await videoTrackOf(input);
@@ -1107,212 +899,77 @@ export async function sampleWatchFrames(
       throw new Error("Could not read the media duration — pass to (seconds).");
     if (!(wanted > from)) throw new Error("from/to describe an empty range.");
     const to = Math.min(wanted, from + 600); // bound the work per call; callers resume from coveredTo
-    const interval = clamp(opts.interval ?? 1, 0.5, 30);
-    // The candidate floor: as asked, widened only when the range would blow
-    // the per-call decode budget.
-    const step = Math.max(interval, (to - from) / CANDIDATE_CAP);
+    const interval =
+      opts.interval !== undefined
+        ? clamp(opts.interval, 0.5, 30)
+        : clamp((to - from) / 32, 2, 30);
+
+    const perSheet = SHEET_GRID * SHEET_GRID;
     const times: number[] = [];
-    for (let t = from; t < to && times.length < CANDIDATE_CAP; t += step)
+    for (let t = from; t < to && times.length < SHEET_MAX * perSheet; t += interval)
       times.push(round2(t));
 
     const [cw, ch] = cellDims(await track.getDisplayWidth(), await track.getDisplayHeight());
-    const maxFrames = SHEET_MAX * SHEET_GRID * SHEET_GRID;
-    // Cell canvases are held only until the selector rules on them (decisions
-    // run one frame behind), so memory stays near the kept set, never the
-    // candidate sweep.
-    const held = new Map<number, HTMLCanvasElement>();
-    const candTimes: number[] = [];
-    const candG16: Float32Array[] = []; // per-candidate coarse grid, for cut refinement
-    let keptCount = 0;
-    const selector = createDedupSelector({
-      maxFrames,
-      onDecision: (d) => {
-        if (d.verdict === "drop") held.delete(d.index);
-        else keptCount++;
-      },
-    });
-    const sig = document.createElement("canvas");
-    sig.width = SIGNATURE_SIZE;
-    sig.height = SIGNATURE_SIZE;
-    const sigCtx = sig.getContext("2d", { willReadFrequently: true });
-    if (!sigCtx) throw new Error("Could not sample the video.");
-    const deadline = Date.now() + (opts.budgetMs ?? Infinity);
-    const outOfTime = () => Date.now() > deadline;
-    const sigG16At = async (t: number): Promise<Float32Array | null> => {
-      const one = await frameSink(track, { width: cw, height: ch, fit: "fill" })
-        .canvasesAtTimestamps([t])
-        .next();
-      if (one.done || !one.value) return null;
-      sigCtx.imageSmoothingQuality = "high";
-      sigCtx.drawImage(one.value.canvas, 0, 0, SIGNATURE_SIZE, SIGNATURE_SIZE);
-      const data = sigCtx.getImageData(0, 0, SIGNATURE_SIZE, SIGNATURE_SIZE).data;
-      return frameSig({ width: SIGNATURE_SIZE, height: SIGNATURE_SIZE, channels: 4, data }).g16;
-    };
+    const sheetW = 2 * SHEET_GAP + SHEET_GRID * cw + (SHEET_GRID - 1) * SHEET_GAP;
+    const sheetH = 2 * SHEET_GAP + SHEET_GRID * ch + (SHEET_GRID - 1) * SHEET_GAP;
+    const sheets: WatchSheets["sheets"] = [];
 
-    // The times are ascending, so the whole span decodes once, in order.
+    // The times are ascending, so the whole span decodes once, in order, and
+    // each cell is drawn as its frame comes past.
     const cells = frameSink(track, { width: cw, height: ch, fit: "fill" }).canvasesAtTimestamps(
       times
     );
-    let paused = false;
-    let capped = false;
+    let ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null;
+    let canvas: HTMLCanvasElement | null = null;
+    // Only the cells that actually got a frame are reported. A cell the decoder
+    // had nothing for stays black, and listing its timestamp anyway would tell
+    // the model there is a picture of that moment on the sheet — it would then
+    // describe a black tile as the content at that time, or read every later
+    // cell against the wrong one.
+    let drawn: { t: number }[] = [];
     for (let i = 0; i < times.length; i++) {
-      if (opts.shouldPause?.() || outOfTime()) {
-        paused = true;
-        break;
-      }
-      // The keep-cap ends the pass — everything reported stays everything
-      // seen, and the caller resumes from coveredTo.
-      if (keptCount >= maxFrames) {
-        capped = true;
-        break;
+      const j = i % perSheet;
+      if (j === 0) {
+        canvas = document.createElement("canvas");
+        canvas.width = sheetW;
+        canvas.height = sheetH;
+        ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Could not sample the video.");
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, sheetW, sheetH);
+        ctx.imageSmoothingQuality = "high";
+        drawn = [];
       }
       const next = await cells.next();
-      if (next.done || !next.value) continue; // a moment the decoder had no frame for
-      if (!opts.metadataOnly) {
-        const copy = document.createElement("canvas");
-        copy.width = cw;
-        copy.height = ch;
-        const cctx = copy.getContext("2d");
-        if (!cctx) throw new Error("Could not sample the video.");
-        cctx.drawImage(next.value.canvas, 0, 0);
-        held.set(candTimes.length, copy);
+      if (!next.done && next.value) {
+        const x = SHEET_GAP + (j % SHEET_GRID) * (cw + SHEET_GAP);
+        const y = SHEET_GAP + Math.floor(j / SHEET_GRID) * (ch + SHEET_GAP);
+        ctx!.drawImage(next.value.canvas, x, y, cw, ch);
+        drawn.push({ t: times[i] });
       }
-      candTimes.push(times[i]);
-      sigCtx.imageSmoothingQuality = "high";
-      sigCtx.drawImage(next.value.canvas, 0, 0, SIGNATURE_SIZE, SIGNATURE_SIZE);
-      const rgb = {
-        width: SIGNATURE_SIZE,
-        height: SIGNATURE_SIZE,
-        channels: 4 as const,
-        data: sigCtx.getImageData(0, 0, SIGNATURE_SIZE, SIGNATURE_SIZE).data,
-      };
-      candG16.push(frameSig(rgb).g16);
-      selector.push(rgb);
-    }
-    const selection = selector.finish();
-    // Nothing decoded and nothing interrupted the pass: the source is
-    // unreadable. Say so — never record an unseen span as watched.
-    if (candTimes.length === 0 && !paused) throw new Error("Could not sample the video.");
-    // finish() judges the one pending frame, which can nudge past the cap.
-    const keptIdx = selection.kept.slice(0, maxFrames);
-    const frames: WatchFrames["frames"] = [];
-    for (const idx of keptIdx) {
-      const canvas = held.get(idx);
-      if (!opts.metadataOnly && !canvas) continue;
-      const verdict = selection.decisions[idx].verdict;
-      frames.push({
-        t: candTimes[idx],
-        image: canvas ? await canvasDataUrl(canvas, "image/jpeg", SHEET_QUALITY) : "",
-        via: verdict === "keep-global" ? "global"
-          : verdict === "keep-action" ? "action"
-          : verdict === "keep-settled" ? "settled"
-          : "first",
-      });
-    }
-    held.clear();
-
-    // A "global" keep only says the cut lies in the grid step before it.
-    // Bisect that step with a few extra decodes so each reported cut time
-    // sits within REFINE_TARGET_S of the first new-shot frame; the kept
-    // image stays the grid sample.
-    let probes = 0;
-    const sceneChanges: number[] = [];
-    for (const idx of keptIdx) {
-      if (selection.decisions[idx].verdict !== "keep-global") continue;
-      let lo = idx > 0 ? candTimes[idx - 1] : from;
-      let hi = candTimes[idx];
-      const pre = idx > 0 ? candG16[idx - 1] : null;
-      while (
-        pre !== null &&
-        hi - lo > REFINE_TARGET_S &&
-        probes < REFINE_MAX_PROBES &&
-        !outOfTime() &&
-        !opts.shouldPause?.()
-      ) {
-        probes++;
-        const mid = (lo + hi) / 2;
-        const g = await sigG16At(mid);
-        if (!g) break;
-        if (diffCellPct(g, pre, DEDUP_TUNING.GLOBAL_TOL) > DEDUP_TUNING.THRESHOLD) hi = mid;
-        else lo = mid;
+      const lastCell = j === perSheet - 1 || i === times.length - 1;
+      if (lastCell && drawn.length > 0) {
+        sheets.push({
+          image: await canvasDataUrl(canvas!, "image/jpeg", SHEET_QUALITY),
+          frames: drawn,
+        });
       }
-      sceneChanges.push(round2(hi));
     }
 
-    // An interrupted or capped scan only covered what it decoded and kept;
-    // the caller merges that much and comes back for the rest.
-    const lastKeptT = keptIdx.length > 0 ? candTimes[keptIdx[keptIdx.length - 1]] : from;
-    const coveredTo = paused
-      ? (candTimes[candTimes.length - 1] ?? from)
-      : capped
-        ? lastKeptT
-        : to;
+    const lastT = times.length > 0 ? times[times.length - 1] : from;
+    const capped = times.length >= SHEET_MAX * perSheet && lastT < to - interval;
+    // The per-call span bound is itself truncation — the caller asked for more.
+    const truncated = capped || to < wanted;
     return {
-      frames,
-      candidates: selection.candidateCount,
-      sceneChanges,
-      coveredTo,
-      // The per-call span bound is itself truncation — the caller asked for more.
-      truncated: paused || capped || to < wanted,
+      sheets,
+      layout: { grid: SHEET_GRID, margin: SHEET_GAP, padding: SHEET_GAP },
+      sceneChanges: [],
+      coveredTo: capped ? lastT : to,
+      truncated,
     };
   } finally {
     input.dispose();
   }
-}
-
-/** Tile kept frames into 3×3 contact sheets and stamp each cell's source
- * time. The last sheet may run short; its frames list only the real cells. */
-export async function composeSheets(
-  cells: { t: number; image: string }[]
-): Promise<{ image: string; frames: { t: number }[] }[]> {
-  if (cells.length === 0) return [];
-  const images = await Promise.all(
-    cells.map(
-      (c) =>
-        new Promise<HTMLImageElement>((resolve, reject) => {
-          const img = new Image();
-          img.onload = () => resolve(img);
-          img.onerror = () => reject(new Error("Bad frame image."));
-          img.src = c.image;
-        })
-    )
-  );
-  const cw = images[0].naturalWidth;
-  const ch = images[0].naturalHeight;
-  const perSheet = SHEET_GRID * SHEET_GRID;
-  const sheetW = 2 * SHEET_GAP + SHEET_GRID * cw + (SHEET_GRID - 1) * SHEET_GAP;
-  const sheetH = 2 * SHEET_GAP + SHEET_GRID * ch + (SHEET_GRID - 1) * SHEET_GAP;
-  const size = Math.max(13, Math.round(ch / 12));
-  const sheets: { image: string; frames: { t: number }[] }[] = [];
-  for (let s = 0; s < cells.length; s += perSheet) {
-    const batch = cells.slice(s, s + perSheet);
-    const canvas = document.createElement("canvas");
-    canvas.width = sheetW;
-    canvas.height = sheetH;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("No 2d context.");
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, sheetW, sheetH);
-    ctx.imageSmoothingQuality = "high";
-    ctx.font = `bold ${size}px ui-monospace, monospace`;
-    ctx.textBaseline = "bottom";
-    batch.forEach((c, j) => {
-      const x = SHEET_GAP + (j % SHEET_GRID) * (cw + SHEET_GAP);
-      const y = SHEET_GAP + Math.floor(j / SHEET_GRID) * (ch + SHEET_GAP);
-      ctx.drawImage(images[s + j], x, y, cw, ch);
-      const label = `${round2(c.t)}s`;
-      const w = ctx.measureText(label).width;
-      ctx.fillStyle = "rgba(0,0,0,0.6)";
-      ctx.fillRect(x + 4, y + ch - size - 10, w + 10, size + 8);
-      ctx.fillStyle = "#fff";
-      ctx.fillText(label, x + 9, y + ch - 6);
-    });
-    sheets.push({
-      image: await canvasDataUrl(canvas, "image/jpeg", SHEET_QUALITY),
-      frames: batch.map((c) => ({ t: c.t })),
-    });
-  }
-  return sheets;
 }
 
 /** Generate filmstrip thumbnails / waveform peaks and merge them into the

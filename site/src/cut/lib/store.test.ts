@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { groupRemap } from "@donkeycut/effects-kit";
-import { adoptTransitionFields, clipLen, deriveTransitionFields, docOverlays, getClipSpans, liftClipLooks, moveOverlayGroup, overlayLaneOrder, normalizeElementLanes, parkedTransitions, placeInRun, projectDuration, reanchorTransitions, separateOverlaps, serializeDoc, useEditor } from "./store";
-import { playheadAt, setPlayhead, setSkim } from "./playhead";
+import { adoptTransitionFields, clipLen, deriveTransitionFields, docOverlays, getClipSpans, liftClipLooks, moveOverlayGroup, overlayLaneOrder, normalizeElementLanes, placeInRun, projectDuration, separateOverlaps, serializeDoc, useEditor } from "./store";
 import { emptySubtitles } from "./types";
 import type { AudioClip, MediaAsset, SubtitleCue, TextOverlay, VideoClip } from "./types";
 
@@ -87,7 +86,6 @@ const videoLane = (track: number) =>
     .map((c) => ({ start: c.start, end: c.start + clipLen(c) }));
 
 beforeEach(() => {
-  setSkim(null);
   useEditor.setState({
     clips: [],
     transitions: [],
@@ -199,14 +197,12 @@ describe("committed video updates (AI chat / inspector)", () => {
   });
 
   test("retracking onto an occupied track slides clear", () => {
-    // Grounded on write: the stack always sits on track 0, so the pair is
-    // written as the rows they would ground to.
-    const c1 = vclip({ track: 0, start: 0, out: 2 });
-    const c2 = vclip({ track: 1, start: 0.5, out: 2 });
+    const c1 = vclip({ track: 1, start: 0, out: 2 });
+    const c2 = vclip({ track: 2, start: 0.5, out: 2 });
     useEditor.setState({ clips: [c1, c2] });
-    s().updateClip(c2.id, { track: 0 });
+    s().updateClip(c2.id, { track: 1 });
     expect(clipById(c2.id).start).toBeCloseTo(2);
-    expectLaneSound(videoLane(0));
+    expectLaneSound(videoLane(1));
   });
 
   test("extending a clip pushes the same-track run right", () => {
@@ -292,66 +288,6 @@ describe("committed video updates (AI chat / inspector)", () => {
     // transition is a blend at the cut, never a licence to intrude.
     s().updateClip(b.id, { start: 1 });
     expect(clipById(b.id).start).toBeCloseTo(4);
-  });
-});
-
-describe("the panel + add", () => {
-  test("a video lands under the playhead when its track has room there", () => {
-    const a = asset(2);
-    useEditor.setState({ assets: [a], clips: [vclip({ start: 0, out: 2 })] });
-    setPlayhead(5);
-    s().addAssetAtPlayhead(a.id);
-    const added = s().clips.find((c) => c.assetId === a.id)!;
-    expect(added.start).toBeCloseTo(5);
-    expect(added.track).toBe(0);
-  });
-
-  test("an occupied playhead climbs to the first open track, opening one when the stack is full", () => {
-    const a = asset(2);
-    useEditor.setState({
-      assets: [a],
-      clips: [vclip({ start: 0, out: 8 }), vclip({ track: 1, start: 4, out: 4 })],
-    });
-    setPlayhead(5);
-    s().addAssetAtPlayhead(a.id);
-    const added = s().clips.find((c) => c.assetId === a.id)!;
-    expect(added.start).toBeCloseTo(5);
-    expect(added.track).toBe(2);
-    expectLaneSound(videoLane(0));
-    expectLaneSound(videoLane(1));
-  });
-
-  test("a gap too small for the clip counts as occupied", () => {
-    const a = asset(4);
-    useEditor.setState({
-      assets: [a],
-      clips: [vclip({ start: 0, out: 2 }), vclip({ start: 4, out: 2 })],
-    });
-    setPlayhead(2); // 2s gap, 4s clip
-    s().addAssetAtPlayhead(a.id);
-    const added = s().clips.find((c) => c.assetId === a.id)!;
-    expect(added.start).toBeCloseTo(2);
-    expect(added.track).toBe(1);
-    expectLaneSound(videoLane(0));
-  });
-
-  test("a live skimmer wins over the playhead", () => {
-    const a = asset(2);
-    useEditor.setState({ assets: [a], clips: [] });
-    setPlayhead(1);
-    setSkim(6);
-    s().addAssetAtPlayhead(a.id);
-    expect(s().clips.find((c) => c.assetId === a.id)!.start).toBeCloseTo(6);
-  });
-
-  test("audio under a full lane opens the next lane at the same moment", () => {
-    const a = asset(3, "audio");
-    useEditor.setState({ assets: [a], audioClips: [aclip({ start: 0, out: 10 })] });
-    setPlayhead(2);
-    s().addAssetAtPlayhead(a.id);
-    const added = s().audioClips.find((c) => c.assetId === a.id)!;
-    expect(added.start).toBeCloseTo(2);
-    expect(added.lane).toBe(1);
   });
 });
 
@@ -517,23 +453,9 @@ describe("title lanes", () => {
       s().setOverlayKey(t1.id, 1);
       s().selectOverlayKey(t1.id, 1);
       s().moveOverlayKey(t1.id, 1, 2.5, { transient: true });
-      expect(s().selectedKey).toEqual({ kind: "overlay", id: t1.id, t: 2.5, track: "pose" });
+      expect(s().selectedKey).toEqual({ overlayId: t1.id, t: 2.5 });
       s().deleteSelection();
       expect(overlayById(t1.id).kf).toBe(undefined);
-    });
-
-    test("a picked mask key deletes from the mask track and leaves the pose", () => {
-      const t1 = title({ start: 0, end: 4, mask: { kind: "rect" as const } });
-      useEditor.setState({ overlays: [t1] });
-      s().setOverlayKey(t1.id, 1);
-      s().setOverlayMaskKey(t1.id, 1);
-      s().setOverlayMaskKey(t1.id, 3, { w: 0.8 });
-      s().selectOverlayMaskKey(t1.id, 3);
-      s().moveOverlayMaskKey(t1.id, 3, 2, { transient: true });
-      expect(s().selectedKey).toEqual({ kind: "overlay", id: t1.id, t: 2, track: "mask" });
-      s().deleteSelection();
-      expect(overlayById(t1.id).mask!.kf!.map((k) => k.t)).toEqual([1]);
-      expect(overlayById(t1.id).kf!.length).toBe(1); // the pose track is untouched
     });
 
     test("selecting anything else drops the pick", () => {
@@ -666,11 +588,11 @@ describe("delete ripple and gaps", () => {
     const far = vclip({ track: 0, start: 30, out: 4 });
     useEditor.setState({ clips: [keep, far] });
     s().seek(32);
-    expect(playheadAt()).toBeCloseTo(32);
+    expect(s().currentTime).toBeCloseTo(32);
     s().select({ kind: "clip", id: far.id });
     s().deleteSelection();
-    expect(playheadAt()).toBeCloseTo(projectDuration(s()));
-    expect(playheadAt()).toBeLessThanOrEqual(4);
+    expect(s().currentTime).toBeCloseTo(projectDuration(s()));
+    expect(s().currentTime).toBeLessThanOrEqual(4);
   });
 
   test("an overlay left standing keeps the playhead reachable", () => {
@@ -678,7 +600,7 @@ describe("delete ripple and gaps", () => {
     const late = title({ start: 6, end: 9 });
     useEditor.setState({ clips: [clip], overlays: [late], audioClips: [] });
     s().seek(8);
-    expect(playheadAt()).toBeCloseTo(8);
+    expect(s().currentTime).toBeCloseTo(8);
   });
 
   test("removeLaneGap closes the gap on its own track only", () => {
@@ -799,8 +721,7 @@ describe("upper-track transitions", () => {
     const c = vclip({ track: 1, start: 8, out: 4, assetId: av.id });
     useEditor.setState({ assets: [av], clips: [spine, a, c] });
     s().setClipTransition(a.id, 1);
-    useEditor.setState({ selection: { kind: "clip", id: a.id } });
-    setPlayhead(4);
+    useEditor.setState({ selection: { kind: "clip", id: a.id }, currentTime: 4 });
     s().splitAtPlayhead();
     const halves = s().clips.filter((x) => x.track === 1 && x.id !== c.id);
     expect(halves.length).toBe(2);
@@ -944,169 +865,6 @@ describe("bars and clip edges", () => {
     expect(clipById(a.id).transition).toBeUndefined();
   });
 
-  test("a trim carries the bar and the clip fields the export renders from", () => {
-    // The preview and the export read clip.transition, not the bar. A resize
-    // moves the clip's edge and the run behind it, so both have to land
-    // together: a bar left behind, or a field left stale, is a blend playing
-    // at a joint that no longer has one.
-    const av = asset(8);
-    const a = vclip({ track: 0, start: 0, out: 4, assetId: av.id });
-    const b = vclip({ track: 0, start: 4, out: 4, assetId: av.id });
-    useEditor.setState({ assets: [av], clips: [a, b] });
-    s().setClipTransition(a.id, 0.8, "wipeleft");
-    s().setClipTrim(a.id, 0, 3);
-    // The pair stays in contact, so the cut moved to 3s with the bar on it.
-    expect(clipById(b.id).start).toBeCloseTo(3);
-    expect(s().transitions[0].start).toBeCloseTo(2.2);
-    expect(parkedTransitions(s().clips, s().transitions)).toEqual([]);
-    // And the render fields still describe that blend.
-    expect(clipById(a.id).transition).toBeCloseTo(0.8);
-    expect(clipById(a.id).transitionStyle).toBe("wipeleft");
-  });
-
-  test("a bar lining up with nothing reads as parked, and reanchorBars brings it back", () => {
-    const av = asset(8);
-    const a = vclip({ track: 0, start: 0, out: 4, assetId: av.id });
-    const b = vclip({ track: 0, start: 6, out: 4, assetId: av.id });
-    useEditor.setState({ assets: [av], clips: [a, b] });
-    // A blend on a's open tail, the bar ending on 4s.
-    s().setClipAnim(a.id, "out", { style: "fade", seconds: 0.8 });
-    expect(parkedTransitions(s().clips, s().transitions)).toEqual([]);
-    // The clip slides — the move an assistant makes with place_clip — and the
-    // bar stays where it was, now lining up with nothing.
-    const before = s().clips;
-    s().updateClip(a.id, { start: 1 });
-    const parked = parkedTransitions(s().clips, s().transitions);
-    expect(parked.length).toBe(1);
-    expect(parked[0].style).toBe("crossfade");
-    expect(clipById(a.id).animOut).toBeUndefined();
-    // Carrying the bars through that move lands it back on the edge it
-    // played, and the render fields follow.
-    s().reanchorBars(before);
-    expect(s().transitions[0].start).toBeCloseTo(4.2);
-    expect(parkedTransitions(s().clips, s().transitions)).toEqual([]);
-    expect(clipById(a.id).animOut).toEqual({ style: "fade", seconds: 0.8 });
-  });
-
-  test("a copied bar pastes onto the cut nearest the playhead", () => {
-    const av = asset(12);
-    const a = vclip({ track: 0, start: 0, out: 4, assetId: av.id });
-    const b = vclip({ track: 0, start: 4, out: 4, assetId: av.id });
-    const c = vclip({ track: 0, start: 8, out: 4, assetId: av.id });
-    useEditor.setState({ assets: [av], clips: [a, b, c] });
-    s().setClipTransition(a.id, 0.8, "wipeleft");
-    const bar = s().transitions[0];
-    useEditor.setState({
-      selection: { kind: "transition", id: bar.id },
-      multiSelection: [{ kind: "transition", id: bar.id }],
-    });
-    expect(s().copySelection()).toBe(true);
-    setPlayhead(7.7); // in reach of the b|c cut at 8
-    expect(s().paste()).toBe(true);
-    expect(s().transitions.length).toBe(2);
-    // The paste plays that cut with the copied blend, fields and all.
-    expect(clipById(b.id).transition).toBeCloseTo(0.8);
-    expect(clipById(b.id).transitionStyle).toBe("wipeleft");
-    expect(parkedTransitions(s().clips, s().transitions)).toEqual([]);
-    expect(s().selection).toEqual({ kind: "transition", id: s().transitions[1].id });
-  });
-
-  test("a bar pasted onto an occupied cut replaces the incumbent", () => {
-    const av = asset(12);
-    const a = vclip({ track: 0, start: 0, out: 4, assetId: av.id });
-    const b = vclip({ track: 0, start: 4, out: 4, assetId: av.id });
-    const c = vclip({ track: 0, start: 8, out: 4, assetId: av.id });
-    useEditor.setState({ assets: [av], clips: [a, b, c] });
-    s().setClipTransition(a.id, 0.8, "wipeleft");
-    s().setClipTransition(b.id, 0.4, "crossfade");
-    const bar = s().transitions.find((t) => t.style === "wipeleft")!;
-    useEditor.setState({
-      selection: { kind: "transition", id: bar.id },
-      multiSelection: [{ kind: "transition", id: bar.id }],
-    });
-    s().copySelection();
-    setPlayhead(8.2);
-    s().paste();
-    // One bar on the b|c cut: the pasted wipe; the crossfade left with it.
-    expect(s().transitions.length).toBe(2);
-    expect(clipById(b.id).transition).toBeCloseTo(0.8);
-    expect(clipById(b.id).transitionStyle).toBe("wipeleft");
-    expect(parkedTransitions(s().clips, s().transitions)).toEqual([]);
-  });
-
-  test("a bar pasted far from any boundary parks at the playhead", () => {
-    const av = asset(8);
-    const a = vclip({ track: 0, start: 0, out: 4, assetId: av.id });
-    const b = vclip({ track: 0, start: 4, out: 4, assetId: av.id });
-    useEditor.setState({ assets: [av], clips: [a, b] });
-    s().setClipTransition(a.id, 0.6, "dipblack");
-    const bar = s().transitions[0];
-    useEditor.setState({
-      selection: { kind: "transition", id: bar.id },
-      multiSelection: [{ kind: "transition", id: bar.id }],
-    });
-    s().copySelection();
-    setPlayhead(6); // 2s from the cuts at 4 and 8
-    s().paste();
-    expect(s().transitions.length).toBe(2);
-    const pasted = s().transitions[1];
-    expect(pasted.start).toBeCloseTo(6);
-    expect(pasted.style).toBe("dipblack");
-    expect(parkedTransitions(s().clips, s().transitions)).toEqual([pasted]);
-  });
-
-  test("clips copied with their bar keep the blend on their own cut", () => {
-    const av = asset(12);
-    const a = vclip({ track: 0, start: 0, out: 3, assetId: av.id });
-    const b = vclip({ track: 0, start: 3, out: 3, assetId: av.id });
-    useEditor.setState({ assets: [av], clips: [a, b] });
-    s().setClipTransition(a.id, 0.5, "crosszoom");
-    const bar = s().transitions[0];
-    useEditor.setState({
-      selection: { kind: "transition", id: bar.id },
-      multiSelection: [
-        { kind: "clip", id: a.id },
-        { kind: "clip", id: b.id },
-        { kind: "transition", id: bar.id },
-      ],
-    });
-    expect(s().copySelection()).toBe(true);
-    setPlayhead(8);
-    expect(s().paste()).toBe(true);
-    const pastedClips = s().clips.filter((x) => x.id !== a.id && x.id !== b.id);
-    expect(pastedClips.map((x) => x.start)).toEqual([8, 11]);
-    // The bar followed the pair, so the copied cut at 11 plays the same blend.
-    expect(pastedClips[0].transition).toBeCloseTo(0.5);
-    expect(pastedClips[0].transitionStyle).toBe("crosszoom");
-    expect(parkedTransitions(s().clips, s().transitions)).toEqual([]);
-  });
-
-  test("paste lands under the skimmer when one is live, sliding clear of the lane", () => {
-    const av = asset(8);
-    const a = vclip({ track: 0, start: 0, out: 3, assetId: av.id });
-    useEditor.setState({
-      assets: [av],
-      clips: [a],
-      selection: { kind: "clip", id: a.id },
-      multiSelection: [{ kind: "clip", id: a.id }],
-    });
-    expect(s().copySelection()).toBe(true);
-    setPlayhead(10);
-    setSkim(5);
-    expect(s().paste()).toBe(true);
-    // The skimmer wins over the playhead.
-    expect(s().clips.map((c) => c.start)).toEqual([0, 5]);
-    // A skim into occupied ground slides to the lane's next gap that fits.
-    setSkim(1);
-    expect(s().paste()).toBe(true);
-    expect(s().clips.map((c) => c.start)).toEqual([0, 5, 8]);
-    expectLaneSound(videoLane(0));
-    // With the pointer off the timeline, the playhead takes over.
-    setSkim(null);
-    expect(s().paste()).toBe(true);
-    expect(s().clips.map((c) => c.start)).toEqual([0, 5, 8, 11]);
-  });
-
   test("an animation on a far edge leaves an unrelated transition alone", () => {
     const av = asset(4);
     const a = vclip({ track: 0, start: 0, out: 4, assetId: av.id });
@@ -1118,67 +876,6 @@ describe("bars and clip edges", () => {
     expect(clipById(a.id).transition).toBeCloseTo(0.8);
     expect(clipById(a.id).animIn).toEqual({ style: "fade", seconds: 0.5 });
     expect(clipById(b.id).animOut).toEqual({ style: "fade", seconds: 0.5 });
-  });
-
-  test("tracks cutting at the same instant share one bar, never a stack", () => {
-    const av = asset(8);
-    const a = vclip({ track: 0, start: 0, out: 2, assetId: av.id });
-    const b = vclip({ track: 0, start: 2, in: 2, out: 4, assetId: av.id });
-    const c = vclip({ track: 1, start: 0, out: 2, assetId: av.id });
-    const d = vclip({ track: 1, start: 2, in: 2, out: 4, assetId: av.id });
-    useEditor.setState({ assets: [av], clips: [a, b, c, d] });
-    s().setClipTransition(a.id, 0.5);
-    s().setClipTransition(c.id, 0.5); // same cut instant on the other track
-    expect(s().transitions.length).toBe(1);
-    expect(clipById(a.id).transition).toBeCloseTo(0.5);
-    expect(clipById(c.id).transition).toBeCloseTo(0.5);
-    // Retiming through the same calls updates that one bar in place.
-    s().setClipTransition(a.id, 0.4);
-    s().setClipTransition(c.id, 0.4);
-    expect(s().transitions.length).toBe(1);
-    expect(s().transitions[0].seconds).toBeCloseTo(0.4);
-  });
-
-  test("simultaneous entrances on several tracks ride one bar", () => {
-    const av = asset(8);
-    const a = vclip({ track: 1, start: 1, in: 1, out: 3, assetId: av.id });
-    const b = vclip({ track: 2, start: 1, in: 1, out: 3, assetId: av.id });
-    useEditor.setState({ assets: [av], clips: [a, b] });
-    s().setClipAnim(a.id, "in", { style: "zoom", seconds: 0.3 });
-    s().setClipAnim(b.id, "in", { style: "zoom", seconds: 0.3 });
-    expect(s().transitions.length).toBe(1);
-    expect(clipById(a.id).animIn).toEqual({ style: "zoom", seconds: 0.3 });
-    expect(clipById(b.id).animIn).toEqual({ style: "zoom", seconds: 0.3 });
-  });
-
-  test("deleting a clip takes its parked leftover bars along", () => {
-    const av = asset(8);
-    const a = vclip({ track: 0, start: 0, out: 2, assetId: av.id });
-    useEditor.setState({ assets: [av], clips: [a] });
-    // A parked twin sitting exactly on the clip's tail, playing nothing.
-    s().addTransition({ start: 1.7, seconds: 0.3, style: "crosszoom" });
-    s().addTransition({ start: 1.7, seconds: 0.3, style: "crosszoom" });
-    expect(s().transitions.length).toBe(2);
-    s().select({ kind: "clip", id: a.id });
-    s().deleteSelection();
-    expect(s().clips.length).toBe(0);
-    expect(s().transitions.length).toBe(0);
-  });
-
-  test("a shared bar survives while one of its clips does", () => {
-    const av = asset(8);
-    const a = vclip({ track: 0, start: 0, out: 2, assetId: av.id });
-    const b = vclip({ track: 0, start: 2, in: 2, out: 4, assetId: av.id });
-    const c = vclip({ track: 1, start: 0, out: 2, assetId: av.id });
-    const d = vclip({ track: 1, start: 2, in: 2, out: 4, assetId: av.id });
-    useEditor.setState({ assets: [av], clips: [a, b, c, d] });
-    s().setClipTransition(a.id, 0.5);
-    expect(s().transitions.length).toBe(1);
-    // Track 1's pair goes; the bar still plays track 0's cut.
-    useEditor.setState({ multiSelection: [{ kind: "clip", id: c.id }, { kind: "clip", id: d.id }] });
-    s().deleteSelection();
-    expect(s().transitions.length).toBe(1);
-    expect(clipById(a.id).transition).toBeCloseTo(0.5);
   });
 });
 

@@ -2,8 +2,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { atempoChain, hasStream, num, videoColorInfo } from "./util";
-import { projectFadeSeconds, regionPx, TRANSITION_XFADE, TRANSITION_ZOOM, type ColorGrade, type TransitionStyle } from "../lib/types";
-import { effectFilterLines, gradeToFfmpegFilter, lookFilterLines, shortestTurn, sortedKeys, type OverlayKey } from "@donkeycut/effects-kit";
+import { projectFadeSeconds, TRANSITION_XFADE, TRANSITION_ZOOM, type ColorGrade, type TransitionStyle } from "../lib/types";
+import { effectFilterLines, gradeToFfmpegFilter, lookFilterLines } from "@donkeycut/effects-kit";
 
 // The render pipeline itself: spec in, finished mp4 out. Shared by the local
 // engine's job registry (jobs.ts) and the cloud render worker, which stage
@@ -35,7 +35,7 @@ export interface ExportSpec {
     volume?: number;
     /** "fit" letterboxes (default); "fill" covers the region and crops. */
     fit?: "fit" | "fill";
-    panX?: number; // crop-window pan -1..1 (fill mode)
+    panX?: number; // crop-window pan -1..1 (fill mode, full frame)
     panY?: number;
     /** Region of the frame this clip fills; absent = full frame. */
     frame?: { x: number; y: number; w: number; h: number };
@@ -62,26 +62,6 @@ export interface ExportSpec {
     image?: boolean;
     /** Manual color adjustments, baked into this clip's segment. */
     grade?: ColorGrade;
-    /** Client-painted grayscale coverage trimming this clip's picture (white
-     * keeps the pixel; feather and invert are baked into the pictures): one
-     * full-frame still, or a sampled `frames` sequence for a keyframed mask
-     * covering the segment's own [0, dur]. `subject` trims by the shared
-     * person matte (`behindMask`) instead — inverted keeps the picture off
-     * the person, feather softens the matte edge (design px). */
-    mask?: {
-      file?: string;
-      frames?: { file: string; duration: number }[];
-      subject?: { invert?: boolean; feather?: number };
-    };
-    /** Keyframed pose track, seconds from the segment's own start: x/y move
-     * the picture's center (frame fractions), scale multiplies it, rotation
-     * turns it. Opacity keys ride the painted mask's luma, so the graph
-     * never needs an animatable alpha filter. */
-    kf?: { t: number; x: number; y: number; scale: number; rotation: number; opacity: number }[];
-    /** Client-painted border ring (a stroked rounded rect along the clip's
-     * box, transparent elsewhere), full-frame sized; overlaid onto the
-     * segment before fades, masks and pose so it rides the clip. */
-    border?: string;
   }[];
   /** Video tracks composited over the track-0 `clips`, lowest track first. */
   overlayVideos?: {
@@ -93,8 +73,6 @@ export interface ExportSpec {
     /** Region of the frame this overlay fills; absent = full frame. */
     frame?: { x: number; y: number; w: number; h: number };
     fit?: "fit" | "fill";
-    panX?: number; // crop-window pan -1..1 (fill mode)
-    panY?: number;
     muted: boolean;
     /** Gain on the clip's own audio, 0..1.5; absent = 1 (unchanged). */
     volume?: number;
@@ -117,20 +95,6 @@ export interface ExportSpec {
      * overlays may carry alpha the look chain would flatten). */
     look?: string;
     lookAmount?: number;
-    /** Client-painted grayscale coverage trimming this overlay's picture,
-     * box-sized (a letterboxed segment pads out to its box when masked);
-     * `subject` trims by the shared person matte instead. */
-    mask?: {
-      file?: string;
-      frames?: { file: string; duration: number }[];
-      subject?: { invert?: boolean; feather?: number };
-    };
-    /** Keyframed pose track, seconds from this overlay's start. */
-    kf?: { t: number; x: number; y: number; scale: number; rotation: number; opacity: number }[];
-    /** Client-painted border ring, box-sized (a letterboxed segment pads out
-     * to its box when bordered); overlaid onto the segment so it rides the
-     * clip through fades, masks and pose. */
-    border?: string;
   }[];
   audio: {
     file: string;
@@ -159,10 +123,9 @@ export interface ExportSpec {
     y?: number;
     blank?: string;
     frames?: { file: string; duration: number }[];
-    /** The element trims by the shared person matte (needs `behindMask` and
-     * a `frames` stream): inverted keeps it off the person — behind the
-     * speaker, in its own lane order — and feather softens the matte edge. */
-    subject?: { invert?: boolean; feather?: number };
+    /** Text-behind-speaker: composite this element beneath the alphamerged
+     * person cutout (needs `behindMask`). */
+    behind?: boolean;
     /** Its row: lane 0 is the top of the stack. Elements composite deepest
      * lane first, and effects interleave with them by the same number. */
     lane?: number;
@@ -231,13 +194,9 @@ function vtQuality(crf: number) {
   return Math.round(Math.max(35, Math.min(80, 100 - crf * 1.8)));
 }
 
-async function resolveMedia(
-  statFn: typeof stat,
-  mediaPathFor: (file: string) => string,
-  file: string
-) {
+async function resolveMedia(mediaPathFor: (file: string) => string, file: string) {
   const p = mediaPathFor(file);
-  const info = await statFn(p).catch(() => null);
+  const info = await stat(p).catch(() => null);
   if (!info?.isFile()) throw new Error(`Media file missing from project: ${file}`);
   return p;
 }
@@ -280,6 +239,24 @@ function clipRate(c: ExportSpec["clips"][number]) {
 
 /** A clip's frame region in even pixels, or null when it fills the whole frame
  * (the common case, which keeps the plain full-frame filter path). */
+function regionPx(
+  frame: { x: number; y: number; w: number; h: number } | undefined,
+  W: number,
+  H: number
+) {
+  if (!frame) return null;
+  const even = (n: number) => 2 * Math.round(n / 2);
+  const rw = Math.min(W, Math.max(2, even(frame.w * W)));
+  const rh = Math.min(H, Math.max(2, even(frame.h * H)));
+  // Clamp the origin so rx+rw ≤ W and ry+rh ≤ H — independent even-rounding can
+  // otherwise push an edge-touching region a pixel past the frame, which makes
+  // the pad filter reject the input ("not within the padded area") and aborts
+  // the whole export.
+  const rx = Math.max(0, Math.min(even(frame.x * W), W - rw));
+  const ry = Math.max(0, Math.min(even(frame.y * H), H - rh));
+  if (rx <= 0 && ry <= 0 && rw >= W && rh >= H) return null;
+  return { rx, ry, rw, rh };
+}
 
 /**
  * Spawn ffmpeg for one pass, tracking `job.proc` so a cancel kills the live
@@ -336,21 +313,6 @@ export function runFfmpeg(
   });
 }
 
-/** The pipeline's edges into the world: staged-media checks, list-file
- * writes, stream probes, the encoder probe, and the ffmpeg runs. `runExport`
- * takes them as a parameter so the filtergraph tests can build the real graph
- * for a spec with these stubbed. */
-export interface ExportPipelineIO {
-  stat: typeof stat;
-  writeFile: typeof writeFile;
-  hasStream: typeof hasStream;
-  videoColorInfo: typeof videoColorInfo;
-  h264Encoder: () => Promise<"libx264" | "h264_videotoolbox">;
-  runFfmpeg: typeof runFfmpeg;
-}
-
-const realIO: ExportPipelineIO = { stat, writeFile, hasStream, videoColorInfo, h264Encoder, runFfmpeg };
-
 /** Render `spec` into `job.outPath`. `mediaPathFor` maps a spec media file
  * name to its staged path on disk (the engine reads the project folder; the
  * worker reads its download dir); overlay/caption PNGs are read from
@@ -358,8 +320,7 @@ const realIO: ExportPipelineIO = { stat, writeFile, hasStream, videoColorInfo, h
 export async function runExport(
   job: RenderHandle,
   spec: ExportSpec,
-  mediaPathFor: (file: string) => string,
-  io: ExportPipelineIO = realIO
+  mediaPathFor: (file: string) => string
 ) {
   if (spec.clips.length === 0) throw new Error("Nothing to export.");
   const { width: W, height: H, fps } = spec;
@@ -400,7 +361,7 @@ export async function runExport(
   let nInputs = 0;
   // Resolve paths in order first so ffmpeg input indices stay deterministic,
   // then probe every file's streams concurrently.
-  const paths = await Promise.all(mediaFiles.map((f) => resolveMedia(io.stat, mediaPathFor, f)));
+  const paths = await Promise.all(mediaFiles.map((f) => resolveMedia(mediaPathFor, f)));
   mediaFiles.forEach((f, i) => {
     inputIndex.set(f, nInputs++);
     inputs.push("-i", paths[i]);
@@ -412,13 +373,13 @@ export async function runExport(
       // video to black. Genuine absence returns false with no error, so on a
       // probe error we assume the stream is present and let ffmpeg map it.
       let audioProbeFailed = false;
-      const hasAudio = await io.hasStream(paths[i], "a", () => (audioProbeFailed = true));
+      const hasAudio = await hasStream(paths[i], "a", () => (audioProbeFailed = true));
       audioPresence.set(f, hasAudio || audioProbeFailed);
       let videoProbeFailed = false;
-      const hasVideo = await io.hasStream(paths[i], "v", () => (videoProbeFailed = true));
+      const hasVideo = await hasStream(paths[i], "v", () => (videoProbeFailed = true));
       videoPresence.set(f, hasVideo || videoProbeFailed);
       // A failed color probe (null) means no conversion — SDR passthrough.
-      colorFix.set(f, sdrConvert(await io.videoColorInfo(paths[i])));
+      colorFix.set(f, sdrConvert(await videoColorInfo(paths[i])));
     })
   );
   // Animated overlays: each is its own concat-demuxer slideshow (region-sized
@@ -444,7 +405,7 @@ export async function runExport(
         lines.push(`file '${blank}'`, `duration ${num(spec.duration - cursor)}`);
       }
       const list = path.join(job.tmpDir, `overlay_anim_${k}.ffconcat`);
-      await io.writeFile(list, lines.join("\n") + "\n");
+      await writeFile(list, lines.join("\n") + "\n");
       animOverlayInput.set(k, nInputs++);
       inputs.push("-f", "concat", "-safe", "0", "-i", list);
     } else if (o.file) {
@@ -467,7 +428,7 @@ export async function runExport(
     if (!c.image || !c.file) continue;
     const dur = Math.max(0.1, (c.out - c.in) / clipRate(c));
     imageClipInput.set(j, nInputs++);
-    inputs.push("-loop", "1", "-t", num(dur), "-framerate", String(fps), "-i", await resolveMedia(io.stat, mediaPathFor, c.file));
+    inputs.push("-loop", "1", "-t", num(dur), "-framerate", String(fps), "-i", await resolveMedia(mediaPathFor, c.file));
   }
   const imageOverlayInput = new Map<(typeof overlayVideos)[number], number>();
   for (const oc of overlayVideos) {
@@ -475,73 +436,7 @@ export async function runExport(
     const ospeed = oc.speed && oc.speed > 0 ? oc.speed : 1;
     const olen = Math.max(0.1, (oc.out - oc.in) / ospeed);
     imageOverlayInput.set(oc, nInputs++);
-    inputs.push("-loop", "1", "-t", num(olen), "-framerate", String(fps), "-i", await resolveMedia(io.stat, mediaPathFor, oc.file));
-  }
-
-  // Client-painted clip masks: a resting mask is one looped still the length
-  // of its segment; a keyframed one plays as its own concat slideshow, both
-  // on the segment's local clock (the mask multiplies in before tpad).
-  const maskInput = async (
-    mk: NonNullable<ExportSpec["clips"][number]["mask"]>,
-    dur: number,
-    tag: string
-  ): Promise<number | undefined> => {
-    if (mk.frames?.length) {
-      const lines = ["ffconcat version 1.0"];
-      for (const f of mk.frames) {
-        if (f.duration < 1e-4) continue;
-        lines.push(
-          `file '${path.join(job.tmpDir, path.basename(f.file))}'`,
-          `duration ${num(f.duration)}`
-        );
-      }
-      const list = path.join(job.tmpDir, `${tag}.ffconcat`);
-      await io.writeFile(list, lines.join("\n") + "\n");
-      const idx = nInputs++;
-      inputs.push("-f", "concat", "-safe", "0", "-i", list);
-      return idx;
-    }
-    if (!mk.file) return undefined;
-    const idx = nInputs++;
-    inputs.push("-loop", "1", "-t", num(dur), "-framerate", String(fps), "-i", path.join(job.tmpDir, path.basename(mk.file)));
-    return idx;
-  };
-  const clipMaskInput = new Map<number, number>();
-  for (let j = 0; j < spec.clips.length; j++) {
-    const c = spec.clips[j];
-    if (!c.mask) continue;
-    const dur = c.file ? Math.max(0.1, (c.out - c.in) / clipRate(c)) : Math.max(0, c.out - c.in);
-    const idx = await maskInput(c.mask, dur, `mask_clip_${j}`);
-    if (idx !== undefined) clipMaskInput.set(j, idx);
-  }
-  const overlayMaskInput = new Map<(typeof overlayVideos)[number], number>();
-  for (let k = 0; k < overlayVideos.length; k++) {
-    const oc = overlayVideos[k];
-    if (!oc.mask) continue;
-    const ospeed = oc.speed && oc.speed > 0 ? oc.speed : 1;
-    const olen = Math.max(0.1, (oc.out - oc.in) / ospeed);
-    const idx = await maskInput(oc.mask, olen, `mask_ovl_${k}`);
-    if (idx !== undefined) overlayMaskInput.set(oc, idx);
-  }
-  // Border rings loop as stills for their segment's length, like mask files.
-  const borderStill = (file: string, dur: number): number => {
-    const idx = nInputs++;
-    inputs.push("-loop", "1", "-t", num(dur), "-framerate", String(fps), "-i", path.join(job.tmpDir, path.basename(file)));
-    return idx;
-  };
-  const clipBorderInput = new Map<number, number>();
-  for (let j = 0; j < spec.clips.length; j++) {
-    const c = spec.clips[j];
-    if (!c.border) continue;
-    const dur = c.file ? Math.max(0.1, (c.out - c.in) / clipRate(c)) : Math.max(0, c.out - c.in);
-    clipBorderInput.set(j, borderStill(c.border, dur));
-  }
-  const overlayBorderInput = new Map<(typeof overlayVideos)[number], number>();
-  for (const oc of overlayVideos) {
-    if (!oc.border) continue;
-    const ospeed = oc.speed && oc.speed > 0 ? oc.speed : 1;
-    const olen = Math.max(0.1, (oc.out - oc.in) / ospeed);
-    overlayBorderInput.set(oc, borderStill(oc.border, olen));
+    inputs.push("-loop", "1", "-t", num(olen), "-framerate", String(fps), "-i", await resolveMedia(mediaPathFor, oc.file));
   }
 
   // One concat-demuxer input per subtitle track: within a track cues never
@@ -575,7 +470,7 @@ export async function runExport(
       lines.push(`file '${blank}'`, `duration ${num(spec.duration - cursor)}`);
     }
     const list = path.join(job.tmpDir, `captions_${lane}.ffconcat`);
-    await io.writeFile(list, lines.join("\n") + "\n");
+    await writeFile(list, lines.join("\n") + "\n");
     captionInputs.push(nInputs++);
     inputs.push("-f", "concat", "-safe", "0", "-i", list);
   }
@@ -588,123 +483,6 @@ export async function runExport(
   // burned-in captions off the picture.
   const clipDur = (c: ExportSpec["clips"][number]) =>
     c.file ? Math.max(0.1, (c.out - c.in) / clipRate(c)) : Math.max(0, c.out - c.in);
-  // Where each track-0 segment lands on the joined timeline: transitions
-  // pad their overlap, so the layout is the plain running sum of durations.
-  const clipStarts: number[] = [];
-  {
-    let accStart = 0;
-    for (const c of spec.clips) {
-      clipStarts.push(accStart);
-      accStart += clipDur(c);
-    }
-  }
-
-  // The shared person matte, split once per subject-mask consumer: elements
-  // trimmed to (or off) the person, and subject-masked clips on any track.
-  // Each consumer takes one split, negates it when inverted, and blurs it by
-  // its feather.
-  const outScale = Math.min(W, H) / 1080;
-  const clipDrawable = (c: ExportSpec["clips"][number]) =>
-    (c.image || videoPresence.get(c.file)) && !c.hidden;
-  const subjectActive = !!spec.behindMask && behindMaskInput !== undefined;
-  const matteConsumers = !subjectActive
-    ? 0
-    : spec.overlays.filter((o) => o.subject && o.frames?.length && o.blank).length +
-      overlayVideos.filter((oc) => oc.mask?.subject && (oc.image || videoPresence.get(oc.file)))
-        .length +
-      spec.clips.filter((c) => c.mask?.subject && clipDrawable(c)).length;
-  let matteN = 0;
-  if (subjectActive && matteConsumers > 0) {
-    filters.push(
-      `[${behindMaskInput}:v]fps=${fps},scale=${W}:${H},setsar=1,format=gray,` +
-        `tpad=start_duration=${num(Math.max(0, spec.behindMask!.from))}:color=black[bh_src]`
-    );
-    filters.push(
-      matteConsumers > 1
-        ? `[bh_src]split=${matteConsumers}` +
-            Array.from({ length: matteConsumers }, (_, i) => `[bhs${i}]`).join("")
-        : `[bh_src]null[bhs0]`
-    );
-  }
-  // ---- Keyframed clip poses as filter expressions -------------------------
-  // The pose track is piecewise-linear with the ends held flat, exactly the
-  // kit evaluator: v0 + Σ Δi·clip((V−ti)/(ti+1−ti),0,1) builds that shape as
-  // one monotone expression, safe inside overlay/scale/rotate.
-  const piecewiseExpr = (keys: { t: number; v: number }[], varExpr: string): string => {
-    const ks = [...keys].sort((a, b) => a.t - b.t);
-    let e = `${num(ks[0].v)}`;
-    for (let i = 0; i < ks.length - 1; i++) {
-      const dt = Math.max(1e-6, ks[i + 1].t - ks[i].t);
-      const dv = ks[i + 1].v - ks[i].v;
-      if (Math.abs(dv) < 1e-9) continue;
-      e += `+${num(dv)}*clip((${varExpr}-${num(ks[i].t)})/${num(dt)},0,1)`;
-    }
-    return `(${e})`;
-  };
-  /** The pose track's rotation values unwrapped into cumulative degrees, so
-   * the expression lerps the short way around like the kit evaluator. */
-  const unwrappedRotation = (kf: OverlayKey[]): { t: number; v: number }[] => {
-    const ks = sortedKeys(kf);
-    const out: { t: number; v: number }[] = [{ t: ks[0].t, v: ks[0].rotation }];
-    for (let i = 1; i < ks.length; i++) {
-      out.push({
-        t: ks[i].t,
-        v: out[i - 1].v + shortestTurn(ks[i - 1].rotation, ks[i].rotation),
-      });
-    }
-    return out;
-  };
-  const varies = (kf: OverlayKey[], field: "x" | "y" | "scale" | "rotation") =>
-    kf.some((k) => Math.abs(k[field] - kf[0][field]) > 1e-6);
-  /** The rotate/scale filters a keyed segment runs before positioning, on
-   * its own local clock. `boxW`/`boxH` give the constant rotate canvas. */
-  const poseTransformFilters = (
-    kf: OverlayKey[],
-    boxW: number,
-    boxH: number
-  ): string => {
-    const ks = sortedKeys(kf);
-    let chain = "";
-    if (varies(ks, "rotation") || Math.abs(ks[0].rotation) > 1e-6) {
-      const diag = 2 * Math.ceil(Math.hypot(boxW, boxH) / 2);
-      const rot = piecewiseExpr(unwrappedRotation(ks), "t");
-      chain += `,rotate=a='${rot}*PI/180':ow=${diag}:oh=${diag}:c=black@0.0`;
-    }
-    if (varies(ks, "scale") || Math.abs(ks[0].scale - 1) > 1e-6) {
-      const sc = piecewiseExpr(ks.map((k) => ({ t: k.t, v: k.scale })), "t");
-      chain += `,scale=w='trunc(iw*${sc}/2)*2':h=-2:eval=frame`;
-    }
-    return chain;
-  };
-  /** The overlay x/y expressions placing a keyed segment's center at its
-   * pose, with the key clock offset to `startAt` on the consuming stream's
-   * timeline (0 for a local-clock base). */
-  const posePositionExprs = (kf: OverlayKey[], startAt: number): { x: string; y: string } => {
-    const ks = sortedKeys(kf);
-    const v = startAt > 1e-9 ? `(t-${num(startAt)})` : "t";
-    return {
-      x: `'${piecewiseExpr(ks.map((k) => ({ t: k.t, v: k.x })), v)}*${W}-w/2'`,
-      y: `'${piecewiseExpr(ks.map((k) => ({ t: k.t, v: k.y })), v)}*${H}-h/2'`,
-    };
-  };
-
-  /** One matte split, shaped for a consumer. Every counted consumer takes
-   * exactly one, so the split's outputs all connect. */
-  const nextMatte = (
-    tag: string,
-    subject: { invert?: boolean; feather?: number }
-  ): string => {
-    let cur = `bhs${matteN++}`;
-    if (subject.invert) {
-      filters.push(`[${cur}]negate[${tag}n]`);
-      cur = `${tag}n`;
-    }
-    if (subject.feather && subject.feather > 0) {
-      filters.push(`[${cur}]gblur=sigma=${num((subject.feather * outScale) / 4)}[${tag}b]`);
-      cur = `${tag}b`;
-    }
-    return cur;
-  };
 
   /** One edge effect on a segment's head or tail window. `zoom` ramps scale
    * (settling in on the head, pushing in on the tail); `xfade` runs the named
@@ -928,24 +706,14 @@ export async function runExport(
       let frame: string;
       if (region) {
         // A regioned track-0 clip (split-screen half) scales into its rect,
-        // then pads out to the full frame with black around it. The rect may
-        // reach past the frame (an oversized focus box), and pad rejects
-        // placement outside its area — so pad to the box holding both, then
-        // crop the frame window back out.
+        // then pads out to the full frame with black around it.
         const { rx, ry, rw, rh } = region;
-        const bx = Math.min(0, rx);
-        const by = Math.min(0, ry);
-        const bw = Math.max(W, rx + rw) - bx;
-        const bh = Math.max(H, ry + rh) - by;
-        const win = bw > W || bh > H ? `,crop=${W}:${H}:${-bx}:${-by}` : "";
         frame =
           c.fit === "fill"
-            ? `scale=${rw}:${rh}:force_original_aspect_ratio=increase,` +
-              `crop=${rw}:${rh}:(iw-ow)*${num(0.5 + Math.max(-1, Math.min(1, c.panX ?? 0)) / 2)}` +
-              `:(ih-oh)*${num(0.5 + Math.max(-1, Math.min(1, c.panY ?? 0)) / 2)},` +
-              `pad=${bw}:${bh}:${rx - bx}:${ry - by}:color=${padColor}${win}`
+            ? `scale=${rw}:${rh}:force_original_aspect_ratio=increase,crop=${rw}:${rh},` +
+              `pad=${W}:${H}:${rx}:${ry}:color=${padColor}`
             : `scale=${rw}:${rh}:force_original_aspect_ratio=decrease:force_divisible_by=2,` +
-              `pad=${bw}:${bh}:${rx - bx}+(${rw}-iw)/2:${ry - by}+(${rh}-ih)/2:color=${padColor}${win}`;
+              `pad=${W}:${H}:${rx}+(${rw}-iw)/2:${ry}+(${rh}-ih)/2:color=${padColor}`;
       } else {
         frame =
           c.fit === "fill"
@@ -971,14 +739,6 @@ export async function runExport(
           core = `[lko${j}]null`;
         }
       }
-      // The border ring lands after the look (true stroke color) and before
-      // the fades, so it fades and masks with the clip like the preview.
-      const brIdx = clipBorderInput.get(j);
-      if (brIdx !== undefined) {
-        filters.push(`${core}[cbi${j}]`);
-        filters.push(`[cbi${j}][${brIdx}:v]overlay=0:0:eof_action=pass,format=${clipFmt}[cbo${j}]`);
-        core = `[cbo${j}]null`;
-      }
       const fades =
         (hf > 0.01 ? `,fade=t=in:st=0:d=${num(hf)}` : "") +
         (tf > 0.01 ? `,fade=t=out:st=${num(Math.max(0, dur - tf))}:d=${num(tf)}` : "");
@@ -986,67 +746,7 @@ export async function runExport(
       // split the copies it needs off the pre-backdrop picture.
       const nFz = (needFirstFreeze[j] ? 1 : 0) + (needLastFreeze[j] ? 1 : 0);
       const segOut = nFz > 0 ? `vseg${j}` : `v${j}`;
-      const mkIdx = clipMaskInput.get(j);
-      const subjMask = subjectActive && matteConsumers > 0 ? c.mask?.subject : undefined;
-      const keyed = !!c.kf?.length;
-      if (mkIdx !== undefined || subjMask || keyed) {
-        // Masked or keyframed track-0 clip, composed in the preview's order:
-        // the painted coverage multiplies first (it rides the clip), the
-        // pose transforms and positions the result over a transparent base,
-        // the person matte — frame-anchored — trims last, and a black base
-        // restores the constant-size opaque frame the join expects. The
-        // multiply chains (alphaextract → blend → alphamerge) compose with
-        // any alpha the segment carries.
-        pushEdgeFx(core, dur, headFx, tailFx, W, H, clipFmt, fades, `vmr${j}`, `c${j}`);
-        let cur = `vmr${j}`;
-        if (mkIdx !== undefined) {
-          filters.push(`[${mkIdx}:v]fps=${fps},scale=${W}:${H},setsar=1,format=gray[cmk${j}]`);
-          filters.push(`[${cur}]format=rgba,split[cm0_${j}][cm1_${j}]`);
-          filters.push(`[cm1_${j}]alphaextract[cma${j}]`);
-          filters.push(`[cma${j}][cmk${j}]blend=all_mode=multiply[cmm${j}]`);
-          filters.push(`[cm0_${j}][cmm${j}]alphamerge[cmc${j}]`);
-          cur = `cmc${j}`;
-        } else {
-          filters.push(`[${cur}]format=rgba[cmc${j}]`);
-          cur = `cmc${j}`;
-        }
-        if (keyed) {
-          const tf = poseTransformFilters(c.kf!, W, H);
-          if (tf) {
-            filters.push(`[${cur}]null${tf}[ckt${j}]`);
-            cur = `ckt${j}`;
-          }
-          const pos = posePositionExprs(c.kf!, 0);
-          filters.push(
-            `color=c=black@0.0:s=${W}x${H}:r=${fps}:d=${num(dur)},format=yuva420p[ckb${j}]`
-          );
-          filters.push(
-            `[ckb${j}][${cur}]overlay=x=${pos.x}:y=${pos.y}:eof_action=pass[ckp${j}]`
-          );
-          cur = `ckp${j}`;
-        }
-        if (subjMask) {
-          const matte = nextMatte(`bsc${j}`, subjMask);
-          // Clone-pad past the matte's own end so a segment running longer
-          // than the matte window never shortens the join.
-          filters.push(
-            `[${matte}]trim=${num(clipStarts[j])}:${num(clipStarts[j] + dur)},` +
-              `setpts=PTS-STARTPTS,fps=${fps},tpad=stop_mode=clone:stop_duration=${num(dur)},` +
-              `trim=0:${num(dur)},setpts=PTS-STARTPTS,fps=${fps}[cms${j}]`
-          );
-          filters.push(`[${cur}]format=rgba,split[cs0_${j}][cs1_${j}]`);
-          filters.push(`[cs1_${j}]alphaextract[csa${j}]`);
-          filters.push(`[csa${j}][cms${j}]blend=all_mode=multiply[csm${j}]`);
-          filters.push(`[cs0_${j}][csm${j}]alphamerge[csc${j}]`);
-          cur = `csc${j}`;
-        }
-        filters.push(`color=c=black:s=${W}x${H}:r=${fps}:d=${num(dur)}[cmb${j}]`);
-        filters.push(
-          `[cmb${j}][${cur}]overlay=0:0:shortest=1,format=${clipFmt},fps=${fps}[${segOut}]`
-        );
-      } else {
-        pushEdgeFx(core, dur, headFx, tailFx, W, H, clipFmt, fades, segOut, `c${j}`);
-      }
+      pushEdgeFx(core, dur, headFx, tailFx, W, H, clipFmt, fades, segOut, `c${j}`);
       if (nFz > 0) {
         filters.push(
           `[vseg${j}]split=${nFz + 1}[v${j}]` +
@@ -1055,11 +755,9 @@ export async function runExport(
         );
       }
     } else {
-      // No video stream, or a hidden clip: the slot plays black. trim+setpts
-      // clear the frame-rate stamp a transitioned join's xfade demands —
-      // re-stamp it.
+      // No video stream, or a hidden clip: the slot plays black.
       filters.push(
-        `color=c=black:s=${W}x${H}:r=${fps},trim=0:${num(dur)},setpts=PTS-STARTPTS,fps=${fps},format=${clipFmt}[v${j}]`
+        `color=c=black:s=${W}x${H}:r=${fps},trim=0:${num(dur)},setpts=PTS-STARTPTS,format=${clipFmt}[v${j}]`
       );
     }
     if (!c.muted && !c.hidden && audioPresence.get(c.file)) {
@@ -1180,10 +878,7 @@ export async function runExport(
       filters.push(`[${aAcc}]afade=t=out:st=${num(offset)}:d=${num(d)}[ah${j}]`);
       filters.push(`[ah${j}][a${j}]concat=n=2:v=0:a=1[${aOut}]`);
     } else {
-      // concat emits a microsecond timebase with no frame-rate stamp, and a
-      // later transitioned join hands this accumulator to xfade, which
-      // demands both of its inputs carry the same 1/fps stamp — re-stamp it.
-      filters.push(`[${vAcc}][${segLabel[j]}]concat=n=2:v=1:a=0,fps=${fps}[${vOut}]`);
+      filters.push(`[${vAcc}][${segLabel[j]}]concat=n=2:v=1:a=0[${vOut}]`);
       filters.push(`[${aAcc}][a${j}]concat=n=2:v=0:a=1[${aOut}]`);
     }
     acc = acc + durJ;
@@ -1216,47 +911,30 @@ export async function runExport(
     const hf = Math.max(0, Math.min(oc.headFade ?? 0, olen));
     const tf = Math.max(0, Math.min(oc.tailFade ?? 0, olen - hf));
     const ramped = hz > 0.01 || tz > 0.01;
-    const maskIdx = overlayMaskInput.get(oc);
-    const subjMask = subjectActive && matteConsumers > 0 ? oc.mask?.subject : undefined;
-    const keyed = !!oc.kf?.length;
     const boxW = region ? region.rw : W;
     const boxH = region ? region.rh : H;
     let framing: string;
     let pos: string;
-    // A fill overlay's crop window follows the clip's pan, matching the
-    // preview compositor.
-    const panCrop =
-      `:(iw-ow)*${num(0.5 + Math.max(-1, Math.min(1, oc.panX ?? 0)) / 2)}` +
-      `:(ih-oh)*${num(0.5 + Math.max(-1, Math.min(1, oc.panY ?? 0)) / 2)}`;
     if (!region) {
       framing = cover
-        ? `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H}${panCrop}`
+        ? `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H}`
         : `scale=${W}:${H}:force_original_aspect_ratio=decrease:force_divisible_by=2`;
       pos = cover ? "0:0" : `x=(${W}-w)/2:y=(${H}-h)/2`;
     } else {
       const { rx, ry, rw, rh } = region;
       framing = cover
-        ? `scale=${rw}:${rh}:force_original_aspect_ratio=increase,crop=${rw}:${rh}${panCrop}`
+        ? `scale=${rw}:${rh}:force_original_aspect_ratio=increase,crop=${rw}:${rh}`
         : `scale=${rw}:${rh}:force_original_aspect_ratio=decrease:force_divisible_by=2`;
       pos = cover ? `${rx}:${ry}` : `x=${rx}+(${rw}-w)/2:y=${ry}+(${rh}-h)/2`;
     }
-    // zoompan needs a constant frame size — and a mask trims at the box, so
-    // both pad a letterboxed segment out to its exact box with transparent
-    // margins (the tracks beneath keep showing through) and anchor the
-    // overlay at the box origin. The pad joins the chain after the look
-    // bakes in, so the look grades the opaque scaled picture and never
-    // flattens the transparent margins.
-    // A bordered letterboxed segment also pads to its box: the ring strokes
-    // the box edge, so the segment must span the box to carry it.
-    const boxed =
-      (ramped || maskIdx !== undefined || !!subjMask || keyed || !!oc.border) && !cover;
-    const boxPad = boxed
-      ? `,format=yuva420p,pad=${boxW}:${boxH}:(ow-iw)/2:(oh-ih)/2:color=black@0.0`
-      : "";
-    if (boxed) pos = region ? `${region.rx}:${region.ry}` : "0:0";
-    const fmt = hf > 0.01 || tf > 0.01 || boxed ? "yuva420p" : "yuv420p";
-    // The look chain reads the pre-pad picture, which is opaque.
-    const lookFmt = boxed ? "yuv420p" : fmt;
+    // zoompan needs a constant frame size: pad a letterboxed segment out to
+    // its exact box with transparent margins (the tracks beneath keep showing
+    // through) and anchor the overlay at the box origin.
+    if (ramped && !cover) {
+      framing += `,format=yuva420p,pad=${boxW}:${boxH}:(ow-iw)/2:(oh-ih)/2:color=black@0.0`;
+      pos = region ? `${region.rx}:${region.ry}` : "0:0";
+    }
+    const fmt = hf > 0.01 || tf > 0.01 || (ramped && !cover) ? "yuva420p" : "yuv420p";
     const fades =
       (hf > 0.01 ? `,fade=t=in:st=0:d=${num(hf)}:alpha=1` : "") +
       (tf > 0.01 ? `,fade=t=out:st=${num(Math.max(0, olen - tf))}:d=${num(tf)}:alpha=1` : "");
@@ -1267,26 +945,18 @@ export async function runExport(
     const timebase = oc.image
       ? `[${idx}:v]setpts=PTS-STARTPTS`
       : `[${idx}:v]trim=${num(oc.in)}:${num(oc.out)},setpts=(PTS-STARTPTS)/${num(ospeed)}`;
-    let core = `${timebase},fps=${fps},${framing},setsar=1,${colorFix.get(oc.file) ?? ""}${gradeToFfmpegFilter(oc.grade)}format=${lookFmt}`;
-    // Looks bake into footage overlays only: an image may carry alpha, which
-    // the look chain's internal filters would flatten onto black over the
-    // tracks beneath. The alpha fades stay safe: they apply after the look.
-    if (oc.look && !oc.image) {
-      const lines = lookFilterLines(`olki${k}`, `olko${k}`, oc.look, oc.lookAmount, H, lookFmt, `o${k}`);
+    let core = `${timebase},fps=${fps},${framing},setsar=1,${colorFix.get(oc.file) ?? ""}${gradeToFfmpegFilter(oc.grade)}format=${fmt}`;
+    // Looks bake into footage overlays only: an image may carry alpha, and a
+    // padded letterbox has transparent margins — the look chain's internal
+    // filters would flatten either onto black over the tracks beneath. The
+    // alpha fades stay safe: they apply after the look.
+    if (oc.look && !oc.image && !(ramped && !cover)) {
+      const lines = lookFilterLines(`olki${k}`, `olko${k}`, oc.look, oc.lookAmount, H, fmt, `o${k}`);
       if (lines) {
         filters.push(`${core}[olki${k}]`);
         filters.push(...lines);
         core = `[olko${k}]null`;
       }
-    }
-    if (boxPad) core += boxPad;
-    // The border ring lands after the look and box pad, before the edge
-    // ramps, so it fades and masks with the clip like the preview.
-    const obIdx = overlayBorderInput.get(oc);
-    if (obIdx !== undefined) {
-      filters.push(`${core}[obi${k}]`);
-      filters.push(`[obi${k}][${obIdx}:v]overlay=0:0:eof_action=pass,format=${fmt}[obo${k}]`);
-      core = `[obo${k}]null`;
     }
     const pre = `ovp${k}`;
     pushEdgeFx(
@@ -1301,74 +971,14 @@ export async function runExport(
       pre,
       `o${k}`
     );
-    // A masked overlay multiplies the painted coverage into whatever alpha
-    // the segment already carries (transparent pad, alpha fades), then keeps
-    // its alpha through the tpad/overlay below. A keyed pose rotates and
-    // scales on the segment's local clock before the delay.
-    let masked = pre;
-    if (maskIdx !== undefined) {
-      filters.push(`[${maskIdx}:v]fps=${fps},scale=${boxW}:${boxH},setsar=1,format=gray[omk${k}]`);
-      filters.push(`[${pre}]format=rgba,split[om0${k}][om1${k}]`);
-      filters.push(`[om1${k}]alphaextract[oma${k}]`);
-      filters.push(`[oma${k}][omk${k}]blend=all_mode=multiply[omm${k}]`);
-      filters.push(`[om0${k}][omm${k}]alphamerge,format=yuva420p[omc${k}]`);
-      masked = `omc${k}`;
-    }
-    if (keyed) {
-      const tf = poseTransformFilters(oc.kf!, boxW, boxH);
-      if (tf) {
-        filters.push(`[${masked}]format=rgba${tf},format=yuva420p[okt${k}]`);
-        masked = `okt${k}`;
-      }
-    }
     // The zoom slices' concat drops the stream's frame-rate metadata, and
     // tpad converts start_duration to a frame count through it — without the
     // fps re-stamp it pads zero frames and the overlay lands early.
-    filters.push(`[${masked}]fps=${fps},tpad=start_duration=${num(oc.start)}[${seg}]`);
+    filters.push(`[${pre}]fps=${fps},tpad=start_duration=${num(oc.start)}[${seg}]`);
     const next = `vovv${k}`;
-    const enable = `enable='between(t,${num(oc.start)},${num(end)})'`;
-    if (subjMask) {
-      // Subject-masked overlay clip: the delayed segment lands on the full
-      // frame at its spot — a static pad, or an expression overlay onto a
-      // transparent base when keyed — its alpha multiplies by the timeline-
-      // aligned matte, and the trimmed layer composites at the origin.
-      const matte = nextMatte(`bso${k}`, subjMask);
-      if (keyed) {
-        const kpos = posePositionExprs(oc.kf!, oc.start);
-        filters.push(
-          `color=c=black@0.0:s=${W}x${H}:r=${fps}:d=${num(spec.duration)},format=yuva420p[osb${k}]`
-        );
-        filters.push(
-          `[osb${k}][${seg}]overlay=x=${kpos.x}:y=${kpos.y}:eof_action=pass[osp${k}]`
-        );
-      } else {
-        // The box may reach past the frame; pad to the box holding both and
-        // crop the frame window back out (pad rejects placement outside its
-        // area).
-        const padX = region ? region.rx : 0;
-        const padY = region ? region.ry : 0;
-        const bx = Math.min(0, padX);
-        const by = Math.min(0, padY);
-        const bw = Math.max(W, padX + boxW) - bx;
-        const bh = Math.max(H, padY + boxH) - by;
-        const win = bw > W || bh > H ? `,crop=${W}:${H}:${-bx}:${-by}` : "";
-        filters.push(
-          `[${seg}]format=rgba,pad=${bw}:${bh}:${padX - bx}:${padY - by}:color=black@0.0${win}[osp${k}]`
-        );
-      }
-      filters.push(`[osp${k}]format=rgba,split[os0${k}][os1${k}]`);
-      filters.push(`[os1${k}]alphaextract[osa${k}]`);
-      filters.push(`[osa${k}][${matte}]blend=all_mode=multiply[osm${k}]`);
-      filters.push(`[os0${k}][osm${k}]alphamerge,format=yuva420p[osc${k}]`);
-      filters.push(`[${onto}][osc${k}]overlay=0:0:${enable}:eof_action=pass[${next}]`);
-    } else if (keyed) {
-      const kpos = posePositionExprs(oc.kf!, oc.start);
-      filters.push(
-        `[${onto}][${seg}]overlay=x=${kpos.x}:y=${kpos.y}:${enable}:eof_action=pass[${next}]`
-      );
-    } else {
-      filters.push(`[${onto}][${seg}]overlay=${pos}:${enable}:eof_action=pass[${next}]`);
-    }
+    filters.push(
+      `[${onto}][${seg}]overlay=${pos}:enable='between(t,${num(oc.start)},${num(end)})':eof_action=pass[${next}]`
+    );
     if (!oc.muted && audioPresence.get(oc.file)) {
       const tempo = ospeed !== 1 ? `${atempoChain(ospeed)},` : "";
       const vol = (oc.volume ?? 1) !== 1 ? `volume=${num(oc.volume ?? 1)},` : "";
@@ -1400,23 +1010,6 @@ export async function runExport(
     const next = `vov${k}`;
     const animIdx = animOverlayInput.get(k);
     if (animIdx !== undefined) {
-      if (o.subject && subjectActive && matteConsumers > 0) {
-        // Subject-trimmed element: its slideshow pads out to the full frame
-        // at its region, the matte multiplies into its alpha, and the
-        // trimmed element composites at the origin — in its own lane order,
-        // behind (inverted) or on the person alike.
-        const matte = nextMatte(`bse${k}`, o.subject);
-        filters.push(
-          `[${animIdx}:v]fps=${fps},setsar=1,format=rgba,` +
-            `pad=${W}:${H}:${num(o.x ?? 0)}:${num(o.y ?? 0)}:color=black@0.0[oep${k}]`
-        );
-        filters.push(`[oep${k}]split[oe0${k}][oe1${k}]`);
-        filters.push(`[oe1${k}]alphaextract[oea${k}]`);
-        filters.push(`[oea${k}][${matte}]blend=all_mode=multiply[oem${k}]`);
-        filters.push(`[oe0${k}][oem${k}]alphamerge,format=yuva420p[oes${k}]`);
-        filters.push(`[${onto}][oes${k}]overlay=0:0:eof_action=pass[${next}]`);
-        return next;
-      }
       filters.push(`[${animIdx}:v]fps=${fps},format=yuva420p,setsar=1[oanim${k}]`);
       filters.push(
         `[${onto}][oanim${k}]overlay=${num(o.x ?? 0)}:${num(o.y ?? 0)}:eof_action=pass[${next}]`
@@ -1432,16 +1025,36 @@ export async function runExport(
     return next;
   };
 
+  // Text-behind-speaker: the composite splits, the behind-tagged elements
+  // burn onto one branch, and the other branch — alphamerged with the
+  // page-rendered person mask (standard LGPL filters) — lays the subject
+  // back over them. Front overlays then continue on the merged stream.
+  const behindKs = spec.behindMask
+    ? spec.overlays.flatMap((o, k) => (o.behind ? [k] : []))
+    : [];
+  if (spec.behindMask && behindMaskInput !== undefined && behindKs.length > 0) {
+    filters.push(`[${vLabel}]split[bh_text][bh_person]`);
+    let textLab = "bh_text";
+    for (const k of behindKs) textLab = compositeOverlayEntry(k, textLab);
+    filters.push(
+      `[${behindMaskInput}:v]fps=${fps},scale=${spec.width}:${spec.height},format=gray,` +
+        `tpad=start_duration=${num(Math.max(0, spec.behindMask.from))}:color=black[bh_mask]`
+    );
+    filters.push(`[bh_person]format=rgba[bh_rgba]`);
+    filters.push(`[bh_rgba][bh_mask]alphamerge[bh_cut]`);
+    filters.push(`[${textLab}][bh_cut]overlay=0:0:eof_action=pass[bh_done]`);
+    vLabel = "bh_done";
+  }
   // The element stack, deepest lane first, with the effects standing in it:
   // an effect grades what plays under it, so everything below its lane is
   // composited before its chain runs, and the elements above it land on the
   // graded picture untouched. Each chain is gated to its own window (the shake
   // recipe swaps in a jittered branch through an overlay instead, so nothing
-  // else rescales). Subject-tagged elements trim by their matte split inside
-  // this walk, in their own lane order.
+  // else rescales).
   const laneOfEntry = (k: number) => spec.overlays[k].lane ?? 0;
   const stacked = spec.overlays
     .map((o, k) => k)
+    .filter((k) => !(spec.overlays[k].behind && behindKs.includes(k)))
     .sort((a, b) => laneOfEntry(b) - laneOfEntry(a));
   const effects = (spec.effects ?? [])
     .map((e, i) => ({ e, i }))
@@ -1579,7 +1192,7 @@ export async function runExport(
     aLabel = "afinal";
   }
 
-  const enc = await io.h264Encoder();
+  const enc = await h264Encoder();
   const videoCodecArgs =
     enc === "libx264"
       ? ["-c:v", "libx264", "-preset", spec.preset, "-crf", String(spec.crf)]
@@ -1589,7 +1202,7 @@ export async function runExport(
   // rotation flag (see the strip pass below). Keeping the encode intermediate
   // lets the second pass own faststart.
   const encodePath = path.join(job.tmpDir, "encode.mp4");
-  await io.runFfmpeg(
+  await runFfmpeg(
     job,
     [
       "-y",
@@ -1620,7 +1233,7 @@ export async function runExport(
   // "desktop" frame. `-display_rotation 0` overrides that matrix to identity; a
   // stream copy re-emits the (already correct) pixels and audio unchanged and
   // writes the faststart-optimized final file.
-  await io.runFfmpeg(job, [
+  await runFfmpeg(job, [
     "-y",
     "-display_rotation", "0",
     "-i", encodePath,

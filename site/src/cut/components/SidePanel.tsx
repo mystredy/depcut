@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MEDIA_CORS } from "@/cut/lib/mediaCors";
 import { apiFetch, apiUrl } from "@/cut/lib/backend";
-import { useCutCaps, useCutMode } from "@/cut/lib/backend/hooks";
+import { useCutCaps } from "@/cut/lib/backend/hooks";
 import {
   clearAssetDrag,
   draggingLibrary,
@@ -33,7 +33,7 @@ import {
   hasLibraryDrag,
   hasTemplateDrag,
   setAssetDragData,
-  setObjectDragImage,
+  setCardDragImage,
 } from "@/cut/lib/assetDrag";
 import { draggingRef, useAssetDrop, type AssetRef } from "@/cut/lib/assetRef";
 import { RefDropZone } from "./RefDropZone";
@@ -65,18 +65,12 @@ import {
   type LibraryFolder,
   type LibraryTemplateItem,
 } from "@/cut/lib/library";
-import {
-  activeResidency,
-  availableResidencies,
-  libraryResidencies,
-  type Residency,
-} from "@/cut/lib/residency";
+import { activeResidency, availableResidencies, type Residency } from "@/cut/lib/residency";
 import { isStylePresetTemplate } from "@/cut/lib/stylePresets";
 import { retryUpload } from "@/cut/lib/importQueue";
-import { downloadMedia, isMediaFile, revealMedia } from "@/cut/lib/media";
+import { isMediaFile, revealMedia } from "@/cut/lib/media";
 import { mediaUrl, TRANSITION_MAX } from "@/cut/lib/types";
-import { parseSecondsInput } from "@/cut/components/ScrubValue";
-import { ValueSlider } from "@/cut/components/ValueSlider";
+import { Slider } from "@/components/ui/slider";
 import { genPulseOverlay, isGenTab, useGenNotify, useGenPulse, useWatchGenTab } from "@/cut/lib/genNotify";
 import { useGenerate, type GenerateJob } from "@/cut/lib/generate";
 import { CAPTION_LIMIT, normalizeTags } from "@/cut/lib/publish";
@@ -162,11 +156,6 @@ export function SidePanel({
     "voice",
     (v) => v === "voice" || v === "music"
   );
-  // Each library column folds away behind its edge knob; every choice sticks.
-  const videoFold = useLibraryFold("cut-video-library");
-  const imageFold = useLibraryFold("cut-image-library");
-  const musicFold = useLibraryFold("cut-music-library");
-  const genFold = tab === "image" ? imageFold : videoFold;
   // The Media rail tile as a drop target: a Library card (asset or template)
   // dropped on it joins the project. Project media (cards and timeline clips)
   // arrives through the ref zone below; these HTML5 handlers cover the
@@ -218,18 +207,13 @@ export function SidePanel({
   // Clicking a reference token anywhere jumps here: switch to the tab that
   // owns the asset; the matching card scrolls into view and flashes.
   useRevealEffect((ref) => {
-    if (ref.scope === "project" || ref.scope === "library") {
-      setTab("media");
-      return;
-    }
-    // The revealed tile lives in a library column; unfold it if hidden.
-    if (STOCK_VIDEOS.some((v) => v.id === ref.id)) {
-      setTab("video");
-      videoFold.setOpen(true);
-    } else {
-      setTab("image");
-      imageFold.setOpen(true);
-    }
+    setTab(
+      ref.scope === "project" || ref.scope === "library"
+        ? "media"
+        : STOCK_VIDEOS.some((v) => v.id === ref.id)
+          ? "video"
+          : "image"
+    );
   });
 
   // The assistant's set_side_panel tool: open the tab it wants on screen, or
@@ -349,7 +333,7 @@ export function SidePanel({
           <div
             className={cn(
               "relative flex w-[252px] min-h-0 shrink-0 flex-col",
-              !sharedFeatures && genFold.open && "border-r border-border"
+              !sharedFeatures && "border-r border-border"
             )}
           >
             <ClosePanelButton onClose={() => setTab(null)} />
@@ -358,19 +342,17 @@ export function SidePanel({
             ) : (
               <GenerateVideoPanel projectId={projectId} />
             )}
-            {!sharedFeatures && !genFold.open && genFold.knob}
           </div>
           {/* Video browses wider: 16:9 clip tiles need the room. A shared view
               shows only the project's own generations — no stock browsing. */}
-          {!sharedFeatures && genFold.open && (
+          {!sharedFeatures && (
             <div
               className={cn(
-                "relative flex min-h-0 shrink-0 flex-col",
+                "flex min-h-0 shrink-0 flex-col",
                 tab === "image" ? "w-[264px]" : "w-[340px]"
               )}
             >
               {tab === "image" ? <StockImagesPanel /> : <StockVideosPanel />}
-              {genFold.knob}
             </div>
           )}
         </>
@@ -381,7 +363,7 @@ export function SidePanel({
           <div
             className={cn(
               "relative flex w-[264px] min-h-0 shrink-0 flex-col",
-              musicLibrary && musicFold.open && "border-r border-border"
+              musicLibrary && "border-r border-border"
             )}
           >
             <ClosePanelButton onClose={() => setTab(null)} />
@@ -391,12 +373,10 @@ export function SidePanel({
               sub={audioSub}
               onSub={setAudioSub}
             />
-            {musicLibrary && !musicFold.open && musicFold.knob}
           </div>
-          {musicLibrary && musicFold.open && (
-            <div className="relative flex w-[340px] min-h-0 shrink-0 flex-col">
+          {musicLibrary && (
+            <div className="flex w-[340px] min-h-0 shrink-0 flex-col">
               <SampleLibrary projectId={projectId} />
-              {musicFold.knob}
             </div>
           )}
         </>
@@ -462,36 +442,6 @@ function ClosePanelButton({ onClose }: { onClose: () => void }) {
       onClick={onClose}
     >
       <X className="size-4" />
-    </button>
-  );
-}
-
-/** One library column's fold: the remembered open flag plus its edge knob.
- * Render the knob inside the library column while open (it folds the column
- * away), and inside the column left of it while folded (it brings the library
- * back). The host column must be `relative`. */
-function useLibraryFold(key: string) {
-  const [open, setOpen] = useLocalPref<boolean>(key, true, (v) => typeof v === "boolean");
-  return {
-    open,
-    setOpen,
-    knob: <LibraryKnob open={open} onToggle={() => setOpen(!open)} />,
-  };
-}
-
-/** The fold's handle: a thin pill floating over the canvas at the vertical
- * middle, a small gap right of the panel border. The hit target is wider than
- * the pill so it stays easy to grab. */
-function LibraryKnob({ open, onToggle }: { open: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-label={open ? "Hide library" : "Show library"}
-      title={open ? "Hide library" : "Show library"}
-      className="group absolute top-1/2 -right-[16px] z-20 flex h-16 w-4 -translate-y-1/2 items-center justify-center outline-none"
-      onClick={onToggle}
-    >
-      <span className="h-9 w-[5px] rounded-full bg-muted-foreground/35 transition-colors group-hover:bg-muted-foreground/70" />
     </button>
   );
 }
@@ -628,10 +578,6 @@ function ProjectFilesPanel({
   importing: boolean;
 }) {
   const caps = useCutCaps();
-  // The library passes over browser storage (`libraryResidencies`), and its
-  // server-side copy can't reach bytes that live in this browser's store, so
-  // a browser-resident project's templates stay on the project shelf.
-  const cutMode = useCutMode();
   // Only user-imported media lives here; anything Cut created (recordings, AI
   // generations, voiceovers, freeze frames, stock adds) is tagged with an
   // `origin` and stays where it was made.
@@ -763,11 +709,9 @@ function ProjectFilesPanel({
                   if (r.scope === "project") useEditor.getState().addAssetToTemplate(t.id, r.id);
                 }}
                 extraMenu={
-                  cutMode === "browser" ? undefined : (
-                    <DropdownMenuItem onClick={() => void saveTemplate(projectId, t)}>
-                      <FolderPlus /> Add to Library
-                    </DropdownMenuItem>
-                  )
+                  <DropdownMenuItem onClick={() => void saveTemplate(projectId, t)}>
+                    <FolderPlus /> Add to Library
+                  </DropdownMenuItem>
                 }
               />
             ))}
@@ -973,7 +917,11 @@ function AssetCard({ asset, projectId }: { asset: MediaAsset; projectId: string 
   const [hovered, setHovered] = useState(false);
   const sizeBytes = useMediaFileSize(asset.url, hovered && !asset.upload);
 
-  const add = () => useEditor.getState().addAssetAtPlayhead(asset.id);
+  const add = () => {
+    const s = useEditor.getState();
+    if (asset.type === "video" || asset.type === "image") s.addClipFromAsset(asset.id);
+    else s.addAudioFromAsset(asset.id);
+  };
 
   const saveToLibrary = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1007,7 +955,7 @@ function AssetCard({ asset, projectId }: { asset: MediaAsset; projectId: string 
       draggable
       onDragStart={(e) => {
         setAssetDragData(e, asset.id);
-        setObjectDragImage(e);
+        setCardDragImage(e, e.currentTarget);
       }}
       onDragEnd={clearAssetDrag}
       onMouseEnter={() => {
@@ -1024,7 +972,6 @@ function AssetCard({ asset, projectId }: { asset: MediaAsset; projectId: string 
     >
       <div
         ref={tileRef}
-        data-drag-object
         className={cn(
           "relative aspect-square overflow-hidden rounded-lg border border-border bg-muted transition-colors group-hover:border-input",
           flash && "ring-2 ring-[#0a84ff] ring-offset-1"
@@ -1056,10 +1003,7 @@ function AssetCard({ asset, projectId }: { asset: MediaAsset; projectId: string 
           />
         )}
         {asset.type === "video" && (
-          <span
-            data-drag-omit
-            className="absolute right-1 bottom-1 rounded-[5px] bg-black/65 px-1 py-px font-mono text-[9.5px] text-white tabular-nums"
-          >
+          <span className="absolute right-1 bottom-1 rounded-[5px] bg-black/65 px-1 py-px font-mono text-[9.5px] text-white tabular-nums">
             {formatTime(asset.duration)}
           </span>
         )}
@@ -1078,7 +1022,7 @@ function AssetCard({ asset, projectId }: { asset: MediaAsset; projectId: string 
         )}
         <span
           className={cn(
-            "absolute flex gap-1 opacity-0 transition-opacity group-hover:opacity-100",
+            "absolute flex gap-1",
             // Audio keeps play bottom-left; + swaps in where the duration pill hides.
             asset.type === "audio" ? "right-1.5 bottom-2.5" : "top-1 left-1"
           )}
@@ -1099,7 +1043,7 @@ function AssetCard({ asset, projectId }: { asset: MediaAsset; projectId: string 
           <DropdownMenuTrigger
             aria-label="More actions"
             title="More actions"
-            className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/65 data-[state=open]:opacity-100"
+            className="absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-black/45 text-white hover:bg-black/65"
             onClick={(e) => e.stopPropagation()}
           >
             {saved ? <Check className="size-3" /> : <Ellipsis className="size-3" />}
@@ -1107,12 +1051,6 @@ function AssetCard({ asset, projectId }: { asset: MediaAsset; projectId: string 
           <DropdownMenuContent align="end" className="w-48" onClick={(e) => e.stopPropagation()}>
             <DropdownMenuItem onClick={saveToLibrary} disabled={!!asset.upload}>
               <FolderPlus /> Save to library
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => downloadMedia(projectId, asset)}
-              disabled={!!asset.upload}
-            >
-              <Download /> Download
             </DropdownMenuItem>
             {caps.revealInFinder && (
               <DropdownMenuItem
@@ -1285,16 +1223,15 @@ function LibraryPanel({ projectId }: { projectId: string }) {
   );
 
   // Let a clip be dragged onto a folder tile to file it (alongside the timeline
-  // drag payload the card already sets). The ghost is the card's picture, and
-  // it hands over to the timeline's segment preview.
+  // drag payload the card already sets). The ghost is the card itself.
   const onCardDragExtra = (e: React.DragEvent, a: LibraryAsset) => {
     e.dataTransfer.setData(LIBRARY_MOVE_MIME, JSON.stringify([a.id]));
     e.dataTransfer.effectAllowed = "copyMove";
-    setObjectDragImage(e);
+    setCardDragImage(e, e.currentTarget as HTMLElement);
   };
 
   const all = assets ?? [];
-  const bothShelves = libraryResidencies(availableResidencies()).length > 1;
+  const bothShelves = availableResidencies().length > 1;
   const shown = all.filter((a) => (a.folderId ?? null) === openFolder);
   const shownTemplates = templates.filter((t) => (t.folderId ?? null) === openFolder);
   const openFolderName = folders.find((f) => f.id === openFolder)?.name;
@@ -1502,24 +1439,22 @@ function ProjectFadeRow({ label, value, onChange }: {
   onChange: (v: number) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 text-[12px] text-muted-foreground">
+    <label className="flex items-center justify-between gap-3 text-[12px] text-muted-foreground">
       {label}
       <span className="flex items-center gap-2">
-        <ValueSlider
-          label={label}
-          sliderClassName={`project-${label.toLowerCase().replace(" ", "-")} data-horizontal:w-28`}
-          valueClassName="w-9"
-          value={value}
+        <Slider
+          className={`project-${label.toLowerCase().replace(" ", "-")} data-horizontal:w-28`}
           min={0}
           max={TRANSITION_MAX}
           step={0.1}
-          format={(v) => (v < 0.05 ? "Off" : `${v.toFixed(1)}s`)}
-          parse={(raw) => (raw.trim().toLowerCase() === "off" ? 0 : parseSecondsInput(raw))}
-          onDraft={onChange}
-          onCommit={onChange}
+          value={value}
+          onValueChange={(v) => onChange(Number(v))}
         />
+        <span className="w-9 text-right font-mono text-[11.5px]">
+          {value < 0.05 ? "Off" : `${value.toFixed(1)}s`}
+        </span>
       </span>
-    </div>
+    </label>
   );
 }
 

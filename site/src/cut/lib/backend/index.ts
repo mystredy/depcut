@@ -6,7 +6,6 @@
 // This module stays React-free: the engine binary compiles lib/types.ts, which
 // imports apiUrl from here. React hooks live in ./hooks.
 import { engineOrigin, servedFromEngine } from "../api";
-import { browserBackend } from "./browser";
 import { cloudBackend } from "./cloud";
 import { localBackend } from "./local";
 import { sharedBackend } from "./shared";
@@ -69,13 +68,7 @@ export function subscribeCutMode(onChange: () => void) {
 
 export function getBackend(): CutBackend {
   const mode = cutMode();
-  return mode === "cloud"
-    ? cloudBackend
-    : mode === "browser"
-      ? browserBackend
-      : mode === "shared"
-        ? sharedBackend
-        : localBackend;
+  return mode === "cloud" ? cloudBackend : mode === "shared" ? sharedBackend : localBackend;
 }
 
 /**

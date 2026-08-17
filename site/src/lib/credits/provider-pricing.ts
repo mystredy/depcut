@@ -16,6 +16,7 @@ import {
   type GeminiOmniModel,
   type GeminiTtsModel,
 } from "@/lib/inference/gemini-models";
+import { openaiModels, type OpenAIRunModel } from "@/lib/inference/openai-models";
 import { browserUsePerStepUsd } from "@/lib/browser/pricing";
 
 export type ProviderCreditPricing = {
@@ -72,6 +73,19 @@ export function providerCreditPricing(
   return undefined;
 }
 
+// Every OpenAI model the gateway selects must appear here: the Record is keyed by the
+// OpenAIRunModel union, so adding a run model without a price fails the type-check (and the
+// build). Matched exactly (not by prefix) so it never shadows a more specific table entry.
+const openaiRunModelPricing: Record<OpenAIRunModel, ProviderCreditPricing> = {
+  [openaiModels.debugInspection]: textTokenPricing({
+    model: "gpt-5.4",
+    input: "2.5",
+    cachedInput: "0.25",
+    output: "15",
+    longContext: { input: "5", cachedInput: "0.5", output: "22.5" },
+  }),
+};
+
 function browserUseCreditPricing(): ProviderCreditPricing {
   // Browser Use Cloud bills ~$0.01/task init + a per-step LLM fee, and the API
   // exposes stepCount (not a USD cost), so we price per step. The per-step rate
@@ -86,6 +100,11 @@ function openAICreditPricing(model: string): ProviderCreditPricing | undefined {
   const audioPricing = openAIAudioCreditPricing(model);
   if (audioPricing) {
     return audioPricing;
+  }
+
+  const runModelPricing = openaiRunModelPricing[model as OpenAIRunModel];
+  if (runModelPricing) {
+    return runModelPricing;
   }
 
   const matched = openAITextCreditRates.find((rate) => modelMatches(model, rate.model));
@@ -247,32 +266,15 @@ const openAITextCreditRates: {
   { model: "o4-mini", input: "1.1", cachedInput: "0.275", output: "4.4" },
 ];
 
-// gemini-3.7-flash launch pricing runs through 2026-12-31; standard pricing
-// starts 2027-01-01 UTC. Audio input bills at the text rate. The record entry
-// is a getter, so every lookup reads the clock and the switch happens on
-// schedule without a deploy.
-const geminiFlashStandardPricingStartMs = Date.UTC(2027, 0, 1);
-const geminiFlashLaunchPricing = textAudioTokenPricing({
-  input: "0.75",
-  cachedInput: "0.075",
-  output: "3.75",
-  inputAudio: "0.75",
-});
-const geminiFlashStandardPricing = textAudioTokenPricing({
-  input: "1.5",
-  cachedInput: "0.15",
-  output: "7.5",
-  inputAudio: "1.5",
-});
-
 // Every Gemini model we run must appear here: the Record is keyed by the GeminiModel union,
 // so adding a model to gemini-models.ts without a price fails the type-check (and the build).
 const geminiModelPricing: Record<GeminiModel, ProviderCreditPricing> = {
-  get [geminiModels.flash]() {
-    return Date.now() >= geminiFlashStandardPricingStartMs
-      ? geminiFlashStandardPricing
-      : geminiFlashLaunchPricing;
-  },
+  [geminiModels.flash]: textTokenPricing({
+    model: "gemini-3.5-flash",
+    input: "1.5",
+    cachedInput: "0.15",
+    output: "9",
+  }),
   [geminiModels.flashLite]: textAudioTokenPricing({
     input: "0.25",
     cachedInput: "0.025",

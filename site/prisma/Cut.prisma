@@ -8,6 +8,7 @@ model CutProject {
   name       String
   doc        Json
   folderId   String?
+  favorite   Boolean  @default(false)
   // Optimistic concurrency for autosave: PUT sends the version it loaded and
   // conflicts 409 instead of clobbering a newer save from another device.
   version    Int      @default(1)

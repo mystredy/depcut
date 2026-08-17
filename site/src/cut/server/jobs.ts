@@ -5,12 +5,16 @@ import path from "node:path";
 import { assertLocalRuntime } from "./local-only";
 import { createJobRegistry } from "./jobRegistry";
 import { runExport, type ExportSpec } from "./exportPipeline";
-import { exportsDir, mediaPath, projectDir, readProject, setActiveJobGuard } from "./projects";
+import { exportsDir, mediaPath, projectDir, readProject } from "./projects";
+import { currentCutUser } from "./userScope";
 
 export type { ExportSpec } from "./exportPipeline";
 
 export interface Job {
   id: string;
+  /** The Donkey account that started the job. The cross-project feed is scoped
+   * to it, so accounts sharing a Mac never see each other's exports. */
+  user: string;
   projectId: string;
   /** Shown in the exports dock; the engine assigns it from the project doc. */
   projectName: string;
@@ -48,14 +52,6 @@ interface Pending {
 }
 const g = globalThis as unknown as { __veditorPending?: Pending[] };
 const pending: Pending[] = (g.__veditorPending ??= []);
-
-// A project folder never moves while a render holds paths inside it: the
-// rename-follows-name machinery asks here before touching the folder.
-setActiveJobGuard((projectId) =>
-  [...jobs.values()].some(
-    (j) => j.projectId === projectId && (j.status === "queued" || j.status === "running")
-  )
-);
 
 /** Promote queued exports into free running slots, oldest first. Called after
  * every enqueue and every settle, so the queue always drains to capacity. */
@@ -108,11 +104,13 @@ function jobView(j: Job) {
   };
 }
 
-/** Every export job across all projects — the source of truth the app-wide
- * exports dock reflects, so it shows the same set in every tab. */
+/** Every export job for the requesting account, across all its projects — the
+ * source of truth the app-wide exports dock reflects, so it shows the same set
+ * in every tab. Scoped to the account so a shared Mac never crosses feeds. */
 export function listAllJobs() {
+  const user = currentCutUser();
   return [...jobs.values()]
-    .filter((j) => j.target !== "preview")
+    .filter((j) => j.target !== "preview" && j.user === user)
     .sort((a, b) => a.createdAt - b.createdAt)
     .map(jobView);
 }
@@ -172,6 +170,7 @@ export async function createJob(form: FormData): Promise<Job> {
   assertLocalRuntime();
   const spec = JSON.parse(String(form.get("spec"))) as ExportSpec;
   const id = crypto.randomUUID().slice(0, 12);
+  const user = currentCutUser();
   const preview = spec.target === "preview";
 
   // Previews are best-effort hover proxies: they take a free slot or bow out,
@@ -181,6 +180,7 @@ export async function createJob(form: FormData): Promise<Job> {
   if (preview && runningCount() >= MAX_RUNNING) {
     const job: Job = {
       id,
+      user,
       projectId: spec.projectId,
       projectName: "",
       target: "preview",
@@ -200,6 +200,7 @@ export async function createJob(form: FormData): Promise<Job> {
 
   const job: Job = {
     id,
+    user,
     projectId: spec.projectId,
     projectName: "",
     target: preview ? "preview" : "export",

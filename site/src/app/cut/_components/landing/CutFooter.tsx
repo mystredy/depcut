@@ -2,24 +2,20 @@
 
 import Link from "next/link";
 
-import { GITHUB_REPO_URL } from "@/app/_components/landing/data";
-
 type FooterLink = { href: string; label: string };
 type FooterColumn = { title: string; links: FooterLink[] };
 
-const DISCORD_URL = "https://discord.gg/Xv6qGax7sT";
+const DISCORD_URL = "https://discord.gg/CPQu5XXmw";
 
 // Cut's own footer, in the shared landing Footer's grouped-column design. The
 // shared Footer links routes that don't exist on donkeycut.com (/sign-in,
-// /use-cases), so this one carries only links that resolve on both hosts.
+// /use-cases, /donkeyvision), so this one carries only links that resolve on
+// both hosts.
 export function CutFooter() {
   const linkGroups: FooterColumn[] = [
     {
       title: "Product",
-      links: [
-        { href: GITHUB_REPO_URL, label: "GitHub" },
-        { href: DISCORD_URL, label: "Discord" },
-      ],
+      links: [{ href: DISCORD_URL, label: "Discord" }],
     },
     {
       title: "Legal",
@@ -51,7 +47,7 @@ export function CutFooter() {
             </a>
           </p>
           <p className="mt-6 text-[13px] text-[#666]">
-            2026 Donkey, Inc.
+            2026 Donkey, Inc. Made for Macs.
           </p>
         </div>
         <div className="flex flex-1 flex-col gap-10 sm:flex-row sm:flex-wrap sm:gap-x-16 sm:gap-y-12 md:gap-x-20">

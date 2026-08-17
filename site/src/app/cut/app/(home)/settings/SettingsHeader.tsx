@@ -15,6 +15,12 @@ const SECTIONS = [
     pinned: false,
   },
   {
+    suffix: "/settings/payouts",
+    title: "Payouts",
+    description: "Payouts to your account.",
+    pinned: false,
+  },
+  {
     suffix: "/settings/profile",
     title: "Profile",
     pinned: true,

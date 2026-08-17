@@ -12,9 +12,10 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-const R2_BUCKET = "donkey-cut";
+const R2_BUCKET = "deepw-media";
 
 const PUT_EXPIRY_SECONDS = 60 * 60; // 1h — the client uploads right after presigning
+const GET_EXPIRY_SECONDS = 60 * 60; // 1h — long enough for a page view, short-lived by design
 
 export class R2NotConfiguredError extends Error {
   constructor() {
@@ -75,12 +76,36 @@ export const INFERENCE_PREFIX = "cut/inference/";
 export const inferenceBlobKey = (userId: string, sha256: string, ext: string) =>
   `${INFERENCE_PREFIX}${userId}/${sha256}.${ext}`;
 
+/** The creator marketplace's Submit Project uploads — outside the Cut engine's
+ * own project media, so its own top-level prefix. "New Submit" creates the
+ * Submission row before anything is picked, so every asset is keyed by that
+ * real id from the start — no client-generated draft id, no orphan sweep by
+ * R2 listing. An abandoned draft is just a `status: "draft"` row; cleaning
+ * one up is a normal delete (row + whatever these keys point at), not a
+ * prefix-scan reconciliation. See prisma/Marketplace.prisma's
+ * SubmissionAsset for the row each of these keys is attached to. */
+export const MARKETPLACE_PREFIX = "marketplace/";
+export const submissionThumbnailKey = (userId: string, submissionId: string) =>
+  `${MARKETPLACE_PREFIX}${userId}/submissions/${submissionId}/thumbnail.webp`;
+export const submissionVideoKey = (userId: string, submissionId: string, fileName: string) =>
+  `${MARKETPLACE_PREFIX}${userId}/submissions/${submissionId}/video/${fileName}`;
+export const submissionVerificationKey = (userId: string, submissionId: string, fileName: string) =>
+  `${MARKETPLACE_PREFIX}${userId}/submissions/${submissionId}/verification/${fileName}`;
+
 export function presignPut(key: string, mime: string): Promise<string> {
   return getSignedUrl(
     r2(),
     new PutObjectCommand({ Bucket: R2_BUCKET, Key: key, ContentType: mime }),
     { expiresIn: PUT_EXPIRY_SECONDS }
   );
+}
+
+/** A time-limited GET URL — used for private objects an `<img>`/`<video>` can
+ * be pointed at directly via a redirect, without proxying bytes through us. */
+export function presignGet(key: string): Promise<string> {
+  return getSignedUrl(r2(), new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }), {
+    expiresIn: GET_EXPIRY_SECONDS,
+  });
 }
 
 
@@ -158,32 +183,6 @@ export async function listUnder(prefix: string, limit = 10_000): Promise<string[
     );
     for (const o of res.Contents ?? []) {
       if (o.Key) out.push(o.Key);
-      if (out.length >= limit) return out;
-    }
-    token = res.IsTruncated ? res.NextContinuationToken : undefined;
-  } while (token);
-  return out;
-}
-
-/** Keys and last-write times under `prefix` — freshness checks without
- * per-object GETs. */
-export async function listObjectsWithDates(
-  prefix: string,
-  limit = 10_000
-): Promise<{ key: string; lastModified: Date }[]> {
-  const out: { key: string; lastModified: Date }[] = [];
-  let token: string | undefined;
-  do {
-    const res = await r2().send(
-      new ListObjectsV2Command({
-        Bucket: R2_BUCKET,
-        Prefix: prefix,
-        ContinuationToken: token,
-        MaxKeys: 1000,
-      })
-    );
-    for (const o of res.Contents ?? []) {
-      if (o.Key && o.LastModified) out.push({ key: o.Key, lastModified: o.LastModified });
       if (out.length >= limit) return out;
     }
     token = res.IsTruncated ? res.NextContinuationToken : undefined;

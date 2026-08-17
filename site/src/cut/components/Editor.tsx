@@ -20,7 +20,7 @@ import {
   renderPreviewProxy,
   type ExportDoc,
 } from "@/cut/lib/exportClient";
-import { fileZoneAt, hasRefDrag, selectionRefTokens } from "@/cut/lib/assetRef";
+import { fileZoneAt, hasRefDrag } from "@/cut/lib/assetRef";
 import { startUpload } from "@/cut/lib/importQueue";
 import { enrichAsset, importFileToProject, prepareImport } from "@/cut/lib/media";
 // Side-effect import: registers the brief-to-video resume subscription, so a
@@ -46,7 +46,6 @@ import {
   storedAssets,
   useEditor,
 } from "@/cut/lib/store";
-import { playheadAt, skimAt } from "@/cut/lib/playhead";
 import type { MediaAsset } from "@/cut/lib/types";
 import { AiPanel } from "./AiPanel";
 import { ExportDialog } from "./ExportDialog";
@@ -105,21 +104,13 @@ export function Editor({
   // show; otherwise (nothing selected, a subtitle cue, a transition bar — the
   // Transitions tab is its panel) it is an empty white panel, so collapse it
   // and let the preview take the space.
-  const hasInspector = useEditor((s) => {
-    if (s.readOnly || s.selection == null) return false;
-    if (s.selection.kind === "cue" || s.selection.kind === "transition") return false;
-    if (s.multiSelection.length <= 1) return true;
-    // A multi-selection (marquee, ⌘-click) has no single item to edit, so the
-    // panel stays closed. The exception is a grouped element: selecting it
-    // selects its whole group, and the panel edits the clicked member.
-    const first = s.multiSelection[0];
-    if (first?.kind !== "overlay") return false;
-    const gid = s.overlays.find((o) => o.id === first.id)?.groupId;
-    if (!gid) return false;
-    return s.multiSelection.every(
-      (m) => m?.kind === "overlay" && s.overlays.find((o) => o.id === m.id)?.groupId === gid
-    );
-  });
+  const hasInspector = useEditor(
+    (s) =>
+      !s.readOnly &&
+      s.selection != null &&
+      s.selection.kind !== "cue" &&
+      s.selection.kind !== "transition"
+  );
   const [importing, setImporting] = useState(0);
   // Files being probed and named, plus the ones already placed whose bytes are
   // still going out — both are work the save indicator reports.
@@ -159,8 +150,8 @@ export function Editor({
           });
       void bind.then((placement) => {
         if (!alive) return;
+        setNeedsApp(!placement.reachable);
         if (placement.reachable) {
-          setNeedsApp(false);
           // loadProject clears `loaded` synchronously before its first await,
           // so marking the mount opened here can never show the editor
           // against leftover state.
@@ -183,17 +174,6 @@ export function Editor({
           waiting = undefined;
           open();
         });
-        // The gate's probe may have reached the engine while the placement
-        // above was resolving — its announcement fired before this
-        // subscription existed. Subscribing first and then reading the
-        // current answer closes that gap in both orders.
-        if (hasLocalCompute()) {
-          waiting();
-          waiting = undefined;
-          open();
-          return;
-        }
-        setNeedsApp(true);
       });
     };
     open();
@@ -294,7 +274,7 @@ export function Editor({
             const version = res.headers.get("x-cut-doc-version");
             const showing = loadedDocVersion(projectId);
             if (version && showing && version !== showing) {
-              const at = playheadAt();
+              const at = useEditor.getState().currentTime;
               await useEditor.getState().loadProject(projectId, { inPlace: true });
               for (const asset of useEditor.getState().assets) void enrichAsset(asset);
               useEditor.getState().seek(at);
@@ -434,10 +414,6 @@ export function Editor({
     let timer: ReturnType<typeof setTimeout> | null = null;
     let last = serializeDoc(useEditor.getState());
     let lastName = useEditor.getState().projectName;
-    // serializeDoc copies the bars, so the store's array is the baseline: a
-    // parked bar changes no clip field, and comparing the copies would never
-    // see it.
-    let lastBars = useEditor.getState().transitions;
 
     // Transient failures (the network coming back up after a laptop wake, a
     // 5xx) retry on a capped backoff so unsaved work never parks on a dead
@@ -529,7 +505,6 @@ export function Editor({
         primedEpoch = s.loadEpoch;
         last = serializeDoc(s);
         lastName = s.projectName;
-        lastBars = s.transitions;
         assetsChanged(s.assets);
         return;
       }
@@ -552,7 +527,6 @@ export function Editor({
         docClips(s.clips, s.assets) !== (last.clips as unknown) ||
         docAudioClips(s.audioClips, s.assets) !== (last.audioClips as unknown) ||
         docOverlays(s.overlays) !== (last.overlays as unknown) ||
-        s.transitions !== lastBars ||
         s.templates !== (last.templates as unknown) ||
         s.subtitles !== (last.subtitles as unknown) ||
         s.aspect !== last.aspect ||
@@ -573,7 +547,6 @@ export function Editor({
       if (!changed) return;
       last = serializeDoc(s);
       lastName = s.projectName;
-      lastBars = s.transitions;
       editSeq++;
       // Every edit lands on disk marked dirty before it lands on the server,
       // with the version it was edited on top of: a crash or a closed tab
@@ -733,11 +706,7 @@ export function Editor({
       }
       const at = timelineDropTime(e);
       if (at != null) {
-        // The first drop on an empty timeline starts the cut at 0: a lone
-        // clip floating at the pointer time reads as broken.
-        const s = useEditor.getState();
-        const empty = s.clips.length === 0 && s.audioClips.length === 0;
-        void importFiles(e.dataTransfer.files, { at: empty ? 0 : at });
+        void importFiles(e.dataTransfer.files, { at });
         return;
       }
       void importFiles(e.dataTransfer.files, { mediaOnly: !overCanvas(e) });
@@ -787,7 +756,7 @@ export function Editor({
 
       if (e.code === "Space" && !controlFocused) {
         e.preventDefault();
-        if (!s.playing && playheadAt() >= projectDuration(s) - 0.01) s.seek(0);
+        if (!s.playing && s.currentTime >= projectDuration(s) - 0.01) s.seek(0);
         s.setPlaying(!s.playing);
       } else if (e.key === "Backspace" || e.key === "Delete") {
         e.preventDefault();
@@ -797,41 +766,18 @@ export function Editor({
         if (e.shiftKey) s.redo();
         else s.undo();
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c") {
-        // Selected page text keeps native ⌘C. Otherwise, alongside the
-        // internal copy (for ⌘V back onto the timeline), the selection's
-        // mention tokens go to the system clipboard, so a copied clip,
-        // element, transition, cue, or keyframe pastes into the chat
-        // composer as a reference.
-        if (!window.getSelection()?.toString()) {
-          const token = selectionRefTokens(s);
-          if (token) void navigator.clipboard.writeText(token).catch(() => {});
-          if (s.copySelection() || token) e.preventDefault();
-        }
+        if (s.copySelection()) e.preventDefault();
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "v") {
         if (s.paste()) e.preventDefault();
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "g") {
-        // ⌘G groups the multi-selected elements, ⇧⌘G dissolves the primary's
-        // group — the panel's Group button is out of reach while a
-        // multi-selection keeps the inspector closed.
-        e.preventDefault();
-        if (e.shiftKey) {
-          const gid =
-            s.selection?.kind === "overlay"
-              ? s.overlays.find((o) => o.id === s.selection!.id)?.groupId
-              : undefined;
-          if (gid) s.ungroupOverlays(gid);
-        } else {
-          s.groupSelectedOverlays();
-        }
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
         e.preventDefault();
         s.setAiOpen(!s.aiOpen);
       } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
         e.preventDefault();
         // Cut at the skimmer when the mouse is over the timeline.
-        s.splitAtPlayhead(skimAt() ?? undefined);
+        s.splitAtPlayhead(s.skimTime ?? undefined);
       } else if (e.key.toLowerCase() === "s" && !e.metaKey && !e.ctrlKey) {
-        s.splitAtPlayhead(skimAt() ?? undefined);
+        s.splitAtPlayhead(s.skimTime ?? undefined);
       } else if (e.key.toLowerCase() === "t" && !e.metaKey && !e.ctrlKey) {
         s.addOverlay();
       } else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !controlFocused) {
@@ -840,7 +786,7 @@ export function Editor({
         // never pauses); paused, they step a frame — 1s with Shift — for
         // precise editing.
         const step = s.playing ? 1 : e.shiftKey ? 1 : 1 / 30;
-        s.seek(playheadAt() + (e.key === "ArrowLeft" ? -step : step));
+        s.seek(s.currentTime + (e.key === "ArrowLeft" ? -step : step));
       } else if (e.key === "Escape") {
         s.select(null);
       }

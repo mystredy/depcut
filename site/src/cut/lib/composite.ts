@@ -19,9 +19,8 @@
  * it was reached by playing there or by rendering the 135th frame.
  */
 
-import { applyMaskToCanvas, gradeTint, gradeToCssFilter, grainTile, isNeutralGrade, lookCssFilter, lookPost, maskComposite } from "@donkeycut/effects-kit";
-import { createRasterCanvas } from "./raster";
-import { clipKeyed, clipPoseAt, isFullRect, rectOf } from "./types";
+import { gradeTint, gradeToCssFilter, grainTile, isNeutralGrade, lookCssFilter, lookPost } from "@donkeycut/effects-kit";
+import { isFullRect, rectOf } from "./types";
 import type { FrameRect, TransitionStyle, VideoClip } from "./types";
 
 /** A clip's picture at some instant, or the reasons there isn't one.
@@ -73,22 +72,6 @@ export class FrameCompositor {
   private gradeCanvas: Surface | null = null;
   private lookScratch: Surface | null = null;
   private vignetteCanvas: Surface | null = null;
-  /** The masked/keyframed-layer pass: the layer draws into `layerScratch`,
-   * its mask's coverage paints into `maskScratch`, a keyframed pose blits
-   * through `poseScratch`, and the result composites back onto the frame. */
-  private layerScratch: Surface | null = null;
-  private maskScratch: Surface | null = null;
-  private poseScratch: Surface | null = null;
-
-  /** Where a subject-masked clip's person matte comes from: the host hands a
-   * reader over the canvas as it stands (the layers beneath the clip), so
-   * the matte never includes the masked clip's own pixels. A computed frame
-   * with `alpha: null` means no person registered — empty coverage. Provider
-   * absent, or a null frame = subject masks draw the plain picture (no
-   * segmenter, or the matte pass that must not recurse). */
-  subjectMatteProvider:
-    | ((at: number) => { alpha: CanvasImageSource | null } | null)
-    | null = null;
 
   constructor(private canvas: Surface) {}
 
@@ -113,19 +96,16 @@ export class FrameCompositor {
    * whether it had to be resized — which also cleared it, since setting a
    * canvas dimension wipes its contents. */
   private scratch(
-    field:
-      | "gradeCanvas"
-      | "lookScratch"
-      | "vignetteCanvas"
-      | "layerScratch"
-      | "maskScratch"
-      | "poseScratch",
+    field: "gradeCanvas" | "lookScratch" | "vignetteCanvas",
     w: number,
     h: number
   ): { surface: Surface; resized: boolean } {
     let surface = this[field];
     if (!surface) {
-      surface = createRasterCanvas(w, h);
+      surface =
+        typeof document === "undefined"
+          ? new OffscreenCanvas(Math.max(1, w), Math.max(1, h))
+          : document.createElement("canvas");
       this[field] = surface;
     }
     // Match both dimensions — a transition alternates two differently-sized
@@ -328,112 +308,6 @@ export class FrameCompositor {
     ctx.globalCompositeOperation = "source-over";
   }
 
-  /** Whether the layer routes through the mask/pose pass at all. */
-  private needsFx(clip?: VideoClip): boolean {
-    return (
-      !!clip &&
-      (clipKeyed(clip) ||
-        !!(clip.mask && (clip.mask.kind !== "subject" || this.subjectMatteProvider)))
-    );
-  }
-
-  /**
-   * Draw one masked or keyframed layer by re-entering `draw` against a
-   * transparent scratch (with the clip's mask and keys stripped so the inner
-   * call draws plainly), then compose in order: the geometry mask trims the
-   * layer in its own space (it rides the clip), the pose blits the result
-   * where the keys put it, and the person matte — anchored to the frame, so
-   * the person never travels with the clip — trims last. The mask and pose
-   * evaluate on the clip's own clock.
-   */
-  private drawFx(
-    clip: VideoClip,
-    at: number,
-    fx: LayerFx | undefined,
-    draw: (plain: VideoClip) => void
-  ) {
-    const ctx = this.ctx();
-    if (!ctx) return;
-    const W = this.canvas.width;
-    const H = this.canvas.height;
-    const tLocal = Math.max(0, at - clip.start);
-    const pose = clipKeyed(clip) ? clipPoseAt(clip, tLocal) : null;
-    if (pose && pose.opacity <= 0.001) return;
-    const mask = clip.mask;
-    const { surface: layer } = this.scratch("layerScratch", W, H);
-    const lctx = layer.getContext("2d") as Ctx | null;
-    if (!lctx) return;
-    lctx.clearRect(0, 0, W, H);
-    const prev = this.canvas;
-    this.canvas = layer;
-    try {
-      draw({ ...clip, mask: undefined, kf: undefined });
-    } finally {
-      this.canvas = prev;
-    }
-    const rect = rectOf(clip);
-    const { surface: cover } = this.scratch("maskScratch", W, H);
-    if (mask && mask.kind !== "subject") {
-      applyMaskToCanvas(
-        lctx,
-        cover,
-        mask,
-        tLocal,
-        { width: W, height: H, scale: Math.min(W, H) / 1080 },
-        { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 }
-      );
-    }
-    let out: Surface = layer;
-    let octx = lctx;
-    if (pose) {
-      const { surface: posed } = this.scratch("poseScratch", W, H);
-      const pctx = posed.getContext("2d") as Ctx | null;
-      if (!pctx) return;
-      pctx.setTransform(1, 0, 0, 1, 0, 0);
-      pctx.clearRect(0, 0, W, H);
-      pctx.save();
-      pctx.globalAlpha = Math.max(0, Math.min(1, pose.opacity));
-      pctx.translate(pose.x * W, pose.y * H);
-      pctx.rotate((pose.rotation * Math.PI) / 180);
-      pctx.scale(pose.scale, pose.scale);
-      pctx.translate(-(rect.x + rect.w / 2) * W, -(rect.y + rect.h / 2) * H);
-      pctx.drawImage(layer, 0, 0);
-      pctx.restore();
-      out = posed;
-      octx = pctx;
-    }
-    if (mask?.kind === "subject") {
-      // The person matte is the coverage: blur its edge by the feather and
-      // multiply it in (or out, inverted), after the pose so the person
-      // stays anchored to the frame. A computed frame with no person means
-      // empty coverage — a front-masked layer shows nothing (the export's
-      // black matte frames land the same way) and a behind-masked one shows
-      // whole.
-      const res = this.subjectMatteProvider?.(at) ?? null;
-      if (res && !res.alpha) {
-        if (!mask.invert) return;
-      } else if (res?.alpha) {
-        const cctx = cover.getContext("2d") as Ctx;
-        cctx.clearRect(0, 0, W, H);
-        const feather = (mask.feather ?? 0) * (Math.min(W, H) / 1080);
-        if (feather > 0 && "filter" in cctx) cctx.filter = `blur(${feather / 2}px)`;
-        cctx.imageSmoothingEnabled = true;
-        cctx.drawImage(res.alpha, 0, 0, W, H);
-        cctx.filter = "none";
-        maskComposite(octx, cover as CanvasImageSource, mask.invert);
-      }
-    }
-    // Transition motion lands on the finished result, so a push carries the
-    // mask and pose along — the export translates the segment the same way.
-    const hasFx = !!fx && (!!fx.dx || !!fx.dy);
-    if (hasFx) {
-      ctx.save();
-      ctx.translate(Math.round(fx.dx ?? 0), Math.round(fx.dy ?? 0));
-    }
-    ctx.drawImage(out, 0, 0);
-    if (hasFx) ctx.restore();
-  }
-
   /** Draw a frame into a sub-rectangle of the canvas (a split-screen half, an
    * overlay's region), fitted or filled. */
   drawIntoRect(
@@ -446,12 +320,6 @@ export class FrameCompositor {
     clip?: VideoClip
   ) {
     if (frame.kind !== "ready") return;
-    if (this.needsFx(clip)) {
-      this.drawFx(clip!, at, undefined, (plain) =>
-        this.drawIntoRect(frame, rect, fill, alpha, at, zoom, plain)
-      );
-      return;
-    }
     const ctx = this.ctx();
     if (!ctx) return;
     const W = this.canvas.width;
@@ -465,40 +333,20 @@ export class FrameCompositor {
     const sc = (fill ? Math.max(rw / vw, rh / vh) : Math.min(rw / vw, rh / vh)) * zoom;
     const dw = vw * sc;
     const dh = vh * sc;
-    let dx = rx + (rw - dw) / 2;
-    let dy = ry + (rh - dh) / 2;
-    if (fill) {
-      // Pan the crop window across the overflow (matches the export crop).
-      const kx = 0.5 + Math.max(-1, Math.min(1, clip?.panX ?? 0)) / 2;
-      const ky = 0.5 + Math.max(-1, Math.min(1, clip?.panY ?? 0)) / 2;
-      dx = rx - (dw - rw) * kx;
-      dy = ry - (dh - rh) * ky;
-    }
+    const dx = rx + (rw - dw) / 2;
+    const dy = ry + (rh - dh) / 2;
     const src = this.gradedSource(frame, clip);
-    const bs = clip?.boxStyle;
-    // Box style lengths are design px at the 1080 short side, like masks.
-    const ds = Math.min(W, H) / 1080;
-    const rad = Math.max(0, (bs?.radius ?? 0) * ds);
     const prevAlpha = ctx.globalAlpha;
     ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-    if (fill || zoom > 1 || rad > 0) {
+    if (fill || zoom > 1) {
       ctx.save();
       ctx.beginPath();
-      ctx.roundRect(rx, ry, rw, rh, rad);
+      ctx.rect(rx, ry, rw, rh);
       ctx.clip();
       ctx.drawImage(src, dx, dy, dw, dh);
       ctx.restore();
     } else {
       ctx.drawImage(src, dx, dy, dw, dh);
-    }
-    if (bs?.borderWidth) {
-      // Stroke inside the box edge, so the border never widens the region.
-      const bw = bs.borderWidth * ds;
-      ctx.strokeStyle = bs.borderColor ?? "#ffffff";
-      ctx.lineWidth = bw;
-      ctx.beginPath();
-      ctx.roundRect(rx + bw / 2, ry + bw / 2, rw - bw, rh - bw, Math.max(0, rad - bw / 2));
-      ctx.stroke();
     }
     ctx.globalAlpha = prevAlpha;
     this.applyLookPost(clip, rx, ry, rw, rh, alpha, at);
@@ -538,15 +386,6 @@ export class FrameCompositor {
     // instead of strobing black (matters while skimming).
     if (frame.kind === "pending") return;
     blank();
-    if (this.needsFx(clip)) {
-      // The blank above already settled who owns the black; the layer itself
-      // draws through the mask/pose pass, and any transition motion lands on
-      // the finished result.
-      this.drawFx(clip!, at, fx, (plain) =>
-        this.drawLayer(frame, plain, false, alpha, at, zoom, undefined)
-      );
-      return;
-    }
 
     const hasFx = !!fx && (!!fx.dx || !!fx.dy);
     if (hasFx) {
@@ -558,11 +397,9 @@ export class FrameCompositor {
       ctx.translate(Math.round(fx.dx ?? 0), Math.round(fx.dy ?? 0));
     }
     // A regioned track-0 clip (split-screen half) draws into its rect over the
-    // black frame; the full-frame path below keeps the pan-crop behavior. A
-    // styled box (rounded corners, border) also routes through the rect path,
-    // which knows how to draw the style at full frame too.
+    // black frame; the full-frame path below keeps the pan-crop behavior.
     const rect = rectOf(clip ?? {});
-    if (!isFullRect(rect) || clip?.boxStyle) {
+    if (!isFullRect(rect)) {
       this.drawIntoRect(frame, rect, clip?.fit === "fill", alpha, at, zoom, clip);
       if (hasFx) ctx.restore();
       return;

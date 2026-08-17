@@ -12,7 +12,8 @@ const NAV_ICON_SIZE = 59;
 
 type Props = {
   homeHref?: string;
-  // Wordmark next to the logo.
+  // Wordmark next to the logo. Donkey Vision is its own B2B product, so that
+  // page overrides the default "Donkey" with "Donkey Vision".
   wordmark?: string;
   // Sign-in/up pages show a single toggle to the other mode. Auth otherwise
   // lives on donkeycut.com, so the marketing nav carries no auth entry points.
@@ -54,7 +55,7 @@ export function TopNav({
     <header className="sticky top-0 z-50 w-full py-3 md:py-4">
       <div
         className={cn(
-          "mx-auto flex w-full max-w-[1400px] items-center justify-between rounded-[24px] px-4 py-2 transition-all duration-300 md:px-12 md:py-2.5",
+          "mx-auto flex w-full max-w-[1400px] items-center justify-between rounded-[24px] px-6 py-2 transition-all duration-300 md:px-12 md:py-2.5",
           scrolled
             ? "border border-ink/10 bg-cream/95 shadow-[0_18px_50px_rgba(15,14,13,0.10)] backdrop-blur-md"
             : "border border-transparent bg-transparent shadow-none",
@@ -62,11 +63,11 @@ export function TopNav({
       >
         <Link
           href={homeHref}
-          className="flex items-center gap-1 text-ink no-underline md:gap-3"
+          className="flex items-center gap-0 text-ink no-underline"
         >
-          <div className="flex h-[44px] w-[44px] items-center justify-center overflow-hidden rounded-[10px] md:h-[59px] md:w-[59px]">
+          <div className="flex h-[59px] w-[59px] items-center justify-center overflow-hidden rounded-[10px]">
             <Image
-              src="/donkey-logo.svg"
+              src="/deepw-logo.svg"
               alt=""
               width={NAV_ICON_SIZE}
               height={NAV_ICON_SIZE}
@@ -75,9 +76,7 @@ export function TopNav({
               unoptimized
             />
           </div>
-          <span className="whitespace-nowrap text-lg font-semibold md:text-2xl">
-            {wordmark}
-          </span>
+          <span className="text-2xl font-semibold">{wordmark}</span>
         </Link>
         <div className="flex items-center gap-[10px] md:gap-4">
           {isSignedIn ? (
@@ -91,7 +90,7 @@ export function TopNav({
                   full-page navigation the sign-in route needs. */}
               <a
                 href={signedOutAuth.logInHref}
-                className="hidden whitespace-nowrap text-sm font-semibold text-ink no-underline sm:inline"
+                className="whitespace-nowrap text-sm font-semibold text-ink no-underline"
               >
                 Log in
               </a>

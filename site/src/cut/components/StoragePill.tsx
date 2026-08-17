@@ -4,7 +4,7 @@
 // mutually exclusive faces: free accounts see their storage usage (click →
 // upgrade dialog); a Pro set to cancel sees the days it has left (click →
 // Stripe portal, where Resume lives).
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import {
   Tooltip,
@@ -35,8 +35,8 @@ export function usageLabel(bytes: number, quotaBytes: number): string {
 }
 
 export function StoragePill() {
-  const mode = useCutMode();
-  if (mode !== "cloud") return null;
+  const cloud = useCutMode() === "cloud";
+  if (!cloud) return null;
   return <CloudStoragePill />;
 }
 

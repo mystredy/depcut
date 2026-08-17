@@ -10,9 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { parseNumberInput } from "@/cut/components/ScrubValue";
-import { ValueSlider } from "@/cut/components/ValueSlider";
+import { parseNumberInput, ScrubValue } from "@/cut/components/ScrubValue";
 import { GenerateSubtitlesAudio } from "@/cut/components/VoicePicker";
 import {
   CAPTION_STYLES,
@@ -26,7 +26,6 @@ import {
 import { useElapsed } from "@/cut/hooks/useElapsed";
 import { useCutCaps } from "@/cut/lib/backend/hooks";
 import { TIMELINE_H_MIN, useEditor } from "@/cut/lib/store";
-import { usePreviewSelector } from "@/cut/lib/playhead";
 import { PLATE_PAD_X, PLATE_PAD_Y, PLATE_RADIUS, plateFill } from "@/cut/lib/textRender";
 import {
   FONTS,
@@ -253,18 +252,24 @@ function OptionsTab() {
       <div className="flex min-h-8 items-center justify-between text-xs font-medium">
         Size
         <div className="sub-size flex items-center gap-2">
-          <ValueSlider
+          <Slider
+            className="data-horizontal:w-24"
+            min={24}
+            max={120}
+            step={1}
+            value={subtitles.size ?? captionStyle(subtitles.style).size}
+            onValueChange={(v) => useEditor.getState().setSubtitlesView({ size: Number(v) })}
+          />
+          <ScrubValue
             label="Caption size"
-            sliderClassName="data-horizontal:w-24"
-            valueClassName="w-7 text-muted-foreground"
+            className="w-7 text-muted-foreground"
             value={subtitles.size ?? captionStyle(subtitles.style).size}
             min={24}
             max={120}
             step={1}
-            snap={[captionStyle(subtitles.style).size]}
             format={(v) => String(Math.round(v))}
             parse={parseNumberInput}
-            onDraft={(v) => useEditor.getState().setSubtitlesView({ size: v })}
+            onScrub={(v) => useEditor.getState().setSubtitlesView({ size: v })}
             onCommit={(v) => useEditor.getState().setSubtitlesView({ size: v })}
           />
         </div>
@@ -556,7 +561,10 @@ function caretOffset(el: HTMLElement): number {
 }
 
 const CueSpan = memo(function CueSpan({ cue, gap }: { cue: SubtitleCue; gap: number }) {
-  const active = usePreviewSelector((t) => t >= cue.start && t < cue.end);
+  const active = useEditor((s) => {
+    const t = !s.playing && s.skimTime !== null ? s.skimTime : s.currentTime;
+    return t >= cue.start && t < cue.end;
+  });
   const ref = useRef<HTMLSpanElement>(null);
   const [focused, setFocused] = useState(false);
 

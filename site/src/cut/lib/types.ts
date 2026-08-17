@@ -1,17 +1,12 @@
 import {
-  behindSubjectMask,
   overlayKind,
-  poseAt,
   stampOverlayKinds,
   stripDefaultOverlayKinds,
   type ColorGrade,
   type EffectOverlay,
   type LookStyle,
-  type Mask,
   type OverlayBase,
-  type OverlayKey,
   type OverlayKind,
-  type OverlayPose,
   type ShapeKind,
   type ShapeOverlay,
   type StickerOverlay,
@@ -98,13 +93,6 @@ export function aspectOrientation(aspect: Aspect): "landscape" | "portrait" | "s
   return r.w === r.h ? "square" : r.w > r.h ? "landscape" : "portrait";
 }
 
-/** Which shape band a w×h frame tiles with. The log of the ratio, in coarse
- * steps: 16:9 bands with 3:2, while 4:3, 1:1, 3:4, and 9:16 each band apart —
- * any ratio lands somewhere, with no landscape/portrait dichotomy. */
-export function shapeBand(w: number, h: number): number {
-  return Math.round(Math.log2(w / h) * 3);
-}
-
 /** Project the project aspect onto a model/provider's supported ratio list:
  * the entry whose shape is closest (log-ratio distance), first entry on ties. */
 export function nearestAspect<T extends string>(aspect: Aspect, supported: readonly T[]): T {
@@ -125,39 +113,6 @@ export function nearestAspect<T extends string>(aspect: Aspect, supported: reado
 }
 
 /** Asset fields persisted in project.json. */
-/** Why watch_video kept a frame: "first" opens the range, "global" is a
- * whole-frame change (a hard cut), "action" is hard local motion (a small
- * subject), "settled" is new settled detail (text, ink, UI). */
-export type WatchKeepReason = "first" | "global" | "action" | "settled";
-
-/** What the assistant has seen of a source: watch_video's kept frames and
- * detected cuts, merged across the watched spans. Times are source seconds.
- * Media files are immutable per fileName, so this never goes stale; it lives
- * on the asset, so it saves with the project and dies with the asset. */
-export interface AssetWatch {
-  /** Watched source spans, merged and ascending. */
-  ranges: { from: number; to: number }[];
-  /** Kept distinct frames, ascending, each with why it was kept. */
-  frames: { t: number; via: WatchKeepReason }[];
-  /** Hard-cut moments among the kept frames. */
-  sceneChanges: number[];
-}
-
-/** A source's own transcript — working data for the assistant, kept apart
- * from subtitle tracks (those are user-visible and only written on request).
- * Times are source seconds. Same lifecycle as AssetWatch: saves with the
- * project, dies with the asset, never stale (media files are immutable). */
-export interface AssetSpeech {
-  /** Transcribed source spans, merged and ascending. */
-  ranges: { from: number; to: number }[];
-  /** Timed speech segments, ascending. */
-  segments: { start: number; end: number; text: string }[];
-  /** Set once the whole source is covered and no speech was heard — a
-   * result, so silent sources are never re-transcribed. */
-  noSpeech?: true;
-  locale?: string;
-}
-
 export interface StoredAsset {
   id: string;
   fileName: string; // file inside the project's media/ folder
@@ -166,10 +121,6 @@ export interface StoredAsset {
   duration: number; // seconds
   width?: number;
   height?: number;
-  /** Watch metadata for video sources — what the assistant has seen. */
-  watch?: AssetWatch;
-  /** The source's own transcript — what the assistant has heard. */
-  speech?: AssetSpeech;
   /** How this asset entered the project. Absent = the user imported it (drag,
    * drop, or upload), so it belongs in the Media panel. Any value marks media
    * Cut created or fetched — it lives where it was made (the timeline, a
@@ -184,20 +135,14 @@ export interface StoredAsset {
 }
 
 /** An import whose bytes are still on their way to storage. While this is set
- * the asset plays from a local object URL. Whether it may join the saved
- * document depends on where the bytes live: an upload holding only tab-scoped
- * bytes is held out along with the clips that use it — a reload cannot resume
- * them, so a doc pointing at them would open broken. One whose bytes sit in
- * the browser store survives a reload and saves like any other asset; the
- * store's ledger re-marks it pending on the next open. */
+ * the asset plays from a local object URL, and it is held out of the saved
+ * document along with the clips that use it — a reload cannot resume bytes
+ * this tab was holding, so a doc pointing at them would open broken. */
 export interface AssetUpload {
   /** Share of the bytes sent, 0..1. */
   progress: number;
   /** Set when the upload failed; the asset is retryable until it is removed. */
   error?: string;
-  /** The bytes are held durably in the browser store, so the asset is safe to
-   * save and the upload safe to resume after a reload. */
-  stored?: boolean;
 }
 
 /** Runtime asset: stored fields plus derived/browser-only data. */
@@ -227,87 +172,14 @@ export interface FrameRect {
 
 export const FULL_FRAME: FrameRect = { x: 0, y: 0, w: 1, h: 1 };
 
-/** Decorative styling on a clip's box, off until the user turns it on:
- * rounded corners trim the picture, and a stroke draws along the box edge.
- * Lengths are design px at the 1080 short side, like mask feather/radius. */
-export interface BoxStyle {
-  /** Corner radius, design px. */
-  radius?: number;
-  /** Border stroke width, design px; 0/absent draws no stroke. */
-  borderWidth?: number;
-  /** Border stroke color (hex). */
-  borderColor?: string;
-}
-
-/** How far a region box may oversize the frame on each axis. Oversizing is
- * the zoom-into-an-area move; the ceiling keeps export scale targets and
- * mask canvases within what ffmpeg and browser canvases handle. */
-export const REGION_MAX_SCALE = 3;
-
 /** A clip's effective region: its own `frame`, or the full frame if unset. */
 export function rectOf(clip: { frame?: FrameRect }): FrameRect {
   return clip.frame ?? FULL_FRAME;
 }
 
-/** Whether a region matches the whole frame (so it needs no special layout).
- * An oversized or shifted region counts as regioned — it crops to the frame. */
+/** Whether a region covers the whole frame (so it needs no special layout). */
 export function isFullRect(r: FrameRect): boolean {
-  return (
-    Math.abs(r.x) <= 0.001 &&
-    Math.abs(r.y) <= 0.001 &&
-    Math.abs(r.w - 1) <= 0.001 &&
-    Math.abs(r.h - 1) <= 0.001
-  );
-}
-
-/** A region's pixel box at an output size, even-rounded — the one rounding
- * that decides where a regioned clip's segment sits. The ffmpeg graph frames
- * segments with it and the export client paints mask coverage with it, so
- * the two land on identical pixels. The box may reach past the frame edges
- * (up to REGION_MAX_SCALE per axis — the same ceiling the resize handle
- * enforces, applied again here so a stored oversize can never blow up the
- * export); the graph crops the frame window back out. Null for the full
- * frame, judged with isFullRect's tolerance so a nudged-by-a-hair rect lays
- * out exactly like the full frame it visually is. */
-export function regionPx(
-  frame: { x: number; y: number; w: number; h: number } | undefined,
-  W: number,
-  H: number
-): { rx: number; ry: number; rw: number; rh: number } | null {
-  if (!frame || isFullRect(frame)) return null;
-  const even = (n: number) => 2 * Math.round(n / 2);
-  const rw = Math.min(even(REGION_MAX_SCALE * W), Math.max(2, even(frame.w * W)));
-  const rh = Math.min(even(REGION_MAX_SCALE * H), Math.max(2, even(frame.h * H)));
-  const rx = even(frame.x * W);
-  const ry = even(frame.y * H);
-  if (rx === 0 && ry === 0 && rw === W && rh === H) return null;
-  return { rx, ry, rw, rh };
-}
-
-/** Whether the clip carries pose keys worth evaluating. */
-export const clipKeyed = (c: { kf?: OverlayKey[] }): boolean => !!c.kf && c.kf.length > 0;
-
-/**
- * The clip's pose at `tLocal` seconds into its window: resting at its region
- * center, or moving along its key track — the overlay evaluator over the
- * clip's own anchor, so clips and elements share one interpolation.
- */
-export function clipPoseAt(
-  clip: { frame?: FrameRect; in: number; out: number; speed?: number; kf?: OverlayKey[] },
-  tLocal: number
-): OverlayPose {
-  const rect = rectOf(clip);
-  const len = Math.max(0.1, (clip.out - clip.in) / (clip.speed && clip.speed > 0 ? clip.speed : 1));
-  return poseAt(
-    {
-      start: 0,
-      end: len,
-      x: rect.x + rect.w / 2,
-      y: rect.y + rect.h / 2,
-      kf: clip.kf,
-    },
-    tLocal
-  );
+  return r.x <= 0.001 && r.y <= 0.001 && r.w >= 0.999 && r.h >= 0.999;
 }
 
 /** One-click layouts for arranging a video layer in the frame. `fit` is the
@@ -394,17 +266,6 @@ export interface VideoClip {
   hidden?: boolean;
   /** Manual color adjustments; absent when every value is neutral. */
   grade?: ColorGrade;
-  /** Coverage that trims the clip's picture to a shape (see the kit's
-   * mask.ts); absent = the whole picture shows. Anchored on the clip's
-   * region center. */
-  mask?: Mask;
-  /** Keyframed pose track (see the kit's keys.ts), seconds from the clip's
-   * timeline start: x/y move the picture's center (frame fractions), scale
-   * multiplies its fitted size, rotation turns it about its center, opacity
-   * fades it. Absent = the clip sits in its region untransformed. */
-  kf?: OverlayKey[];
-  /** Rounded corners and a border stroke on the clip's box; absent = plain. */
-  boxStyle?: BoxStyle;
 }
 
 // Color grading (the dual-renderer math) lives in the effects kit; the model
@@ -848,40 +709,9 @@ export const isShapeOverlay = (o: Overlay): o is ShapeOverlay => o.kind === "sha
 export const isStickerOverlay = (o: Overlay): o is StickerOverlay => o.kind === "sticker";
 export const isEffectOverlay = (o: Overlay): o is EffectOverlay => o.kind === "effect";
 
-/** The element rides the person matte in some direction. */
-export const subjectMasked = (o: Overlay): boolean => o.mask?.kind === "subject";
-
-/** The element sits behind the person (an inverted subject mask). */
-export const behindSubjectOverlay = (o: Overlay): boolean => behindSubjectMask(o.mask);
-
-/** The element shows only on the person (a plain subject mask). */
-export const frontSubjectOverlay = (o: Overlay): boolean =>
-  subjectMasked(o) && !behindSubjectOverlay(o);
-
-/** Tolerant-load migration: documents written when behind-speaker was a
- * boolean load it as an inverted subject mask, so one mask model covers it
- * everywhere in memory and on save. Returns the same array when nothing
- * migrates (hosts compare documents by identity). */
-export function migrateBehindSubject<T extends Overlay>(overlays: T[]): T[] {
-  const legacy = (o: Overlay) =>
-    isTextOverlay(o) && !!(o as { behindSubject?: boolean }).behindSubject;
-  if (!overlays.some(legacy)) return overlays;
-  return overlays.map((o) => {
-    if (!legacy(o)) return o;
-    const next = { ...o, mask: o.mask ?? { kind: "subject" as const, invert: true } };
-    delete (next as { behindSubject?: boolean }).behindSubject;
-    return next;
-  });
-}
-
 export const SHAPE_LABELS: Record<ShapeKind, string> = {
   rect: "Rectangle",
   ellipse: "Ellipse",
-  triangle: "Triangle",
-  diamond: "Diamond",
-  star: "Star",
-  heart: "Heart",
-  hexagon: "Hexagon",
   line: "Line",
   arrow: "Arrow",
 };
@@ -1049,10 +879,6 @@ export const SIDE_PANEL_TABS: SidePanelTab[] = [
 
 export interface ProjectDoc {
   version: 1;
-  /** The project's stable API id. On the local engine the folder is named
-   * after the project and follows renames, so the id lives in the doc; the
-   * server stamps it on every write. */
-  id?: string;
   name: string;
   createdAt: number;
   updatedAt: number;
@@ -1164,13 +990,12 @@ export interface ProjectSummary {
   previewStart?: number;
   /** Whether a rendered proxy of the edit exists to play on hover. */
   hasPreview?: boolean;
-  /** Output frame ratio, so the home card takes the project's shape.
-   * Absent in older projects (which are all 9:16). */
-  aspect?: Aspect;
   /** Folder this project is filed under (null = ungrouped). */
   folderId?: string | null;
   /** Total bytes on disk (media + exports + proxy), for cleanup decisions. */
   sizeBytes?: number;
+  /** Starred for quick access. Cloud projects only. */
+  favorite?: boolean;
 }
 
 /** A project media file's URL. Work that outlives navigation (a generation

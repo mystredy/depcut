@@ -1,23 +1,14 @@
 "use client";
 
 import { apiFetch, apiJson, getBackend, type CutBackend } from "./backend";
-import {
-  removeBrowserExportJob,
-  reserveBrowserExportJob,
-  updateBrowserExportJob,
-} from "./backend/browser/exportJobs";
-import { exportsDir, readFileAt, saveExport } from "./backend/browser/opfs";
-import { holdRegistered, registerBlobFile, releaseRegistered } from "./backend/browser/registry";
 import { quotaErrorMessage } from "./backend/cloud";
-import { downloadFromUrl } from "./download";
 import { renderProjectToMp4 } from "./exportRender";
 import { putSigned } from "./media";
-import { createRasterCanvas, rasterCanvasToPng } from "./raster";
 import { clipSpeed, getClipSpans, overlayLayers, projectDuration, spanSequence, useEditor } from "./store";
 import { captionStyle, cueOverlay, cueWordWindows, laneCues, laneHidden, subtitleLaneCount, trackPos } from "./subtitles";
-import { isMaskAnimated, isOverlayAnimated, normalizeGrade, paintMaskLuma } from "@donkeycut/effects-kit";
+import { isOverlayAnimated, normalizeGrade } from "@donkeycut/effects-kit";
 import { renderElementFrames, renderElementPng } from "./textRender";
-import { clipPoseAt, frameOf, isStickerOverlay, isTextOverlay, laneOf, overlayAnimStyle, rectOf, regionPx, subjectMasked } from "./types";
+import { frameOf, isStickerOverlay, isTextOverlay, laneOf, overlayAnimStyle } from "./types";
 import type {
   Aspect,
   AudioClip,
@@ -148,10 +139,14 @@ export async function revealExport(
  * when the backend has no Finder (the cloud route 302s to a signed R2 URL with
  * attachment disposition). */
 export function downloadProjectExport(projectId: string, file: string) {
-  downloadFromUrl(
-    getBackend().url(`/api/cut/projects/${projectId}/exports/${encodeURIComponent(file)}`),
-    file
+  const a = document.createElement("a");
+  a.href = getBackend().url(
+    `/api/cut/projects/${projectId}/exports/${encodeURIComponent(file)}?download=1`
   );
+  a.download = file;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 /** Delete a rendered export from the project folder. Throws on failure so the
@@ -193,121 +188,6 @@ interface ExportPayload {
   pngs: { name: string; blob: Blob }[];
 }
 
-/** A masked video clip's coverage in the spec: one grayscale still, a
- * sampled sequence when the mask is keyframed, or the shared person matte
- * (`subject`) with its knobs. */
-interface SpecMask {
-  file?: string;
-  frames?: { file: string; duration: number }[];
-  subject?: { invert?: boolean; feather?: number };
-}
-
-/** How often a keyframed clip mask samples — the person-matte cadence; the
- * server re-stamps the output fps over it. */
-const MASK_SAMPLE_FPS = 15;
-
-/** Paint a clip's mask coverage for its export segment: one luma PNG for a
- * resting mask, a 15fps sampled sequence for a keyframed one. Keyframed
- * opacity folds into the luma — a clip fading under its pose track exports
- * an opacity-scaled coverage (flat white when it has no shape mask), so the
- * graph never needs an animatable alpha filter. The pictures land in `pngs`
- * and the returned entry references them by name. */
-async function renderClipMaskPictures(
-  clip: VideoClip,
-  box: { x: number; y: number; w: number; h: number },
-  W: number,
-  H: number,
-  dur: number,
-  tag: string,
-  pngs: ExportPayload["pngs"]
-): Promise<SpecMask | undefined> {
-  const m = clip.mask && clip.mask.kind !== "subject" ? clip.mask : undefined;
-  const opacityVaries = (clip.kf ?? []).some((k) => Math.abs(k.opacity - 1) > 1e-3);
-  const radius = clip.boxStyle?.radius ?? 0;
-  if (!m && !opacityVaries && radius <= 0) return undefined;
-  const rect = rectOf(clip);
-  const anchor = { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
-  const frame = { width: W, height: H, scale: Math.min(W, H) / 1080 };
-  // Rounded corners trim coverage at the clip's box: outside the rounded box
-  // everything drops, and inside it the mask keeps deciding.
-  const rp = regionPx(clip.frame, W, H);
-  const rb = rp
-    ? { x: rp.rx - box.x, y: rp.ry - box.y, w: rp.rw, h: rp.rh }
-    : { x: -box.x, y: -box.y, w: W, h: H };
-  const canvas = createRasterCanvas(box.w, box.h);
-  const blobAt = (tLocal: number) => {
-    const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
-    if (radius > 0) {
-      ctx.globalCompositeOperation = "source-over";
-      ctx.fillStyle = "#000000";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(rb.x, rb.y, rb.w, rb.h, radius * frame.scale);
-      ctx.clip();
-    }
-    if (m) {
-      paintMaskLuma(canvas, m, tLocal, frame, anchor, box.x, box.y);
-    } else {
-      ctx.globalCompositeOperation = "source-over";
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-    if (radius > 0) ctx.restore();
-    if (opacityVaries) {
-      const v = Math.round(
-        255 * Math.max(0, Math.min(1, clipPoseAt(clip, tLocal).opacity))
-      );
-      ctx.globalCompositeOperation = "multiply";
-      ctx.fillStyle = `rgb(${v},${v},${v})`;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.globalCompositeOperation = "source-over";
-    }
-    return rasterCanvasToPng(canvas);
-  };
-  if (!(m && isMaskAnimated(m)) && !opacityVaries) {
-    const name = `${tag}.png`;
-    pngs.push({ name, blob: await blobAt(0) });
-    return { file: name };
-  }
-  const step = 1 / MASK_SAMPLE_FPS;
-  const n = Math.max(1, Math.round(dur * MASK_SAMPLE_FPS));
-  const frames: { file: string; duration: number }[] = [];
-  for (let i = 0; i < n; i++) {
-    const name = `${tag}_f${i}.png`;
-    pngs.push({ name, blob: await blobAt(i * step) });
-    frames.push({ file: name, duration: i === n - 1 ? Math.max(step, dur - (n - 1) * step) : step });
-  }
-  return { frames };
-}
-
-/** Paint the clip's border ring — a stroked rounded rect along its box edge,
- * transparent everywhere else — sized to the segment the graph frames (the
- * full frame for track 0, the region box for overlays). The engine overlays
- * it onto the segment before fades, masks and pose, so the ring rides the
- * clip like the preview's stroke does. Null without a border. */
-function renderClipBorderPng(
-  clip: VideoClip,
-  seg: { w: number; h: number },
-  ring: { x: number; y: number; w: number; h: number },
-  W: number,
-  H: number
-): Promise<Blob> | null {
-  const bs = clip.boxStyle;
-  if (!bs?.borderWidth) return null;
-  const scale = Math.min(W, H) / 1080;
-  const bw = bs.borderWidth * scale;
-  const rad = Math.max(0, (bs.radius ?? 0) * scale);
-  const canvas = createRasterCanvas(seg.w, seg.h);
-  const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
-  ctx.strokeStyle = bs.borderColor ?? "#ffffff";
-  ctx.lineWidth = bw;
-  ctx.beginPath();
-  ctx.roundRect(ring.x + bw / 2, ring.y + bw / 2, ring.w - bw, ring.h - bw, Math.max(0, rad - bw / 2));
-  ctx.stroke();
-  return rasterCanvasToPng(canvas);
-}
-
 /** Build the export spec + overlay PNGs from the cut. Media already lives in
  * the project folder — the spec references it by file name; only overlay PNGs
  * travel with the request. Shared by full exports and the low-res hover proxy. */
@@ -335,33 +215,6 @@ async function buildExportPayload(
     throw new Error("Add a video to the timeline first.");
   }
 
-  // The person matte renders first, so the loops below attach subject fields
-  // only when the effect will actually composite (no person segmenter, or no
-  // person → everything renders plain, matching the preview's degrade). The
-  // spec field keeps its `behindMask` name so older engines keep rendering
-  // behind-tagged text.
-  let behindMask: { file: string; from: number } | undefined;
-  const wantsSubject =
-    doc.overlays.some((o) => subjectMasked(o) && !o.hidden) ||
-    doc.clips.some((c) => c.mask?.kind === "subject" && !c.hidden);
-  if (wantsSubject) {
-    const mask = await import("./maskVideo")
-      .then((m) => m.renderSubjectMask(doc, duration))
-      .catch(() => null);
-    if (mask) {
-      pngs.push({ name: "behind_mask.mp4", blob: mask.blob });
-      behindMask = { file: "behind_mask.mp4", from: mask.from };
-    }
-  }
-  /** The subject entry a masked item ships, or undefined without a matte. */
-  const subjectOf = (m: { invert?: boolean; feather?: number } | undefined) =>
-    behindMask && m
-      ? {
-          ...(m.invert ? { invert: true } : {}),
-          ...(m.feather ? { feather: m.feather } : {}),
-        }
-      : undefined;
-
   const clipEntries = spans.map((sp) => ({
     file: sp.asset.fileName,
     in: sp.clip.in,
@@ -387,47 +240,7 @@ async function buildExportPayload(
     // trimming a source span.
     image: sp.asset.type === "image",
     grade: normalizeGrade(sp.clip.grade),
-    mask: undefined as SpecMask | undefined,
-    kf: sp.clip.kf,
-    border: undefined as string | undefined,
   }));
-  // Track-0 segments render at the full output frame (regioned clips pad out
-  // to it), so their masks paint full-frame. A subject mask rides the shared
-  // matte; painted pictures still travel beside it when the pose track keys
-  // opacity, since opacity ships as coverage luma.
-  for (let i = 0; i < spans.length; i++) {
-    const c = spans[i].clip;
-    const dur = Math.max(0.1, (c.out - c.in) / clipSpeed(c));
-    const pictures = await renderClipMaskPictures(
-      c,
-      { x: 0, y: 0, w: settings.width, h: settings.height },
-      settings.width,
-      settings.height,
-      dur,
-      `mask_c${i}`,
-      pngs
-    );
-    const subject = c.mask?.kind === "subject" ? subjectOf(c.mask) : undefined;
-    if (pictures || subject) {
-      clipEntries[i].mask = { ...(pictures ?? {}), ...(subject ? { subject } : {}) };
-    }
-    const rp = regionPx(c.frame, settings.width, settings.height);
-    const ring = rp
-      ? { x: rp.rx, y: rp.ry, w: rp.rw, h: rp.rh }
-      : { x: 0, y: 0, w: settings.width, h: settings.height };
-    const borderBlob = renderClipBorderPng(
-      c,
-      { w: settings.width, h: settings.height },
-      ring,
-      settings.width,
-      settings.height
-    );
-    if (borderBlob) {
-      const name = `border_c${i}.png`;
-      pngs.push({ name, blob: await borderBlob });
-      clipEntries[i].border = name;
-    }
-  }
 
   // The server's video graph is a sequential fold, so gaps between the
   // free-placed clips ship as explicit spacer segments: no file, hidden and
@@ -465,9 +278,6 @@ async function buildExportPayload(
   // ramps). Animations map fade/zoom natively; the styles that need frame
   // motion degrade to a fade up here.
   const overlayTracks = [...new Set(overlayLayers(doc.clips).map((c) => c.track))];
-  // Entry → its source clip, so the mask loop below can paint per clip after
-  // the entries assemble.
-  const overlayClipOf = new Map<object, VideoClip>();
   const overlayVideos = overlayTracks.flatMap((track) => {
     const trackSpans = getClipSpans(doc.clips, doc.assets, track);
     const ramps = trackSpans.map(() => ({ headFade: 0, tailFade: 0, headZoom: 0, tailZoom: 0 }));
@@ -498,74 +308,26 @@ async function buildExportPayload(
     return trackSpans
       .map((sp, i) => ({ c: sp.clip, ramp: ramps[i] }))
       .filter(({ c }) => !c.hidden && c.start < duration)
-      .map(({ c, ramp }) => {
-        const entry = {
-          file: assetById.get(c.assetId)!.fileName,
-          in: c.in,
-          out: c.out,
-          start: c.start,
-          track: c.track,
-          frame: c.frame,
-          // Pass `fit` through unset so the server's "default full-frame overlay
-          // covers what's below" branch fires — normalizing to "fit" defeated it.
-          fit: c.fit,
-          panX: c.panX ?? 0,
-          panY: c.panY ?? 0,
-          muted: c.muted,
-          volume: c.volume,
-          speed: c.speed,
-          image: assetById.get(c.assetId)!.type === "image",
-          grade: normalizeGrade(c.grade),
-          look: c.look,
-          lookAmount: c.lookAmount,
-          mask: undefined as SpecMask | undefined,
-          kf: c.kf,
-          border: undefined as string | undefined,
-          ...ramp,
-        };
-        overlayClipOf.set(entry, c);
-        return entry;
-      });
+      .map(({ c, ramp }) => ({
+        file: assetById.get(c.assetId)!.fileName,
+        in: c.in,
+        out: c.out,
+        start: c.start,
+        track: c.track,
+        frame: c.frame,
+        // Pass `fit` through unset so the server's "default full-frame overlay
+        // covers what's below" branch fires — normalizing to "fit" defeated it.
+        fit: c.fit,
+        muted: c.muted,
+        volume: c.volume,
+        speed: c.speed,
+        image: assetById.get(c.assetId)!.type === "image",
+        grade: normalizeGrade(c.grade),
+        look: c.look,
+        lookAmount: c.lookAmount,
+        ...ramp,
+      }));
   });
-  // Upper-track segments render at their region box (letterboxed ones pad out
-  // to it when masked), so their masks paint box-sized. Subject masks ride
-  // the shared matte, with opacity-key luma pictures beside them.
-  for (let i = 0; i < overlayVideos.length; i++) {
-    const entry = overlayVideos[i];
-    const c = overlayClipOf.get(entry);
-    if (!c) continue;
-    const region = regionPx(c.frame, settings.width, settings.height);
-    const box = region
-      ? { x: region.rx, y: region.ry, w: region.rw, h: region.rh }
-      : { x: 0, y: 0, w: settings.width, h: settings.height };
-    const ospeed = c.speed && c.speed > 0 ? c.speed : 1;
-    const olen = Math.max(0.1, (c.out - c.in) / ospeed);
-    const pictures = await renderClipMaskPictures(
-      c,
-      box,
-      settings.width,
-      settings.height,
-      olen,
-      `mask_ov${i}`,
-      pngs
-    );
-    const subject = c.mask?.kind === "subject" ? subjectOf(c.mask) : undefined;
-    if (pictures || subject) {
-      entry.mask = { ...(pictures ?? {}), ...(subject ? { subject } : {}) };
-    }
-    const borderBlob = renderClipBorderPng(
-      c,
-      { w: box.w, h: box.h },
-      { x: 0, y: 0, w: box.w, h: box.h },
-      settings.width,
-      settings.height
-    );
-    if (borderBlob) {
-      const name = `border_ov${i}.png`;
-      pngs.push({ name, blob: await borderBlob });
-      entry.border = name;
-    }
-  }
 
   const audio = doc.audioClips
     .filter((a) => !a.hidden && a.start < duration && assetById.has(a.assetId))
@@ -581,6 +343,20 @@ async function buildExportPayload(
       duck: a.duck,
     }));
 
+  // Text-behind-speaker: the mask video renders first so the loop below tags
+  // behind elements only when the effect will actually composite (no person
+  // segmenter, or no person → the text stays a normal front title).
+  let behindMask: { file: string; from: number } | undefined;
+  if (doc.overlays.some((o) => isTextOverlay(o) && !!o.behindSubject && !o.hidden)) {
+    const mask = await import("./maskVideo")
+      .then((m) => m.renderBehindMask(doc, duration))
+      .catch(() => null);
+    if (mask) {
+      pngs.push({ name: "behind_mask.mp4", blob: mask.blob });
+      behindMask = { file: "behind_mask.mp4", from: mask.from };
+    }
+  }
+
   const overlays: {
     file?: string;
     start: number;
@@ -589,9 +365,7 @@ async function buildExportPayload(
     y?: number;
     blank?: string;
     frames?: { file: string; duration: number }[];
-    /** The element trims by the shared person matte (invert = behind the
-     * speaker). */
-    subject?: { invert?: boolean; feather?: number };
+    behind?: boolean;
     /** Its row: lane 0 is the top of the stack, and the effects interleave
      * with these by lane. */
     lane?: number;
@@ -616,14 +390,9 @@ async function buildExportPayload(
     if (o.kind === "effect") continue;
     // A blank title has no pixels to burn; shapes and stickers always render.
     if (isTextOverlay(o) && !o.text.trim()) continue;
-    // A subject-masked element's stream must run its whole window so the
-    // server can multiply the matte in per frame — the frames mechanism
-    // covers that (a static element costs one frame plus the blank).
-    const subject = subjectMasked(o) && o.mask ? subjectOf(o.mask) : undefined;
-    const subjectFields = subject ? { subject } : {};
     // A Lottie sticker's pixels move on their own, so it exports as frames
     // even with no transform animation set.
-    if (isOverlayAnimated(o) || (isStickerOverlay(o) && o.lottie) || subject) {
+    if (isOverlayAnimated(o) || (isStickerOverlay(o) && o.lottie)) {
       // Animated: a region-cropped 30fps frame sequence that the server plays
       // as a concat-demuxer slideshow overlaid at the region. Presets sample
       // their heads and tails and reuse the middle; a keyframed pose changes
@@ -644,7 +413,7 @@ async function buildExportPayload(
         blank,
         frames: set.entries.map((e) => ({ file: names[e.image], duration: e.duration })),
         lane: laneOf(o),
-        ...subjectFields,
+        ...(behindMask && isTextOverlay(o) && o.behindSubject ? { behind: true } : {}),
       });
       continue;
     }
@@ -656,7 +425,7 @@ async function buildExportPayload(
       start: o.start,
       end: Math.min(o.end, duration),
       lane: laneOf(o),
-      ...subjectFields,
+      ...(behindMask && isTextOverlay(o) && o.behindSubject ? { behind: true } : {}),
     });
   }
 
@@ -709,8 +478,13 @@ async function buildExportPayload(
       }
     }
     if (captions.length > 0) {
-      const blank = createRasterCanvas(settings.width, settings.height);
-      pngs.push({ name: "sub_blank.png", blob: await rasterCanvasToPng(blank) });
+      const blank = document.createElement("canvas");
+      blank.width = settings.width;
+      blank.height = settings.height;
+      const png = await new Promise<Blob>((resolve, reject) =>
+        blank.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not render captions."))), "image/png")
+      );
+      pngs.push({ name: "sub_blank.png", blob: png });
     }
   }
 
@@ -767,8 +541,7 @@ async function postExport(
         files: payload.pngs.map((p) => ({ name: p.name, bytes: p.blob.size })),
       }),
     });
-    const preBody =
-      await apiJson<{ files?: { name: string; key: string; type?: string; url: string }[] }>(pre);
+    const preBody = await apiJson<{ files?: { name: string; key: string; url: string }[] }>(pre);
     if (!pre.ok || !preBody.files) {
       throw new Error(
         quotaErrorMessage(pre.status, preBody) ?? preBody.error ?? "Export failed to start."
@@ -779,10 +552,7 @@ async function postExport(
       payload.pngs.map(async (p) => {
         const target = byName.get(p.name);
         if (!target) throw new Error("Export failed to start.");
-        // The content type the URL was signed with, not the blob's: they agree
-        // for the PNG frames and differ for the behind-speaker mask clip, and
-        // sending anything but the signed one fails the signature.
-        await putSigned(target.url, p.blob, target.type || "image/png");
+        await putSigned(target.url, p.blob, p.blob.type || "image/png");
       })
     );
     for (const p of payload.pngs) overlays.push({ name: p.name, key: byName.get(p.name)!.key });
@@ -877,15 +647,12 @@ export async function runBrowserExport(
   opts: {
     onProgress?: (ratio: number) => void;
     signal?: AbortSignal;
-    /** Dock-row label for a browser-resident render's tab-local job. */
-    projectName?: string;
     /** The reserved job's id, as soon as it exists — the dock hides that row
      * while this tab is the thing rendering it. */
     onClaimed?: (jobId: string) => void;
   } = {}
 ): Promise<string> {
   const backend = getBackend(); // pinned: the render outlives navigation
-  if (backend.kind === "browser") return runStoreExport(projectId, doc, settings, opts);
   if (backend.kind !== "cloud") throw new Error("This project renders on its own machine.");
 
   // The name and the destination are claimed before a frame is drawn, so a
@@ -907,9 +674,6 @@ export async function runBrowserExport(
   const jobId = claimed.jobId;
   opts.onClaimed?.(jobId);
 
-  // The render keeps reading the project's store-served blob URLs after the
-  // user opens another project; the hold keeps them alive until it finishes.
-  holdRegistered(`/api/cut/projects/${projectId}/`);
   try {
     const rendered = await renderProjectToMp4(doc, settings, {
       // Read the asset's URL at the moment it is needed rather than off the
@@ -949,58 +713,6 @@ export async function runBrowserExport(
       .fetch(`/api/cut/export/client/${jobId}/release`, { method: "POST" })
       .catch(() => {});
     throw err;
-  } finally {
-    releaseRegistered(`/api/cut/projects/${projectId}/`);
-  }
-}
-
-/** A browser-resident project's export: the same in-tab render, with the
- * finished file written into the project's exports shelf in the browser store.
- * The job is a row in the tab-local feed, so the dock tracks, cancels, and
- * downloads it the way it does every other residency's. */
-async function runStoreExport(
-  projectId: string,
-  doc: ExportDoc,
-  settings: ExportSettings,
-  opts: Parameters<typeof runBrowserExport>[3] = {}
-): Promise<string> {
-  const job = reserveBrowserExportJob(projectId, opts.projectName);
-  opts.onClaimed?.(job.id);
-  holdRegistered(`/api/cut/projects/${projectId}/`);
-  try {
-    const rendered = await renderProjectToMp4(doc, settings, {
-      resolve: (asset) =>
-        useEditor.getState().assets.find((a) => a.id === asset.id)?.url ?? asset.url,
-      signal: opts.signal,
-      onProgress: ({ ratio }) => {
-        opts.onProgress?.(ratio);
-        updateBrowserExportJob(job.id, { progress: ratio });
-      },
-    });
-    let outName: string;
-    try {
-      outName = await saveExport(projectId, rendered.file, exportOutName());
-    } finally {
-      void rendered.discard();
-    }
-    // Serve the finished file from the store copy: the scratch file behind the
-    // render is already gone, and these two paths are what the dock's download
-    // button and the exports shelf resolve through backend.url().
-    const saved = await readFileAt(await exportsDir(projectId), outName);
-    if (saved) {
-      registerBlobFile(`/api/cut/export/${job.id}/file`, saved);
-      registerBlobFile(
-        `/api/cut/projects/${projectId}/exports/${encodeURIComponent(outName)}`,
-        saved
-      );
-    }
-    updateBrowserExportJob(job.id, { status: "done", progress: 1, outName });
-    return job.id;
-  } catch (err) {
-    removeBrowserExportJob(job.id);
-    throw err;
-  } finally {
-    releaseRegistered(`/api/cut/projects/${projectId}/`);
   }
 }
 

@@ -1,9 +1,15 @@
+import { apiKey } from "@better-auth/api-key";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 
 import { DONKEYCUT_CANONICAL } from "@/cut/lib/hosts";
 import { provisionSignupGrants } from "@/lib/onboarding/signup-grants";
 import { prisma } from "@/lib/prisma";
+
+// Prefix for issued Vision API keys. The full secret is shown to the developer
+// once at creation; only a hash is stored (handled by the apiKey plugin).
+export const visionApiKeyPrefix = "dk_live_";
 
 // donkeycut.com is the single production host: the sign-in pages, the auth
 // API, the Google OAuth callback, and the session all live on that one origin
@@ -28,16 +34,11 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
-        // Every new account is provisioned with its signup credit grant, its
-        // starter project, the welcome email, and its Resend contact.
-        // provisionSignupGrants is idempotent and
+        // Every new account is provisioned with its signup grants (app credits
+        // + free Vision API calls). provisionSignupGrants is idempotent and
         // swallows its own errors, so it never blocks user creation.
         after: async (user) => {
-          await provisionSignupGrants({
-            email: user.email,
-            id: user.id,
-            name: user.name,
-          });
+          await provisionSignupGrants(user.id);
         },
       },
     },
@@ -54,4 +55,32 @@ export const auth = betterAuth({
       prompt: "select_account",
     },
   },
+  // The admin panel's per-platform "Enable" toggle (SocialAppConfig, see
+  // /admin/settings/oauth-app) is otherwise just a label — betterAuth reads
+  // its provider credentials straight from env at startup and has no
+  // concept of a runtime on/off switch. This checks the DB flag right
+  // before a social sign-in starts, so turning Google off here actually
+  // blocks new sign-ins without touching env or restarting the server.
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/sign-in/social") return;
+      const provider = ctx.body?.provider;
+      if (!provider) return;
+      const config = await prisma.socialAppConfig.findUnique({ where: { platform: provider } });
+      if (config && !config.enabled) {
+        throw new APIError("FORBIDDEN", { message: `${provider} sign-in is currently disabled.` });
+      }
+    }),
+  },
+  plugins: [
+    apiKey({
+      // We enforce our own monthly call quota and per-key rate limit on the
+      // vision route, so the plugin's built-in rate limiting stays off.
+      defaultPrefix: visionApiKeyPrefix,
+      enableMetadata: true,
+      rateLimit: {
+        enabled: false,
+      },
+    }),
+  ],
 });

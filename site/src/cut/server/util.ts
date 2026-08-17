@@ -32,16 +32,22 @@ export async function writeJsonAtomic(filePath: string, value: unknown) {
 /** First executable *file* named `name` on PATH, or null. Directories carry the
  * execute bit too, so a like-named directory must not shadow the real CLI. */
 export async function findOnPath(name: string): Promise<string | null> {
-  for (const dir of (process.env.PATH ?? "").split(":")) {
+  const candidateNames =
+    process.platform === "win32" && !path.extname(name)
+      ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";").map((ext) => `${name}${ext}`)
+      : [name];
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
     if (!dir) continue;
-    const candidate = path.join(dir, name);
-    try {
-      const s = await stat(candidate); // follows symlinks
-      if (!s.isFile()) continue;
-      await access(candidate, constants.X_OK);
-      return candidate;
-    } catch {
-      // absent or not executable — keep looking
+    for (const candidateName of candidateNames) {
+      const candidate = path.join(dir, candidateName);
+      try {
+        const s = await stat(candidate); // follows symlinks
+        if (!s.isFile()) continue;
+        await access(candidate, constants.X_OK);
+        return candidate;
+      } catch {
+        // absent or not executable — keep looking
+      }
     }
   }
   return null;

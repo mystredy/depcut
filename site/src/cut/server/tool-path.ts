@@ -42,17 +42,24 @@ async function widenPath(): Promise<void> {
   const parts: string[] = [];
   const push = (p?: string | null) => {
     if (!p) return;
-    for (const dir of p.split(":")) {
+    for (const dir of p.split(path.delimiter)) {
       if (dir && !parts.includes(dir)) parts.push(dir);
     }
   };
   push(path.dirname(process.execPath));
   push(process.env.DONKEY_CUT_TOOLS_DIR);
   push(await devVendorToolsDir());
-  push(await loginShellPath());
-  for (const dir of COMMON_BIN_DIRS) push(dir);
+  // The login-shell PATH lookup and COMMON_BIN_DIRS below exist for macOS:
+  // a GUI-spawned process (double-clicked, not launched from a terminal)
+  // misses whatever a shell profile puts on PATH. Windows has no equivalent
+  // gap here — this dev server always launches from a terminal, which
+  // already has a real PATH — so both are skipped there.
+  if (process.platform !== "win32") {
+    push(await loginShellPath());
+    for (const dir of COMMON_BIN_DIRS) push(dir);
+  }
   push(process.env.PATH);
-  process.env.PATH = parts.join(":");
+  process.env.PATH = parts.join(path.delimiter);
 }
 
 let widened: Promise<void> | null = null;

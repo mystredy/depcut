@@ -25,7 +25,10 @@ export function Footer() {
   const linkGroups: FooterColumn[] = [
     {
       title: "Product",
-      links: [{ href: GITHUB_REPO_URL, label: "GitHub" }],
+      links: [
+        { href: "/donkeyvision", label: "Donkey Vision API" },
+        { href: GITHUB_REPO_URL, label: "GitHub" },
+      ],
     },
     {
       title: "Legal",
@@ -66,14 +69,14 @@ export function Footer() {
           <p className="text-[15px] font-semibold text-ink">
             Need help? Email us at{" "}
             <a
-              href="mailto:hello@donkeycut.com"
+              href="mailto:david@donkeyuse.com"
               className="underline underline-offset-2"
             >
-              hello@donkeycut.com
+              david@donkeyuse.com
             </a>
           </p>
           <p className="mt-6 text-[13px] text-[#666]">
-            2026 Donkey, Inc.
+            2026 Donkey, Inc. Made for Macs.
           </p>
         </div>
         <div className="flex flex-1 flex-col gap-10 sm:flex-row sm:flex-wrap sm:gap-x-16 sm:gap-y-12 md:gap-x-20">

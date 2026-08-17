@@ -94,7 +94,7 @@ export function ProCard() {
             disabled={checkout.isPending}
             onClick={() => {
               track("pro_checkout_started");
-              checkout.mutate(undefined, {
+              checkout.mutate("pro", {
                 onSuccess: (result) => window.location.assign(result.url),
               });
             }}

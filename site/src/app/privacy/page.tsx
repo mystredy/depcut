@@ -1,12 +1,15 @@
-import PrivacyPolicy from "@/app/legal/PrivacyPolicy.mdx";
+import ReactMarkdown from "react-markdown";
+
 import { LegalPageShell } from "@/app/legal/LegalPageShell";
+import { getLegalPage } from "@/lib/pages/legal-pages";
 
-export const dynamic = "force-static";
+export const dynamic = "force-dynamic";
 
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  const page = await getLegalPage("privacy");
   return (
     <LegalPageShell>
-      <PrivacyPolicy />
+      <ReactMarkdown>{page.contentMarkdown}</ReactMarkdown>
     </LegalPageShell>
   );
 }
