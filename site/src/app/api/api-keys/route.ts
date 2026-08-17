@@ -1,64 +1,94 @@
-import { randomBytes, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { z } from "zod";
+
+import { auth, visionApiKeyPrefix } from "@/lib/auth";
 import {
-  API_KEY_PREFIX,
   donkeySessionUserId,
-  hashApiKey,
-  unauthorizedResponse,
   withDonkeyAuth,
 } from "@/lib/donkey-api-auth";
-import { prisma } from "@/lib/prisma";
+import { validationErrorResponse } from "@/lib/inference/responses";
 
-// API keys for the Cut surface, stored in the Better-Auth-shaped Apikey
-// table. Managed with the signed-in session only — a key cannot mint or list
-// keys. The full secret is returned once, at creation; the row holds its
-// hash (`key`) and a display head (`start`).
+export const dynamic = "force-dynamic";
 
-export const runtime = "nodejs";
+function unauthorized() {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
 
-const MAX_KEYS = 20;
-
-export const GET = withDonkeyAuth(async (request) => {
-  const userId = donkeySessionUserId(request);
-  if (!userId) return unauthorizedResponse();
-  const rows = await prisma.apikey.findMany({
-    where: { referenceId: userId },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      start: true,
-      enabled: true,
-      createdAt: true,
-      lastRequest: true,
-    },
-  });
-  return NextResponse.json(rows);
+const createApiKeySchema = z.object({
+  name: z.string().trim().min(1).max(120),
 });
 
+type ApiKeyRecord = {
+  id: string;
+  name: string | null;
+  start: string | null;
+  prefix: string | null;
+  enabled: boolean | null;
+  referenceId: string;
+  createdAt: Date;
+  lastRequest: Date | null;
+  expiresAt: Date | null;
+};
+
+function toSafeApiKey(key: ApiKeyRecord) {
+  return {
+    createdAt: key.createdAt,
+    enabled: key.enabled ?? true,
+    expiresAt: key.expiresAt,
+    id: key.id,
+    lastRequest: key.lastRequest,
+    name: key.name,
+    // start + prefix let the UI show e.g. "dk_live_abc…" without the secret.
+    prefix: key.prefix,
+    start: key.start,
+  };
+}
+
+// List the signed-in user's Vision API keys (secrets never returned). The
+// referenceId filter is defense-in-depth: the plugin already scopes by session,
+// but we never return a key the session user does not own.
+export const GET = withDonkeyAuth(async (request) => {
+  const userId = donkeySessionUserId(request);
+  if (!userId) {
+    return unauthorized();
+  }
+
+  const result = (await auth.api.listApiKeys({
+    headers: request.headers,
+  })) as { apiKeys: ApiKeyRecord[] } | ApiKeyRecord[];
+  const keys = Array.isArray(result) ? result : result.apiKeys;
+  const ownKeys = keys.filter((key) => key.referenceId === userId);
+
+  return NextResponse.json({ apiKeys: ownKeys.map(toSafeApiKey) });
+});
+
+// Create a new key. Any signed-in user can mint one; the key only returns data
+// when the user has capacity (an active subscription or remaining vision-call
+// grants), which the Vision API route enforces per call. The full secret is
+// returned exactly once here and never again.
 export const POST = withDonkeyAuth(async (request) => {
   const userId = donkeySessionUserId(request);
-  if (!userId) return unauthorizedResponse();
-  const body = (await request.json().catch(() => ({}))) as { name?: string };
-  const name = (body.name ?? "").trim() || "API key";
-  const live = await prisma.apikey.count({ where: { referenceId: userId, enabled: true } });
-  if (live >= MAX_KEYS)
-    return NextResponse.json({ error: "Key limit reached. Revoke one first." }, { status: 400 });
-  const secret = `${API_KEY_PREFIX}${randomBytes(24).toString("base64url")}`;
-  const now = new Date();
-  const row = await prisma.apikey.create({
-    data: {
-      id: randomUUID(),
-      name,
-      referenceId: userId,
-      prefix: API_KEY_PREFIX,
-      start: secret.slice(0, API_KEY_PREFIX.length + 6),
-      key: hashApiKey(secret),
-      enabled: true,
-      createdAt: now,
-      updatedAt: now,
+  if (!userId) {
+    return unauthorized();
+  }
+
+  const body = await request.json().catch(() => null);
+  const parsed = createApiKeySchema.safeParse(body);
+  if (!parsed.success) {
+    return validationErrorResponse(parsed.error);
+  }
+
+  const created = await auth.api.createApiKey({
+    body: {
+      name: parsed.data.name,
+      prefix: visionApiKeyPrefix,
     },
-    select: { id: true, name: true, start: true, createdAt: true },
+    headers: request.headers,
   });
-  return NextResponse.json({ ...row, key: secret });
+
+  return NextResponse.json({
+    apiKey: toSafeApiKey(created as ApiKeyRecord),
+    // The plaintext secret — display once, store securely client-side, then drop.
+    secret: created.key,
+  });
 });
