@@ -189,7 +189,7 @@ interface PcmClip {
 export class NoCreditsError extends Error {}
 
 async function readError(res: Response, fallback: string): Promise<string> {
-  if (res.status === 401) return "Sign in to Donkey to generate voiceovers.";
+  if (res.status === 401) return "Sign in to Depcut to generate voiceovers.";
   const body = (await res.json().catch(() => null)) as {
     error?: unknown;
     message?: unknown;
@@ -198,7 +198,7 @@ async function readError(res: Response, fallback: string): Promise<string> {
   const message = [body?.message, body?.error].find(
     (v): v is string => typeof v === "string" && v.length > 0
   );
-  if (res.status === 402) return message ?? "Not enough Donkey credits — top up to continue.";
+  if (res.status === 402) return message ?? "Not enough Depcut credits — top up to continue.";
   // The provider's own error (`details.message`) names the actual rejection
   // ("input too long", a rate limit, …); the top-level message is generic.
   const detail = body?.details?.message;

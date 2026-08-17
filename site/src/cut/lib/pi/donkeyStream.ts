@@ -188,7 +188,7 @@ async function requestError(
 ): Promise<string> {
   if (res.status === 401) {
     onAuthFail?.();
-    return "Sign in to Donkey to chat with Gemini.";
+    return "Sign in to Depcut to chat with Gemini.";
   }
   const body = (await res.json().catch(() => null)) as {
     error?: unknown;
@@ -199,7 +199,7 @@ async function requestError(
     (v): v is string => typeof v === "string" && v.length > 0
   );
   if (res.status === 402)
-    return message ?? "You're out of Donkey credits — top up to keep generating.";
+    return message ?? "You're out of Depcut credits — top up to keep generating.";
   return message ?? "Gemini request failed.";
 }
 

@@ -30,7 +30,7 @@ export function UnsubscribeConfirm({ token }: { token: string }) {
   return (
     <>
       <p>
-        Stop receiving product news and announcements from Donkey Cut? Emails
+        Stop receiving product news and announcements from Depcut? Emails
         about your account, like billing and security, keep arriving either way.
       </p>
       <button

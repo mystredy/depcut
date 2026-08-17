@@ -22,7 +22,7 @@ const PLATFORMS = ["General", "YouTube", "TikTok / Reels / Shorts", "Instagram",
 type ChatCompletion = { choices: { message: { content: string } }[] };
 
 async function readError(res: Response, fallback: string): Promise<string> {
-  if (res.status === 401) return "Sign in to Donkey to generate a script.";
+  if (res.status === 401) return "Sign in to Depcut to generate a script.";
   if (res.status === 402) return NO_CREDITS_MESSAGE;
   const body = (await res.json().catch(() => null)) as {
     error?: unknown;
@@ -191,7 +191,7 @@ export default function ScriptingPage() {
 
         {signedOut ? (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Scripting runs on your Donkey account.{" "}
+            Scripting runs on your Depcut account.{" "}
             <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
               Sign in
             </a>{" "}

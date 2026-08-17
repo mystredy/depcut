@@ -28,7 +28,7 @@ type Props = {
 
 export function TopNav({
   homeHref = "/",
-  wordmark = "Donkey",
+  wordmark = "Depcut",
   authToggle,
   signedInPill = { href: "/app", label: "Dashboard" },
   signedOutAuth,

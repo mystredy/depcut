@@ -27,15 +27,15 @@ const installSteps = [
   {
     eyebrow: "Step 2",
     title: "Install",
-    body: "Drag and drop the Donkey app into your Applications folder.",
-    imageAlt: "Donkey app icon being dragged into the Applications folder.",
+    body: "Drag and drop the Depcut app into your Applications folder.",
+    imageAlt: "Depcut app icon being dragged into the Applications folder.",
     imageSrc: "/install/install-drag.png",
   },
   {
     eyebrow: "Step 3",
     title: "Launch",
     body: "Open Donkey from your Applications folder or Launchpad.",
-    imageAlt: "Donkey app icon in the macOS Dock.",
+    imageAlt: "Depcut app icon in the macOS Dock.",
     imageSrc: "/install/install-launch.png",
   },
 ] satisfies InstallStep[];

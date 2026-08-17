@@ -96,7 +96,7 @@ export default function App() {
 
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
-      if (target instanceof Element && target.closest('[aria-label="Donkey prompt"]')) return;
+      if (target instanceof Element && target.closest('[aria-label="Depcut prompt"]')) return;
       setComposerVisible(false);
     };
 

@@ -18,7 +18,7 @@ import {
 const ASPECT_WORD: Record<ImageAspect, string> = { "16:9": "Landscape", "9:16": "Portrait", "1:1": "Square" };
 
 async function readError(res: Response, fallback: string): Promise<string> {
-  if (res.status === 401) return "Sign in to Donkey to generate images.";
+  if (res.status === 401) return "Sign in to Depcut to generate images.";
   if (res.status === 402) return NO_CREDITS_MESSAGE;
   const body = (await res.json().catch(() => null)) as {
     error?: unknown;
@@ -97,7 +97,7 @@ export default function TextToImagePage() {
       <div>
         <h1 className="text-lg font-semibold">Text to Image</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Describe an image and Donkey's AI model will render it.
+          Describe an image and Depcut's AI model will render it.
         </p>
       </div>
 
@@ -140,7 +140,7 @@ export default function TextToImagePage() {
 
         {signedOut ? (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Generating runs on your Donkey account.{" "}
+            Generating runs on your Depcut account.{" "}
             <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
               Sign in
             </a>{" "}

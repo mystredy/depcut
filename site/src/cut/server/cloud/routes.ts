@@ -113,7 +113,7 @@ const CUT_CLOUD_ROUTES: CloudRoute[] = [
     handler: () =>
       Response.json({
         providers: {
-          gemini: { available: true, note: "runs on your Donkey account", installed: true },
+          gemini: { available: true, note: "runs on your Depcut account", installed: true },
         },
       }),
   },

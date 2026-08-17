@@ -32,10 +32,10 @@ export function CutFooter() {
         <div className="min-w-[240px] max-w-sm flex-1">
           <Link
             href="/"
-            aria-label="Donkey Cut home"
+            aria-label="Depcut home"
             className="text-[40px] font-semibold text-ink no-underline md:text-[48px]"
           >
-            Donkey Cut
+            Depcut
           </Link>
           <p className="mt-6 text-[15px] font-semibold text-ink">
             Need help? Join us on{" "}
@@ -47,7 +47,7 @@ export function CutFooter() {
             </a>
           </p>
           <p className="mt-6 text-[13px] text-[#666]">
-            2026 Donkey, Inc. Made for Macs.
+            2026 Depcut, Inc. Made for Macs.
           </p>
         </div>
         <div className="flex flex-1 flex-col gap-10 sm:flex-row sm:flex-wrap sm:gap-x-16 sm:gap-y-12 md:gap-x-20">

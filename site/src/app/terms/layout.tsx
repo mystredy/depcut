@@ -7,8 +7,8 @@ export const metadata: Metadata = {
   alternates: {
     canonical: `${DONKEYCUT_CANONICAL}/terms`,
   },
-  description: "Read the Donkey Cut terms of use.",
-  title: "Terms of Use | Donkey Cut",
+  description: "Read the Depcut terms of use.",
+  title: "Terms of Use | Depcut",
 };
 
 type Props = {

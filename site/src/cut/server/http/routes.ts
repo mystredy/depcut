@@ -116,7 +116,7 @@ export async function runCutRoute(
   const user = new URL(req.url).searchParams.get("u");
   if (!user || !isValidCutUser(user)) {
     return new Response(
-      JSON.stringify({ error: "This page is out of date with the Donkey app — reload the tab." }),
+      JSON.stringify({ error: "This page is out of date with the Depcut app — reload the tab." }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }

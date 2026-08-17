@@ -407,7 +407,7 @@ export function TopBar({
         <span className="grid size-[22px] shrink-0 place-items-center">
           <img
             src="/deepw-logo.svg"
-            alt="Donkey"
+            alt="Depcut"
             width={22}
             height={22}
             className="block h-full w-full object-contain"

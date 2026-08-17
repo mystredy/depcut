@@ -349,7 +349,7 @@ export function AiPanel({
   const mergedInfo = useMemo<ModelsInfo | null>(() => {
     const gemini =
       signedIn === false
-        ? { available: false, note: "sign in to Donkey to chat", installed: true }
+        ? { available: false, note: "sign in to Depcut to chat", installed: true }
         : (info?.providers.gemini ?? { available: true, note: "", installed: true });
     // With no engine on this Mac the CLI providers don't exist: their groups
     // hide, and the saved-model fallback effect moves a CLI selection over to
@@ -927,7 +927,7 @@ function ChatSession({
     : true;
   const unavailableMessage = (): string => {
     const p = provider(model);
-    if (p === "gemini") return "Sign in to your Donkey account to chat with Gemini.";
+    if (p === "gemini") return "Sign in to your Depcut account to chat with Gemini.";
     const note = info?.providers[p]?.note?.trim();
     return note ? `${PROVIDER_LABEL[p]}: ${note}` : `${PROVIDER_LABEL[p]} isn't available.`;
   };

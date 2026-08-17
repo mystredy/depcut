@@ -451,7 +451,7 @@ export const aiApi = {
         codex: { available: value.codex.ok, note: value.codex.note, installed: value.codex.installed },
         // Gemini chats run from the page through Donkey's hosted inference;
         // the browser overlays the real availability from its sign-in probe.
-        gemini: { available: true, note: "runs on your Donkey account", installed: true },
+        gemini: { available: true, note: "runs on your Depcut account", installed: true },
         test: { available: true, note: "hermetic test provider", installed: true },
       },
     });

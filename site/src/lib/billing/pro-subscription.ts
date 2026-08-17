@@ -123,7 +123,7 @@ export async function syncProSubscription(
   ) {
     await grantCredits({
       amountMicros: allowanceMicros,
-      description: "Donkey Pro monthly allowance",
+      description: "Depcut Pro monthly allowance",
       expiresAt: periodEnd,
       metadata: { plan: proPlanKey },
       periodEnd,

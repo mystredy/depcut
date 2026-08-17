@@ -8,7 +8,7 @@ export function MediaSection() {
           Works anywhere a screenshot can be captured.
         </h2>
         <p className="mt-6 text-lg leading-8 text-[#454545] 2xl:whitespace-nowrap">
-          Donkey Vision analyzes pixels directly. No DOM access, private
+          Depcut Vision analyzes pixels directly. No DOM access, private
           integration, app-specific setup, or brittle selectors required.
         </p>
         <p className="mt-4 text-lg leading-8 text-[#454545] 2xl:whitespace-nowrap">

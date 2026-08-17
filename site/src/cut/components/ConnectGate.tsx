@@ -196,8 +196,8 @@ export function ConnectGate({ children }: { children: ReactNode }) {
           <span className="min-w-0 truncate">
             This project is stored on this Mac, and{" "}
             {blocked
-              ? "your browser is blocking this page from reaching the Donkey app."
-              : "Donkey Cut can’t reach the Donkey app."}
+              ? "your browser is blocking this page from reaching the Depcut app."
+              : "Depcut can’t reach the Depcut app."}
           </span>
           <button
             className="shrink-0 underline underline-offset-2"
@@ -216,7 +216,7 @@ export function ConnectGate({ children }: { children: ReactNode }) {
               {blocked
                 ? "Connection blocked"
                 : needsAsk
-                  ? "Connect to the Donkey app"
+                  ? "Connect to the Depcut app"
                   : "This project is stored on this Mac"}
             </DialogTitle>
           </DialogHeader>
@@ -225,14 +225,14 @@ export function ConnectGate({ children }: { children: ReactNode }) {
               <>
                 This is a local project — its video and its edits live on this
                 Mac, and your browser is blocking this page from reaching the
-                Donkey app that opens them. Open the site settings from the icon
+                Depcut app that opens them. Open the site settings from the icon
                 next to the address bar, turn on{" "}
                 <span className="font-medium text-foreground">Apps on device</span>,
                 then try again.
               </>
             ) : needsAsk ? (
               <>
-                This is a local project — it lives in the Donkey app on this
+                This is a local project — it lives in the Depcut app on this
                 Mac. Your browser will ask for permission to connect to apps on
                 this device — choose{" "}
                 <span className="font-medium text-foreground">Allow</span>.
@@ -240,7 +240,7 @@ export function ConnectGate({ children }: { children: ReactNode }) {
             ) : (
               <>
                 This is a local project: its video and its edits live on this
-                Mac, and the Donkey app is what opens them. Install Donkey, or
+                Mac, and the Depcut app is what opens them. Install Depcut, or
                 open it if it&rsquo;s already installed — this page connects
                 automatically.
               </>

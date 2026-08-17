@@ -44,7 +44,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
           </p>
         </div>
         <a className="text-sm font-medium text-primary underline-offset-4 hover:underline" href="/app">
-          Back to Donkey Cut
+          Back to Depcut
         </a>
       </div>
     );

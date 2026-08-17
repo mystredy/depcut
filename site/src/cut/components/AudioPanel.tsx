@@ -323,7 +323,7 @@ function MusicGenerator({ projectId }: { projectId: string }) {
 
       {signedOut ? (
         <p className="music-signin text-[11px] leading-relaxed text-muted-foreground">
-          Music runs on your Donkey account.{" "}
+          Music runs on your Depcut account.{" "}
           <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
             Sign in
           </a>{" "}
@@ -525,7 +525,7 @@ function VoiceGenerator({ projectId }: { projectId: string }) {
 
       {signedOut ? (
         <p className="voice-signin text-[11px] leading-relaxed text-muted-foreground">
-          Voiceovers run on your Donkey account.{" "}
+          Voiceovers run on your Depcut account.{" "}
           <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
             Sign in
           </a>{" "}

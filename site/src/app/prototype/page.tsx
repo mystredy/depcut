@@ -5,8 +5,8 @@ import NotchPrototypeApp from "@/app/prototype/_components/App";
 export const runtime = "nodejs";
 
 export const metadata: Metadata = {
-  title: "Donkey Notch Prototype",
-  description: "Interactive Donkey notch prototype.",
+  title: "Depcut Notch Prototype",
+  description: "Interactive Depcut notch prototype.",
 };
 
 export default function Page() {

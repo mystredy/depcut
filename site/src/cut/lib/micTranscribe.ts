@@ -163,7 +163,7 @@ export function useMicTranscription(onResult: (text: string) => void): MicContro
         body: JSON.stringify({}),
       });
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
-      if (!res.ok || !data.id) throw new Error(data.error || "Dictation needs the Donkey app running on this Mac.");
+      if (!res.ok || !data.id) throw new Error(data.error || "Dictation needs the Depcut app running on this Mac.");
       jobRef.current = data.id;
     } catch (e) {
       media.getTracks().forEach((t) => t.stop());

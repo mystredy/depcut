@@ -26,7 +26,7 @@ export function Footer() {
     {
       title: "Product",
       links: [
-        { href: "/donkeyvision", label: "Donkey Vision API" },
+        { href: "/donkeyvision", label: "Depcut Vision API" },
         { href: GITHUB_REPO_URL, label: "GitHub" },
       ],
     },
@@ -46,10 +46,10 @@ export function Footer() {
           <div className="mb-6 flex flex-wrap items-center gap-4">
             <Link
               href="/"
-              aria-label="Donkey home"
+              aria-label="Depcut home"
               className="text-[40px] font-semibold text-ink no-underline md:text-[48px]"
             >
-              Donkey
+              Depcut
             </Link>
             {socialLinks.map((link) => {
               const Icon = link.icon;
@@ -76,7 +76,7 @@ export function Footer() {
             </a>
           </p>
           <p className="mt-6 text-[13px] text-[#666]">
-            2026 Donkey, Inc. Made for Macs.
+            2026 Depcut, Inc. Made for Macs.
           </p>
         </div>
         <div className="flex flex-1 flex-col gap-10 sm:flex-row sm:flex-wrap sm:gap-x-16 sm:gap-y-12 md:gap-x-20">

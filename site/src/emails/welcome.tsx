@@ -36,7 +36,7 @@ export default function WelcomeEmail({
     <Html>
       <Head />
       <Preview>
-        I built Donkey Cut because I wanted a video editor that was simple and
+        I built Depcut because I wanted a video editor that was simple and
         open source.
       </Preview>
       <Tailwind config={{ presets: [pixelBasedPreset] }}>
@@ -48,7 +48,7 @@ export default function WelcomeEmail({
               Thanks for signing up.
             </Text>
             <Text className="text-[15px] leading-relaxed">
-              I&apos;m David, and I built Donkey Cut because I wanted a video
+              I&apos;m David, and I built Depcut because I wanted a video
               editor that was simple and open source.
             </Text>
             <Text className="text-[15px] leading-relaxed">
@@ -65,7 +65,7 @@ export default function WelcomeEmail({
               try AI Chat or generate videos, images, audio, and more.
             </Text>
             <Text className="text-[15px] leading-relaxed">
-              If you enjoy using Donkey Cut, I&apos;d really appreciate a ⭐ on
+              If you enjoy using Depcut, I&apos;d really appreciate a ⭐ on
               GitHub. If you have questions, feedback, or just want to say hi,
               join the Discord. I&apos;m there every day.
             </Text>
@@ -74,7 +74,7 @@ export default function WelcomeEmail({
               reply anytime. I read every email.
             </Text>
             <Text className="text-[15px] leading-relaxed">
-              Thanks again for giving Donkey Cut a try.
+              Thanks again for giving Depcut a try.
             </Text>
             <Text className="text-[15px] leading-relaxed">
               Have a great day!
@@ -83,7 +83,7 @@ export default function WelcomeEmail({
             <CommunityPs />
             <Hr className="mt-6 border-[#0F0E0D]/15" />
             <Text className="text-[12px] leading-relaxed text-[#0F0E0D]/60">
-              You&apos;re receiving this because you created a Donkey Cut
+              You&apos;re receiving this because you created a Depcut
               account.{" "}
               <Link
                 href={unsubscribeUrl}

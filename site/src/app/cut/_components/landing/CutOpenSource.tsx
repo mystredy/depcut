@@ -11,7 +11,7 @@ export function CutOpenSource() {
   return (
     <section className="mx-auto max-w-[1400px] px-6 py-20 md:px-12 md:py-24">
       <Headline size="lg">
-        Donkey Cut is <span className="italic">open source.</span>
+        Depcut is <span className="italic">open source.</span>
       </Headline>
       <p className="mt-6 max-w-[900px] text-[17px] leading-[1.55] text-[#454545]">
         The editor and its render engine are built in the open. Read the

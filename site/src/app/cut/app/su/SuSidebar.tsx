@@ -28,7 +28,7 @@ export function SuSidebar() {
         <span className="grid size-9 shrink-0 place-items-center p-0.5">
           <img
             src="/donkey-logo.svg"
-            alt="Donkey Cut"
+            alt="Depcut"
             width={36}
             height={36}
             className="block h-full w-full object-contain"

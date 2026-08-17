@@ -88,7 +88,7 @@ export function ShelfBadge({
   const Icon = residency === "cloud" ? Cloud : Laptop;
   return (
     <span
-      title={offline ? "On this Mac — open the Donkey app to use it" : RESIDENCY_LABEL[residency]}
+      title={offline ? "On this Mac — open the Depcut app to use it" : RESIDENCY_LABEL[residency]}
       className={className}
     >
       <Icon className="size-3" />

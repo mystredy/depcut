@@ -10,7 +10,7 @@ export function DonkeyMark() {
   return (
     <Img
       src={`cid:${DONKEY_LOGO_CID}`}
-      alt="Donkey Cut"
+      alt="Depcut"
       width="48"
       height="48"
       className="mb-4"

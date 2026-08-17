@@ -52,13 +52,13 @@ export function SettingsShell({ children }: { children: ReactNode }) {
             <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-md">
               <img
                 src="/deepw-logo.svg"
-                alt="Donkey Logo"
+                alt="Depcut Logo"
                 width={32}
                 height={32}
                 className="block h-full w-full object-contain"
               />
             </div>
-            <span>Donkey</span>
+            <span>Depcut</span>
           </Link>
           <nav className="flex items-center gap-1">
             {navItems.map((item) => (

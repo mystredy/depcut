@@ -10,7 +10,7 @@ export function HeroSection() {
           Open source <span className="italic">computer use</span> API
         </h1>
         <p className="mt-7 max-w-2xl break-words text-lg leading-8 text-[#454545] md:text-xl">
-          Donkey Vision finds every interactable element in a screenshot —
+          Depcut Vision finds every interactable element in a screenshot —
           buttons, icons, inputs, rows — and returns each one&rsquo;s box, center
           point, and label. It reads pixels, so it works on software that exposes
           no API at all.
@@ -24,7 +24,7 @@ export function HeroSection() {
           </a>
         </div>
         <p className="mt-7 text-sm text-[#666]">
-          The same screen-understanding layer Donkey uses to read and drive apps
+          The same screen-understanding layer Depcut uses to read and drive apps
           on your Mac.
         </p>
       </div>

@@ -5,8 +5,8 @@ import { AdminGuard } from "@/app/admin/AdminGuard";
 import { AdminNav } from "@/app/admin/AdminNav";
 
 export const metadata: Metadata = {
-  title: "Admin | Donkey Cut",
-  description: "Site management for Donkey Cut.",
+  title: "Admin | Depcut",
+  description: "Site management for Depcut.",
 };
 
 // Standalone area outside the Cut app shell (no editor sidebar/header) — its

@@ -283,7 +283,7 @@ async function requestError(res: Response): Promise<string> {
   if (res.status === 401) {
     // Refresh the sign-in probe so the composer note (with its sign-in link) appears.
     useGenerate.getState().probe();
-    return "Sign in to Donkey to chat with Gemini.";
+    return "Sign in to Depcut to chat with Gemini.";
   }
   const body = (await res.json().catch(() => null)) as {
     error?: unknown;

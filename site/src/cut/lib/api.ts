@@ -109,7 +109,7 @@ export function engineProbe(): Promise<string> {
       resolvedOrigin = RELEASE_ENGINE_ORIGIN;
       return RELEASE_ENGINE_ORIGIN;
     }
-    throw new Error("No Donkey Cut engine is reachable on this Mac.");
+    throw new Error("No Depcut engine is reachable on this Mac.");
   })().finally(() => {
     resolving = null;
   });
@@ -176,7 +176,7 @@ export async function apiJson<T>(res: Response): Promise<T & { error?: string }>
     const stale = res.status === 404 || res.status === 405;
     return {
       error: stale
-        ? "The Donkey app on this Mac doesn't support this yet — update Donkey and try again."
+        ? "The Depcut app on this Mac doesn't support this yet — update Depcut and try again."
         : text.trim() || `The engine replied ${res.status}.`,
     } as T & { error?: string };
   }

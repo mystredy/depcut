@@ -14,7 +14,7 @@ export function UseCasesSection() {
           Use screenshots when there is no API.
         </h2>
         <p className="mt-5 max-w-2xl text-lg leading-8 text-[#454545]">
-          Send a screenshot from any application. Donkey Vision returns detected
+          Send a screenshot from any application. Depcut Vision returns detected
           UI elements, labels, bounding boxes, center points, and optional
           prompt-matched click targets.
         </p>

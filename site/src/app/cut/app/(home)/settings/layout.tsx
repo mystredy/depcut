@@ -5,8 +5,8 @@ import { SettingsHeader } from "@/app/cut/app/(home)/settings/SettingsHeader";
 import { SettingsGuard } from "@/cut/components/SettingsGuard";
 
 export const metadata: Metadata = {
-  title: "Settings | Donkey Cut",
-  description: "Manage your Donkey Cut subscription, credits, and usage.",
+  title: "Settings | Depcut",
+  description: "Manage your Depcut subscription, credits, and usage.",
 };
 
 // Billing and Usage render inside the Cut app shell (the home layout's

@@ -8,7 +8,7 @@ type Props = {
 };
 
 const contactEmail = "david@donkeyuse.com";
-const contactSubject = "Donkey Vision API";
+const contactSubject = "Depcut Vision API";
 
 export function ContactSalesButton({ children, className }: Props) {
   const handleClick = () => {

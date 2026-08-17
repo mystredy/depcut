@@ -5,7 +5,7 @@ import { SettingsShell } from "@/app/donkeyvision/settings/SettingsShell";
 import { AppSurfaceBackground } from "@/components/AppSurfaceBackground";
 
 export const metadata: Metadata = {
-  title: "Settings | Donkey",
+  title: "Settings | Depcut",
   description: "Manage your Vision API subscription and API keys.",
 };
 

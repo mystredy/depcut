@@ -365,7 +365,7 @@ export function GenerateSubtitlesAudio({
       </Button>
       {signedOut ? (
         <p className="voice-signin text-[11px] leading-relaxed text-muted-foreground">
-          Voiceovers run on your Donkey account.{" "}
+          Voiceovers run on your Depcut account.{" "}
           <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
             Sign in
           </a>{" "}

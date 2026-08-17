@@ -804,7 +804,7 @@ export function Editor({
         <div className="flex max-w-sm flex-col items-center gap-3 text-center">
           <Laptop className="size-7 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            This is a local project — it lives on this Mac. Open the Donkey app and it opens
+            This is a local project — it lives on this Mac. Open the Depcut app and it opens
             here.
           </p>
           <Button

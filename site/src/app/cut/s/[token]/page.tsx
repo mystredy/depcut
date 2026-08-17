@@ -36,7 +36,7 @@ export async function generateMetadata({
   const meta = await shareMetaForToken(token);
   if (!meta || !meta.isPublic) {
     return {
-      title: "Shared project · Donkey Cut",
+      title: "Shared project · Depcut",
       description: "This project is shared with specific people.",
       robots: { index: false, follow: false },
     };
@@ -44,7 +44,7 @@ export async function generateMetadata({
   const base = await origin();
   const url = `${base}${sharePath(token)}`;
   const card = (kind: "gif" | "jpg") => `${url}/card/${kind}?v=${meta.version}`;
-  const description = `A video project shared from Donkey Cut. Watch ${meta.name} in the browser.`;
+  const description = `A video project shared from Depcut. Watch ${meta.name} in the browser.`;
   // The GIF leads: the platforms that animate it play the opening seconds, and
   // the rest fall back to its first frame — the same picture the JPEG carries
   // for anything that would rather not take a multi-megabyte image. Either URL
@@ -58,7 +58,7 @@ export async function generateMetadata({
     { url: card("jpg"), alt: meta.name },
   ];
   return {
-    title: `${meta.name} · Donkey Cut`,
+    title: `${meta.name} · Depcut`,
     description,
     alternates: { canonical: url },
     openGraph: {
@@ -66,7 +66,7 @@ export async function generateMetadata({
       title: meta.name,
       description,
       url,
-      siteName: "Donkey Cut",
+      siteName: "Depcut",
       images,
     },
     twitter: {

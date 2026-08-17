@@ -10,7 +10,7 @@ export function CutTopNav() {
   return (
     <TopNav
       homeHref="/"
-      wordmark="Donkey Cut"
+      wordmark="Depcut"
       signedInPill={{ href: "/app", label: "Go to App" }}
       signedOutAuth={{
         logInHref: authHrefFor("/sign-in", "/app"),

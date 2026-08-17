@@ -13,9 +13,9 @@ import { VisionCompareSection } from "@/app/donkeyvision/VisionCompareSection";
 export const dynamic = "force-static";
 
 export const metadata: Metadata = {
-  title: "OmniParser API for UI Element Detection | Donkey Vision",
+  title: "OmniParser API for UI Element Detection | Depcut Vision",
   description:
-    "Donkey Vision is a fast, OmniParser-compatible API for detecting interactable UI elements in screenshots — bounding boxes, center points, and labels.",
+    "Depcut Vision is a fast, OmniParser-compatible API for detecting interactable UI elements in screenshots — bounding boxes, center points, and labels.",
   keywords: [
     "OmniParser API",
     "OmniParser",
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     "UI element detection API",
     "screenshot UI parsing API",
     "computer use vision API",
-    "Donkey Vision",
+    "Depcut Vision",
   ],
   alternates: {
     canonical: "https://donkeycut.com/donkeyvision",
@@ -31,30 +31,30 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: "https://donkeycut.com/donkeyvision",
-    siteName: "Donkey",
-    title: "OmniParser API for UI Element Detection | Donkey Vision",
+    siteName: "Depcut",
+    title: "OmniParser API for UI Element Detection | Depcut Vision",
     description:
-      "Donkey Vision is a fast, OmniParser-compatible API for detecting interactable UI elements in screenshots — bounding boxes, center points, and labels.",
+      "Depcut Vision is a fast, OmniParser-compatible API for detecting interactable UI elements in screenshots — bounding boxes, center points, and labels.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "OmniParser API for UI Element Detection | Donkey Vision",
+    title: "OmniParser API for UI Element Detection | Depcut Vision",
     description:
-      "Donkey Vision is a fast, OmniParser-compatible API for detecting interactable UI elements in screenshots — bounding boxes, center points, and labels.",
+      "Depcut Vision is a fast, OmniParser-compatible API for detecting interactable UI elements in screenshots — bounding boxes, center points, and labels.",
   },
 };
 
 const structuredData = {
   "@context": "https://schema.org",
   "@type": "WebAPI",
-  name: "Donkey Vision",
+  name: "Depcut Vision",
   alternateName: "OmniParser API",
   url: "https://donkeycut.com/donkeyvision",
   description:
-    "Donkey Vision is a fast, OmniParser-compatible API for detecting interactable UI elements in screenshots — bounding boxes, center points, and labels.",
+    "Depcut Vision is a fast, OmniParser-compatible API for detecting interactable UI elements in screenshots — bounding boxes, center points, and labels.",
   provider: {
     "@type": "Organization",
-    name: "Donkey",
+    name: "Depcut",
     url: "https://donkeycut.com",
   },
 };
@@ -66,7 +66,7 @@ export default function DonkeyVisionPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
-      <TopNav wordmark="Donkey Vision" />
+      <TopNav wordmark="Depcut Vision" />
       <HeroSection />
       <ProofSection />
       <VisionCompareSection />

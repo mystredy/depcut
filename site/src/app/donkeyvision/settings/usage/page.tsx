@@ -9,7 +9,7 @@ export default function UsagePage() {
       <div>
         <h1 className="text-2xl font-semibold">Usage</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your recent Donkey app and Vision API calls.
+          Your recent Depcut app and Vision API calls.
         </p>
       </div>
       <UsageCard />

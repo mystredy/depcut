@@ -67,8 +67,8 @@ export const POST = withDonkeyAuth(async (request) => {
         price_data: {
           currency: "usd",
           product_data: {
-            description: `$${amountDollars} of Donkey inference credits`,
-            name: "Donkey credits",
+            description: `$${amountDollars} of Depcut inference credits`,
+            name: "Depcut credits",
           },
           unit_amount: dollarsToStripeCents(amountDollars),
         },

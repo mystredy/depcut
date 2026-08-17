@@ -47,7 +47,7 @@ export default function AdminOverviewPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-lg font-semibold tracking-tight">Overview</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Site management for Donkey Cut.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Site management for Depcut.</p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 rounded-2xl border bg-card p-6 sm:grid-cols-4">

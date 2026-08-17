@@ -15,14 +15,14 @@ export function PricingSection() {
       <div className="mx-auto grid w-full max-w-[1400px] gap-8 px-6 py-20 md:grid-cols-[1fr_auto] md:px-12">
         <div>
           <h2 className="text-4xl font-semibold leading-none md:text-6xl">
-            Get Donkey Vision API access.
+            Get Depcut Vision API access.
           </h2>
           <p className="mt-4 text-xl font-semibold text-[#EC7868] md:text-2xl">
             Starts at $50/month
           </p>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-white/75">
             Start detecting clickable elements from screenshots in minutes.
-            Donkey Vision returns UI boxes, center points, labels, and
+            Depcut Vision returns UI boxes, center points, labels, and
             prompt-matched click targets for computer-use agents.
           </p>
           <ul className="mt-8 grid max-w-2xl gap-2 text-base text-white/85 sm:grid-cols-2">

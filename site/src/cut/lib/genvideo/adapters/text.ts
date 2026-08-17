@@ -64,7 +64,7 @@ async function llmJson<T>(
     }
     if (!res.ok) {
       if (res.status === 402) throw new Error(NO_CREDITS_MESSAGE);
-      if (res.status === 401) throw new Error("Sign in to Donkey to generate a video.");
+      if (res.status === 401) throw new Error("Sign in to Depcut to generate a video.");
       const reason = await providerReason(res);
       lastError = new Error(reason ?? "The planning model is unavailable — try again.");
       // Any other 4xx is deterministic — the same request fails the same way —

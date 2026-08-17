@@ -146,7 +146,7 @@ export function EditorMock({
         </div>
       </div>
       <figcaption className="sr-only">
-        The Donkey Cut editor with a finished project open: generated media in
+        The Depcut editor with a finished project open: generated media in
         the side panel, clips and music on the timeline, and the AI chat that
         assembled them.
       </figcaption>

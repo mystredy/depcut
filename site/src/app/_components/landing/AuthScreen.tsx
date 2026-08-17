@@ -19,11 +19,11 @@ const copy = {
   "sign-in": {
     alternateHref: "/sign-up",
     alternateLabel: "Create account",
-    alternateLead: "New to Donkey?",
+    alternateLead: "New to Depcut?",
     googleAlt: "Sign in with Google",
     googleSrc: "/google/dark-sign-in-with-google.svg",
     googleWidth: 175,
-    heading: "Send Donkey back to work.",
+    heading: "Send Depcut back to work.",
     title: "Log in",
   },
   "sign-up": {
@@ -33,7 +33,7 @@ const copy = {
     googleAlt: "Sign up with Google",
     googleSrc: "/google/dark-sign-up-with-google.svg",
     googleWidth: 179,
-    heading: "Put Donkey to Work",
+    heading: "Put Depcut to Work",
     title: "Sign up",
   },
 } satisfies Record<
@@ -142,7 +142,7 @@ export function AuthScreen({ mode }: Props) {
     <main className="min-h-screen w-full bg-background font-system text-ink antialiased">
       {/* Auth serves same-host on donkeycut.com, so the chrome is Cut's. */}
       <TopNav
-        wordmark="Donkey Cut"
+        wordmark="Depcut"
         authToggle={{
           href: screenCopy.alternateHref,
           label: copy[otherMode].title,

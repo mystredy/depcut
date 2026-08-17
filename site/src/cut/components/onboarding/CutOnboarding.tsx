@@ -230,7 +230,7 @@ export function CutOnboarding() {
           className="block h-full w-full object-contain"
         />
       </span>
-      <span className="text-2xl font-semibold">Donkey Cut</span>
+      <span className="text-2xl font-semibold">Depcut</span>
     </span>
   );
 
@@ -270,7 +270,7 @@ export function CutOnboarding() {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Welcome to Donkey Cut"
+      aria-label="Welcome to Depcut"
       className="fixed inset-0 z-[80] flex flex-col bg-cream font-system text-ink antialiased"
     >
       <div className="flex shrink-0 items-center justify-between px-6 py-2 md:px-10 md:py-2.5">

@@ -136,7 +136,7 @@ const RESIDENCY_HINT: Record<Residency, string> = {
   local: "This is a local project",
   cloud: "This is a cloud project",
 };
-const OFFLINE_HINT = "This is a local project — open the Donkey app to edit it";
+const OFFLINE_HINT = "This is a local project — open the Depcut app to edit it";
 
 function ResidencyBadge({
   residency,

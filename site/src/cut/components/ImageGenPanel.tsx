@@ -180,7 +180,7 @@ export function ImageGenPanel({ projectId }: { projectId: string }) {
 
         {signedIn === false && (
           <p className="shrink-0 text-[11px] leading-relaxed text-muted-foreground">
-            Generating runs on your Donkey account.{" "}
+            Generating runs on your Depcut account.{" "}
             <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
               Sign in
             </a>{" "}

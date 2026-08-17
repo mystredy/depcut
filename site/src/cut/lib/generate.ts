@@ -262,7 +262,7 @@ interface GenerationResponse {
 }
 
 async function readError(res: Response, fallback: string): Promise<string> {
-  if (res.status === 401) return "Sign in to Donkey to generate media.";
+  if (res.status === 401) return "Sign in to Depcut to generate media.";
   const body = (await res.json().catch(() => null)) as {
     error?: unknown;
     message?: unknown;

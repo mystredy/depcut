@@ -81,7 +81,7 @@ export function UsageCard() {
       <CardContent className="space-y-4">
         <Table>
           <TableBody>
-            <UsageRow label="Donkey Pro (app)" value={proStatus} />
+            <UsageRow label="Depcut Pro (app)" value={proStatus} />
             <UsageRow label="Vision API" value={visionStatus} />
             {extra > 0 ? (
               <UsageRow

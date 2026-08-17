@@ -103,7 +103,7 @@ export function MacDesktop({
           backdropFilter: 'blur(14px)',
         }}
       >
-        <span className="font-medium text-white/[0.88]">Donkey</span>
+        <span className="font-medium text-white/[0.88]">Depcut</span>
         <span>File</span>
         <span>Edit</span>
         <span>View</span>
@@ -136,7 +136,7 @@ export function MacDesktop({
       />
 
       <section
-        aria-label="Donkey prompt"
+        aria-label="Depcut prompt"
         className="absolute left-1/2 top-1/2 z-20"
         style={{
           width: LAYOUT.contentWidth,
@@ -168,7 +168,7 @@ export function MacDesktop({
             rows={1}
             value={promptText}
             onChange={(event) => setPromptText(event.target.value)}
-            placeholder="What can Donkey do for you?"
+            placeholder="What can Depcut do for you?"
             className="flex-1 resize-none border-0 bg-transparent p-0 pr-[84px] text-[16px] font-light leading-[19.2px] text-white outline-none placeholder:text-white/[0.58]"
             style={{
               height: promptTextHeight,

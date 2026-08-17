@@ -105,7 +105,7 @@ export default function DubbingPage() {
       <div>
         <h1 className="text-lg font-semibold">Dubbing</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Upload a clip, and Donkey will transcribe it, translate the lines, and voice them in a
+          Upload a clip, and Depcut will transcribe it, translate the lines, and voice them in a
           new language.
         </p>
       </div>
@@ -197,7 +197,7 @@ export default function DubbingPage() {
 
         {signedOut ? (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Dubbing runs on your Donkey account.{" "}
+            Dubbing runs on your Depcut account.{" "}
             <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
               Sign in
             </a>{" "}

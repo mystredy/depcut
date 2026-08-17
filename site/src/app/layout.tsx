@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Donkey Cut",
+  title: "Depcut",
   description: "A video editor that does all its work on your Mac.",
 };
 

@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import { AuthScreen } from "@/app/_components/landing/AuthScreen";
 
 export const metadata: Metadata = {
-  title: "Log in | Donkey",
-  description: "Log in to Donkey with Google.",
+  title: "Log in | Depcut",
+  description: "Log in to Depcut with Google.",
 };
 
 export default function Page() {

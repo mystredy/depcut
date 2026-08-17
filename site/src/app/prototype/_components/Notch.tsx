@@ -322,7 +322,7 @@ export function Notch({
 
   return (
     <section
-      aria-label="Donkey status"
+      aria-label="Depcut status"
       className="absolute left-1/2 top-0 z-30 -translate-x-1/2 overflow-hidden focus:outline-none"
       style={{
         width: collapsedWidth,
@@ -385,7 +385,7 @@ export function Notch({
                   padding: '0 12px',
                 }}
               >
-                <p className="truncate text-[12px] leading-[15px] text-white/[0.82]">Login to use Donkey</p>
+                <p className="truncate text-[12px] leading-[15px] text-white/[0.82]">Login to use Depcut</p>
               </div>
             </div>
 
@@ -402,7 +402,7 @@ export function Notch({
                 transition: expanded ? 'opacity 300ms ease-out 150ms' : 'opacity 100ms ease-out',
               }}
             >
-              <span className="text-[16px] leading-none text-white/[0.92]">Login to use Donkey</span>
+              <span className="text-[16px] leading-none text-white/[0.92]">Login to use Depcut</span>
               <button
                 type="button"
                 onClick={(event) => {
@@ -642,7 +642,7 @@ export function Notch({
               ref={followUpRef}
               name="followUp"
               rows={1}
-              placeholder="What can Donkey do for you?"
+              placeholder="What can Depcut do for you?"
               onInput={resizeFollowUp}
               className="flex-1 resize-none border-0 bg-transparent p-0 pr-11 text-[16px] font-light leading-[20px] text-white outline-none placeholder:text-white/[0.58]"
               style={{
