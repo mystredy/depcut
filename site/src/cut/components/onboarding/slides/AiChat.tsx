@@ -2,6 +2,7 @@
 
 import { EditorMock } from "@/cut/components/editor-mock/EditorMock";
 import { ONBOARDING_PROJECT } from "@/cut/components/editor-mock/mockData";
+import { useOnboardingSlideText } from "@/queries/onboarding";
 
 // The one slide that uses the whole window rather than the sequence's reading
 // column. The editor is the layout — the slide is exactly as tall as the mock,
@@ -27,7 +28,7 @@ export function AiChatSlide() {
               project={ONBOARDING_PROJECT}
               view="ai"
               showSwitcher={false}
-              frame="flat"
+              shadow={false}
             />
           </div>
           <div className="pointer-events-none absolute inset-y-0 left-0 w-[64%] bg-gradient-to-r from-cream via-cream/85 to-transparent" />
@@ -46,7 +47,7 @@ export function AiChatSlide() {
         {/* Edge to edge: the slide's own padding is cancelled so the editor
             uses the whole width it has down here. */}
         <div className="-mx-6 mt-8">
-          <EditorMock view="ai" showSwitcher={false} frame="flat" />
+          <EditorMock view="ai" showSwitcher={false} shadow={false} />
         </div>
       </div>
     </div>
@@ -54,20 +55,21 @@ export function AiChatSlide() {
 }
 
 function Copy() {
+  const copy = useOnboardingSlideText("ai_chat");
+  const paragraphs = copy.body.split("\n\n");
   return (
     <div className="max-w-[620px]">
       <h2 className="text-[clamp(26px,3.2vw,38px)] leading-[1.05] font-semibold tracking-[-0.02em]">
-        Chat with your editor.
+        {copy.headline}
       </h2>
-      <p className="mt-5 text-[16.5px] leading-[1.55] text-[#454545]">
-        The AI has access to your entire project. Ask it to trim clips, generate
-        missing shots, write subtitles, add voiceovers, rearrange your timeline,
-        or answer questions about your footage.
-      </p>
-      <p className="mt-4 text-[16.5px] leading-[1.55] text-[#454545]">
-        Works out of the box with Gemini, or use your own Claude or Codex
-        subscription.
-      </p>
+      {paragraphs.map((p, i) => (
+        <p
+          key={i}
+          className={i === 0 ? "mt-5 text-[16.5px] leading-[1.55] text-[#454545]" : "mt-4 text-[16.5px] leading-[1.55] text-[#454545]"}
+        >
+          {p}
+        </p>
+      ))}
     </div>
   );
 }

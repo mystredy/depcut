@@ -6,6 +6,7 @@ import { TapedCard } from "@/app/_components/landing/LandingPrimitives";
 import { CUT_PRO } from "@/app/cut/_components/landing/cutPricingPlans";
 import { Button } from "@/components/ui/button";
 import { useUpgradeToPro } from "@/cut/lib/proUpgrade";
+import { useOnboardingSlideText } from "@/queries/onboarding";
 
 import "../onboarding.css";
 
@@ -16,15 +17,14 @@ import "../onboarding.css";
 // storage wall and the billing page start.
 export function PlansSlide({ onSkipPro }: { onSkipPro: () => void }) {
   const pro = useUpgradeToPro();
+  const copy = useOnboardingSlideText("plans");
 
   return (
     <div className="mx-auto w-full max-w-[520px]">
       <h2 className="text-center text-[clamp(24px,3vw,32px)] leading-[1.1] font-semibold tracking-[-0.02em]">
-        Simple pricing
+        {copy.headline}
       </h2>
-      <p className="mt-3 text-center text-[16px] text-[#454545]">
-        The editor is free. Pay only for AI generated media.
-      </p>
+      <p className="mt-3 text-center text-[16px] text-[#454545]">{copy.body}</p>
 
       <div className="mt-8">
         <TapedCard

@@ -16,7 +16,6 @@ import { track } from "@/lib/analytics";
 import { authClient } from "@/lib/auth-client";
 import {
   ONBOARDING_VERSION,
-  isKnownReferralSource,
   type OnboardingRun,
   type ReferralSource,
 } from "@/lib/onboarding/sequence";
@@ -29,12 +28,6 @@ import {
 } from "@/queries/onboarding";
 
 const SLIDE_COUNT = 6;
-const REFERRAL_STEP = 1;
-
-// One string for "what the question's answer is right now", so the seeded
-// answer, the last write, and the current picks compare cheaply.
-const referralSignature = (sources: ReferralSource[], other: string) =>
-  `${[...sources].sort().join(",")}|${other}`;
 
 // The sequence version this browser last saw this account finish. It exists so
 // a returning load paints the app immediately instead of covering it while the
@@ -69,7 +62,6 @@ export function CutOnboarding() {
   const save = useSaveOnboarding();
   const [rawStep, setStep] = useState(0);
   const [referrals, setReferrals] = useState<ReferralSource[]>([]);
-  const [referralOther, setReferralOther] = useState("");
   const [dismissed, setDismissed] = useState(false);
   const [replaying, setReplaying] = useState(false);
   // Read once per mount: whether this browser can skip the wait below.
@@ -84,21 +76,6 @@ export function CutOnboarding() {
   // What the account already has, so leaving the question without changing
   // anything writes nothing.
   const savedReferrals = useRef("");
-
-  // An answer given in the past shows again: once the account read lands, the
-  // question opens already filled in, and it reads as saved rather than as a
-  // pending change.
-  const seeded = useRef(false);
-  useEffect(() => {
-    if (!state || seeded.current) return;
-    seeded.current = true;
-    const saved = state.referralSources.filter(isKnownReferralSource);
-    if (!saved.length) return;
-    const other = saved.includes("other") ? (state.referralOther ?? "") : "";
-    setReferrals(saved);
-    setReferralOther(other);
-    savedReferrals.current = referralSignature(saved, other);
-  }, [state]);
 
   // Which run is on screen, derived rather than set: the account read landing
   // is what opens a first run, and nothing has to push that into state. On the
@@ -173,6 +150,7 @@ export function CutOnboarding() {
     () =>
       onOpenOnboarding(() => {
         setStep(0);
+        setReferrals([]);
         setReplaying(true);
       }),
     [],
@@ -181,16 +159,12 @@ export function CutOnboarding() {
   // The answers go up when the sequence leaves the question, so picking several
   // is one write rather than one per tap. Every way out passes through here.
   const commitReferrals = useCallback(() => {
-    const other = referrals.includes("other") ? referralOther.trim() : "";
-    const signature = referralSignature(referrals, other);
+    const signature = [...referrals].sort().join(",");
     if (!referrals.length || signature === savedReferrals.current) return;
     savedReferrals.current = signature;
-    track("onboarding_referral_selected", {
-      referralSources: referrals,
-      ...(other && { referralOther: other }),
-    });
-    save.mutate({ referralSources: referrals, ...(other && { referralOther: other }) });
-  }, [referrals, referralOther, save]);
+    track("onboarding_referral_selected", { referralSources: referrals });
+    save.mutate({ referralSources: referrals });
+  }, [referrals, save]);
 
   const finish = useCallback(
     (skipped: boolean) => {
@@ -210,9 +184,6 @@ export function CutOnboarding() {
     setStep(Math.max(0, step - 1));
   }, [commitReferrals, step]);
   const advance = useCallback(() => {
-    // The question holds the sequence until it has an answer. Guarded here as
-    // well as on the button, or the arrow keys would walk right past it.
-    if (step === REFERRAL_STEP && !referrals.length) return;
     commitReferrals();
     if (step >= slideCount - 1) {
       // The plans slide ends the sequence through its own two answers — Get
@@ -223,7 +194,7 @@ export function CutOnboarding() {
       return;
     }
     setStep(step + 1);
-  }, [commitReferrals, finish, isPro, referrals, slideCount, step]);
+  }, [commitReferrals, finish, isPro, slideCount, step]);
 
   useEffect(() => {
     if (!run) return;
@@ -252,7 +223,7 @@ export function CutOnboarding() {
     <span className="flex items-center gap-0">
       <span className="flex size-[59px] shrink-0 items-center justify-center overflow-hidden rounded-[10px]">
         <img
-          src="/donkey-logo.svg"
+          src="/deepw-logo.svg"
           alt=""
           width={59}
           height={59}
@@ -327,12 +298,7 @@ export function CutOnboarding() {
         <div className="mx-auto w-full max-w-[1100px]">
           {step === 0 && <WelcomeSlide />}
           {step === 1 && (
-            <ReferralSlide
-              selected={referrals}
-              onToggle={toggleReferral}
-              otherText={referralOther}
-              onOtherTextChange={setReferralOther}
-            />
+            <ReferralSlide selected={referrals} onToggle={toggleReferral} />
           )}
           {step === 2 && <ModesSlide />}
           {step === 3 && <CreditsSlide />}
@@ -369,7 +335,6 @@ export function CutOnboarding() {
             takes them out. */}
         <Button
           onClick={advance}
-          disabled={step === REFERRAL_STEP && !referrals.length}
           className={cn(
             "gap-1.5 rounded-full bg-ink px-5 text-white hover:bg-ink/90",
             last && !done && "invisible",

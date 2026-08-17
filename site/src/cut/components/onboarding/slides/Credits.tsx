@@ -4,12 +4,14 @@ import { useEffect, useRef } from "react";
 
 import { burstConfetti } from "@/cut/components/onboarding/confetti";
 import { signupAppCredits } from "@/lib/onboarding/sequence";
+import { useOnboardingSlideText } from "@/queries/onboarding";
 
 // The signup grant already landed when the account was created, so this slide
 // never grants anything — it says what's there. That's as true on a replay as
 // on a first run, so the words don't change between them; the burst fires every
 // time the slide is reached.
 export function CreditsSlide() {
+  const copy = useOnboardingSlideText("credits");
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -44,8 +46,7 @@ export function CreditsSlide() {
         {/* Ragged right on a narrow measure: the line breaks stay put instead
             of the last line floating in the middle of the slide. */}
         <p className="mx-auto mt-4 max-w-[460px] text-left text-[16px] leading-[1.55] text-[#454545]">
-          Already in your account — nothing to claim. Spend it on generated
-          video, audio and images.
+          {copy.body}
         </p>
       </div>
     </div>
