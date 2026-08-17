@@ -19,22 +19,17 @@ import { useNewProjectTarget } from "@/cut/lib/newProject";
 import { RESIDENCY_LABEL, type Residency } from "@/cut/lib/residency";
 import { cn } from "@/lib/utils";
 
-const RESIDENCY_ICON: Record<Residency, typeof Cloud> = {
-  local: Laptop,
-  cloud: Cloud,
-  browser: Laptop,
-};
+const RESIDENCY_ICON: Record<Residency, typeof Cloud> = { local: Laptop, cloud: Cloud };
 
 // The picker is one switch for the whole app, and its tooltip is where that
 // scope is stated: everything that lands on the shelf, then the shelf itself in
 // bold. The break is written into the copy rather than left to a width, so the
 // sentence reads the same in both shelves. The menu needs no more than the two
 // names.
-const RESIDENCY_LEAD = "All projects and media created going";
+const RESIDENCY_LEAD = "All projects and media will";
 const RESIDENCY_SCOPE: Record<Residency, { tail: string; place: string }> = {
-  local: { tail: "forward will be stored on", place: "this device" },
-  cloud: { tail: "forward will be stored on the", place: "Cloud" },
-  browser: { tail: "forward will be stored on", place: "this device" },
+  local: { tail: "be stored on", place: "this Mac" },
+  cloud: { tail: "be stored on the", place: "Cloud" },
 };
 
 /**

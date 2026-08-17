@@ -1,11 +1,12 @@
 "use client";
 
-// The free tier's cloud storage row, pinned above the account row: how much
-// of the quota this account has used, and the one thing that buys more. The
+// The free tier's cloud storage row, next to the account menu in the app
+// header: how much of the quota this account has used, and the one thing
+// that buys more. The
 // quota belongs to the account, not to the backend the app happens to be
 // running against, so this shows in local mode too — a local editor still has
 // cloud projects, and the number is the same either way. Pro accounts see
-// nothing here — 100 GB is enough that a meter would only take up room.
+// nothing here — 50 GB is enough that a meter would only take up room.
 import { Cloud, Loader2 } from "lucide-react";
 import {
   Tooltip,
@@ -34,7 +35,7 @@ export function NavStorage() {
 
   const frac = u.bytes / u.quotaBytes;
   return (
-    <div className="mb-2 flex flex-col border-b pb-2">
+    <div className="flex flex-col">
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger
@@ -55,10 +56,10 @@ export function NavStorage() {
             </span>
             <span className="flex items-center gap-1.5 group-hover:underline">
               {upgrade.isPending && <Loader2 className="size-3 animate-spin" />}
-              Get 100 GB
+              Get 50 GB
             </span>
           </TooltipTrigger>
-          <TooltipContent>Upgrade for 100 GB + AI credits</TooltipContent>
+          <TooltipContent>Upgrade to get 50 GB</TooltipContent>
         </Tooltip>
       </TooltipProvider>
       {u.grace && (
