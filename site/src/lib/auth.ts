@@ -11,13 +11,19 @@ import { prisma } from "@/lib/prisma";
 // once at creation; only a hash is stored (handled by the apiKey plugin).
 export const visionApiKeyPrefix = "dk_live_";
 
-// donkeycut.com is the single production host: the sign-in pages, the auth
-// API, the Google OAuth callback, and the session all live on that one origin
-// (the proxy 308s www. to the apex before anything serves), so auth cookies
-// stay plain host-only cookies. Hosted deploys pin baseURL there — it decides
-// the OAuth redirect_uri — while local dev leaves it unset and better-auth
-// derives it from the localhost request.
-const baseURL = process.env.VERCEL ? DONKEYCUT_CANONICAL : undefined;
+// donkeycut.com is the intended production host: the sign-in pages, the auth
+// API, the Google OAuth callback, and the session are meant to all live on
+// that one origin (the proxy 308s www. to the apex before anything serves),
+// so auth cookies stay plain host-only cookies. Hosted deploys resolve
+// baseURL per-request from this allowlist — it decides the OAuth
+// redirect_uri — falling back to the canonical host for anything else, so an
+// unrecognized Host header can never hijack a session. depcut.vercel.app is
+// this fork's current deploy target; add a host here only after registering
+// its OAuth redirect URI with the Google client too. Local dev leaves
+// baseURL unset and better-auth derives it from the localhost request.
+const baseURL = process.env.VERCEL
+  ? { allowedHosts: ["donkeycut.com", "depcut.vercel.app"], fallback: DONKEYCUT_CANONICAL }
+  : undefined;
 
 export const auth = betterAuth({
   baseURL,
