@@ -233,7 +233,7 @@ export function SidePanel({
           label still fits. */}
       <ScrollArea
         className={cn(
-          "min-h-0 w-[68px] shrink-0",
+          "min-h-0 w-12 shrink-0 sm:w-[68px]",
           tab !== null && "border-r border-border"
         )}
         contentClassName="flex flex-col items-center gap-1 py-3"
@@ -263,7 +263,7 @@ export function SidePanel({
               </span>
               <span
                 className={cn(
-                  "w-full truncate text-center text-[10px] font-medium tracking-tight",
+                  "hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block",
                   tab === id && "text-foreground"
                 )}
               >
@@ -275,6 +275,7 @@ export function SidePanel({
           const tile = (
             <button
               className={tileClass}
+              aria-label={label}
               aria-pressed={tab === id}
               onClick={() => setTab(tab === id ? null : id)}
               onDragOver={(e) => {

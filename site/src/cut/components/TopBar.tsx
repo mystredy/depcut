@@ -306,7 +306,8 @@ export function TopBar({
   };
 
   // One set of actions rendered both ways: labelled, and icon-only when the
-  // bar tightens. Chat keeps its label in both — it is the primary control.
+  // bar tightens. Chat keeps its label in both fit tiers — it is the primary
+  // control — but every label still drops below the mobile breakpoint.
   const actionButtons = (compact: boolean) => (
     <>
       {cutMode === "cloud" && (
@@ -318,7 +319,7 @@ export function TopBar({
           onClick={() => setShareOpen(true)}
         >
           <Share2 data-icon={compact ? undefined : "inline-start"} />
-          {!compact && "Share"}
+          {!compact && <span className="hidden sm:inline">Share</span>}
         </Button>
       )}
       {canMoveToCloud && (
@@ -368,7 +369,7 @@ export function TopBar({
         }}
       >
         <Upload data-icon={compact ? undefined : "inline-start"} />
-        {!compact && "Export"}
+        {!compact && <span className="hidden sm:inline">Export</span>}
       </Button>
       <div aria-hidden className="h-4 w-px bg-border" />
       <Button
@@ -383,7 +384,7 @@ export function TopBar({
           s.setAiOpen(!s.aiOpen);
         }}
       >
-        <Sparkles data-icon="inline-start" /> Chat
+        <Sparkles data-icon="inline-start" /> <span className="hidden sm:inline">Chat</span>
       </Button>
     </>
   );
@@ -469,7 +470,7 @@ export function TopBar({
             <span className="text-destructive">Couldn’t save</span>
           ) : (
             <>
-              <Check className="size-3" /> Saved
+              <Check className="size-3" /> <span className="hidden sm:inline">Saved</span>
             </>
           )}
         </span>
