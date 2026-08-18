@@ -201,14 +201,16 @@ export function ImageGenPanel({ projectId }: { projectId: string }) {
         {generated.length > 0 && (
           <div className="flex shrink-0 flex-col gap-1.5">
             <SectionTitle>Generated</SectionTitle>
-            {generated.map((a) => (
-              <GeneratedTile
-                key={a.id}
-                asset={a}
-                projectId={projectId}
-                handle={candidates.find((c) => c.scope === "project" && c.id === a.id)?.handle}
-              />
-            ))}
+            <div className="grid grid-cols-2 gap-1.5">
+              {generated.map((a) => (
+                <GeneratedTile
+                  key={a.id}
+                  asset={a}
+                  projectId={projectId}
+                  handle={candidates.find((c) => c.scope === "project" && c.id === a.id)?.handle}
+                />
+              ))}
+            </div>
           </div>
         )}
       </ScrollArea>
