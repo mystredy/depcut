@@ -678,9 +678,10 @@ export function LibraryCard({
                 ? // Clear of the play circle, matching the face's duration pill.
                   "bottom-3 left-12 rounded-md bg-[#2b4e42] px-1.5 py-0.5 text-[10px] text-[#d6eddf]"
                 : cn(
-                    "rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] text-white",
-                    // The + button takes the corner on hover; sit beside it.
-                    onUse ? "bottom-2 left-9" : "bottom-1.5 left-1.5"
+                    "bottom-1.5 left-1.5 rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] text-white",
+                    // The + button only occupies the corner on hover; sit
+                    // flush at rest and slide over once it appears.
+                    onUse && "transition-[left] group-hover:left-9"
                   )
             )}
           >
