@@ -7,6 +7,8 @@ import {
   Activity,
   Bot,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Coins,
   CreditCard,
   DollarSign,
@@ -198,14 +200,42 @@ const SECTIONS: NavSection[] = [
 export function AdminNav() {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [collapsed, setCollapsed] = useState(false);
 
   const toggle = (id: string) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
+  if (collapsed) {
+    return (
+      <div className="flex w-10 shrink-0 flex-col items-center border-r bg-card py-4">
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          aria-label="Show sidebar"
+          title="Show sidebar"
+          className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <ChevronRight className="size-4" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <nav className="flex w-64 shrink-0 flex-col border-r bg-card">
-      <div className="px-4 py-4">
-        <p className="text-sm font-semibold">Depcut Admin</p>
-        <p className="text-xs text-muted-foreground">Site management</p>
+      <div className="flex items-center justify-between gap-2 px-4 py-4">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold">Depcut Admin</p>
+          <p className="text-xs text-muted-foreground">Site management</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setCollapsed(true)}
+          aria-label="Hide sidebar"
+          title="Hide sidebar"
+          className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <ChevronLeft className="size-4" />
+        </button>
       </div>
       <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 pb-3">
         {SECTIONS.map((section) => {
