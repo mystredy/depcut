@@ -113,17 +113,26 @@ async function claimKeys(blobs: Claimable[], clientId: string): Promise<Claim[]>
   return claimed.flat();
 }
 
+// A failed PUT here falls back to sending the image inline, which is exactly
+// what risks tripping the hosted route's body-size limit — so a transient
+// blip (a dropped connection, a cold CORS preflight) gets one retry before
+// that fallback kicks in.
 async function put(url: string, bytes: Uint8Array, mimeType: string): Promise<boolean> {
-  try {
-    const res = await fetch(url, {
-      method: "PUT",
-      headers: { "Content-Type": mimeType },
-      body: new Blob([bytes as unknown as BlobPart], { type: mimeType }),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+  const attempt = async () => {
+    try {
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": mimeType },
+        body: new Blob([bytes as unknown as BlobPart], { type: mimeType }),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  };
+  if (await attempt()) return true;
+  await new Promise((r) => setTimeout(r, 500));
+  return attempt();
 }
 
 /**
