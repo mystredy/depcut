@@ -158,7 +158,7 @@ export default function DubbingPage() {
             <Languages className="size-3.5 text-primary" />
             Dub into <span className="text-destructive">*</span>
           </Label>
-          <Select value={targetLanguage} onValueChange={setTargetLanguage}>
+          <Select value={targetLanguage} onValueChange={(value) => setTargetLanguage(value ?? "")}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Choose a language">
                 {(value: string | null) => DUB_LANGUAGES.find((l) => l.id === value)?.label ?? null}

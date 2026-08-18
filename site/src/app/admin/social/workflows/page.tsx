@@ -302,7 +302,7 @@ function CreateWorkflowDialog({ open, onClose }: { open: boolean; onClose: () =>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Source connection</Label>
-              <Select value={sourceId} onValueChange={setSourceId}>
+              <Select value={sourceId} onValueChange={(value) => setSourceId(value ?? "")}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select a source" />
                 </SelectTrigger>
@@ -317,7 +317,7 @@ function CreateWorkflowDialog({ open, onClose }: { open: boolean; onClose: () =>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Destination connection</Label>
-              <Select value={destinationId} onValueChange={setDestinationId}>
+              <Select value={destinationId} onValueChange={(value) => setDestinationId(value ?? "")}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select a destination" />
                 </SelectTrigger>

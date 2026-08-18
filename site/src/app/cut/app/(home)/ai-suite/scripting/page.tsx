@@ -144,7 +144,7 @@ export default function ScriptingPage() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>Target length</Label>
-            <Select value={duration} onValueChange={setDuration}>
+            <Select value={duration} onValueChange={(value) => value && setDuration(value)}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -159,7 +159,7 @@ export default function ScriptingPage() {
           </div>
           <div className="space-y-2">
             <Label>Platform</Label>
-            <Select value={platform} onValueChange={setPlatform}>
+            <Select value={platform} onValueChange={(value) => value && setPlatform(value)}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
