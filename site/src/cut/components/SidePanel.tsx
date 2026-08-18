@@ -236,7 +236,7 @@ export function SidePanel({
           "min-h-0 w-12 shrink-0 sm:w-[68px]",
           tab !== null && "border-r border-border"
         )}
-        contentClassName="flex flex-col items-center gap-1 py-3"
+        contentClassName="flex flex-col items-center gap-0.5 py-2 sm:gap-1 sm:py-3"
       >
         {visibleTabs.map(({ id, label, icon: Icon }, tabIndex) => {
           // The open tab never badges — its completions are already on screen.
@@ -248,7 +248,7 @@ export function SidePanel({
           // the rail edges. The outline stays off — click focus otherwise
           // draws one around the tile.
           const tileClass =
-            "flex w-full min-w-0 shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-muted-foreground outline-none transition-colors hover:text-foreground";
+            "flex w-full min-w-0 shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5";
           const inner = (
             <>
               <span

@@ -314,6 +314,7 @@ export function TopBar({
         <Button
           variant="ghost"
           size={compact ? "icon-sm" : "sm"}
+          className="max-sm:size-7 max-sm:px-0"
           aria-label="Share"
           title="Share"
           onClick={() => setShareOpen(true)}
@@ -348,6 +349,7 @@ export function TopBar({
       <Button
         variant="ghost"
         size={compact ? "icon-sm" : "sm"}
+        className="max-sm:size-7 max-sm:px-0"
         aria-label="Export"
         // A render reads the saved document, which an import still uploading
         // (or one that failed) is deliberately absent from — exporting now
@@ -375,7 +377,7 @@ export function TopBar({
       <Button
         variant={aiOpen ? "default" : "outline"}
         size="sm"
-        className="ai-toggle"
+        className="ai-toggle max-sm:size-7 max-sm:px-0"
         aria-label="Chat"
         aria-pressed={aiOpen}
         title="Chat (⌘J)"
@@ -395,7 +397,7 @@ export function TopBar({
     // match and the switches sit centred; as the bar tightens they drift
     // toward whichever side has slack instead of colliding with the rail.
     <header ref={headerRef} className="relative flex items-center border-b border-border bg-card">
-      <div ref={leftRef} className="flex shrink-0 items-center gap-1 pl-2">
+      <div ref={leftRef} className="flex shrink-0 items-center gap-0.5 pl-1 sm:gap-1 sm:pl-2">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -513,7 +515,7 @@ export function TopBar({
         </TooltipProvider>
       </div>
       <div className="min-w-2 flex-1" />
-      <div ref={middleRef} className="flex shrink-0 items-center gap-2">
+      <div ref={middleRef} className="flex shrink-0 items-center gap-1 sm:gap-2">
         {(() => {
           const aspectMenu = (
             <DropdownMenuContent align="start" className="w-56">
@@ -610,9 +612,12 @@ export function TopBar({
             </div>
           ) : (
             <DropdownMenu>
-              <DropdownMenuTrigger className="aspect-switch flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-xs transition-colors hover:text-foreground">
+              <DropdownMenuTrigger
+                aria-label={`Aspect ratio: ${aspectLabel(aspect)}`}
+                className="aspect-switch flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-1.5 text-xs font-medium text-muted-foreground shadow-xs transition-colors hover:text-foreground sm:px-3"
+              >
                 <AspectIcon aspect={aspect} className="size-3.5" />
-                {aspectLabel(aspect)}
+                <span className="hidden sm:inline">{aspectLabel(aspect)}</span>
                 <ChevronDown className="size-3" />
               </DropdownMenuTrigger>
               {aspectMenu}
@@ -620,9 +625,12 @@ export function TopBar({
           );
         })()}
         <DropdownMenu>
-          <DropdownMenuTrigger className="record-switch flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-xs transition-colors hover:text-foreground">
+          <DropdownMenuTrigger
+            aria-label="Record"
+            className="record-switch flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-1.5 text-xs font-medium text-muted-foreground shadow-xs transition-colors hover:text-foreground sm:px-3"
+          >
             <span className="size-2 rounded-full bg-red-500" aria-hidden />
-            Record
+            <span className="hidden sm:inline">Record</span>
             <ChevronDown className="size-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" style={{ width: "12rem" }}>
@@ -647,7 +655,7 @@ export function TopBar({
           bar, and the hidden measuring rows need no help staying out of
           sight. Clipping would only shave the focus ring off the last
           button. */}
-      <div className="flex shrink-0 items-center gap-2 pr-3">
+      <div className="flex shrink-0 items-center gap-1 pr-1 sm:gap-2 sm:pr-3">
         <div ref={pillRef} className="flex items-center">
           <StoragePill />
         </div>
