@@ -169,6 +169,31 @@ export async function deletePrefix(prefix: string): Promise<number> {
 
 /** Every key under `prefix`, up to `limit`. Callers deleting a whole tree
  * should use deletePrefix, which pages instead of truncating. */
+/** Keys under `prefix` with their last-modified time, paged to `limit` objects. */
+export async function listObjectsWithDates(
+  prefix: string,
+  limit = 10_000,
+): Promise<{ key: string; lastModified: Date }[]> {
+  const out: { key: string; lastModified: Date }[] = [];
+  let token: string | undefined;
+  do {
+    const res = await r2().send(
+      new ListObjectsV2Command({
+        Bucket: R2_BUCKET,
+        Prefix: prefix,
+        ContinuationToken: token,
+        MaxKeys: 1000,
+      })
+    );
+    for (const o of res.Contents ?? []) {
+      if (o.Key && o.LastModified) out.push({ key: o.Key, lastModified: o.LastModified });
+      if (out.length >= limit) return out;
+    }
+    token = res.IsTruncated ? res.NextContinuationToken : undefined;
+  } while (token);
+  return out;
+}
+
 export async function listUnder(prefix: string, limit = 10_000): Promise<string[]> {
   const out: string[] = [];
   let token: string | undefined;
