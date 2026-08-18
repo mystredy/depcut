@@ -266,14 +266,14 @@ function GeneratedTile({
           className="aspect-[16/10] w-full bg-black object-cover transition-transform group-hover:scale-[1.04]"
         />
       </button>
-      <CopyHandlePill handle={handle} name={asset.name} />
+      <CopyHandlePill handle={handle} name={asset.name} className="opacity-100" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5 opacity-0 transition-opacity group-hover:opacity-100">
         <span className="block truncate text-[11px] font-medium text-white">{asset.name}</span>
       </div>
       <div className="absolute top-1 right-1 flex gap-1">
         <button
           title="Expand"
-          className="grid size-5 place-items-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/65"
+          className="grid size-5 place-items-center rounded-full bg-black/45 text-white hover:bg-black/65"
           onClick={() =>
             useLightbox.getState().open({
               kind: "image",
@@ -289,7 +289,7 @@ function GeneratedTile({
         <GeneratedAssetMenu
           asset={asset}
           projectId={projectId}
-          triggerClassName="grid size-5 place-items-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 data-popup-open:opacity-100 hover:bg-black/65"
+          triggerClassName="grid size-5 place-items-center rounded-full bg-black/45 text-white hover:bg-black/65"
           before={
             <>
               <DropdownMenuItem onClick={() => useImageGen.getState().openWith(asset.name)}>
