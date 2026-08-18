@@ -351,7 +351,7 @@ function ImageJobRow({ job }: { job: GenerateJob }) {
       {job.status === "error" && (
         <button
           title="Dismiss"
-          className={cn(cardIconButton, "opacity-0 group-hover:opacity-100")}
+          className={cardIconButton}
           onClick={() => useGenerate.getState().dismiss(job.id)}
         >
           <Trash2 className="size-3.5" />
