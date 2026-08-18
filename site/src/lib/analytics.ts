@@ -19,7 +19,7 @@ export type AnalyticsEvents = {
   onboarding_referral_selected: { referralSources: ReferralSource[] };
   onboarding_completed: { source: OnboardingRun; skipped: boolean; step: number };
   // Cut projects home.
-  project_created: { source: "projects_home" | "sidebar" | "file_import" };
+  project_created: { source: "projects_home" | "my_projects" | "sidebar" | "file_import" };
   folder_created: void;
   // Cut cloud storage limits.
   cut_storage_pill_clicked: void;
