@@ -374,6 +374,10 @@ function geminiCreditPricing(model: string): ProviderCreditPricing | undefined {
 // ElevenLabsRunModel union, so adding a run model without a price fails the build.
 const elevenLabsRunModelPricing: Record<ElevenLabsRunModel, ProviderCreditPricing> = {
   [elevenLabsModels.music]: { durationSecondCostMicros: usdWithMargin("0.005") },
+  // ElevenLabs lists Scribe at ~$0.40/hour of audio ($0.000111/s) on the
+  // published rate card — verify against the account's actual plan/rate
+  // before relying on this margin at volume.
+  [elevenLabsModels.scribe]: { durationSecondCostMicros: usdWithMargin("0.000111") },
 };
 
 function elevenLabsCreditPricing(model: string): ProviderCreditPricing | undefined {

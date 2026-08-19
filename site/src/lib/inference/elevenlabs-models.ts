@@ -3,6 +3,8 @@
 export const elevenLabsModels = {
   // Music composition.
   music: "music_v1",
+  // Speech-to-text (cut/server/cloud/transcribe.ts).
+  scribe: "scribe_v2",
 } as const;
 
 export type ElevenLabsRunModel = (typeof elevenLabsModels)[keyof typeof elevenLabsModels];
