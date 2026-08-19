@@ -24,6 +24,7 @@
  */
 
 import type { CanvasSink, Input, WrappedCanvas } from "mediabunny";
+import { reportClientError } from "./backend";
 import { frameSink, openMedia, videoTrackOf } from "./mediaRead";
 import type { MediaAsset } from "./types";
 
@@ -337,10 +338,10 @@ export class ClipFrameSource {
    * one) and books itself another try. Only a file that keeps failing stays
    * marked unreadable, and only after it has had its chances.
    */
-  private fail(): void {
+  private fail(error: unknown): void {
     this.unreadable = true;
     this.opening = null;
-    void import("./mediaLinks").then((m) => m.reportMediaUrlError(this.asset.url));
+    reportClientError(`video frame source: ${this.asset.url}`, error);
     if (this.closed || this.attempts >= RETRIES || typeof window === "undefined") return;
     this.attempts++;
     this.retryTimer = window.setTimeout(() => {
@@ -373,9 +374,9 @@ export class ClipFrameSource {
         // file's rotation, so a phone clip arrives upright at preview size and
         // no caller has to know it was ever sideways.
         this.sink = frameSink(track, { height: this.height }, POOL);
-      } catch {
+      } catch (error) {
         input.dispose();
-        this.fail();
+        this.fail(error);
       }
     })();
     return this.opening;
@@ -395,8 +396,8 @@ export class ClipFrameSource {
           timestamp: 0,
         };
         this.onFrame();
-      } catch {
-        this.fail();
+      } catch (error) {
+        this.fail(error);
       }
     })();
     return this.opening;

@@ -101,3 +101,17 @@ export const apiFetch = (path: string, init?: RequestInit) => getBackend().fetch
 
 /** Absolute-or-relative URL for a backend API path. */
 export const apiUrl = (path: string) => getBackend().url(path);
+
+/** A raw internal error (a fetch/library message naming an internal URL,
+ * status code, or stack detail) isn't something a user should have to read —
+ * report it to the admin's Telegram instead, best-effort and non-blocking,
+ * and hand the caller a plain message to show in its place. */
+export function reportClientError(context: string, error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  void apiFetch("/api/cut/errors/report", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ context, message }),
+  }).catch(() => {});
+  return "Something went wrong. We've been notified — try again in a moment.";
+}

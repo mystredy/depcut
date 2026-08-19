@@ -38,7 +38,12 @@ import {
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+// "" is a real, persisted locale value meaning "detect the spoken language" —
+// sent to the hosted transcriber as no languageCode at all (Scribe predicts
+// it), and to the on-device one as no locale (falls back to en-US; Apple's
+// Speech framework doesn't auto-detect the way the hosted model does).
 const LOCALES = [
+  ["", "Detect language"],
   ["en-US", "English (US)"],
   ["en-GB", "English (UK)"],
   ["es-ES", "Español"],
@@ -62,9 +67,11 @@ function SubtitleElapsed() {
   return elapsed ? <span className="tabular-nums text-muted-foreground">{elapsed}</span> : null;
 }
 
-/** A track's short pill label: its language code (EN, KO, …). */
+/** A track's short pill label: its language code (EN, KO, …), or a plain
+ * marker for a track generated with detection instead of a fixed language. */
 function laneLabel(subs: SubtitlesBlock, lane: number): string {
-  return trackLocale(subs, lane).split("-")[0].toUpperCase();
+  const locale = trackLocale(subs, lane);
+  return locale ? locale.split("-")[0].toUpperCase() : "AUTO";
 }
 
 /** A track's language name from the locale picker list, else its short code. */
@@ -589,7 +596,7 @@ const CueSpan = memo(function CueSpan({ cue, gap }: { cue: SubtitleCue; gap: num
   };
 
   return (
-    <span className="sub-cue">
+    <span className="sub-cue block">
       {gap > 0.5 && (
         <span
           className="sub-gap mx-0.5 inline-block rounded-md bg-muted px-1.5 py-px align-baseline font-mono text-[10px] text-muted-foreground/80"

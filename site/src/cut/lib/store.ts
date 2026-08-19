@@ -39,7 +39,7 @@ import type {
 } from "./types";
 import type { VideoProject } from "./genvideo/types";
 import { fillSlot } from "./genvideo/fillSlot";
-import { apiFetch, apiJson, getBackend, hasLocalCompute } from "./backend";
+import { apiFetch, apiJson, getBackend, hasLocalCompute, reportClientError } from "./backend";
 import { fetchSignedMediaUrls, pinDocBase } from "./backend/cloud";
 import { markSignedBatch } from "./mediaLinks";
 import {
@@ -849,6 +849,8 @@ export function rippleInsert(
   const shifts = delta > 0 ? after.map((c) => ({ id: c.id, start: c.start + delta })) : [];
   return { start, shifts };
 }
+
+const reportSubtitleError = reportClientError;
 
 /** POST a transcribe spec and poll the job to completion. Returns the cues, or
  * null when the user switches projects mid-run. Throws user-facing errors.
@@ -3046,7 +3048,7 @@ export const useEditor = create<EditorState>((baseSet, get) => {
         if (get().projectId !== projectId) return;
         set({
           subtitleStatus: "error",
-          subtitleError: err instanceof Error ? err.message : String(err),
+          subtitleError: reportSubtitleError("generateSubtitles", err),
         });
       }
     },
@@ -3179,7 +3181,7 @@ export const useEditor = create<EditorState>((baseSet, get) => {
         if (get().projectId !== projectId) return;
         set({
           subtitleStatus: "error",
-          subtitleError: err instanceof Error ? err.message : String(err),
+          subtitleError: reportSubtitleError("generateClipSubtitles", err),
         });
       }
     },
@@ -3246,7 +3248,7 @@ export const useEditor = create<EditorState>((baseSet, get) => {
         if (get().projectId !== projectId) return;
         set({
           subtitleStatus: "ready",
-          subtitleError: err instanceof Error ? err.message : String(err),
+          subtitleError: reportSubtitleError("generateCaptions", err),
         });
       }
     },
@@ -3304,7 +3306,7 @@ export const useEditor = create<EditorState>((baseSet, get) => {
         if (get().projectId !== projectId) return;
         set({
           subtitleStatus: "error",
-          subtitleError: err instanceof Error ? err.message : String(err),
+          subtitleError: reportSubtitleError("translateSubtitleTrack", err),
         });
       }
     },
