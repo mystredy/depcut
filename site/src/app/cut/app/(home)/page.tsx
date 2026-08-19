@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { DashboardGenerateVideo } from "@/cut/components/DashboardGenerateVideo";
 import { NewProjectLauncher } from "@/cut/components/NewProjectLauncher";
 import { GROUPS } from "@/cut/lib/navData";
 import { useCutBase } from "@/cut/lib/nav";
@@ -12,6 +13,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5 p-6">
+      <DashboardGenerateVideo />
       <NewProjectLauncher source="dashboard" className="w-full sm:w-auto" />
       <div className="space-y-5 rounded-3xl border bg-card p-6">
         <div className="flex items-center justify-between">
