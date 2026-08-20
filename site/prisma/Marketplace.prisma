@@ -88,6 +88,13 @@ model Submission {
   id                String            @id @default(cuid())
   userId            String
   user              User              @relation("UserSubmissions", fields: [userId], references: [id], onDelete: Cascade)
+  // Set when this submission came from the editor's Submit button, rather
+  // than the manual video/thumbnail upload flow. Drives two things: the
+  // submit-project UI shows the project's title instead of drop-zones, and
+  // the project is locked to its owner (read-only) while this submission is
+  // outstanding — see CutProject.submissions.
+  projectId         String?
+  project           CutProject?       @relation(fields: [projectId], references: [id])
   subSource         String?
   subType           String            @default("CSVID")
   extension         String            @default("standard")
@@ -150,6 +157,7 @@ model Submission {
   @@index([categoryId])
   @@index([reviewStatus])
   @@index([status])
+  @@index([projectId])
   @@map("submission")
 }
 

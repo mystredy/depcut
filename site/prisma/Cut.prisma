@@ -15,6 +15,9 @@ model CutProject {
   previewKey String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  // A submission with projectId set to this row locks it to its owner while
+  // outstanding (not draft, not rejected) — see Submission.projectId.
+  submissions Submission[]
 
   @@index([userId, updatedAt])
 }
