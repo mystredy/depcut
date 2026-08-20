@@ -599,7 +599,7 @@ const CueSpan = memo(function CueSpan({ cue, gap }: { cue: SubtitleCue; gap: num
     <span className="sub-cue block">
       {gap > 0.5 && (
         <span
-          className="sub-gap mx-0.5 inline-block rounded-md bg-muted px-1.5 py-px align-baseline font-mono text-[10px] text-muted-foreground/80"
+          className="sub-gap mb-1 block w-fit rounded-md bg-muted px-1.5 py-px font-mono text-[10px] text-muted-foreground/80"
           title={`${gap.toFixed(1)}s pause`}
         >
           ·&thinsp;{gap.toFixed(1)}s&thinsp;·

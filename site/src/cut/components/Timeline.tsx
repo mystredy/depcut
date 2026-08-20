@@ -741,10 +741,6 @@ export function Timeline() {
     }
     return m;
   }, [overlays]);
-  // Reveals the resting toggles while the pointer is over the track area;
-  // a toggle whose track has anything off stays visible on its own.
-  const [trackHover, setTrackHover] = useState(false);
-
   // Chat mention token per audio clip ("@s1"), keyed by clip id — the same
   // handles the chat resolves against, so the token shown on hover is exactly
   // what pulls this sound into a message.
@@ -1650,11 +1646,7 @@ export function Timeline() {
           picture the bounce reveals: the card-white ruler band (with its
           baseline) over the track gray. The scroller stays transparent — the
           underlay IS the timeline's surface. */}
-      <div
-        className="relative min-h-0 flex-1 bg-muted"
-        onPointerEnter={() => setTrackHover(true)}
-        onPointerLeave={() => setTrackHover(false)}
-      >
+      <div className="relative min-h-0 flex-1 bg-muted">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div ref={rulerUnderlayRef} className="absolute inset-x-0 top-0">
           <RestingSurface railYs={railYs} empty={total <= 0} timelineH={timelineH} />
@@ -2232,7 +2224,6 @@ export function Timeline() {
                 kind="hide"
                 off={t.hidden === t.total}
                 partial={t.hidden > 0}
-                reveal={trackHover}
                 top={y + (t.sound > 0 ? VIDEO_H / 2 - 22 : VIDEO_H / 2 - 8)}
                 onToggle={() =>
                   useEditor.getState().setTrackHidden(track, t.hidden !== t.total)
@@ -2246,7 +2237,6 @@ export function Timeline() {
                   kind="mute"
                   off={t.muted === t.sound}
                   partial={t.muted > 0}
-                  reveal={trackHover}
                   top={y + VIDEO_H / 2 + 6}
                   onToggle={() =>
                     useEditor.getState().setTrackMuted(track, t.muted !== t.sound)
@@ -2265,7 +2255,6 @@ export function Timeline() {
                   kind="mute"
                   off={t.hidden === t.total}
                   partial={t.hidden > 0}
-                  reveal={trackHover}
                   top={gutterYs.audioTop! + r * AUDIO_H + AUDIO_H / 2 - 8}
                   onToggle={() =>
                     useEditor.getState().setAudioLaneHidden(lane, t.hidden !== t.total)
@@ -2283,7 +2272,6 @@ export function Timeline() {
                   kind="hide"
                   off={t.hidden === t.total}
                   partial={t.hidden > 0}
-                  reveal={trackHover}
                   top={gutterYs.textTop! + r * TEXT_H + TEXT_H / 2 - 8}
                   onToggle={() =>
                     useEditor.getState().setTextLaneHidden(lane, t.hidden !== t.total)
@@ -2300,7 +2288,6 @@ export function Timeline() {
                   kind="hide"
                   off={off}
                   partial={false}
-                  reveal={trackHover}
                   top={gutterYs.subTop! + lane * SUB_H + SUB_H / 2 - 8}
                   onToggle={() => {
                     const s = useEditor.getState();
@@ -3327,9 +3314,8 @@ function Filmstrip({
   );
 }
 
-/** A track-wide toggle pinned in the gutter column. Rests invisible until the
- * pointer is over the track area; while anything on its track is off it stays
- * visible on its own, the off glyph fading to say "some segments" versus the
+/** A track-wide toggle pinned in the gutter column, always visible. While
+ * anything on its track is off it fades to say "some segments" versus the
  * full-strength "whole track". A click always turns the whole track off, and
  * the next click turns every segment back on — individually disabled segments
  * included. */
@@ -3337,14 +3323,12 @@ function GutterToggle({
   kind,
   off,
   partial,
-  reveal,
   top,
   onToggle,
 }: {
   kind: "hide" | "mute";
   off: boolean;
   partial: boolean;
-  reveal: boolean;
   top: number;
   onToggle: () => void;
 }) {
@@ -3366,13 +3350,7 @@ function GutterToggle({
       className={cn(
         "tl-track-toggle pointer-events-auto absolute left-[3px] grid size-4 place-items-center transition-opacity",
         active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-        active
-          ? partial && !off
-            ? "opacity-60 hover:opacity-100"
-            : "opacity-100"
-          : reveal
-            ? "opacity-100"
-            : "pointer-events-none opacity-0"
+        active && partial && !off ? "opacity-60 hover:opacity-100" : "opacity-100"
       )}
       style={{ top }}
       onPointerDown={(e) => e.stopPropagation()}
