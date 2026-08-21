@@ -796,11 +796,8 @@ export default function SubmitProjectEditorPage() {
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-6 rounded-3xl border bg-card p-6 lg:col-span-8"
-        >
+      <div className="flex flex-col gap-6">
+        <form onSubmit={handleSubmit} className="space-y-6 rounded-3xl border bg-card p-6">
           {/* Submission mode */}
           <div className="flex rounded-2xl border bg-muted/40 p-1">
             {(["Inspire", "Task"] as const).map((m) => (
@@ -1585,7 +1582,7 @@ export default function SubmitProjectEditorPage() {
         </form>
 
         {/* Collaboration Hub */}
-        <div className="space-y-4 rounded-3xl border bg-card p-6 lg:col-span-4">
+        <div className="space-y-4 rounded-3xl border bg-card p-6">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold">Collaboration Hub</p>
             <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
