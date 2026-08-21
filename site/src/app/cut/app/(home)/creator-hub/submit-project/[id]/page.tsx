@@ -733,7 +733,7 @@ export default function SubmitProjectEditorPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6">
+    <div className="space-y-6 p-6">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold">Submit Project</h1>
@@ -797,7 +797,7 @@ export default function SubmitProjectEditorPage() {
       )}
 
       <div className="flex flex-col gap-6">
-        <form onSubmit={handleSubmit} className="space-y-6 rounded-3xl border bg-card p-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
           {/* Submission mode */}
           <div className="flex rounded-2xl border bg-muted/40 p-1">
             {(["Inspire", "Task"] as const).map((m) => (
