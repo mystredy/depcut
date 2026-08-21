@@ -938,7 +938,7 @@ export default function SubmitProjectEditorPage() {
                     {submission.project?.name ?? "Untitled project"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Video, thumbnail, and verification come from this project — nothing to upload here.
+                    Video, thumbnail come from this project — nothing to upload here.
                   </p>
                 </div>
               </div>
@@ -1434,8 +1434,7 @@ export default function SubmitProjectEditorPage() {
 
               {submission?.projectId ? (
                 <p className="text-xs text-muted-foreground">
-                  Verification export isn't needed — Pro review happens against the source project
-                  directly.
+                  Verification come from this project — nothing to upload here.
                 </p>
               ) : (
               <div className="space-y-2">
