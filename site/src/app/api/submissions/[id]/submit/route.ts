@@ -31,8 +31,13 @@ export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
     );
   }
 
-  const hasVideo = submission.assets.some((a) => a.type === "video" && a.storageKey);
-  const hasThumbnail = submission.assets.some((a) => a.type === "thumbnail" && a.storageKey);
+  // A submission linked to an editor project (see POST /api/submissions)
+  // satisfies video/thumbnail/verification through that project instead of
+  // an uploaded asset — there's nothing to pick.
+  const linkedToProject = Boolean(submission.projectId);
+  const hasVideo = linkedToProject || submission.assets.some((a) => a.type === "video" && a.storageKey);
+  const hasThumbnail =
+    linkedToProject || submission.assets.some((a) => a.type === "thumbnail" && a.storageKey);
   const missing: string[] = [];
   if (!submission.title?.trim()) missing.push("title");
   if (!submission.categoryId) missing.push("category");
@@ -48,7 +53,8 @@ export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
     if (!submission.packageTitle?.trim()) missing.push("package title");
     if (!submission.packageDescription?.trim()) missing.push("package description");
     if (!submission.packageTags?.trim()) missing.push("package tags");
-    const hasVerification = submission.assets.some((a) => a.type === "verification" && a.storageKey);
+    const hasVerification =
+      linkedToProject || submission.assets.some((a) => a.type === "verification" && a.storageKey);
     if (!hasVerification) missing.push("verification export");
   }
   if (missing.length > 0) {

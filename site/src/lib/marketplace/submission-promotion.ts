@@ -25,10 +25,12 @@ export async function tryPromoteSubmission(submissionId: string): Promise<void> 
   if (!submission.submitRequestedAt) return;
   if (submission.status !== "submitting" && submission.status !== "failed") return;
 
+  // A submission linked to an editor project has no uploaded assets to wait
+  // on — the project itself is what's under review.
   const required = requiredAssetTypes(submission.extension);
-  const complete = required.every((type) =>
-    submission.assets.some((a) => a.type === type && a.status === "complete"),
-  );
+  const complete =
+    Boolean(submission.projectId) ||
+    required.every((type) => submission.assets.some((a) => a.type === type && a.status === "complete"));
   if (!complete) return;
 
   await prisma.$transaction(async (tx) => {

@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronLeft, CloudUpload, Loader2, Mic, Monitor, MoreHorizontal, Ratio, Redo2, Share2, Smartphone, Sparkles, Square, Undo2, Upload, Video } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, CloudUpload, Loader2, Mic, Monitor, MoreHorizontal, Ratio, Redo2, Send, Share2, Smartphone, Sparkles, Square, Undo2, Upload, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,6 +34,7 @@ import { backTarget, projectHref, useCutBase } from "@/cut/lib/nav";
 import { copyProjectAcross } from "@/cut/lib/projectCopy";
 import { useEditor } from "@/cut/lib/store";
 import { useLocalPref } from "@/cut/lib/uiState";
+import { useCreateDraftSubmission } from "@/queries/submissions";
 import { ASPECT_PRESETS, aspectLabel, aspectOrientation, normalizeAspect, parseRatio, type Aspect } from "@/cut/lib/types";
 import { cn } from "@/lib/utils";
 import { RecordDialog, type RecordMode } from "./RecordDialog";
@@ -243,6 +245,21 @@ export function TopBar({
   // copy.
   const cutMode = useCutMode();
   const canMoveToCloud = cutMode === "local";
+  // Submit to the marketplace: creates a draft linked to this project (only
+  // meaningful in cloud mode — a local project has no CutProject row to
+  // link) and hands off to the existing Submit Project flow.
+  const router = useRouter();
+  const createSubmission = useCreateDraftSubmission();
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const submitProject = () => {
+    setSubmitError(null);
+    const projectId = useEditor.getState().projectId;
+    if (!projectId) return;
+    createSubmission.mutate(projectId, {
+      onSuccess: (data) => router.push(`${base}/creator-hub/submit-project/${data.submission.id}`),
+      onError: (e) => setSubmitError(e instanceof Error ? e.message : "Could not start the submission."),
+    });
+  };
   // Cloud imports are real uploads worth reporting; local imports are instant
   // disk copies, so they report nothing.
   const cloudUploading = uploading > 0 && cutMode === "cloud";
@@ -373,6 +390,24 @@ export function TopBar({
         <Upload data-icon={compact ? undefined : "inline-start"} />
         {!compact && <span className="hidden sm:inline">Export</span>}
       </Button>
+      {cutMode === "cloud" && (
+        <Button
+          variant="ghost"
+          size={compact ? "icon-sm" : "sm"}
+          className="max-sm:size-7 max-sm:px-0"
+          aria-label="Submit"
+          disabled={createSubmission.isPending}
+          title={submitError ?? (compact ? "Submit" : undefined)}
+          onClick={submitProject}
+        >
+          {createSubmission.isPending ? (
+            <Loader2 data-icon={compact ? undefined : "inline-start"} className="animate-spin" />
+          ) : (
+            <Send data-icon={compact ? undefined : "inline-start"} />
+          )}
+          {!compact && <span className="hidden sm:inline">Submit</span>}
+        </Button>
+      )}
       <div aria-hidden className="h-4 w-px bg-border" />
       <Button
         variant={aiOpen ? "default" : "outline"}

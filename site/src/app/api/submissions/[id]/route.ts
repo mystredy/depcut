@@ -17,6 +17,7 @@ export const GET = withDonkeyAuth(async (request, context: RouteContext) => {
     include: {
       assets: true,
       category: { select: { emoji: true, name: true } },
+      project: { select: { name: true } },
     },
     where: { id },
   });

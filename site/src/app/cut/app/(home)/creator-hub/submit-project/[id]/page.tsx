@@ -868,7 +868,11 @@ export default function SubmitProjectEditorPage() {
             <Label>
               Category <span className="text-destructive">*</span>
             </Label>
-            <Select value={category} onValueChange={updateCategory} disabled={categories.isLoading || !isDraft}>
+            <Select
+              value={category}
+              onValueChange={(value) => value && updateCategory(value)}
+              disabled={categories.isLoading || !isDraft}
+            >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder={categories.isLoading ? "Loading categories…" : "Choose a category"}>
                   {(value: string | null) => {
@@ -924,6 +928,22 @@ export default function SubmitProjectEditorPage() {
             </div>
           </div>
 
+          {submission?.projectId ? (
+            <div className="space-y-2">
+              <Label>Source project</Label>
+              <div className="flex items-center gap-2 rounded-2xl border p-4">
+                <Film className="size-5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {submission.project?.name ?? "Untitled project"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Video, thumbnail, and verification come from this project — nothing to upload here.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>
@@ -1112,6 +1132,7 @@ export default function SubmitProjectEditorPage() {
               )}
             </div>
           </div>
+          )}
 
           {/* Linked Collaboration Pipeline */}
           <div className="space-y-3 rounded-2xl border border-dashed p-4">
@@ -1147,7 +1168,11 @@ export default function SubmitProjectEditorPage() {
             ) : (
               <div className="space-y-2">
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <Select value={selectedWorkspaceId} onValueChange={updateSelectedWorkspaceId} disabled={!isDraft}>
+                  <Select
+                    value={selectedWorkspaceId}
+                    onValueChange={(value) => value && updateSelectedWorkspaceId(value)}
+                    disabled={!isDraft}
+                  >
                     <SelectTrigger className="flex-1">
                       <SelectValue placeholder="Choose a connected workspace" />
                     </SelectTrigger>
@@ -1407,6 +1432,12 @@ export default function SubmitProjectEditorPage() {
                 />
               </div>
 
+              {submission?.projectId ? (
+                <p className="text-xs text-muted-foreground">
+                  Verification export isn't needed — Pro review happens against the source project
+                  directly.
+                </p>
+              ) : (
               <div className="space-y-2">
                 <Label className="flex items-center gap-1.5">
                   <ShieldCheck className="size-3.5 text-primary" />
@@ -1506,6 +1537,7 @@ export default function SubmitProjectEditorPage() {
                   </p>
                 )}
               </div>
+              )}
             </div>
           )}
 

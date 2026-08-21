@@ -29,6 +29,11 @@ export type SubmissionAsset = {
 export type Submission = {
   id: string;
   userId: string;
+  // Set when this draft came from the editor's Submit button — see
+  // useCreateDraftSubmission. The submit-project page shows the linked
+  // project's title instead of the video/thumbnail/verification drop-zones.
+  projectId: string | null;
+  project: { name: string } | null;
   subSource: string | null;
   subType: string;
   extension: string;
@@ -95,11 +100,18 @@ export function useSubmission(id: string | null) {
 }
 
 // "New Submit" calls this — no fields required, the row exists the instant
-// this resolves and the page navigates to it.
+// this resolves and the page navigates to it. The editor's Submit button
+// passes projectId to link the draft to that project instead.
 export function useCreateDraftSubmission() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => apiFetch<{ submission: Submission }>("/api/submissions", { method: "POST" }),
+    mutationFn: (projectId?: string) =>
+      apiFetch<{ submission: Submission }>("/api/submissions", {
+        method: "POST",
+        ...(projectId
+          ? { body: JSON.stringify({ projectId }), headers: { "Content-Type": "application/json" } }
+          : {}),
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: submissionsQueryKey });
     },

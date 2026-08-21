@@ -16,6 +16,12 @@ const MAX_OPEN_DRAFTS = 3;
 // Capped at MAX_OPEN_DRAFTS unfinished drafts per user so someone can't spin
 // up an unbounded number of empty rows — they have to finish or delete one
 // first (DELETE /api/submissions/[id]).
+//
+// The editor's own Submit button sends { projectId }: the draft is linked to
+// that project instead of the manual video/thumbnail/verification uploads —
+// see submit-project's [id] page for how a linked draft renders. The project
+// must belong to the caller; a stranger's id 404s rather than leaking whether
+// it exists.
 export const POST = withDonkeyAuth(async (request) => {
   const openDrafts = await prisma.submission.count({
     where: { status: "draft", userId: request.donkey.userId },
@@ -30,9 +36,29 @@ export const POST = withDonkeyAuth(async (request) => {
     );
   }
 
+  let projectId: string | undefined;
+  try {
+    const body = (await request.json()) as { projectId?: string };
+    if (typeof body.projectId === "string" && body.projectId.trim()) {
+      projectId = body.projectId.trim();
+    }
+  } catch {
+    // No body (or invalid JSON) is the normal case for a manual-upload draft.
+  }
+
+  if (projectId) {
+    const project = await prisma.cutProject.findUnique({
+      select: { id: true },
+      where: { id: projectId, userId: request.donkey.userId },
+    });
+    if (!project) {
+      return NextResponse.json({ error: "not_found", message: "Project not found." }, { status: 404 });
+    }
+  }
+
   const submission = await prisma.submission.create({
-    data: { status: "draft", userId: request.donkey.userId },
-    include: { assets: true },
+    data: { status: "draft", userId: request.donkey.userId, projectId },
+    include: { assets: true, project: { select: { name: true } } },
   });
   return NextResponse.json({ submission });
 });
