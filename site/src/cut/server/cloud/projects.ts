@@ -22,8 +22,22 @@ type ProjectRow = {
   updatedAt: Date;
 };
 
+// Locked out from here on the instant a submission on it moves past draft —
+// every route in this file (and chats/jobs/library/media/share/turns, which
+// all gate on this same function) treats a locked project as if it doesn't
+// exist. It still lists on the Projects page (list() below queries
+// cutProject directly, not this), so the creator sees the card; opening it
+// just 404s. Rejected releases it — draft is the only other status a fresh
+// project starts in, so excluding both leaves every "outstanding" status
+// (submitting, submitted, Approved) locked.
 export async function getProject(userId: string, id: string): Promise<ProjectRow | null> {
-  return prisma.cutProject.findFirst({ where: { id, userId } });
+  const row = await prisma.cutProject.findFirst({ where: { id, userId } });
+  if (!row) return null;
+  const outstanding = await prisma.submission.findFirst({
+    select: { id: true },
+    where: { projectId: id, status: { notIn: ["draft", "Rejected"] } },
+  });
+  return outstanding ? null : row;
 }
 
 /** Every media fileName already claimed in the project — pending uploads hold
@@ -129,8 +143,13 @@ export async function deleteProjectCascade(userId: string, id: string): Promise<
 
 export const projectsCloud = {
   async list(userId: string) {
+    // An approved submission's project moves to the reviewer/admin side
+    // entirely — see /api/admin/project-submissions — so it's excluded here
+    // outright rather than just locked. Submitting/submitted/rejected still
+    // list (as a locked or, once rejected, normal card); only approval
+    // removes it from the creator's own list.
     const rows = await prisma.cutProject.findMany({
-      where: { userId },
+      where: { userId, submissions: { none: { status: "Approved" } } },
       orderBy: { updatedAt: "desc" },
     });
     const sizes = await projectSizes(userId, rows.map((r) => r.id));

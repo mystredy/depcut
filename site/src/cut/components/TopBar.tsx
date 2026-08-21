@@ -743,6 +743,11 @@ export function TopBar({
                 >
                   <Upload /> {cloudUploading ? "Finishing uploads…" : "Export"}
                 </DropdownMenuItem>
+                {cutMode === "cloud" && (
+                  <DropdownMenuItem disabled={createSubmission.isPending} onClick={submitProject}>
+                    <Send /> Submit
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={() => {
                     const s = useEditor.getState();

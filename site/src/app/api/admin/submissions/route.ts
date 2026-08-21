@@ -23,6 +23,7 @@ export const GET = withDonkeyAuth(async (request) => {
     include: {
       assets: true,
       category: { select: { emoji: true, name: true } },
+      project: { select: { name: true } },
       task: { select: { id: true, title: true } },
       user: { select: { displayName: true, email: true, name: true } },
     },
@@ -33,8 +34,8 @@ export const GET = withDonkeyAuth(async (request) => {
   const submissions = rows.map((row) => ({
     ...row,
     createdAt: row.createdAt.toISOString(),
-    hasThumbnail: row.assets.some((a) => a.type === "thumbnail" && a.status === "complete"),
-    hasVideo: row.assets.some((a) => a.type === "video" && a.status === "complete"),
+    hasThumbnail: Boolean(row.projectId) || row.assets.some((a) => a.type === "thumbnail" && a.status === "complete"),
+    hasVideo: Boolean(row.projectId) || row.assets.some((a) => a.type === "video" && a.status === "complete"),
     reviewedAt: row.reviewedAt?.toISOString() ?? null,
     reviewStartedAt: row.reviewStartedAt?.toISOString() ?? null,
     reviewCompletedAt: row.reviewCompletedAt?.toISOString() ?? null,

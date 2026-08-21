@@ -207,6 +207,11 @@ export type AdminTask = {
 export type AdminSubmission = {
   id: string;
   title: string;
+  // Set when this came from the editor's Submit button — see
+  // Submission.projectId. hasVideo/hasThumbnail are always true for these
+  // (there's nothing uploaded to check); review happens against the project.
+  projectId: string | null;
+  project: { name: string } | null;
   categoryId: string | null;
   category: { name: string; emoji: string } | null;
   status: string | null;
