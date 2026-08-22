@@ -36,14 +36,16 @@ export const POST = withDonkeyAuth(async (request) => {
     // No body (or invalid JSON) is the normal case for a manual-upload draft.
   }
 
+  let projectName: string | undefined;
   if (projectId) {
     const project = await prisma.cutProject.findUnique({
-      select: { id: true },
+      select: { name: true },
       where: { id: projectId, userId: request.donkey.userId },
     });
     if (!project) {
       return NextResponse.json({ error: "not_found", message: "Project not found." }, { status: 404 });
     }
+    projectName = project.name;
     const existing = await prisma.submission.findFirst({
       where: { projectId, userId: request.donkey.userId, status: "draft" },
       include: { assets: true, project: { select: { name: true } } },
@@ -64,8 +66,13 @@ export const POST = withDonkeyAuth(async (request) => {
     );
   }
 
+  // Seeded once, from the project's title at the moment the draft is
+  // created — not kept in sync after. The title field then behaves exactly
+  // like any other draft field: autosave (PATCH) owns it from here, so
+  // renaming the project later doesn't silently retitle an in-progress
+  // submission, and renaming the submission doesn't touch the project.
   const submission = await prisma.submission.create({
-    data: { status: "draft", userId: request.donkey.userId, projectId },
+    data: { status: "draft", userId: request.donkey.userId, projectId, title: projectName },
     include: { assets: true, project: { select: { name: true } } },
   });
   return NextResponse.json({ submission });
