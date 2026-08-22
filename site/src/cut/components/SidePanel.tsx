@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Captions, Check, Clapperboard, ClipboardList, Copy, Download, Ellipsis, Film, FolderOpen, FolderPlus, Image as ImageIcon, Loader2, Music, Plus, Shapes, Sparkles, Trash2, Upload, X, Blend } from "lucide-react";
+import { Captions, Check, Clapperboard, ClipboardList, Copy, Download, Ellipsis, Film, FolderOpen, FolderPlus, Image as ImageIcon, Layers, Loader2, Music, Plus, Shapes, Sparkles, Trash2, Upload, X, Blend } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { LiveElapsed } from "@/cut/components/Elapsed";
@@ -1050,6 +1050,16 @@ function AssetCard({ asset, projectId }: { asset: MediaAsset; projectId: string 
             {saved ? <Check className="size-3" /> : <Ellipsis className="size-3" />}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48" onClick={(e) => e.stopPropagation()}>
+            {(asset.type === "video" || asset.type === "image") && (
+              <DropdownMenuItem
+                onClick={() => {
+                  const s = useEditor.getState();
+                  s.addVideoFromAsset(asset.id, { kind: "track", track: 1 }, s.currentTime);
+                }}
+              >
+                <Layers /> Add overlay
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem onClick={saveToLibrary} disabled={!!asset.upload}>
               <FolderPlus /> Save to library
             </DropdownMenuItem>
