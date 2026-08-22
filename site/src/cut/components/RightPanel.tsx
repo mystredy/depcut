@@ -200,13 +200,10 @@ function OverlayPanel() {
 function AspectPanel() {
   return (
     <>
-      <PanelHead title="Aspect ratio" />
-      <div className="flex flex-col items-start gap-3 px-4 pb-4">
-        <p className="text-xs leading-relaxed text-balance text-muted-foreground">
-          Sets the project's frame shape — the same control as the top bar.
-        </p>
-        <AspectRatioControl />
-      </div>
+      <PanelHead title="Aspect ratio" hint="Sets the project's frame shape" />
+      <ScrollArea className="min-h-0 flex-1" contentClassName="px-2.5 pb-4">
+        <AspectRatioControl variant="list" />
+      </ScrollArea>
     </>
   );
 }

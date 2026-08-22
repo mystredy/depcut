@@ -19,11 +19,12 @@ function AspectIcon({ aspect, className }: { aspect: Aspect; className?: string 
   return <Icon className={className} />;
 }
 
-/** The project's aspect-ratio picker: a pill showing the current preset, or —
- * once Custom is chosen — a live W:H editor. Self-contained (reads/writes the
- * project's aspect directly), so it drops into the top bar and the right
- * rail's Aspect ratio tab identically. */
-export function AspectRatioControl() {
+/** The project's aspect-ratio picker. Self-contained (reads/writes the
+ * project's aspect directly). `variant="pill"` (default) is a compact pill
+ * that opens a dropdown — the top bar's shape. `variant="list"` renders the
+ * same presets and custom editor already expanded in place, for a panel with
+ * room to spare. */
+export function AspectRatioControl({ variant = "pill" }: { variant?: "pill" | "list" }) {
   const aspect = useEditor((s) => s.aspect);
   const isPreset = ASPECT_PRESETS.some((p) => p.value === aspect);
   // Custom is a sticky mode: picked from the menu, entered by typing in the pill,
@@ -143,16 +144,106 @@ export function AspectRatioControl() {
     endEditing();
   };
 
+  const selectPreset = (value: Aspect) => {
+    useEditor.getState().setAspect(value);
+    setCustomMode(false);
+  };
+  // Picking Custom returns to the remembered ratio right away.
+  const selectCustom = () => {
+    setCustomMode(true);
+    if (customNormalized) useEditor.getState().setAspect(customNormalized);
+  };
+  const customLabel = normalizeAspect(savedCustom) ? `Custom · ${savedCustom}` : "Custom…";
+
+  if (variant === "list") {
+    return (
+      <div className="flex w-full flex-col gap-0.5">
+        {ASPECT_PRESETS.map((p) => (
+          <button
+            key={p.value}
+            type="button"
+            onClick={() => selectPreset(p.value)}
+            className={cn(
+              "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted",
+              !showCustomEditor && aspect === p.value && "bg-muted"
+            )}
+          >
+            <AspectIcon aspect={p.value} className="size-4 shrink-0 text-muted-foreground" />
+            <span className="flex-1">
+              {p.name} · {p.value}
+              {p.sublabel && (
+                <span className="block text-[10.5px] text-muted-foreground">{p.sublabel}</span>
+              )}
+            </span>
+            {!showCustomEditor && aspect === p.value && (
+              <Check className="size-3.5 shrink-0 text-muted-foreground" />
+            )}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={selectCustom}
+          className={cn(
+            "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted",
+            showCustomEditor && "bg-muted"
+          )}
+        >
+          <Ratio className="size-4 shrink-0 text-muted-foreground" />
+          <span className="flex-1">{customLabel}</span>
+          {showCustomEditor && <Check className="size-3.5 shrink-0 text-muted-foreground" />}
+        </button>
+        {showCustomEditor && (
+          <div
+            className={cn(
+              "mt-1 flex items-center justify-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium",
+              customInvalid ? "border-destructive text-destructive" : "border-border"
+            )}
+            title={customInvalid ? "Up to an 8:1 shape" : undefined}
+            onBlur={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) endEditing();
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitCustom();
+              if (e.key === "Escape") revertCustom();
+            }}
+          >
+            <input
+              aria-label="Width"
+              aria-invalid={customInvalid}
+              inputMode="decimal"
+              className="w-10 bg-transparent text-center outline-none"
+              value={customW}
+              onFocus={beginEditing}
+              onChange={(e) => {
+                const v = ratioInput(e.target.value);
+                setCustomW(v);
+                setPendingRatio(`${v}:${customH}`);
+              }}
+            />
+            <span className="text-muted-foreground">:</span>
+            <input
+              aria-label="Height"
+              aria-invalid={customInvalid}
+              inputMode="decimal"
+              className="w-10 bg-transparent text-center outline-none"
+              value={customH}
+              onFocus={beginEditing}
+              onChange={(e) => {
+                const v = ratioInput(e.target.value);
+                setCustomH(v);
+                setPendingRatio(`${customW}:${v}`);
+              }}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const aspectMenu = (
     <DropdownMenuContent align="start" className="w-56">
       {ASPECT_PRESETS.map((p) => (
-        <DropdownMenuItem
-          key={p.value}
-          onClick={() => {
-            useEditor.getState().setAspect(p.value);
-            setCustomMode(false);
-          }}
-        >
+        <DropdownMenuItem key={p.value} onClick={() => selectPreset(p.value)}>
           <AspectIcon aspect={p.value} />
           <span className="flex-1">
             {p.name} · {p.value}
@@ -165,17 +256,9 @@ export function AspectRatioControl() {
           )}
         </DropdownMenuItem>
       ))}
-      <DropdownMenuItem
-        onClick={() => {
-          setCustomMode(true);
-          // Picking Custom returns to the remembered ratio right away.
-          if (customNormalized) useEditor.getState().setAspect(customNormalized);
-        }}
-      >
+      <DropdownMenuItem onClick={selectCustom}>
         <Ratio />
-        <span className="flex-1">
-          {normalizeAspect(savedCustom) ? `Custom · ${savedCustom}` : "Custom…"}
-        </span>
+        <span className="flex-1">{customLabel}</span>
         {showCustomEditor && <Check className="size-3.5 text-muted-foreground" />}
       </DropdownMenuItem>
     </DropdownMenuContent>
