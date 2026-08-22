@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { importFileToProject } from "@/cut/lib/media";
-import { useEditor } from "@/cut/lib/store";
+import { clipLen, useEditor } from "@/cut/lib/store";
 import { timelineScrollBy } from "@/cut/lib/timelineScroll";
 import { useLocalPref } from "@/cut/lib/uiState";
 import { cn } from "@/lib/utils";
@@ -86,6 +86,48 @@ export function RightPanel() {
     setSeenKey(selectionKey);
     if (selectionKey && hasEditContent) setTab("edit");
   }
+
+  // Remembers the track (video) or lane (audio) a clip selection was last
+  // made on — not cleared when the selection is dropped, only replaced by
+  // the next one.
+  const lastTrack = useRef<{ kind: "clip"; track: number } | { kind: "audio"; lane: number } | null>(
+    null
+  );
+  useEffect(() => {
+    const s = useEditor.getState();
+    if (s.selection?.kind === "clip") {
+      const c = s.clips.find((c) => c.id === s.selection!.id);
+      if (c) lastTrack.current = { kind: "clip", track: c.track };
+    } else if (s.selection?.kind === "audio") {
+      const c = s.audioClips.find((c) => c.id === s.selection!.id);
+      if (c) lastTrack.current = { kind: "audio", lane: c.lane ?? 0 };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionKey]);
+
+  // With Edit open and nothing selected, fall back to whatever clip sits
+  // under the playhead on that remembered track/lane instead of leaving the
+  // panel on the "select something" placeholder — the playhead crossing
+  // into a new clip there re-runs this and follows it.
+  const currentTime = useEditor((s) => s.currentTime);
+  useEffect(() => {
+    if (tab !== "edit" || hasEditContent) return;
+    const remembered = lastTrack.current;
+    if (!remembered) return;
+    const s = useEditor.getState();
+    const t = s.currentTime;
+    if (remembered.kind === "clip") {
+      const hit = s.clips.find(
+        (c) => c.track === remembered.track && c.start <= t && t < c.start + clipLen(c)
+      );
+      if (hit) s.select({ kind: "clip", id: hit.id });
+    } else {
+      const hit = s.audioClips.find(
+        (c) => (c.lane ?? 0) === remembered.lane && c.start <= t && t < c.start + clipLen(c)
+      );
+      if (hit) s.select({ kind: "audio", id: hit.id });
+    }
+  }, [tab, hasEditContent, currentTime]);
 
   const overlayInputRef = useRef<HTMLInputElement>(null);
   const [overlayImporting, setOverlayImporting] = useState(0);
