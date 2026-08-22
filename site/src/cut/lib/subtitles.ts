@@ -31,11 +31,12 @@ export function laneHidden(subs: SubtitlesBlock, lane: number): boolean {
 }
 
 /** A track's language: its own meta, then the block-level legacy locale (which
- * described the first track only), then English. The panel's language select
+ * described the first track only), then detect. The panel's language select
  * and every generation path read this same chain, so the language shown is
- * always the language sent. */
+ * always the language sent. "" means detect the spoken language rather than
+ * naming one. */
 export function trackLocale(subs: SubtitlesBlock, lane: number): string {
-  return subs.tracks?.[lane]?.locale ?? (lane === 0 ? subs.locale : undefined) ?? "en-US";
+  return subs.tracks?.[lane]?.locale ?? (lane === 0 ? subs.locale : undefined) ?? "";
 }
 
 /** A track's effective caption anchor plus the block's look overrides

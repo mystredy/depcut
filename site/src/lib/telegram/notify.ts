@@ -1,14 +1,16 @@
 import { prisma } from "@/lib/prisma";
 
-export type TelegramNotificationEvent = "submission" | "withdrawal" | "supportTicket";
+export type TelegramNotificationEvent = "submission" | "withdrawal" | "supportTicket" | "systemError";
 
-const EVENT_FLAG: Record<
-  TelegramNotificationEvent,
-  "notifySubmissions" | "notifyWithdrawals" | "notifySupportTickets"
+const EVENT_FLAG: Partial<
+  Record<TelegramNotificationEvent, "notifySubmissions" | "notifyWithdrawals" | "notifySupportTickets">
 > = {
   submission: "notifySubmissions",
   withdrawal: "notifyWithdrawals",
   supportTicket: "notifySupportTickets",
+  // "systemError" has no settings row of its own (would need a schema change/
+  // migration this codebase's rules keep out of an agent's hands) — it rides
+  // the bot's plain Enable toggle instead of a per-category one.
 };
 
 // Best-effort admin alert, fanned out to every destination configured at
@@ -22,12 +24,13 @@ const EVENT_FLAG: Record<
 // never let a notification problem fail it.
 export async function notifyTelegram(event: TelegramNotificationEvent, text: string): Promise<void> {
   try {
+    const flag = EVENT_FLAG[event];
     const [settings, bot] = await Promise.all([
-      prisma.telegramNotificationSettings.findUnique({ where: { id: "singleton" } }),
+      flag ? prisma.telegramNotificationSettings.findUnique({ where: { id: "singleton" } }) : null,
       prisma.socialAppConfig.findUnique({ where: { platform: "telegram" } }),
     ]);
     if (!bot?.enabled) return;
-    if (!settings?.[EVENT_FLAG[event]]) return;
+    if (flag && !settings?.[flag]) return;
 
     const credentials = (bot?.credentials as Record<string, string> | null) ?? {};
     const destinations = [
