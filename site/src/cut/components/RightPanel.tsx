@@ -46,7 +46,19 @@ export function RightPanel() {
   return (
     <div className="flex min-h-0 border-l border-border bg-card">
       {tab !== null && (
-        <div className="flex w-[264px] min-h-0 shrink-0 flex-col border-r border-border">
+        <div
+          className={cn(
+            "flex min-h-0 shrink-0 flex-col",
+            // Below sm there's no room to squeeze a 264px column out of the
+            // canvas, so Aspect ratio floats instead: a card pinned to the
+            // bottom-right corner of the viewport, on top of the timeline,
+            // rather than pushing Preview sideways. Edit and Overlay still
+            // dock inline on every width — only asked to move this one.
+            tab === "aspect"
+              ? "fixed right-3 bottom-3 z-[60] max-h-[70vh] w-64 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-border bg-card shadow-lg sm:static sm:z-auto sm:max-h-none sm:w-[264px] sm:max-w-none sm:overflow-visible sm:rounded-none sm:border-0 sm:border-r sm:shadow-none"
+              : "w-[264px] border-r border-border"
+          )}
+        >
           {tab === "edit" ? (
             <>
               {/* Inspector's own sub-panel headers (ClipHead, PanelTitle, ...)
