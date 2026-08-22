@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Check, Layers, Ratio, SlidersHorizontal, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Layers, Loader2, Plus, Ratio, SlidersHorizontal, X } from "lucide-react";
 import {
   Drawer,
   DrawerBackdrop,
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MEDIA_CORS } from "@/cut/lib/mediaCors";
+import { importFileToProject } from "@/cut/lib/media";
 import { useEditor } from "@/cut/lib/store";
 import { useLocalPref } from "@/cut/lib/uiState";
 import { formatTime } from "@/cut/lib/time";
@@ -253,27 +254,67 @@ function PanelHead({ title, hint }: { title: string; hint?: string }) {
 }
 
 /** Pick a project video or photo to composite above the main track — the
- * clip lands on layer 1, packed after whatever else already sits there. */
+ * clip lands on layer 1, packed after whatever else already sits there.
+ * "Add overlay" skips the round trip through Media: it imports straight
+ * from disk and places the result on the overlay track in one step. */
 function OverlayPanel() {
   const assets = useEditor((s) => s.assets).filter(
     (a) => a.origin == null && (a.type === "video" || a.type === "image")
   );
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const add = (asset: MediaAsset) => {
     const s = useEditor.getState();
     s.addVideoFromAsset(asset.id, { kind: "track", track: 1 }, s.currentTime);
   };
 
+  const importAndAdd = async (files: FileList) => {
+    const projectId = useEditor.getState().projectId;
+    if (!projectId) return;
+    setError(null);
+    // One at a time: addVideoFromAsset packs each new clip after whatever
+    // the track already holds, so a batch has to land in order rather than
+    // racing on the same "next free slot" read.
+    for (const file of Array.from(files)) {
+      setImporting((n) => n + 1);
+      try {
+        const asset = await importFileToProject(projectId, file);
+        if (!asset) {
+          setError(`${file.name} isn't a video or photo.`);
+          continue;
+        }
+        useEditor.getState().addAsset(asset);
+        if (asset.type === "video" || asset.type === "image") add(asset);
+      } catch {
+        setError(`Couldn't import ${file.name}.`);
+      } finally {
+        setImporting((n) => n - 1);
+      }
+    }
+  };
+
   return (
     <>
       <PanelHead title="Overlay" hint="Adds above the main track, not into it" />
-      <ScrollArea className="min-h-0 flex-1" contentClassName="grid grid-cols-2 gap-1.5 px-3.5 pb-4">
-        {assets.length === 0 ? (
-          <p className="col-span-2 px-1 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
-            No video or photo assets yet — add some from Media first.
-          </p>
-        ) : (
-          assets.map((a) => (
+      <ScrollArea className="min-h-0 flex-1" contentClassName="flex flex-col gap-2 px-3.5 pb-4">
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            aria-label="Add overlay"
+            onClick={() => inputRef.current?.click()}
+            disabled={importing > 0}
+            className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border text-muted-foreground transition-colors hover:border-input hover:text-foreground disabled:opacity-60"
+          >
+            {importing > 0 ? (
+              <Loader2 className="size-5 animate-spin" />
+            ) : (
+              <Plus className="size-5" />
+            )}
+            <span className="text-[11px] font-medium">Add overlay</span>
+          </button>
+          {assets.map((a) => (
             <button
               key={a.id}
               type="button"
@@ -300,9 +341,21 @@ function OverlayPanel() {
                 </span>
               )}
             </button>
-          ))
-        )}
+          ))}
+        </div>
+        {error && <p className="px-1 text-xs text-destructive">{error}</p>}
       </ScrollArea>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/*,image/*"
+        multiple
+        hidden
+        onChange={(e) => {
+          if (e.target.files?.length) void importAndAdd(e.target.files);
+          e.target.value = "";
+        }}
+      />
     </>
   );
 }
