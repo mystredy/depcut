@@ -19,12 +19,12 @@ function AspectIcon({ aspect, className }: { aspect: Aspect; className?: string 
   return <Icon className={className} />;
 }
 
-/** The project's aspect-ratio picker. Self-contained (reads/writes the
- * project's aspect directly). `variant="pill"` (default) is a compact pill
- * that opens a dropdown — the top bar's shape. `variant="list"` renders the
- * same presets and custom editor already expanded in place, for a panel with
- * room to spare. */
-export function AspectRatioControl({ variant = "pill" }: { variant?: "pill" | "list" }) {
+/** All the state and logic behind the aspect-ratio picker, with no rendering
+ * opinion — shared by the pill/list `AspectRatioControl` and by the mobile
+ * bottom-sheet's preset list + nested custom-editor, which are two separate
+ * components (one inside a nested Drawer) that need to agree on one set of
+ * draft W:H fields rather than keeping their own. */
+function useAspectRatioPicker() {
   const aspect = useEditor((s) => s.aspect);
   const isPreset = ASPECT_PRESETS.some((p) => p.value === aspect);
   // Custom is a sticky mode: picked from the menu, entered by typing in the pill,
@@ -155,31 +155,95 @@ export function AspectRatioControl({ variant = "pill" }: { variant?: "pill" | "l
   };
   const customLabel = normalizeAspect(savedCustom) ? `Custom · ${savedCustom}` : "Custom…";
 
+  return {
+    aspect,
+    showCustomEditor,
+    customW,
+    customH,
+    customInvalid,
+    customLabel,
+    selectPreset,
+    selectCustom,
+    beginEditing,
+    endEditing,
+    commitCustom,
+    revertCustom,
+    ratioInput,
+    setCustomW,
+    setCustomH,
+    setPendingRatio,
+  };
+}
+
+type AspectRatioPicker = ReturnType<typeof useAspectRatioPicker>;
+
+/** The bordered W:H editor row, shared by the pill's inline custom mode and
+ * the mobile nested drawer's Custom screen. */
+function CustomRatioFields({ picker }: { picker: AspectRatioPicker }) {
+  const { customW, customH, customInvalid, beginEditing, endEditing, commitCustom, revertCustom, ratioInput, setCustomW, setCustomH, setPendingRatio } =
+    picker;
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium",
+        customInvalid ? "border-destructive text-destructive" : "border-border"
+      )}
+      title={customInvalid ? "Up to an 8:1 shape" : undefined}
+      // The session ends when focus leaves the row entirely. Moving between
+      // the two fields stays inside it, so a half-typed side is never
+      // settled out from under the user.
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) endEditing();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commitCustom();
+        if (e.key === "Escape") revertCustom();
+      }}
+    >
+      <input
+        aria-label="Width"
+        aria-invalid={customInvalid}
+        inputMode="decimal"
+        className="w-10 bg-transparent text-center outline-none"
+        value={customW}
+        onFocus={beginEditing}
+        onChange={(e) => {
+          const v = ratioInput(e.target.value);
+          setCustomW(v);
+          setPendingRatio(`${v}:${customH}`);
+        }}
+      />
+      <span className="text-muted-foreground">:</span>
+      <input
+        aria-label="Height"
+        aria-invalid={customInvalid}
+        inputMode="decimal"
+        className="w-10 bg-transparent text-center outline-none"
+        value={customH}
+        onFocus={beginEditing}
+        onChange={(e) => {
+          const v = ratioInput(e.target.value);
+          setCustomH(v);
+          setPendingRatio(`${customW}:${v}`);
+        }}
+      />
+    </div>
+  );
+}
+
+/** The project's aspect-ratio picker. Self-contained (reads/writes the
+ * project's aspect directly). `variant="pill"` (default) is a compact pill
+ * that opens a dropdown — the top bar's shape. `variant="list"` renders the
+ * same presets and custom editor already expanded in place, for a panel with
+ * room to spare. */
+export function AspectRatioControl({ variant = "pill" }: { variant?: "pill" | "list" }) {
+  const picker = useAspectRatioPicker();
+  const { aspect, showCustomEditor, customLabel, selectPreset, selectCustom } = picker;
+
   if (variant === "list") {
     return (
       <div className="flex w-full flex-col gap-0.5">
-        {ASPECT_PRESETS.map((p) => (
-          <button
-            key={p.value}
-            type="button"
-            onClick={() => selectPreset(p.value)}
-            className={cn(
-              "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted",
-              !showCustomEditor && aspect === p.value && "bg-muted"
-            )}
-          >
-            <AspectIcon aspect={p.value} className="size-4 shrink-0 text-muted-foreground" />
-            <span className="flex-1">
-              {p.name} · {p.value}
-              {p.sublabel && (
-                <span className="block text-[10.5px] text-muted-foreground">{p.sublabel}</span>
-              )}
-            </span>
-            {!showCustomEditor && aspect === p.value && (
-              <Check className="size-3.5 shrink-0 text-muted-foreground" />
-            )}
-          </button>
-        ))}
+        <AspectPresetList picker={picker} />
         <button
           type="button"
           onClick={selectCustom}
@@ -193,47 +257,8 @@ export function AspectRatioControl({ variant = "pill" }: { variant?: "pill" | "l
           {showCustomEditor && <Check className="size-3.5 shrink-0 text-muted-foreground" />}
         </button>
         {showCustomEditor && (
-          <div
-            className={cn(
-              "mt-1 flex items-center justify-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium",
-              customInvalid ? "border-destructive text-destructive" : "border-border"
-            )}
-            title={customInvalid ? "Up to an 8:1 shape" : undefined}
-            onBlur={(e) => {
-              if (!e.currentTarget.contains(e.relatedTarget as Node)) endEditing();
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitCustom();
-              if (e.key === "Escape") revertCustom();
-            }}
-          >
-            <input
-              aria-label="Width"
-              aria-invalid={customInvalid}
-              inputMode="decimal"
-              className="w-10 bg-transparent text-center outline-none"
-              value={customW}
-              onFocus={beginEditing}
-              onChange={(e) => {
-                const v = ratioInput(e.target.value);
-                setCustomW(v);
-                setPendingRatio(`${v}:${customH}`);
-              }}
-            />
-            <span className="text-muted-foreground">:</span>
-            <input
-              aria-label="Height"
-              aria-invalid={customInvalid}
-              inputMode="decimal"
-              className="w-10 bg-transparent text-center outline-none"
-              value={customH}
-              onFocus={beginEditing}
-              onChange={(e) => {
-                const v = ratioInput(e.target.value);
-                setCustomH(v);
-                setPendingRatio(`${customW}:${v}`);
-              }}
-            />
+          <div className="mt-1">
+            <CustomRatioFields picker={picker} />
           </div>
         )}
       </div>
@@ -268,46 +293,43 @@ export function AspectRatioControl({ variant = "pill" }: { variant?: "pill" | "l
     <div
       className={cn(
         "aspect-switch flex items-center gap-1 rounded-full border bg-card px-3 py-1.5 text-xs font-medium shadow-xs",
-        customInvalid ? "border-destructive text-destructive" : "border-border"
+        picker.customInvalid ? "border-destructive text-destructive" : "border-border"
       )}
-      title={customInvalid ? "Up to an 8:1 shape" : undefined}
-      // The session ends when focus leaves the pill entirely. Moving
-      // between the two fields (or to the chevron) stays inside it, so a
-      // half-typed side is never settled out from under the user.
+      title={picker.customInvalid ? "Up to an 8:1 shape" : undefined}
       onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) endEditing();
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) picker.endEditing();
       }}
       onKeyDown={(e) => {
-        if (e.key === "Enter") commitCustom();
-        if (e.key === "Escape") revertCustom();
+        if (e.key === "Enter") picker.commitCustom();
+        if (e.key === "Escape") picker.revertCustom();
       }}
     >
       <Ratio className="size-3.5 text-muted-foreground" />
       <input
         aria-label="Width"
-        aria-invalid={customInvalid}
+        aria-invalid={picker.customInvalid}
         inputMode="decimal"
         className="w-10 bg-transparent text-center outline-none"
-        value={customW}
-        onFocus={beginEditing}
+        value={picker.customW}
+        onFocus={picker.beginEditing}
         onChange={(e) => {
-          const v = ratioInput(e.target.value);
-          setCustomW(v);
-          setPendingRatio(`${v}:${customH}`);
+          const v = picker.ratioInput(e.target.value);
+          picker.setCustomW(v);
+          picker.setPendingRatio(`${v}:${picker.customH}`);
         }}
       />
       <span className="text-muted-foreground">:</span>
       <input
         aria-label="Height"
-        aria-invalid={customInvalid}
+        aria-invalid={picker.customInvalid}
         inputMode="decimal"
         className="w-10 bg-transparent text-center outline-none"
-        value={customH}
-        onFocus={beginEditing}
+        value={picker.customH}
+        onFocus={picker.beginEditing}
         onChange={(e) => {
-          const v = ratioInput(e.target.value);
-          setCustomH(v);
-          setPendingRatio(`${customW}:${v}`);
+          const v = picker.ratioInput(e.target.value);
+          picker.setCustomH(v);
+          picker.setPendingRatio(`${picker.customW}:${v}`);
         }}
       />
       <DropdownMenu>
@@ -334,3 +356,37 @@ export function AspectRatioControl({ variant = "pill" }: { variant?: "pill" | "l
     </DropdownMenu>
   );
 }
+
+/** Just the preset rows (no Custom row, no inline editor) — used by the
+ * mobile bottom sheet, where Custom is a separate nested drawer instead of
+ * an inline expansion. */
+export function AspectPresetList({ picker }: { picker: AspectRatioPicker }) {
+  return (
+    <>
+      {ASPECT_PRESETS.map((p) => (
+        <button
+          key={p.value}
+          type="button"
+          onClick={() => picker.selectPreset(p.value)}
+          className={cn(
+            "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted",
+            !picker.showCustomEditor && picker.aspect === p.value && "bg-muted"
+          )}
+        >
+          <AspectIcon aspect={p.value} className="size-4 shrink-0 text-muted-foreground" />
+          <span className="flex-1">
+            {p.name} · {p.value}
+            {p.sublabel && (
+              <span className="block text-[10.5px] text-muted-foreground">{p.sublabel}</span>
+            )}
+          </span>
+          {!picker.showCustomEditor && picker.aspect === p.value && (
+            <Check className="size-3.5 shrink-0 text-muted-foreground" />
+          )}
+        </button>
+      ))}
+    </>
+  );
+}
+
+export { useAspectRatioPicker, CustomRatioFields as AspectCustomFields, type AspectRatioPicker };

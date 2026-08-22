@@ -1,7 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { Layers, Ratio, SlidersHorizontal, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Layers, Ratio, SlidersHorizontal, X } from "lucide-react";
+import {
+  Drawer,
+  DrawerBackdrop,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerPopup,
+  DrawerPortal,
+  DrawerTitle,
+  DrawerTrigger,
+  DrawerViewport,
+} from "@/components/ui/drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MEDIA_CORS } from "@/cut/lib/mediaCors";
 import { useEditor } from "@/cut/lib/store";
@@ -9,8 +21,32 @@ import { useLocalPref } from "@/cut/lib/uiState";
 import { formatTime } from "@/cut/lib/time";
 import type { MediaAsset } from "@/cut/lib/types";
 import { cn } from "@/lib/utils";
-import { AspectRatioControl } from "./AspectRatioControl";
+import {
+  AspectCustomFields,
+  AspectPresetList,
+  AspectRatioControl,
+  useAspectRatioPicker,
+} from "./AspectRatioControl";
 import { Inspector } from "./Inspector";
+
+/** Below `sm` there's no room to dock a 264px column without swallowing the
+ * canvas, so on a narrow viewport Aspect ratio opens as a bottom sheet
+ * instead. A wrong guess on the first paint only picks which of two open
+ * gestures a tap performs — unlike useIsNarrow (which gates what mounts —
+ * see its own doc comment), that's cheap enough to guess eagerly rather than
+ * wait out the media query. */
+function useNarrowRail(): boolean {
+  const [narrow, setNarrow] = useState(() =>
+    typeof window === "undefined" ? false : !window.matchMedia("(min-width: 640px)").matches
+  );
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 640px)");
+    const sync = () => setNarrow(!query.matches);
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+  return narrow;
+}
 
 type RightTab = "edit" | "overlay" | "aspect";
 
@@ -25,6 +61,7 @@ const TABS: { id: RightTab; label: string; icon: typeof Layers }[] = [
  * adds a project asset onto a layer above the main track; Aspect ratio
  * exposes the same project-aspect control as the top bar. */
 export function RightPanel() {
+  const narrow = useNarrowRail();
   const hasEditContent = useEditor(
     (s) => s.selection != null && s.selection.kind !== "cue" && s.selection.kind !== "transition"
   );
@@ -43,22 +80,15 @@ export function RightPanel() {
     if (selectionKey && hasEditContent) setTab("edit");
   }
 
+  // On a narrow viewport, Aspect ratio's content moves into the bottom sheet
+  // below instead of docking inline — Edit and Overlay still dock at every
+  // width, so only that one tab skips the column here.
+  const aspectDocksInline = !(narrow && tab === "aspect");
+
   return (
     <div className="flex min-h-0 border-l border-border bg-card">
-      {tab !== null && (
-        <div
-          className={cn(
-            "flex min-h-0 shrink-0 flex-col",
-            // Below sm there's no room to squeeze a 264px column out of the
-            // canvas, so Aspect ratio floats instead: a card pinned to the
-            // bottom-right corner of the viewport, on top of the timeline,
-            // rather than pushing Preview sideways. Edit and Overlay still
-            // dock inline on every width — only asked to move this one.
-            tab === "aspect"
-              ? "fixed right-3 bottom-3 z-[60] max-h-[70vh] w-64 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-border bg-card shadow-lg sm:static sm:z-auto sm:max-h-none sm:w-[264px] sm:max-w-none sm:overflow-visible sm:rounded-none sm:border-0 sm:border-r sm:shadow-none"
-              : "w-[264px] border-r border-border"
-          )}
-        >
+      {tab !== null && aspectDocksInline && (
+        <div className="flex w-[264px] min-h-0 shrink-0 flex-col border-r border-border">
           {tab === "edit" ? (
             <>
               {/* Inspector's own sub-panel headers (ClipHead, PanelTitle, ...)
@@ -121,7 +151,75 @@ export function RightPanel() {
           </button>
         ))}
       </ScrollArea>
+      {narrow && (
+        <AspectDrawer open={tab === "aspect"} onOpenChange={(o) => setTab(o ? "aspect" : null)} />
+      )}
     </div>
+  );
+}
+
+/** The mobile stand-in for the Aspect ratio tab: a draggable modal bottom
+ * sheet instead of the docked column. Picking Custom drills into a nested
+ * sheet for the W:H fields (Base UI stacks and swipe-coordinates it with the
+ * parent automatically) rather than expanding in place like the desktop
+ * list does — there's no room to grow the sheet taller mid-swipe. */
+function AspectDrawer({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const picker = useAspectRatioPicker();
+  return (
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerPortal>
+        <DrawerBackdrop />
+        <DrawerViewport>
+          <DrawerPopup>
+            <DrawerContent>
+              <DrawerTitle className="text-center">Aspect ratio</DrawerTitle>
+              <DrawerDescription className="mb-3 text-center">
+                Sets the project&rsquo;s frame shape
+              </DrawerDescription>
+              <div className="flex flex-col gap-0.5 pb-2">
+                <AspectPresetList picker={picker} />
+                <Drawer>
+                  <DrawerTrigger
+                    onClick={() => picker.selectCustom()}
+                    className={cn(
+                      "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted",
+                      picker.showCustomEditor && "bg-muted"
+                    )}
+                  >
+                    <Ratio className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="flex-1">{picker.customLabel}</span>
+                    {picker.showCustomEditor && (
+                      <Check className="size-3.5 shrink-0 text-muted-foreground" />
+                    )}
+                  </DrawerTrigger>
+                  <DrawerPortal>
+                    <DrawerViewport>
+                      <DrawerPopup nested>
+                        <DrawerContent>
+                          <DrawerTitle className="text-center">Custom ratio</DrawerTitle>
+                          <div className="mt-3 mb-4 flex justify-center">
+                            <AspectCustomFields picker={picker} />
+                          </div>
+                          <DrawerClose className="w-full rounded-md bg-muted px-3 py-2 text-center text-sm font-medium transition-colors hover:bg-muted/70">
+                            Done
+                          </DrawerClose>
+                        </DrawerContent>
+                      </DrawerPopup>
+                    </DrawerViewport>
+                  </DrawerPortal>
+                </Drawer>
+              </div>
+            </DrawerContent>
+          </DrawerPopup>
+        </DrawerViewport>
+      </DrawerPortal>
+    </Drawer>
   );
 }
 
