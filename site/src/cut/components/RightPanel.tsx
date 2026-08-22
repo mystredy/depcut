@@ -266,8 +266,7 @@ function OverlayPanel() {
   const [error, setError] = useState<string | null>(null);
 
   const add = (asset: MediaAsset) => {
-    const s = useEditor.getState();
-    s.addVideoFromAsset(asset.id, { kind: "track", track: 1 }, s.currentTime);
+    useEditor.getState().addOverlayFromAsset(asset.id);
   };
 
   const importAndAdd = async (files: FileList) => {

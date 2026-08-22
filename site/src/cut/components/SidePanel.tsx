@@ -1051,12 +1051,7 @@ function AssetCard({ asset, projectId }: { asset: MediaAsset; projectId: string 
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48" onClick={(e) => e.stopPropagation()}>
             {(asset.type === "video" || asset.type === "image") && (
-              <DropdownMenuItem
-                onClick={() => {
-                  const s = useEditor.getState();
-                  s.addVideoFromAsset(asset.id, { kind: "track", track: 1 }, s.currentTime);
-                }}
-              >
+              <DropdownMenuItem onClick={() => useEditor.getState().addOverlayFromAsset(asset.id)}>
                 <Layers /> Add overlay
               </DropdownMenuItem>
             )}

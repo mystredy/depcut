@@ -372,6 +372,11 @@ export interface EditorState {
   /** Add a video asset to the timeline at a placement: an existing track or a
    * freshly inserted one. Used by media / library drops. */
   addVideoFromAsset: (assetId: string, place: VideoTrackPlacement, start: number) => void;
+  /** Add a video/image asset onto the overlay layers at `start` (defaults to
+   * the playhead): the first existing overlay track with room for it right
+   * there, or a fresh one above the rest if none do. Used by the Overlay
+   * tab's picker and the Media card's "Add overlay" action. */
+  addOverlayFromAsset: (assetId: string, start?: number) => void;
   /** Move an existing clip to a placement, preserving its trim/region/speed.
    * Inserting a track renumbers the ones above it; dropping onto track 0 lands
    * free-positioned at the drop time. Owns its own history. */
@@ -2326,6 +2331,28 @@ export const useEditor = create<EditorState>((baseSet, get) => {
         clips: [...shiftTracksUp(s.clips, place), ov],
         ...sole({ kind: "clip", id: ov.id }),
       }));
+    },
+
+    addOverlayFromAsset: (assetId, start) => {
+      const asset = get().assets.find((a) => a.id === assetId);
+      if (!asset || (asset.type !== "video" && asset.type !== "image")) return;
+      push();
+      const out = asset.type === "image" ? IMAGE_CLIP_SECONDS : asset.duration;
+      const len = Math.max(MIN_LEN, out);
+      const at = Math.max(0, start ?? get().currentTime);
+      const layers = overlayLayers(get().clips);
+      const trackNumbers = [...new Set(layers.map((c) => c.track))].sort((a, b) => a - b);
+      // The first existing overlay track with room for the clip right at the
+      // playhead — sliding it into a gap further down that same row would
+      // land it somewhere the user didn't point at, which reads as "nothing
+      // happened" more than it reads as "moved". Only when none of them have
+      // room right there does a fresh row open above the rest.
+      const track =
+        trackNumbers.find(
+          (t) => nextFreeStart(footprints(layers.filter((c) => c.track === t)), at, len) <= at + 1e-3
+        ) ?? Math.max(0, ...trackNumbers) + 1;
+      const clip: VideoClip = { id: uid(), assetId, track, start: at, in: 0, out, muted: false };
+      set((s) => ({ clips: [...s.clips, clip], ...sole({ kind: "clip", id: clip.id }) }));
     },
 
     dropVideoClip: (id, place, start) => {
