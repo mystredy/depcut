@@ -33,7 +33,18 @@ export type Submission = {
   // useCreateDraftSubmission. The submit-project page shows the linked
   // project's title instead of the video/thumbnail/verification drop-zones.
   projectId: string | null;
-  project: { name: string } | null;
+  project:
+    | {
+        name: string;
+        // The linked project's preview state, same fields the Projects page
+        // reads — present once the project lookup resolves (omitted, not
+        // null, on the rare row where it doesn't).
+        hasPreview?: boolean;
+        previewFile?: string;
+        previewIsImage?: boolean;
+        previewStart?: number;
+      }
+    | null;
   subSource: string | null;
   subType: string;
   extension: string;

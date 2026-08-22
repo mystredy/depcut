@@ -21,21 +21,11 @@ const MAX_OPEN_DRAFTS = 3;
 // that project instead of the manual video/thumbnail/verification uploads —
 // see submit-project's [id] page for how a linked draft renders. The project
 // must belong to the caller; a stranger's id 404s rather than leaking whether
-// it exists.
+// it exists. Idempotent per project: a project can only ever have one open
+// (draft) submission at a time, so clicking Submit again on a project that
+// already has one continues that draft instead of creating a duplicate and
+// silently eating a slot toward MAX_OPEN_DRAFTS.
 export const POST = withDonkeyAuth(async (request) => {
-  const openDrafts = await prisma.submission.count({
-    where: { status: "draft", userId: request.donkey.userId },
-  });
-  if (openDrafts >= MAX_OPEN_DRAFTS) {
-    return NextResponse.json(
-      {
-        error: "draft_limit_reached",
-        message: `You have ${MAX_OPEN_DRAFTS} drafts in progress. Submit or delete one before starting another.`,
-      },
-      { status: 400 },
-    );
-  }
-
   let projectId: string | undefined;
   try {
     const body = (await request.json()) as { projectId?: string };
@@ -54,6 +44,24 @@ export const POST = withDonkeyAuth(async (request) => {
     if (!project) {
       return NextResponse.json({ error: "not_found", message: "Project not found." }, { status: 404 });
     }
+    const existing = await prisma.submission.findFirst({
+      where: { projectId, userId: request.donkey.userId, status: "draft" },
+      include: { assets: true, project: { select: { name: true } } },
+    });
+    if (existing) return NextResponse.json({ submission: existing });
+  }
+
+  const openDrafts = await prisma.submission.count({
+    where: { status: "draft", userId: request.donkey.userId },
+  });
+  if (openDrafts >= MAX_OPEN_DRAFTS) {
+    return NextResponse.json(
+      {
+        error: "draft_limit_reached",
+        message: `You have ${MAX_OPEN_DRAFTS} drafts in progress. Submit or delete one before starting another.`,
+      },
+      { status: 400 },
+    );
   }
 
   const submission = await prisma.submission.create({

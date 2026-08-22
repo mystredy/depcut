@@ -45,11 +45,13 @@ import { creditBalanceQueryKey, useCreditBalance } from "@/queries/credits";
 import {
   type AssetType,
   type AutosaveSubmissionInput,
+  type Submission,
   useAutosaveSubmission,
   useSubmission,
   useSubmitSubmission,
   useUploadSubmissionAsset,
 } from "@/queries/submissions";
+import { MEDIA_CORS } from "@/cut/lib/mediaCors";
 import { formatUsd } from "@/lib/credits/format-usd";
 
 const THUMB_WIDTH = 480;
@@ -929,7 +931,7 @@ export default function SubmitProjectEditorPage() {
             <div className="space-y-2">
               <Label>Source project</Label>
               <div className="flex items-center gap-2 rounded-2xl border p-4">
-                <Film className="size-5 shrink-0 text-muted-foreground" />
+                <SourceProjectPreview projectId={submission.projectId} project={submission.project} />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">
                     {submission.project?.name ?? "Untitled project"}
@@ -1785,6 +1787,68 @@ export default function SubmitProjectEditorPage() {
           )}
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/** The same picture the Projects page's grid tile shows for this project —
+ * a rendered export proxy where one exists, otherwise the first clip's own
+ * frame (an image asset shown directly, a video asset's opening frame as a
+ * static poster) — but non-interactive: this is confirmation of which
+ * project is linked, not a way back into it (the project is locked while a
+ * submission is outstanding), so there's no hover-to-play and no click. */
+function SourceProjectPreview({
+  projectId,
+  project,
+}: {
+  projectId: string;
+  project: Submission["project"];
+}) {
+  const [failed, setFailed] = useState(false);
+  const fileUrl = (file: string) =>
+    `/api/cut-cloud/projects/${projectId}/media/${encodeURIComponent(file)}`;
+
+  const frame = (() => {
+    if (failed) return null;
+    if (project?.hasPreview) {
+      return (
+        // eslint-disable-next-line @next/next/no-img-element -- engine media, not a Next asset
+        <img
+          src={`/api/cut-cloud/projects/${projectId}/preview`}
+          alt=""
+          className="absolute inset-0 size-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      );
+    }
+    if (!project?.previewFile) return null;
+    if (project.previewIsImage) {
+      return (
+        // eslint-disable-next-line @next/next/no-img-element -- engine media, not a Next asset
+        <img
+          crossOrigin={MEDIA_CORS}
+          src={fileUrl(project.previewFile)}
+          alt=""
+          className="absolute inset-0 size-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      );
+    }
+    return (
+      <video
+        crossOrigin={MEDIA_CORS}
+        src={`${fileUrl(project.previewFile)}#t=${project.previewStart ?? 0.1}`}
+        muted
+        preload="metadata"
+        className="size-full object-cover"
+        onError={() => setFailed(true)}
+      />
+    );
+  })();
+
+  return (
+    <div className="relative grid aspect-[9/16] w-11 shrink-0 place-items-center overflow-hidden rounded-lg border bg-muted">
+      {frame ?? <Film className="size-4 text-muted-foreground" />}
     </div>
   );
 }

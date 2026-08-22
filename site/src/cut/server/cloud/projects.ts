@@ -59,7 +59,7 @@ function docOf(row: ProjectRow): ProjectDoc {
 
 /** Mirror of the engine's summarize(): track 0 is the cut. sizeBytes comes from
  * the project's complete media objects instead of a directory walk. */
-function summarize(row: ProjectRow, sizeBytes: number): ProjectSummary {
+export function summarize(row: ProjectRow, sizeBytes: number): ProjectSummary {
   const doc = docOf(row);
   const clips = Array.isArray(doc.clips) ? doc.clips : [];
   const assets = Array.isArray(doc.assets) ? doc.assets : [];

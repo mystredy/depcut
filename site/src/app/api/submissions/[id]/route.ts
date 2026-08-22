@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { getProject, summarize } from "@/cut/server/cloud/projects";
 import { del } from "@/cut/server/cloud/r2";
 import { prisma } from "@/lib/prisma";
 
@@ -25,7 +26,25 @@ export const GET = withDonkeyAuth(async (request, context: RouteContext) => {
   if (submission.userId !== request.donkey.userId) {
     return NextResponse.json({ error: "Forbidden", message: "Forbidden" }, { status: 403 });
   }
-  return NextResponse.json({ submission });
+  // The linked project's own preview state — same fields the Projects page
+  // reads to decide between the rendered proxy, the raw first-clip frame,
+  // and no preview at all — so the submit form's source-project card can
+  // show the identical picture instead of a generic icon.
+  let project: {
+    name: string;
+    hasPreview?: boolean;
+    previewFile?: string;
+    previewIsImage?: boolean;
+    previewStart?: number;
+  } | null = submission.project;
+  if (submission.projectId && project) {
+    const row = await getProject(submission.userId, submission.projectId);
+    if (row) {
+      const { hasPreview, previewFile, previewIsImage, previewStart } = summarize(row, 0);
+      project = { ...project, hasPreview, previewFile, previewIsImage, previewStart };
+    }
+  }
+  return NextResponse.json({ submission: { ...submission, project } });
 });
 
 // Autosave — every Submit Project field edit lands here, debounced
