@@ -49,9 +49,9 @@ import {
 import type { MediaAsset } from "@/cut/lib/types";
 import { AiPanel } from "./AiPanel";
 import { ExportDialog } from "./ExportDialog";
-import { Inspector } from "./Inspector";
 import { Lightbox } from "./Lightbox";
 import { Preview } from "./Preview";
+import { RightPanel } from "./RightPanel";
 import { SidePanel } from "./SidePanel";
 import { Timeline } from "./Timeline";
 import { StorageUpgradeDialog } from "./StorageUpgradeDialog";
@@ -100,17 +100,9 @@ export function Editor({
   const exportOpen = useEditor((s) => s.exportOpen);
   const aiOpen = useEditor((s) => s.aiOpen);
   const sharedFeatures = useEditor((s) => s.sharedFeatures);
-  // The inspector only earns its column when the selection has a panel to
-  // show; otherwise (nothing selected, a subtitle cue, a transition bar — the
-  // Transitions tab is its panel) it is an empty white panel, so collapse it
-  // and let the preview take the space.
-  const hasInspector = useEditor(
-    (s) =>
-      !s.readOnly &&
-      s.selection != null &&
-      s.selection.kind !== "cue" &&
-      s.selection.kind !== "transition"
-  );
+  // The right rail (Edit/Overlay/Aspect ratio) only exists for an editable
+  // project — a shared read-only viewer has nothing to change there.
+  const hasRightPanel = useEditor((s) => !s.readOnly);
   const [importing, setImporting] = useState(0);
   // Files being probed and named, plus the ones already placed whose bytes are
   // still going out — both are work the save indicator reports.
@@ -873,7 +865,7 @@ export function Editor({
         )}
         <div
           className={`grid min-h-0 ${
-            hasInspector ? "grid-cols-[auto_minmax(0,1fr)_272px]" : "grid-cols-[auto_minmax(0,1fr)]"
+            hasRightPanel ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[auto_minmax(0,1fr)]"
           }`}
         >
           {anySidePanel && (
@@ -883,7 +875,7 @@ export function Editor({
           <div className="grid min-h-0 min-w-0">
             <Preview />
           </div>
-          {hasInspector && <Inspector />}
+          {hasRightPanel && <RightPanel />}
         </div>
         <Timeline />
       </div>
