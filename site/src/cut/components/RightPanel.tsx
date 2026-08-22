@@ -108,14 +108,22 @@ export function RightPanel() {
   // With Edit open and nothing selected, fall back to whatever clip sits
   // under the playhead on that remembered track/lane instead of leaving the
   // panel on the "select something" placeholder — the playhead crossing
-  // into a new clip there re-runs this and follows it.
+  // into a new clip there re-runs this and follows it. The main track wins
+  // over the remembered one whenever the playhead sits on it: it's the
+  // through-line of the edit, so it's the safer default regardless of
+  // whatever else was last selected (or nothing ever was).
   const currentTime = useEditor((s) => s.currentTime);
   useEffect(() => {
     if (tab !== "edit" || hasEditContent) return;
-    const remembered = lastTrack.current;
-    if (!remembered) return;
     const s = useEditor.getState();
     const t = s.currentTime;
+    const onMain = s.clips.find((c) => c.track === 0 && c.start <= t && t < c.start + clipLen(c));
+    if (onMain) {
+      s.select({ kind: "clip", id: onMain.id });
+      return;
+    }
+    const remembered = lastTrack.current;
+    if (!remembered) return;
     if (remembered.kind === "clip") {
       const hit = s.clips.find(
         (c) => c.track === remembered.track && c.start <= t && t < c.start + clipLen(c)
