@@ -552,7 +552,7 @@ function MediaPanel({
         <div className="flex h-12 shrink-0 items-center pr-12 pl-3.5">
           <SubTabs
             tabs={[
-              { id: "project", label: "Project Files" },
+              { id: "project", label: "Assets" },
               { id: "library", label: "Library" },
             ]}
             value={view}
