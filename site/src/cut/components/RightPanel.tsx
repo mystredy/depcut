@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Crosshair, Layers, Loader2, MoveHorizontal, Plus, Ratio, SlidersHorizontal, X } from "lucide-react";
+import { Check, Crosshair, Layers, Loader2, MoveHorizontal, Ratio, SlidersHorizontal, X } from "lucide-react";
 import {
   Drawer,
   DrawerBackdrop,
@@ -15,13 +15,10 @@ import {
   DrawerViewport,
 } from "@/components/ui/drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MEDIA_CORS } from "@/cut/lib/mediaCors";
 import { importFileToProject } from "@/cut/lib/media";
 import { useEditor } from "@/cut/lib/store";
 import { timelineScrollBy } from "@/cut/lib/timelineScroll";
 import { useLocalPref } from "@/cut/lib/uiState";
-import { formatTime } from "@/cut/lib/time";
-import type { MediaAsset } from "@/cut/lib/types";
 import { cn } from "@/lib/utils";
 import {
   AspectCustomFields,
@@ -50,9 +47,12 @@ function useNarrowRail(): boolean {
   return narrow;
 }
 
-type RightTab = "edit" | "overlay" | "aspect" | "timeline" | "playhead";
+type RightTab = "edit" | "aspect" | "timeline" | "playhead";
+/** Every rail icon, including the one ("overlay") that isn't a panel tab at
+ * all — it fires an action directly instead of toggling one open. */
+type RailId = RightTab | "overlay";
 
-const TABS: { id: RightTab; label: string; icon: typeof Layers }[] = [
+const TABS: { id: RailId; label: string; icon: typeof Layers }[] = [
   { id: "edit", label: "Edit", icon: SlidersHorizontal },
   { id: "overlay", label: "Overlay", icon: Layers },
   { id: "aspect", label: "Aspect ratio", icon: Ratio },
@@ -61,20 +61,23 @@ const TABS: { id: RightTab; label: string; icon: typeof Layers }[] = [
 ];
 
 /** The right rail: mirrors the left SidePanel's icon+label tabs. Edit holds
- * the selection inspector (the whole of the old Inspector column); Overlay
- * adds a project asset onto a layer above the main track; Aspect ratio
- * exposes the same project-aspect control as the top bar. */
+ * the selection inspector (the whole of the old Inspector column); Aspect
+ * ratio exposes the same project-aspect control as the top bar. Overlay
+ * isn't a panel — tapping it goes straight to a file picker and adds the
+ * result to the overlay track, the same as the Media card's own "Add
+ * overlay" action, rather than opening a picker panel first. */
 export function RightPanel() {
   const narrow = useNarrowRail();
   const hasEditContent = useEditor(
     (s) => s.selection != null && s.selection.kind !== "cue" && s.selection.kind !== "transition"
   );
   const [tab, setTab] = useLocalPref<RightTab | null>("cut-right-tab", "edit", (v) =>
-    v === null || TABS.some((t) => t.id === v)
+    v === null || (["edit", "aspect", "timeline", "playhead"] as RightTab[]).includes(v as RightTab)
   );
 
   // A new selection with its own panel jumps here automatically, the way the
-  // old always-on Inspector column used to just appear.
+  // old always-on Inspector column used to just appear — including the
+  // clip Overlay's import just added.
   const selectionKey = useEditor((s) =>
     s.selection ? `${s.selection.kind}:${s.selection.id}` : null
   );
@@ -84,9 +87,37 @@ export function RightPanel() {
     if (selectionKey && hasEditContent) setTab("edit");
   }
 
+  const overlayInputRef = useRef<HTMLInputElement>(null);
+  const [overlayImporting, setOverlayImporting] = useState(0);
+  const [overlayError, setOverlayError] = useState<string | null>(null);
+  const importOverlayFiles = async (files: FileList) => {
+    const projectId = useEditor.getState().projectId;
+    if (!projectId) return;
+    setOverlayError(null);
+    // One at a time: addOverlayFromAsset packs each new clip against
+    // whatever the overlay tracks already hold, so a batch has to land in
+    // order rather than racing on the same "where's the next gap" read.
+    for (const file of Array.from(files)) {
+      setOverlayImporting((n) => n + 1);
+      try {
+        const asset = await importFileToProject(projectId, file);
+        if (!asset || (asset.type !== "video" && asset.type !== "image")) {
+          setOverlayError(`${file.name} isn't a video or photo.`);
+          continue;
+        }
+        useEditor.getState().addAsset(asset);
+        useEditor.getState().addOverlayFromAsset(asset.id);
+      } catch {
+        setOverlayError(`Couldn't import ${file.name}.`);
+      } finally {
+        setOverlayImporting((n) => n - 1);
+      }
+    }
+  };
+
   // On a narrow viewport, Aspect ratio's content moves into the bottom sheet
-  // below instead of docking inline — Edit and Overlay still dock at every
-  // width, so only that one tab skips the column here.
+  // below instead of docking inline — Edit still docks at every width, so
+  // only that one tab skips the column here.
   const aspectDocksInline = !(narrow && tab === "aspect");
 
   return (
@@ -119,9 +150,7 @@ export function RightPanel() {
           ) : (
             <div className="relative flex min-h-0 flex-1 flex-col">
               <ClosePanelButton onClose={() => setTab(null)} />
-              {tab === "overlay" ? (
-                <OverlayPanel />
-              ) : tab === "aspect" ? (
+              {tab === "aspect" ? (
                 <AspectPanel />
               ) : tab === "timeline" ? (
                 <TimelineShuttlePanel />
@@ -136,36 +165,58 @@ export function RightPanel() {
         className="min-h-0 w-12 shrink-0 sm:w-[68px]"
         contentClassName="flex flex-col items-center gap-0.5 py-2 sm:gap-1 sm:py-3"
       >
-        {TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            className="flex w-full min-w-0 shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
-            aria-label={label}
-            aria-pressed={tab === id}
-            onClick={() => setTab(tab === id ? null : id)}
-          >
-            <span
-              className={cn(
-                "grid size-9 place-items-center rounded-lg transition-colors",
-                tab === id ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60"
-              )}
+        {TABS.map(({ id, label, icon: Icon }) => {
+          const isOverlay = id === "overlay";
+          const active = !isOverlay && tab === id;
+          return (
+            <button
+              key={id}
+              className="flex w-full min-w-0 shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
+              aria-label={label}
+              aria-pressed={active}
+              title={isOverlay && overlayError ? overlayError : undefined}
+              onClick={() =>
+                isOverlay ? overlayInputRef.current?.click() : setTab(tab === id ? null : (id as RightTab))
+              }
             >
-              <Icon className="size-4.5" />
-            </span>
-            <span
-              className={cn(
-                "hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block",
-                tab === id && "text-foreground"
-              )}
-            >
-              {label}
-            </span>
-          </button>
-        ))}
+              <span
+                className={cn(
+                  "grid size-9 place-items-center rounded-lg transition-colors",
+                  active ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60"
+                )}
+              >
+                {isOverlay && overlayImporting > 0 ? (
+                  <Loader2 className="size-4.5 animate-spin" />
+                ) : (
+                  <Icon className="size-4.5" />
+                )}
+              </span>
+              <span
+                className={cn(
+                  "hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block",
+                  active && "text-foreground"
+                )}
+              >
+                {label}
+              </span>
+            </button>
+          );
+        })}
       </ScrollArea>
       {narrow && (
         <AspectDrawer open={tab === "aspect"} onOpenChange={(o) => setTab(o ? "aspect" : null)} />
       )}
+      <input
+        ref={overlayInputRef}
+        type="file"
+        accept="video/*,image/*"
+        multiple
+        hidden
+        onChange={(e) => {
+          if (e.target.files?.length) void importOverlayFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
     </div>
   );
 }
@@ -261,112 +312,6 @@ function PanelHead({ title, hint }: { title: string; hint?: string }) {
       <span className="text-sm font-semibold tracking-tight">{title}</span>
       {hint && <span className="truncate text-[11px] text-muted-foreground">{hint}</span>}
     </div>
-  );
-}
-
-/** Pick a project video or photo to composite above the main track — the
- * clip lands on layer 1, packed after whatever else already sits there.
- * "Add overlay" skips the round trip through Media: it imports straight
- * from disk and places the result on the overlay track in one step. */
-function OverlayPanel() {
-  const assets = useEditor((s) => s.assets).filter(
-    (a) => a.origin == null && (a.type === "video" || a.type === "image")
-  );
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [importing, setImporting] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-
-  const add = (asset: MediaAsset) => {
-    useEditor.getState().addOverlayFromAsset(asset.id);
-  };
-
-  const importAndAdd = async (files: FileList) => {
-    const projectId = useEditor.getState().projectId;
-    if (!projectId) return;
-    setError(null);
-    // One at a time: addVideoFromAsset packs each new clip after whatever
-    // the track already holds, so a batch has to land in order rather than
-    // racing on the same "next free slot" read.
-    for (const file of Array.from(files)) {
-      setImporting((n) => n + 1);
-      try {
-        const asset = await importFileToProject(projectId, file);
-        if (!asset) {
-          setError(`${file.name} isn't a video or photo.`);
-          continue;
-        }
-        useEditor.getState().addAsset(asset);
-        if (asset.type === "video" || asset.type === "image") add(asset);
-      } catch {
-        setError(`Couldn't import ${file.name}.`);
-      } finally {
-        setImporting((n) => n - 1);
-      }
-    }
-  };
-
-  return (
-    <>
-      <PanelHead title="Overlay" hint="Adds above the main track, not into it" />
-      <ScrollArea className="min-h-0 flex-1" contentClassName="flex flex-col gap-2 px-3.5 pb-4">
-        <div className="grid grid-cols-2 gap-1.5">
-          <button
-            type="button"
-            aria-label="Add overlay"
-            onClick={() => inputRef.current?.click()}
-            disabled={importing > 0}
-            className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border text-muted-foreground transition-colors hover:border-input hover:text-foreground disabled:opacity-60"
-          >
-            {importing > 0 ? (
-              <Loader2 className="size-5 animate-spin" />
-            ) : (
-              <Plus className="size-5" />
-            )}
-            <span className="text-[11px] font-medium">Add overlay</span>
-          </button>
-          {assets.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              title={a.name}
-              onClick={() => add(a)}
-              className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted text-left transition-colors hover:border-input"
-            >
-              {a.type === "video" ? (
-                <video
-                  crossOrigin={MEDIA_CORS}
-                  src={`${a.url}#t=0.1`}
-                  preload="metadata"
-                  muted
-                  playsInline
-                  className="size-full object-cover"
-                />
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element -- engine/static file, not Next-optimizable
-                <img crossOrigin={MEDIA_CORS} src={a.url} alt={a.name} loading="lazy" className="size-full object-cover" />
-              )}
-              {a.type === "video" && (
-                <span className="absolute right-1 bottom-1 rounded-[5px] bg-black/65 px-1 py-px font-mono text-[9.5px] text-white tabular-nums">
-                  {formatTime(a.duration)}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-        {error && <p className="px-1 text-xs text-destructive">{error}</p>}
-      </ScrollArea>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="video/*,image/*"
-        multiple
-        hidden
-        onChange={(e) => {
-          if (e.target.files?.length) void importAndAdd(e.target.files);
-          e.target.value = "";
-        }}
-      />
-    </>
   );
 }
 
