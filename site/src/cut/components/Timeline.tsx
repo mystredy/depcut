@@ -44,7 +44,7 @@ import { ensurePeaks, importImage, importStockMusic, importStockVideo, peekEdgeF
 import { track0Clips, laneGapAt, sameLane, type LaneRef, clipLen, clipSpeed, footprints, getClipSpans, nextFreeStart, overlayLaneOrder, overlayLayers, projectDuration, resolveTransitions, rippleInsert, TIMELINE_H_MAX, useEditor } from "@/cut/lib/store";
 import type { VideoTrackPlacement } from "@/cut/lib/store";
 import { laneHidden, subtitleLaneCount } from "@/cut/lib/subtitles";
-import { formatTime, formatTimecode } from "@/cut/lib/time";
+import { formatTimecode } from "@/cut/lib/time";
 import { EFFECT_LABELS } from "@donkeycut/effects-kit";
 import { emptySubtitles, IMAGE_CLIP_SECONDS, SHAPE_LABELS, TRANSITION_DEFAULT_SECONDS, TRANSITION_MAX, TRANSITION_STYLE_LABELS } from "@/cut/lib/types";
 import type { AudioClip, ClipSpan, ColorGrade, MediaAsset, Overlay, StickerOverlay, SubtitleCue, TimelineTransition, TransitionStyle, VideoClip } from "@/cut/lib/types";
@@ -2755,6 +2755,20 @@ function mmss(t: number): string {
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+/** The coarse ruler's per-tick label: "M:SS", with a ".5" only for the
+ * half-second ticks that appear at the finer end of this tier — every other
+ * tick lands on a whole second, where formatTime's tenth digit would always
+ * read ".0" and add nothing. */
+function rulerTickLabel(t: number): string {
+  const clamped = Math.max(0, t);
+  const m = Math.floor(clamped / 60);
+  const s = clamped - m * 60;
+  const whole = Math.floor(s);
+  const tenth = Math.round((s - whole) * 10);
+  const base = `${m}:${String(whole).padStart(2, "0")}`;
+  return tenth === 0 ? base : `${base}.${tenth}`;
+}
+
 function Ruler({
   pps,
   width,
@@ -2812,7 +2826,7 @@ function Ruler({
           style={{ left: t * pps }}
         >
           <span className="font-mono text-[9.5px] leading-6 text-muted-foreground select-none">
-            {formatTime(t)}
+            {rulerTickLabel(t)}
           </span>
         </div>
       ))}
