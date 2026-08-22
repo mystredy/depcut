@@ -46,29 +46,35 @@ export function RightPanel() {
   return (
     <div className="flex min-h-0 border-l border-border bg-card">
       {tab !== null && (
-        <div className="relative flex w-[264px] min-h-0 shrink-0 flex-col border-r border-border">
-          {/* Edit reuses Inspector's own sub-panel headers as-is (ClipHead,
-              PanelTitle, ...) — none of them reserve room for an overlay
-              button, so the close affordance stays off this tab. Clicking
-              the active Edit tile still collapses it. */}
-          {tab !== "edit" && <ClosePanelButton onClose={() => setTab(null)} />}
+        <div className="flex w-[264px] min-h-0 shrink-0 flex-col border-r border-border">
           {tab === "edit" ? (
-            // A grid cell (rather than another flex child) stretches Inspector
-            // to the full column height regardless of its own root's classes —
-            // the same stretch it got for free as Editor's direct grid item.
-            <div className="grid min-h-0 flex-1">
-              {hasEditContent ? (
-                <Inspector />
-              ) : (
-                <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
-                  Select a clip, overlay, or audio clip to edit it here.
-                </p>
-              )}
-            </div>
-          ) : tab === "overlay" ? (
-            <OverlayPanel />
+            <>
+              {/* Inspector's own sub-panel headers (ClipHead, PanelTitle, ...)
+                  run flush to the edge with no room reserved for an overlay
+                  button, so the close button gets its own row here instead of
+                  floating on top of them like it does on the other two tabs. */}
+              <div className="flex h-9 shrink-0 items-center pl-2.5">
+                <ClosePanelButton onClose={() => setTab(null)} inline />
+              </div>
+              {/* A grid cell (rather than another flex child) stretches
+                  Inspector to the full remaining height regardless of its own
+                  root's classes — the same stretch it got for free as
+                  Editor's direct grid item. */}
+              <div className="grid min-h-0 flex-1">
+                {hasEditContent ? (
+                  <Inspector />
+                ) : (
+                  <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
+                    Select a clip, overlay, or audio clip to edit it here.
+                  </p>
+                )}
+              </div>
+            </>
           ) : (
-            <AspectPanel />
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              <ClosePanelButton onClose={() => setTab(null)} />
+              {tab === "overlay" ? <OverlayPanel /> : <AspectPanel />}
+            </div>
           )}
         </div>
       )}
@@ -107,13 +113,18 @@ export function RightPanel() {
   );
 }
 
-function ClosePanelButton({ onClose }: { onClose: () => void }) {
+/** `inline` sits in normal flow (the Edit tab's own close row); otherwise it
+ * floats over the top-left corner of a PanelHead. */
+function ClosePanelButton({ onClose, inline }: { onClose: () => void; inline?: boolean }) {
   return (
     <button
       type="button"
       aria-label="Close panel"
       title="Close panel"
-      className="absolute top-2.5 left-2.5 z-10 grid size-7 place-items-center rounded-md bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      className={cn(
+        "z-10 grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+        inline ? "bg-transparent" : "absolute top-2.5 left-2.5 bg-card"
+      )}
       onClick={onClose}
     >
       <X className="size-4" />
