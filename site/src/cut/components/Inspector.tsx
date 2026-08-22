@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlignCenter, AlignLeft, AlignRight, Bold, ChevronLeft, ChevronRight, Diamond, Info, Italic, RotateCcw, SlidersHorizontal, Smile, Trash2, Wand2 } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, AudioLines, Bold, ChevronLeft, ChevronRight, Diamond, Info, Italic, Loader2, RotateCcw, SlidersHorizontal, Smile, Trash2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmojiPicker } from "@/cut/components/EmojiPicker";
 import {
@@ -38,6 +38,7 @@ import {
   type OverlayLoopStyle,
 } from "@donkeycut/effects-kit";
 import { clipWindow, useEditor, type EditorState } from "@/cut/lib/store";
+import { extractClipAudio } from "@/cut/lib/extractAudio";
 import { AnimationTiles } from "@/cut/components/AnimationTiles";
 import { GenerateSubtitlesAudio } from "@/cut/components/VoicePicker";
 import {
@@ -407,6 +408,23 @@ function ClipPanel({ clip }: { clip: VideoClip }) {
   // The panel can push into the color-grade subview, which remembers which
   // clip opened it, so selecting another clip lands back on the main view.
   const [colorFor, setColorFor] = useState<string | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const extractAudio = async () => {
+    const projectId = useEditor.getState().projectId;
+    if (!projectId || !asset || extracting) return;
+    setExtracting(true);
+    setExtractError(null);
+    try {
+      const extracted = await extractClipAudio(projectId, clip, asset);
+      useEditor.getState().addAsset(extracted);
+      useEditor.getState().addAudioFromAsset(extracted.id, clip.start);
+    } catch (e) {
+      setExtractError(e instanceof Error ? e.message : "Could not extract the audio.");
+    } finally {
+      setExtracting(false);
+    }
+  };
   const view = colorFor === clip.id ? "color" : "main";
   const volume = volumeDraft ?? clip.volume ?? 1;
   const speed = speedDraft ?? clip.speed ?? 1;
@@ -560,6 +578,26 @@ function ClipPanel({ clip }: { clip: VideoClip }) {
             onCheckedChange={(v) => updateClip(clip.id, { muted: v })}
           />
         </Row>
+        {asset?.type === "video" && (
+          <Row label="Extract audio">
+            <button
+              type="button"
+              className="clip-extract-audio flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+              disabled={extracting}
+              onClick={() => void extractAudio()}
+            >
+              {extracting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <AudioLines className="size-3.5" />
+              )}
+              {extracting ? "Extracting…" : "Extract"}
+            </button>
+          </Row>
+        )}
+        {extractError && (
+          <p className="clip-extract-error text-[11px] leading-relaxed text-red-600">{extractError}</p>
+        )}
 
         {/* Picture */}
         <div className="my-1.5 h-px bg-border" />
