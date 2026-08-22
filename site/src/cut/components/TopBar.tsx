@@ -35,7 +35,6 @@ import { copyProjectAcross } from "@/cut/lib/projectCopy";
 import { useEditor } from "@/cut/lib/store";
 import { useCreateDraftSubmission } from "@/queries/submissions";
 import { cn } from "@/lib/utils";
-import { AspectRatioControl } from "./AspectRatioControl";
 import { RecordDialog, type RecordMode } from "./RecordDialog";
 import { ShareDialog } from "./ShareDialog";
 import { StoragePill } from "./StoragePill";
@@ -425,7 +424,6 @@ export function TopBar({
       </div>
       <div className="min-w-2 flex-1" />
       <div ref={middleRef} className="flex shrink-0 items-center gap-1 sm:gap-2">
-        <AspectRatioControl />
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label="Record"
