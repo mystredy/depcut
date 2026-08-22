@@ -362,6 +362,9 @@ export interface EditorState {
   /** Keep the clips array sorted by start (consumers read `clips[0]` as the
    * timeline's first clip). Called after a lane-coordinator move commits. */
   sortClips: () => void;
+  /** Repack track 0 to abut, current start order, closing any gap a
+   * same-track drag just left. */
+  closeTrack0Gaps: () => void;
   /** Reorder video track 0 by index (the AI reorder op): the clip lifts out
    * (leaving a gap) and a slot opens at the target index — clips from the
    * landing point shift right; nothing else moves. */
@@ -2218,6 +2221,25 @@ export const useEditor = create<EditorState>((baseSet, get) => {
     sortClips: () =>
       set((s) => ({ clips: [...s.clips].sort((a, b) => a.start - b.start) })),
 
+    // The main track never has gaps: after any committed move that could
+    // leave one (a same-track drag lands wherever the pointer released, past
+    // what parting neighbors alone closes), repack track 0 to abut in its
+    // current start order. Upper layers, audio, and titles are untouched —
+    // gaps there are a real editorial choice, just not on the reel.
+    closeTrack0Gaps: () =>
+      set((s) => {
+        const row = track0Clips(s.clips).sort((a, b) => a.start - b.start);
+        let t = 0;
+        const starts = new Map<string, number>();
+        for (const c of row) {
+          starts.set(c.id, t);
+          t += clipLen(c);
+        }
+        return {
+          clips: s.clips.map((c) => (starts.has(c.id) ? { ...c, start: starts.get(c.id)! } : c)),
+        };
+      }),
+
     updateAudioTransient: (id, patch) =>
       set((s) => ({
         audioClips: s.audioClips.map((c) =>
@@ -2260,12 +2282,14 @@ export const useEditor = create<EditorState>((baseSet, get) => {
       const out = asset.type === "image" ? IMAGE_CLIP_SECONDS : asset.duration;
       push();
       if (place.kind === "track" && place.track === 0) {
-        const taken = footprints(track0Clips(get().clips));
+        // The main track never has gaps: wherever the pointer released, the
+        // clip lands right after the last one on the reel, not at the drop
+        // point — see the same rule in dropVideoClip below.
         const v: VideoClip = {
           id: uid(),
           assetId,
           track: 0,
-          start: nextFreeStart(taken, Math.max(0, start), Math.max(MIN_LEN, out)),
+          start: totalDuration(get().clips),
           in: 0,
           out,
           muted: false,
@@ -2313,9 +2337,10 @@ export const useEditor = create<EditorState>((baseSet, get) => {
 
       if (place.kind === "track" && place.track === 0) {
         if (onTrack0) return; // a same-track move commits through the lane coordinator
-        // Drop a layer clip down onto track 0: slide to its next free slot.
-        const taken = footprints(track0Clips(get().clips));
-        const at = nextFreeStart(taken, Math.max(0, start), clipLen(src));
+        // Drop a layer clip down onto track 0: the main track never has gaps,
+        // so it lands right after the last clip already there, not at the
+        // drop point.
+        const at = totalDuration(get().clips);
         set((st) => ({
           clips: st.clips.map((c) =>
             c.id === id ? { ...c, track: 0, start: at } : c

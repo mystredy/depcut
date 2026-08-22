@@ -128,6 +128,10 @@ const clipAdapter: LaneAdapter<VideoClip> = {
   },
   assetOf: (s, c) => s.assets.find((x) => x.id === c.assetId),
   onMoved: () => useEditor.getState().sortClips(),
+  // The main track never has gaps: parting alone only prevents an overlap,
+  // not a same-track drag settling short of its neighbor, so every committed
+  // move repacks the row to abut.
+  afterMove: () => useEditor.getState().closeTrack0Gaps(),
 };
 
 const audioAdapter: LaneAdapter<AudioClip> = {

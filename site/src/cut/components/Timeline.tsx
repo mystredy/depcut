@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowLeftToLine, ArrowRight, ArrowRightToLine, ArrowUp, ArrowUpToLine, AudioLines, Blend, Check, Circle, Clapperboard, Copy, Diamond, Droplets, EllipsisVertical, Expand, Eye, EyeOff, FolderOpen, FolderPlus, FoldHorizontal, Fullscreen, Loader2, Minus, Moon, MoreHorizontal, MoveRight, Pause, Play, Scissors, SkipBack, Sparkles, Square, Sticker, Sun, Target, Trash2, Type, UnfoldHorizontal, Volume2, VolumeX, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowLeftToLine, ArrowRight, ArrowRightToLine, ArrowUp, ArrowUpToLine, AudioLines, Blend, Check, Circle, Clapperboard, Copy, Diamond, Droplets, EllipsisVertical, Expand, Eye, EyeOff, FolderOpen, FolderPlus, FoldHorizontal, Fullscreen, Loader2, Minus, Moon, MoreHorizontal, MoveRight, Pause, Play, Scissors, SkipBack, SkipForward, Sparkles, Square, Sticker, Sun, Target, Trash2, Type, UnfoldHorizontal, Volume2, VolumeX, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -2538,21 +2538,19 @@ function TimelineTools({
         <Scissors />
         {labels && <span>Split</span>}
       </Button>
-      <Button variant="ghost" size={size} title="Text (T)" onClick={addText}>
+      <Button variant="ghost" size="icon-sm" title="Text (T)" onClick={addText}>
         <Type />
-        {labels && <span>Text</span>}
       </Button>
       <Button
         variant="ghost"
-        size={size}
-        title="Delete (⌫)"
+        size="icon-sm"
+        title={selectionCount > 1 ? `Delete ${selectionCount}` : "Delete (⌫)"}
         disabled={selectionCount === 0}
         onClick={deleteSelection}
       >
         <Trash2 />
-        {labels && <span>{selectionCount > 1 ? `Delete ${selectionCount}` : "Delete"}</span>}
       </Button>
-      <SaveSelectionButton labels={labels} />
+      <SaveSelectionButton />
     </>
   );
 }
@@ -2661,14 +2659,14 @@ function useSaveSelection() {
   return { available: multiSelection.length > 0, state, save };
 }
 
-function SaveSelectionButton({ labels = true }: { labels?: boolean }) {
+function SaveSelectionButton() {
   const { available, state, save } = useSaveSelection();
   if (!available) return null;
   return (
     <Button
       variant="ghost"
-      size={labels ? "sm" : "icon-sm"}
-      title="Save the selection as a reusable template (kept by reference)"
+      size="icon-sm"
+      title={state === "done" ? "Saved" : "Save the selection as a reusable template (kept by reference)"}
       disabled={state === "saving"}
       onClick={save}
     >
@@ -2679,7 +2677,6 @@ function SaveSelectionButton({ labels = true }: { labels?: boolean }) {
       ) : (
         <FolderPlus />
       )}
-      {labels && <span>{state === "done" ? "Saved" : "Save template"}</span>}
     </Button>
   );
 }
@@ -2722,6 +2719,15 @@ function Transport({ total }: { total: number }) {
           <Play className="ml-0.5 size-4 fill-current stroke-none" />
         )}
       </button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Skip to end"
+        disabled={!hasClips}
+        onClick={() => useEditor.getState().seek(total)}
+      >
+        <SkipForward className="fill-current" />
+      </Button>
       <div className="flex min-w-30 items-baseline gap-1.5 font-mono text-xs tabular-nums">
         <span className="tc-now">{formatTimecode(currentTime)}</span>
         <span className="text-muted-foreground">/</span>
@@ -2732,6 +2738,23 @@ function Transport({ total }: { total: number }) {
 }
 
 
+// The export pipeline always renders at 30fps (every quality preset in
+// exportClient.ts fixes fps: 30 for a real export; the lower rates there are
+// only for lightweight internal previews) — there's no per-project frame
+// rate to read, but 30 is what the timeline's seconds actually become, so
+// the ruler's frame subdivisions below are real, not a guess.
+const RULER_FPS = 30;
+
+/** Zero-padded "MM:SS" — the ruler's per-second label once ticks get fine
+ * enough that a tenth-of-a-second decimal (formatTime's usual form) would
+ * just repeat what the sub-ticks already show. */
+function mmss(t: number): string {
+  const whole = Math.max(0, Math.round(t));
+  const m = Math.floor(whole / 60);
+  const s = whole % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 function Ruler({
   pps,
   width,
@@ -2741,6 +2764,41 @@ function Ruler({
   width: number;
   onScrub: (e: React.PointerEvent) => void;
 }) {
+  // Below this, a second's ten sub-ticks and its half-second frame label
+  // would crowd past legibility — the coarser single-tier ruler (below)
+  // covers that range instead.
+  if (pps >= 80) {
+    const subPps = pps / 10; // ten ticks/second — each one RULER_FPS/10 frames wide
+    const count = Math.ceil((width / pps) * 10);
+    return (
+      <div className="relative cursor-ew-resize" style={{ height: RULER_H }} onPointerDown={onScrub}>
+        {Array.from({ length: count }, (_, i) => {
+          const seconds = i / 10;
+          const onSecond = i % 10 === 0;
+          const onHalf = i % 10 === 5;
+          return (
+            <div key={i} className="absolute top-0 bottom-0" style={{ left: i * subPps }}>
+              <div
+                className="absolute border-l border-foreground/15"
+                style={onSecond || onHalf ? { top: 4, height: 12 } : { top: 9, height: 6 }}
+              />
+              {onSecond && (
+                <span className="absolute top-1 left-1.5 font-mono text-[9.5px] leading-none text-muted-foreground select-none">
+                  {mmss(seconds)}
+                </span>
+              )}
+              {onHalf && (
+                <span className="absolute top-1 left-1.5 font-mono text-[9.5px] leading-none text-muted-foreground/70 select-none">
+                  {RULER_FPS / 2}f
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   const steps = [0.5, 1, 2, 5, 10, 15, 30, 60];
   const step = steps.find((s) => s * pps >= 64) ?? 120;
   const count = Math.ceil(width / (step * pps));
