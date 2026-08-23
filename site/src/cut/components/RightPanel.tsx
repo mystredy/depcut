@@ -1,84 +1,42 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Crosshair, Layers, Loader2, MoveHorizontal, Ratio, SlidersHorizontal, X } from "lucide-react";
-import {
-  Drawer,
-  DrawerBackdrop,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerPopup,
-  DrawerPortal,
-  DrawerTitle,
-  DrawerTrigger,
-  DrawerViewport,
-} from "@/components/ui/drawer";
+import { Layers, Loader2, SlidersHorizontal, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { importFileToProject } from "@/cut/lib/media";
 import { clipLen, useEditor } from "@/cut/lib/store";
-import { timelineScrollBy } from "@/cut/lib/timelineScroll";
 import { useLocalPref } from "@/cut/lib/uiState";
 import { cn } from "@/lib/utils";
-import {
-  AspectCustomFields,
-  AspectPresetList,
-  AspectRatioControl,
-  useAspectRatioPicker,
-} from "./AspectRatioControl";
 import { Inspector } from "./Inspector";
-import { ShuttleBar } from "./ShuttleBar";
 
-/** Below `sm` there's no room to dock a 264px column without swallowing the
- * canvas, so on a narrow viewport Aspect ratio opens as a bottom sheet
- * instead. A wrong guess on the first paint only picks which of two open
- * gestures a tap performs — unlike useIsNarrow (which gates what mounts —
- * see its own doc comment), that's cheap enough to guess eagerly rather than
- * wait out the media query. */
-function useNarrowRail(): boolean {
-  const [narrow, setNarrow] = useState(() =>
-    typeof window === "undefined" ? false : !window.matchMedia("(min-width: 640px)").matches
-  );
-  useEffect(() => {
-    const query = window.matchMedia("(min-width: 640px)");
-    const sync = () => setNarrow(!query.matches);
-    query.addEventListener("change", sync);
-    return () => query.removeEventListener("change", sync);
-  }, []);
-  return narrow;
-}
-
-type RightTab = "edit" | "aspect" | "timeline" | "playhead";
-/** Every rail icon, including the one ("overlay") that isn't a panel tab at
- * all — it fires an action directly instead of toggling one open. */
+type RightTab = "edit";
+/** Every rail icon, including "overlay" which isn't a panel tab at all — it
+ * fires an action directly instead of toggling one open. */
 type RailId = RightTab | "overlay";
 
 const TABS: { id: RailId; label: string; icon: typeof Layers }[] = [
   { id: "edit", label: "Edit", icon: SlidersHorizontal },
   { id: "overlay", label: "Overlay", icon: Layers },
-  { id: "aspect", label: "Aspect ratio", icon: Ratio },
-  { id: "timeline", label: "Timeline", icon: MoveHorizontal },
-  { id: "playhead", label: "Playhead", icon: Crosshair },
 ];
 
-/** The right rail: mirrors the left SidePanel's icon+label tabs. Edit holds
- * the selection inspector (the whole of the old Inspector column); Aspect
- * ratio exposes the same project-aspect control as the top bar. Overlay
- * isn't a panel — tapping it goes straight to a file picker and adds the
- * result to the overlay track, the same as the Media card's own "Add
- * overlay" action, rather than opening a picker panel first. */
+/** The right rail: Edit holds the selection inspector — the whole of the old
+ * Inspector column. Overlay isn't a panel; tapping it goes straight to a
+ * file picker and adds the result to the overlay track, the same as the
+ * Media card's own "Add overlay" action, rather than opening a picker panel
+ * first. Aspect ratio, Timeline, and Playhead moved to the left SidePanel. */
 export function RightPanel() {
-  const narrow = useNarrowRail();
   const hasEditContent = useEditor(
     (s) => s.selection != null && s.selection.kind !== "cue" && s.selection.kind !== "transition"
   );
-  const [tab, setTab] = useLocalPref<RightTab | null>("cut-right-tab", "edit", (v) =>
-    v === null || (["edit", "aspect", "timeline", "playhead"] as RightTab[]).includes(v as RightTab)
+  const [tab, setTab] = useLocalPref<RightTab | null>(
+    "cut-right-tab",
+    "edit",
+    (v) => v === null || v === "edit"
   );
 
   // A new selection with its own panel jumps here automatically, the way the
-  // old always-on Inspector column used to just appear — including the
-  // clip Overlay's import just added.
+  // old always-on Inspector column used to just appear — including the clip
+  // Overlay's import just added.
   const selectionKey = useEditor((s) =>
     s.selection ? `${s.selection.kind}:${s.selection.id}` : null
   );
@@ -166,50 +124,30 @@ export function RightPanel() {
     }
   };
 
-  // On a narrow viewport, Aspect ratio's content moves into the bottom sheet
-  // below instead of docking inline — Edit still docks at every width, so
-  // only that one tab skips the column here.
-  const aspectDocksInline = !(narrow && tab === "aspect");
-
   return (
     <div className="flex min-h-0 border-l border-border bg-card">
-      {tab !== null && aspectDocksInline && (
+      {tab === "edit" && (
         <div className="flex w-[264px] min-h-0 shrink-0 flex-col border-r border-border">
-          {tab === "edit" ? (
-            <>
-              {/* Inspector's own sub-panel headers (ClipHead, PanelTitle, ...)
-                  run flush to the edge with no room reserved for an overlay
-                  button, so the close button gets its own row here instead of
-                  floating on top of them like it does on the other two tabs. */}
-              <div className="flex h-9 shrink-0 items-center pl-2.5">
-                <ClosePanelButton onClose={() => setTab(null)} inline />
-              </div>
-              {/* A grid cell (rather than another flex child) stretches
-                  Inspector to the full remaining height regardless of its own
-                  root's classes — the same stretch it got for free as
-                  Editor's direct grid item. */}
-              <div className="grid min-h-0 flex-1">
-                {hasEditContent ? (
-                  <Inspector />
-                ) : (
-                  <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
-                    Select a clip, overlay, or audio clip to edit it here.
-                  </p>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="relative flex min-h-0 flex-1 flex-col">
-              <ClosePanelButton onClose={() => setTab(null)} />
-              {tab === "aspect" ? (
-                <AspectPanel />
-              ) : tab === "timeline" ? (
-                <TimelineShuttlePanel />
-              ) : (
-                <PlayheadShuttlePanel />
-              )}
-            </div>
-          )}
+          {/* Inspector's own sub-panel headers (ClipHead, PanelTitle, ...)
+              run flush to the edge with no room reserved for an overlay
+              button, so the close button gets its own row here instead of
+              floating on top of them. */}
+          <div className="flex h-9 shrink-0 items-center pl-2.5">
+            <ClosePanelButton onClose={() => setTab(null)} />
+          </div>
+          {/* A grid cell (rather than another flex child) stretches
+              Inspector to the full remaining height regardless of its own
+              root's classes — the same stretch it got for free as Editor's
+              direct grid item. */}
+          <div className="grid min-h-0 flex-1">
+            {hasEditContent ? (
+              <Inspector />
+            ) : (
+              <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
+                Select a clip, overlay, or audio clip to edit it here.
+              </p>
+            )}
+          </div>
         </div>
       )}
       <ScrollArea
@@ -254,9 +192,6 @@ export function RightPanel() {
           );
         })}
       </ScrollArea>
-      {narrow && (
-        <AspectDrawer open={tab === "aspect"} onOpenChange={(o) => setTab(o ? "aspect" : null)} />
-      )}
       <input
         ref={overlayInputRef}
         type="file"
@@ -272,144 +207,16 @@ export function RightPanel() {
   );
 }
 
-/** The mobile stand-in for the Aspect ratio tab: a draggable modal bottom
- * sheet instead of the docked column. Picking Custom drills into a nested
- * sheet for the W:H fields (Base UI stacks and swipe-coordinates it with the
- * parent automatically) rather than expanding in place like the desktop
- * list does — there's no room to grow the sheet taller mid-swipe. */
-function AspectDrawer({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const picker = useAspectRatioPicker();
-  return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerPortal>
-        <DrawerBackdrop />
-        <DrawerViewport>
-          <DrawerPopup>
-            <DrawerContent>
-              <DrawerTitle className="text-center">Aspect ratio</DrawerTitle>
-              <DrawerDescription className="mb-3 text-center">
-                Sets the project&rsquo;s frame shape
-              </DrawerDescription>
-              <div className="flex flex-col gap-0.5 pb-2">
-                <AspectPresetList picker={picker} />
-                <Drawer>
-                  <DrawerTrigger
-                    onClick={() => picker.selectCustom()}
-                    className={cn(
-                      "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted",
-                      picker.showCustomEditor && "bg-muted"
-                    )}
-                  >
-                    <Ratio className="size-4 shrink-0 text-muted-foreground" />
-                    <span className="flex-1">{picker.customLabel}</span>
-                    {picker.showCustomEditor && (
-                      <Check className="size-3.5 shrink-0 text-muted-foreground" />
-                    )}
-                  </DrawerTrigger>
-                  <DrawerPortal>
-                    <DrawerViewport>
-                      <DrawerPopup nested>
-                        <DrawerContent>
-                          <DrawerTitle className="text-center">Custom ratio</DrawerTitle>
-                          <div className="mt-3 mb-4 flex justify-center">
-                            <AspectCustomFields picker={picker} />
-                          </div>
-                          <DrawerClose className="w-full rounded-md bg-muted px-3 py-2 text-center text-sm font-medium transition-colors hover:bg-muted/70">
-                            Done
-                          </DrawerClose>
-                        </DrawerContent>
-                      </DrawerPopup>
-                    </DrawerViewport>
-                  </DrawerPortal>
-                </Drawer>
-              </div>
-            </DrawerContent>
-          </DrawerPopup>
-        </DrawerViewport>
-      </DrawerPortal>
-    </Drawer>
-  );
-}
-
-/** `inline` sits in normal flow (the Edit tab's own close row); otherwise it
- * floats over the top-left corner of a PanelHead. */
-function ClosePanelButton({ onClose, inline }: { onClose: () => void; inline?: boolean }) {
+function ClosePanelButton({ onClose }: { onClose: () => void }) {
   return (
     <button
       type="button"
       aria-label="Close panel"
       title="Close panel"
-      className={cn(
-        "z-10 grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-        inline ? "bg-transparent" : "absolute top-2.5 left-2.5 bg-card"
-      )}
+      className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
       onClick={onClose}
     >
       <X className="size-4" />
     </button>
-  );
-}
-
-/** Left-padded to clear ClosePanelButton, which floats over this row. */
-function PanelHead({ title, hint }: { title: string; hint?: string }) {
-  return (
-    <div className="flex h-12 shrink-0 flex-col justify-center gap-0.5 pr-2.5 pl-11">
-      <span className="text-sm font-semibold tracking-tight">{title}</span>
-      {hint && <span className="truncate text-[11px] text-muted-foreground">{hint}</span>}
-    </div>
-  );
-}
-
-function AspectPanel() {
-  return (
-    <>
-      <PanelHead title="Aspect ratio" hint="Sets the project's frame shape" />
-      <ScrollArea className="min-h-0 flex-1" contentClassName="px-2.5 pb-4">
-        <AspectRatioControl variant="list" />
-      </ScrollArea>
-    </>
-  );
-}
-
-/** Shuttles the timeline's own horizontal scroll — panning the view without
- * touching the playhead or the project. */
-function TimelineShuttlePanel() {
-  const MAX_PX_PER_SEC = 900;
-  return (
-    <>
-      <PanelHead title="Timeline" hint="Press and drag to pan the timeline" />
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 pb-8">
-        <ShuttleBar onTick={(rate, dt) => timelineScrollBy(rate * MAX_PX_PER_SEC * dt)} />
-      </div>
-    </>
-  );
-}
-
-/** Shuttles the playhead itself, like a jog wheel — pauses playback first,
- * same as grabbing the ruler does. */
-function PlayheadShuttlePanel() {
-  const MAX_SECONDS_PER_SEC = 12;
-  const startShuttle = (e: React.PointerEvent) => {
-    const s = useEditor.getState();
-    if (s.playing) s.setPlaying(false);
-  };
-  return (
-    <>
-      <PanelHead title="Playhead" hint="Press and drag to shuttle the playhead" />
-      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 pb-8" onPointerDownCapture={startShuttle}>
-        <ShuttleBar
-          onTick={(rate, dt) => {
-            const s = useEditor.getState();
-            s.seek(s.currentTime + rate * MAX_SECONDS_PER_SEC * dt);
-          }}
-        />
-      </div>
-    </>
   );
 }

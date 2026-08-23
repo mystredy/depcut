@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Captions, Check, Clapperboard, ClipboardList, Copy, Download, Ellipsis, Film, FolderOpen, FolderPlus, Image as ImageIcon, Layers, Loader2, Music, Plus, Shapes, Sparkles, Trash2, Upload, X, Blend } from "lucide-react";
+import { Captions, Check, Clapperboard, ClipboardList, Copy, Crosshair, Download, Ellipsis, Film, FolderOpen, FolderPlus, Image as ImageIcon, Layers, Loader2, MoveHorizontal, Music, Plus, Ratio, Shapes, Sparkles, Trash2, Upload, X, Blend } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { LiveElapsed } from "@/cut/components/Elapsed";
@@ -102,6 +102,26 @@ import { SubTabs } from "./SubTabs";
 const LIBRARY_MOVE_MIME = "application/x-cut-library-move";
 import { PlatformPreviewDialog, type ExportItem } from "./PlatformPreview";
 import { SubtitlesPanel } from "./SubtitlesPanel";
+import {
+  AspectCustomFields,
+  AspectPresetList,
+  AspectRatioControl,
+  useAspectRatioPicker,
+} from "./AspectRatioControl";
+import {
+  Drawer,
+  DrawerBackdrop,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerPopup,
+  DrawerPortal,
+  DrawerTitle,
+  DrawerTrigger,
+  DrawerViewport,
+} from "@/components/ui/drawer";
+import { ShuttleBar } from "./ShuttleBar";
+import { timelineScrollBy } from "@/cut/lib/timelineScroll";
 
 type Tab = SidePanelTab;
 
@@ -116,6 +136,37 @@ const TABS: { id: Tab; label: string; icon: typeof Film }[] = [
   { id: "subtitles", label: "Subtitles", icon: Captions },
   { id: "publish", label: "Details", icon: ClipboardList },
 ];
+
+/** Aspect ratio, Timeline, and Playhead — editor tools rather than project
+ * surfaces, so they're a separate tab set from `Tab`/`TABS` above: their own
+ * open/closed state, no drop targets, no busy/unseen badges, and (unlike the
+ * rest of the rail) not addressable by the assistant's set_side_panel tool. */
+type ExtraTab = "aspect" | "timeline" | "playhead";
+
+const EXTRA_TABS: { id: ExtraTab; label: string; icon: typeof Film }[] = [
+  { id: "aspect", label: "Aspect ratio", icon: Ratio },
+  { id: "timeline", label: "Timeline", icon: MoveHorizontal },
+  { id: "playhead", label: "Playhead", icon: Crosshair },
+];
+
+/** Below `sm` there's no room to dock a 264px column without swallowing the
+ * canvas, so on a narrow viewport Aspect ratio opens as a bottom sheet
+ * instead. A wrong guess on the first paint only picks which of two open
+ * gestures a tap performs — unlike useIsNarrow (which gates what mounts —
+ * see its own doc comment), that's cheap enough to guess eagerly rather than
+ * wait out the media query. */
+function useNarrowRail(): boolean {
+  const [narrow, setNarrow] = useState(() =>
+    typeof window === "undefined" ? false : !window.matchMedia("(min-width: 640px)").matches
+  );
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 640px)");
+    const sync = () => setNarrow(!query.matches);
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+  return narrow;
+}
 
 export function SidePanel({
   projectId,
@@ -149,6 +200,21 @@ export function SidePanel({
   );
   // The remembered tab may be hidden in this share; fall back to collapsed.
   const tab = tabPref !== null && !visibleTabs.some((t) => t.id === tabPref) ? null : tabPref;
+  const narrow = useNarrowRail();
+  // Aspect ratio/Timeline/Playhead's own open state, independent of `tab` —
+  // opening one closes the other and vice versa (see the click handlers
+  // below), so only one column ever shows at a time. Hidden in a shared view
+  // along with the rest of the editing surface.
+  const [extraTab, setExtraTab] = useLocalPref<ExtraTab | null>(
+    "cut-side-extra-tab",
+    null,
+    (v) => v === null || EXTRA_TABS.some((t) => t.id === v)
+  );
+  const visibleExtra = sharedFeatures ? [] : EXTRA_TABS;
+  // On a narrow viewport, Aspect ratio's content moves into the bottom sheet
+  // below instead of docking inline — Timeline and Playhead still dock at
+  // every width, so only that one tab skips the column here.
+  const extraDocksInline = !(narrow && extraTab === "aspect");
   // The Audio tab's Voice/Music sub-tab lives here so the Music sub-tab can lay
   // out as two columns — the generator plus the sample library — like Image/Video.
   const [audioSub, setAudioSub] = useLocalPref<"voice" | "music">(
@@ -234,7 +300,7 @@ export function SidePanel({
       <ScrollArea
         className={cn(
           "min-h-0 w-12 shrink-0 sm:w-[68px]",
-          tab !== null && "border-r border-border"
+          (tab !== null || extraTab !== null) && "border-r border-border"
         )}
         contentClassName="flex flex-col items-center gap-0.5 py-2 sm:gap-1 sm:py-3"
       >
@@ -277,7 +343,10 @@ export function SidePanel({
               className={tileClass}
               aria-label={label}
               aria-pressed={tab === id}
-              onClick={() => setTab(tab === id ? null : id)}
+              onClick={() => {
+                setExtraTab(null);
+                setTab(tab === id ? null : id);
+              }}
               onDragOver={(e) => {
                 if (!acceptsDrop(id, e)) return;
                 e.preventDefault();
@@ -322,9 +391,41 @@ export function SidePanel({
             </Fragment>
           );
         })}
+        {visibleExtra.length > 0 && (
+          <div aria-hidden className="my-1 h-px w-8 shrink-0 bg-border" />
+        )}
+        {visibleExtra.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            className="flex w-full min-w-0 shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
+            aria-label={label}
+            aria-pressed={extraTab === id}
+            onClick={() => {
+              setTab(null);
+              setExtraTab(extraTab === id ? null : id);
+            }}
+          >
+            <span
+              className={cn(
+                "grid size-9 place-items-center rounded-lg transition-colors",
+                extraTab === id ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60"
+              )}
+            >
+              <Icon className="size-4.5" />
+            </span>
+            <span
+              className={cn(
+                "hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block",
+                extraTab === id && "text-foreground"
+              )}
+            >
+              {label}
+            </span>
+          </button>
+        ))}
       </ScrollArea>
 
-      {tab === null ? null : (
+      {(tab !== null || (extraTab !== null && extraDocksInline)) && (
         <div className="flex min-h-0">
           {tab === "image" || tab === "video" ? (
         // The generate tabs are two columns: the generate input on the left,
@@ -383,7 +484,12 @@ export function SidePanel({
         </>
       ) : (
         <div className="relative flex w-[264px] min-h-0 shrink-0 flex-col">
-          <ClosePanelButton onClose={() => setTab(null)} />
+          <ClosePanelButton
+            onClose={() => {
+              setTab(null);
+              setExtraTab(null);
+            }}
+          />
           {tab === "media" && (
             <MediaPanel projectId={projectId} onImport={onImport} importing={importing} />
           )}
@@ -392,9 +498,18 @@ export function SidePanel({
           {tab === "transitions" && <TransitionsPanel />}
           {tab === "subtitles" && <SubtitlesPanel />}
           {tab === "publish" && <PublishPanel />}
+          {extraTab === "aspect" && <AspectPanel />}
+          {extraTab === "timeline" && <TimelineShuttlePanel />}
+          {extraTab === "playhead" && <PlayheadShuttlePanel />}
         </div>
       )}
         </div>
+      )}
+      {narrow && (
+        <AspectDrawer
+          open={extraTab === "aspect"}
+          onOpenChange={(o) => setExtraTab(o ? "aspect" : null)}
+        />
       )}
     </div>
   );
@@ -466,11 +581,128 @@ function TileStatus({ count, busy }: { count: number; busy: boolean }) {
   return null;
 }
 
-function PanelHead({ title }: { title: string }) {
+function PanelHead({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="flex h-12 shrink-0 items-center pr-2.5 pl-4">
+    <div className="flex h-12 shrink-0 flex-col justify-center gap-0.5 pr-2.5 pl-4">
       <span className="text-sm font-semibold tracking-tight">{title}</span>
+      {hint && <span className="truncate text-[11px] text-muted-foreground">{hint}</span>}
     </div>
+  );
+}
+
+function AspectPanel() {
+  return (
+    <>
+      <PanelHead title="Aspect ratio" hint="Sets the project's frame shape" />
+      <ScrollArea className="min-h-0 flex-1" contentClassName="px-2.5 pb-4">
+        <AspectRatioControl variant="list" />
+      </ScrollArea>
+    </>
+  );
+}
+
+/** Shuttles the timeline's own horizontal scroll — panning the view without
+ * touching the playhead or the project. */
+function TimelineShuttlePanel() {
+  const MAX_PX_PER_SEC = 900;
+  return (
+    <>
+      <PanelHead title="Timeline" hint="Press and drag to pan the timeline" />
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 pb-8">
+        <ShuttleBar onTick={(rate, dt) => timelineScrollBy(rate * MAX_PX_PER_SEC * dt)} />
+      </div>
+    </>
+  );
+}
+
+/** Shuttles the playhead itself, like a jog wheel — pauses playback first,
+ * same as grabbing the ruler does. */
+function PlayheadShuttlePanel() {
+  const MAX_SECONDS_PER_SEC = 12;
+  const startShuttle = () => {
+    const s = useEditor.getState();
+    if (s.playing) s.setPlaying(false);
+  };
+  return (
+    <>
+      <PanelHead title="Playhead" hint="Press and drag to shuttle the playhead" />
+      <div
+        className="flex flex-1 flex-col items-center justify-center gap-4 px-4 pb-8"
+        onPointerDownCapture={startShuttle}
+      >
+        <ShuttleBar
+          onTick={(rate, dt) => {
+            const s = useEditor.getState();
+            s.seek(s.currentTime + rate * MAX_SECONDS_PER_SEC * dt);
+          }}
+        />
+      </div>
+    </>
+  );
+}
+
+/** The mobile stand-in for the Aspect ratio tab: a draggable modal bottom
+ * sheet instead of the docked column. Picking Custom drills into a nested
+ * sheet for the W:H fields (Base UI stacks and swipe-coordinates it with the
+ * parent automatically) rather than expanding in place like the desktop
+ * list does — there's no room to grow the sheet taller mid-swipe. */
+function AspectDrawer({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const picker = useAspectRatioPicker();
+  return (
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerPortal>
+        <DrawerBackdrop />
+        <DrawerViewport>
+          <DrawerPopup>
+            <DrawerContent>
+              <DrawerTitle className="text-center">Aspect ratio</DrawerTitle>
+              <DrawerDescription className="mb-3 text-center">
+                Sets the project&rsquo;s frame shape
+              </DrawerDescription>
+              <div className="flex flex-col gap-0.5 pb-2">
+                <AspectPresetList picker={picker} />
+                <Drawer>
+                  <DrawerTrigger
+                    onClick={() => picker.selectCustom()}
+                    className={cn(
+                      "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted",
+                      picker.showCustomEditor && "bg-muted"
+                    )}
+                  >
+                    <Ratio className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="flex-1">{picker.customLabel}</span>
+                    {picker.showCustomEditor && (
+                      <Check className="size-3.5 shrink-0 text-muted-foreground" />
+                    )}
+                  </DrawerTrigger>
+                  <DrawerPortal>
+                    <DrawerViewport>
+                      <DrawerPopup nested>
+                        <DrawerContent>
+                          <DrawerTitle className="text-center">Custom ratio</DrawerTitle>
+                          <div className="mt-3 mb-4 flex justify-center">
+                            <AspectCustomFields picker={picker} />
+                          </div>
+                          <DrawerClose className="w-full rounded-md bg-muted px-3 py-2 text-center text-sm font-medium transition-colors hover:bg-muted/70">
+                            Done
+                          </DrawerClose>
+                        </DrawerContent>
+                      </DrawerPopup>
+                    </DrawerViewport>
+                  </DrawerPortal>
+                </Drawer>
+              </div>
+            </DrawerContent>
+          </DrawerPopup>
+        </DrawerViewport>
+      </DrawerPortal>
+    </Drawer>
   );
 }
 
