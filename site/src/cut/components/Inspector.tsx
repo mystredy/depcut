@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlignCenter, AlignLeft, AlignRight, AudioLines, Bold, ChevronLeft, ChevronRight, Diamond, Info, Italic, Loader2, RotateCcw, SlidersHorizontal, Smile, Trash2, Wand2 } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, AudioLines, Bold, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Diamond, Info, Italic, Loader2, RotateCcw, SlidersHorizontal, Smile, Trash2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmojiPicker } from "@/cut/components/EmojiPicker";
 import {
@@ -40,6 +40,7 @@ import {
 import { clipWindow, useEditor, type EditorState } from "@/cut/lib/store";
 import { extractClipAudio } from "@/cut/lib/extractAudio";
 import { AnimationTiles } from "@/cut/components/AnimationTiles";
+import { ShuttleBar } from "@/cut/components/ShuttleBar";
 import { GenerateSubtitlesAudio } from "@/cut/components/VoicePicker";
 import {
   parseNumberInput,
@@ -337,6 +338,11 @@ const Value = ({ children, className }: { children: React.ReactNode; className?:
 /** Matches the store's MIN_LEN: the shortest a trim can leave a clip. */
 const MIN_TRIM = 0.1;
 
+/** Full shuttle deflection nudges an overlay clip's start by this many
+ * seconds per second — gentler than the Playhead shuttle's 12, since this is
+ * fine repositioning of one clip rather than scrubbing the whole project. */
+const MOVE_SECONDS_PER_SEC = 6;
+
 /** Sits at the right end of a row, visible once its value has moved off the
  * default. Always occupies its slot so the row doesn't shift when it appears. */
 function ResetButton({ title, show, onClick }: { title: string; show: boolean; onClick: () => void }) {
@@ -425,6 +431,19 @@ function ClipPanel({ clip }: { clip: VideoClip }) {
       setExtracting(false);
     }
   };
+  // Overlay tracks only — track 0 is the gapless main sequence, reordered by
+  // dragging in the timeline rather than hopped between rows. dropVideoClip
+  // keeps the clip's own trim/speed and slides it to the next free spot on
+  // the destination track if something's already there at this start time.
+  const moveTrack = (delta: number) => {
+    const s = useEditor.getState();
+    const live = s.clips.find((c) => c.id === clip.id);
+    if (!live || live.track === 0) return;
+    const track = live.track + delta;
+    if (track < 1) return;
+    s.pushHistory();
+    s.dropVideoClip(clip.id, { kind: "track", track }, live.start);
+  };
   const view = colorFor === clip.id ? "color" : "main";
   const volume = volumeDraft ?? clip.volume ?? 1;
   const speed = speedDraft ?? clip.speed ?? 1;
@@ -485,6 +504,42 @@ function ClipPanel({ clip }: { clip: VideoClip }) {
             }}
           />
         </Row>
+        {clip.track !== 0 && (
+          <>
+            <div className="flex flex-col items-center gap-2 py-1">
+              <span className="self-start text-[13px] text-muted-foreground">Move in time</span>
+              <ShuttleBar
+                onStart={() => useEditor.getState().pushHistory()}
+                onTick={(rate, dt) => {
+                  const s = useEditor.getState();
+                  const live = s.clips.find((c) => c.id === clip.id);
+                  if (!live) return;
+                  const next = Math.max(0, live.start + rate * MOVE_SECONDS_PER_SEC * dt);
+                  s.updateClipTransient(clip.id, { start: next });
+                }}
+              />
+            </div>
+            <Row label="Move track">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                title="Move to the track below"
+                disabled={clip.track <= 1}
+                onClick={() => moveTrack(-1)}
+              >
+                <ChevronDown className="size-3.5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                title="Move to the track above"
+                onClick={() => moveTrack(1)}
+              >
+                <ChevronUp className="size-3.5" />
+              </Button>
+            </Row>
+          </>
+        )}
         <Row label="Speed">
           <Slider
             className="clip-speed data-horizontal:w-24"
