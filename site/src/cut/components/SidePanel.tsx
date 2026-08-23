@@ -68,7 +68,7 @@ import {
 import { activeResidency, availableResidencies, type Residency } from "@/cut/lib/residency";
 import { isStylePresetTemplate } from "@/cut/lib/stylePresets";
 import { retryUpload } from "@/cut/lib/importQueue";
-import { isMediaFile, revealMedia } from "@/cut/lib/media";
+import { importFileToProject, isMediaFile, revealMedia } from "@/cut/lib/media";
 import { mediaUrl, TRANSITION_MAX } from "@/cut/lib/types";
 import { Slider } from "@/components/ui/slider";
 import { genPulseOverlay, isGenTab, useGenNotify, useGenPulse, useWatchGenTab } from "@/cut/lib/genNotify";
@@ -215,6 +215,36 @@ export function SidePanel({
   // below instead of docking inline — Timeline and Playhead still dock at
   // every width, so only that one tab skips the column here.
   const extraDocksInline = !(narrow && extraTab === "aspect");
+  // Overlay isn't a panel here either (same as the right rail's copy): tapping
+  // it goes straight to a file picker and adds the result to the overlay
+  // track, no docked column involved.
+  const overlayInputRef = useRef<HTMLInputElement>(null);
+  const [overlayImporting, setOverlayImporting] = useState(0);
+  const [overlayError, setOverlayError] = useState<string | null>(null);
+  const importOverlayFiles = async (files: FileList) => {
+    const pid = useEditor.getState().projectId;
+    if (!pid) return;
+    setOverlayError(null);
+    // One at a time: addOverlayFromAsset packs each new clip against
+    // whatever the overlay tracks already hold, so a batch has to land in
+    // order rather than racing on the same "where's the next gap" read.
+    for (const file of Array.from(files)) {
+      setOverlayImporting((n) => n + 1);
+      try {
+        const asset = await importFileToProject(pid, file);
+        if (!asset || (asset.type !== "video" && asset.type !== "image")) {
+          setOverlayError(`${file.name} isn't a video or photo.`);
+          continue;
+        }
+        useEditor.getState().addAsset(asset);
+        useEditor.getState().addOverlayFromAsset(asset.id);
+      } catch {
+        setOverlayError(`Couldn't import ${file.name}.`);
+      } finally {
+        setOverlayImporting((n) => n - 1);
+      }
+    }
+  };
   // The Audio tab's Voice/Music sub-tab lives here so the Music sub-tab can lay
   // out as two columns — the generator plus the sample library — like Image/Video.
   const [audioSub, setAudioSub] = useLocalPref<"voice" | "music">(
@@ -391,6 +421,28 @@ export function SidePanel({
             </Fragment>
           );
         })}
+        {!sharedFeatures && (
+          <>
+            <div aria-hidden className="my-1 h-px w-8 shrink-0 bg-border" />
+            <button
+              className="flex w-full min-w-0 shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
+              aria-label="Overlay"
+              title={overlayError ?? undefined}
+              onClick={() => overlayInputRef.current?.click()}
+            >
+              <span className="grid size-9 place-items-center rounded-lg transition-colors hover:bg-muted/60">
+                {overlayImporting > 0 ? (
+                  <Loader2 className="size-4.5 animate-spin" />
+                ) : (
+                  <Layers className="size-4.5" />
+                )}
+              </span>
+              <span className="hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block">
+                Overlay
+              </span>
+            </button>
+          </>
+        )}
         {visibleExtra.length > 0 && (
           <div aria-hidden className="my-1 h-px w-8 shrink-0 bg-border" />
         )}
@@ -511,6 +563,17 @@ export function SidePanel({
           onOpenChange={(o) => setExtraTab(o ? "aspect" : null)}
         />
       )}
+      <input
+        ref={overlayInputRef}
+        type="file"
+        accept="video/*,image/*"
+        multiple
+        hidden
+        onChange={(e) => {
+          if (e.target.files?.length) void importOverlayFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
     </div>
   );
 }
