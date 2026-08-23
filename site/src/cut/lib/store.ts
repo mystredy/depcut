@@ -3649,7 +3649,11 @@ export const useEditor = create<EditorState>((baseSet, get) => {
         },
       })),
     setPxPerSec: (v) => {
-      const pxPerSec = Math.max(12, Math.min(800, v));
+      // A sanity floor only — Timeline's own zoomFloor is the real minimum
+      // and already clamps `v` before this runs. A hardcoded 12 here used to
+      // override it, silently refusing to zoom a long project out far enough
+      // to actually fit the window.
+      const pxPerSec = Math.max(0.01, Math.min(800, v));
       set({ pxPerSec });
       const id = get().projectId;
       if (id) saveUiState(id, { pxPerSec: Math.round(pxPerSec * 100) / 100 });
