@@ -466,63 +466,12 @@ function ClipPanel({ clip }: { clip: VideoClip }) {
   const view = colorFor === clip.id ? "color" : "main";
   const volume = volumeDraft ?? clip.volume ?? 1;
   const speed = speedDraft ?? clip.speed ?? 1;
-  const speedLen = (clip.out - clip.in) / (speed > 0 ? speed : 1);
-  // Typing can trim out to the source's end but no further; an image has no
-  // intrinsic duration, so its clip can be any length.
-  const maxOut = asset && asset.type !== "image" ? asset.duration : Infinity;
   if (view === "color") {
     return <ColorPanel clip={clip} onBack={() => setColorFor(null)} />;
   }
   return (
     <>
       <div className="flex flex-col gap-1 px-3.5 pb-4">
-        <ClipHead name={asset?.name} time={formatTime(speedLen)} />
-        <Row label="Trim">
-          <ScrubValue
-            label="Trim start"
-            value={clip.in}
-            min={0}
-            max={clip.out - MIN_TRIM}
-            step={0.1}
-            keyStep={1}
-            format={formatTime}
-            parse={parseTimeInput}
-            onCommit={(v) => useEditor.getState().setClipTrim(clip.id, v, clip.out)}
-          />
-          <Value className="text-muted-foreground">–</Value>
-          <ScrubValue
-            label="Trim end"
-            value={clip.out}
-            min={clip.in + MIN_TRIM}
-            max={maxOut}
-            step={0.1}
-            keyStep={1}
-            format={formatTime}
-            parse={parseTimeInput}
-            onCommit={(v) => useEditor.getState().setClipTrim(clip.id, clip.in, v)}
-          />
-          <ResetButton
-            title="Reset trim"
-            show={Number.isFinite(maxOut) && (clip.in > 1e-3 || clip.out < maxOut - 1e-3)}
-            onClick={() => useEditor.getState().setClipTrim(clip.id, 0, maxOut)}
-          />
-        </Row>
-        <Row label="Starts at">
-          <ScrubValue
-            label="Starts at"
-            value={clip.start}
-            min={0}
-            max={Infinity}
-            step={0.1}
-            keyStep={1}
-            format={formatTime}
-            parse={parseTimeInput}
-            onCommit={(v) => {
-              updateClip(clip.id, { start: Math.max(0, v) });
-              useEditor.getState().sortClips();
-            }}
-          />
-        </Row>
         <div className="flex flex-col items-center gap-2 py-1">
           <span className="self-start text-[13px] text-muted-foreground">Move in time</span>
           <ShuttleBar
