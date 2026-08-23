@@ -3143,7 +3143,7 @@ function ClipMenu({
         render={
           <button
             aria-label="Clip options"
-            className="tl-clip-menu absolute top-1 right-2 z-4 grid size-[18px] place-items-center rounded-[5px] bg-black/55 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/75"
+            className="tl-clip-menu absolute top-1 right-2 z-4 grid size-[18px] place-items-center rounded-[5px] bg-black/55 text-white transition-colors hover:bg-black/75"
             onPointerDown={(e) => e.stopPropagation()}
           />
         }
@@ -3459,9 +3459,8 @@ function HideChip({
       title={hidden ? "Enable clip" : "Disable clip"}
       aria-label={hidden ? "Enable clip" : "Disable clip"}
       className={cn(
-        "tl-hide-chip absolute z-4 grid place-items-center rounded-[5px] bg-black/55 text-white transition-opacity hover:bg-black/75",
+        "tl-hide-chip absolute z-4 grid place-items-center rounded-[5px] bg-black/55 text-white transition-colors hover:bg-black/75",
         small ? "size-[13px]" : "size-[18px]",
-        hidden ? "opacity-100" : "opacity-0 group-hover:opacity-100",
         className
       )}
       onPointerDown={(e) => e.stopPropagation()}
