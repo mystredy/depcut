@@ -115,13 +115,12 @@ const ZOOM_MAX = 800;
 /** px/sec at which `dur` seconds fill a `width`-px viewport, with room spared
  * for the side padding. */
 const fitZoom = (width: number, dur: number) => Math.max((width - 60) / dur, 0.01);
-/** The slider's left end: zoomed all the way out, the project still fills at
- * least 70% of the viewport, so the timeline never shrinks into a corner. A
- * very short project caps at half of ZOOM_MAX to keep the slider some travel. */
+/** The slider's left end: exactly the zoom "Fit" would pick, so dragging all
+ * the way out lands on the whole project filling the viewport rather than
+ * stopping short of it. A very short project caps at half of ZOOM_MAX to
+ * keep the slider some travel. */
 const zoomFloor = (width: number, dur: number) =>
-  dur > 0
-    ? Math.min(Math.max((width * 0.7) / dur, 0.01), ZOOM_MAX / 2)
-    : ZOOM_MIN;
+  dur > 0 ? Math.min(fitZoom(width, dur), ZOOM_MAX / 2) : ZOOM_MIN;
 /**
  * Zoom reads as a ratio — doubling px/sec feels like one step whether you start
  * at 20 or at 400 — so the slider travels in log space. A linear track would
