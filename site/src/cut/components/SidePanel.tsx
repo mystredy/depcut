@@ -797,7 +797,7 @@ function ProjectFilesPanel({
                       </span>
                     </span>
                   </button>
-                  <div className="flex shrink-0 items-center gap-0.5 pr-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                  <div className="flex shrink-0 items-center gap-0.5 pr-0.5">
                     {caps.revealInFinder ? (
                       <Button
                         variant="ghost"
