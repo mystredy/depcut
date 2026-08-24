@@ -407,9 +407,12 @@ function LayoutButtons({
  * rate applies directly to `in`/`out`, not the timeline-rate `start`). The
  * front edge keeps the tail anchored — trimming it slides `start` to match —
  * except on track 0, which has no independent position: closeTrack0Gaps
- * repacks the whole gapless run against whatever length results. */
+ * repacks the whole gapless run against whatever length results. A still
+ * image has no source to run out of, so it stretches from either edge with
+ * no limit; a video is bounded by its own file. */
 export function ClipTrimSection({ clip }: { clip: VideoClip }) {
   const asset = useEditor((s) => s.assets.find((a) => a.id === clip.assetId));
+  const isImage = asset?.type === "image";
   return (
     <div className="flex flex-col gap-1 px-3.5 pb-4">
       <div className="flex flex-col items-center gap-2 py-1">
@@ -421,15 +424,28 @@ export function ClipTrimSection({ clip }: { clip: VideoClip }) {
             const live = s.clips.find((c) => c.id === clip.id);
             if (!live) return;
             const delta = rate * TRIM_SECONDS_PER_SEC * dt;
-            const newIn = Math.max(0, Math.min(live.out - MIN_TRIM, live.in + delta));
+            const inFloor = isImage ? -Infinity : 0;
             if (live.track === 0) {
+              // No timeline-position constraint to reconcile — closeTrack0Gaps
+              // repacks against whatever length results.
+              const newIn = Math.max(inFloor, Math.min(live.out - MIN_TRIM, live.in + delta));
               s.updateClipTransient(clip.id, { in: newIn });
               s.closeTrack0Gaps();
-            } else {
-              const speed = live.speed && live.speed > 0 ? live.speed : 1;
-              const newStart = Math.max(0, live.start + (newIn - live.in) / speed);
-              s.updateClipTransient(clip.id, { in: newIn, start: newStart });
+              return;
             }
+            const speed = live.speed && live.speed > 0 ? live.speed : 1;
+            // The tail stays anchored by moving `start` the same amount as
+            // `in`, so both must be clamped by the SAME delta — whichever
+            // bound is tighter, the source floor (skipped for a still image)
+            // or the timeline floor (start can't go below project 0).
+            const maxDelta = live.out - MIN_TRIM - live.in;
+            let d = Math.min(delta, maxDelta);
+            const minDelta = Math.max(inFloor - live.in, -live.start * speed);
+            d = Math.max(minDelta, d);
+            s.updateClipTransient(clip.id, {
+              in: live.in + d,
+              start: Math.max(0, live.start + d / speed),
+            });
           }}
         />
       </div>
@@ -442,7 +458,7 @@ export function ClipTrimSection({ clip }: { clip: VideoClip }) {
             const live = s.clips.find((c) => c.id === clip.id);
             if (!live) return;
             const delta = rate * TRIM_SECONDS_PER_SEC * dt;
-            const maxOut = asset?.duration ?? live.out;
+            const maxOut = isImage ? Infinity : (asset?.duration ?? live.out);
             const newOut = Math.max(live.in + MIN_TRIM, Math.min(maxOut, live.out + delta));
             s.updateClipTransient(clip.id, { out: newOut });
             if (live.track === 0) s.closeTrack0Gaps();
