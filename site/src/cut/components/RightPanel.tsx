@@ -28,8 +28,8 @@ import {
   AudioDuckSection,
   AudioFadeInSection,
   AudioFadeOutSection,
-  AudioHiddenSection,
   AudioMoveSection,
+  AudioMuteSection,
   AudioSpeedSection,
   AudioTrimSection,
   AudioVolumeSection,
@@ -63,7 +63,7 @@ type AudioTab =
   | "audio-fade-in"
   | "audio-fade-out"
   | "audio-duck"
-  | "audio-hidden";
+  | "audio-mute";
 type RightTab = "edit" | ClipTab | AudioTab;
 
 /** One clip property per tab, so only one is ever open in the panel at a
@@ -91,7 +91,7 @@ const AUDIO_TABS: { id: AudioTab; label: string; icon: typeof SlidersHorizontal 
   { id: "audio-fade-in", label: "Fade in", icon: Sunrise },
   { id: "audio-fade-out", label: "Fade out", icon: Sunset },
   { id: "audio-duck", label: "Duck", icon: Volume1 },
-  { id: "audio-hidden", label: "Hidden", icon: EyeOff },
+  { id: "audio-mute", label: "Mute", icon: VolumeX },
 ];
 
 /** The right rail: focused purely on editing whatever's selected on the
@@ -252,7 +252,7 @@ export function RightPanel() {
                 {tab === "audio-fade-in" && <AudioFadeInSection clip={audio} />}
                 {tab === "audio-fade-out" && <AudioFadeOutSection clip={audio} />}
                 {tab === "audio-duck" && <AudioDuckSection clip={audio} />}
-                {tab === "audio-hidden" && <AudioHiddenSection clip={audio} />}
+                {tab === "audio-mute" && <AudioMuteSection clip={audio} />}
               </ScrollArea>
             ) : CLIP_TABS.some((t) => t.id === tab) ? (
               <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">

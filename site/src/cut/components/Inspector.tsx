@@ -1249,10 +1249,13 @@ export function AudioDuckSection({ clip }: { clip: AudioClip }) {
   );
 }
 
-export function AudioHiddenSection({ clip }: { clip: AudioClip }) {
+/** An audio clip has no picture to hide — `hidden` just means muted from the
+ * final mix but left on the timeline, so this reads as "Mute audio" to match
+ * the same control on a video clip. */
+export function AudioMuteSection({ clip }: { clip: AudioClip }) {
   return (
     <div className="flex flex-col gap-1 px-3.5 pb-4">
-      <Row label="Hidden">
+      <Row label="Mute audio">
         <Switch
           checked={!!clip.hidden}
           onCheckedChange={(v) => useEditor.getState().updateAudio(clip.id, { hidden: v })}
