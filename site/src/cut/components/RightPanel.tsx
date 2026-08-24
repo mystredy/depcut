@@ -15,7 +15,7 @@ import {
   Palette,
   PenLine,
   RectangleHorizontal,
-  Ruler,
+  Rows3,
   Scissors,
   SlidersHorizontal,
   Sparkles,
@@ -24,6 +24,7 @@ import {
   TextCursorInput,
   Trash2,
   Type,
+  UnfoldHorizontal,
   UserRound,
   Volume1,
   Volume2,
@@ -51,6 +52,7 @@ import {
   ClipMoveTrackSection,
   ClipMuteSection,
   ClipSpeedSection,
+  ClipTrimSection,
   ClipVolumeSection,
   ColorPanel,
   Inspector,
@@ -68,9 +70,11 @@ import {
   TextSpacingSection,
   TextStyleMemory,
   TextTransformSection,
+  TextTrimSection,
 } from "./Inspector";
 
 type ClipTab =
+  | "trim"
   | "move-time"
   | "move-track"
   | "speed"
@@ -91,6 +95,7 @@ type AudioTab =
   | "audio-mute";
 type TextTab =
   | "text-content"
+  | "text-trim"
   | "text-font"
   | "text-align"
   | "text-size"
@@ -110,6 +115,7 @@ type RightTab = "edit" | ClipTab | AudioTab | TextTab;
  * applies to a selected video or photo clip — the tab shows a placeholder
  * for any other kind of selection. */
 const CLIP_TABS: { id: ClipTab; label: string; icon: typeof SlidersHorizontal }[] = [
+  { id: "trim", label: "Trim", icon: UnfoldHorizontal },
   { id: "move-time", label: "Move", icon: MoveHorizontal },
   { id: "move-track", label: "Track", icon: ArrowUpDown },
   { id: "speed", label: "Speed", icon: Gauge },
@@ -123,7 +129,7 @@ const CLIP_TABS: { id: ClipTab; label: string; icon: typeof SlidersHorizontal }[
 
 /** Same idea, for an audio clip's own properties. */
 const AUDIO_TABS: { id: AudioTab; label: string; icon: typeof SlidersHorizontal }[] = [
-  { id: "audio-trim", label: "Trim", icon: Ruler },
+  { id: "audio-trim", label: "Trim", icon: UnfoldHorizontal },
   { id: "audio-move", label: "Move", icon: MoveHorizontal },
   { id: "audio-speed", label: "Speed", icon: Gauge },
   { id: "audio-volume", label: "Volume", icon: Volume2 },
@@ -136,12 +142,13 @@ const AUDIO_TABS: { id: AudioTab; label: string; icon: typeof SlidersHorizontal 
 /** Same idea, for a text element's own properties. */
 const TEXT_TABS: { id: TextTab; label: string; icon: typeof SlidersHorizontal }[] = [
   { id: "text-content", label: "Text", icon: TextCursorInput },
+  { id: "text-trim", label: "Trim", icon: UnfoldHorizontal },
   { id: "text-font", label: "Font", icon: Type },
   { id: "text-align", label: "Align", icon: AlignCenter },
   { id: "text-size", label: "Size", icon: CaseSensitive },
   { id: "text-color", label: "Color", icon: Palette },
   { id: "text-spacing", label: "Spacing", icon: MoveHorizontal },
-  { id: "text-line-height", label: "Line height", icon: Ruler },
+  { id: "text-line-height", label: "Line height", icon: Rows3 },
   { id: "text-outline", label: "Outline", icon: PenLine },
   { id: "text-shadow", label: "Shadow", icon: Blend },
   { id: "text-backdrop", label: "Backdrop", icon: RectangleHorizontal },
@@ -300,6 +307,7 @@ export function RightPanel() {
               )
             ) : clip ? (
               <ScrollArea className="flex min-h-0 flex-col">
+                {tab === "trim" && <ClipTrimSection clip={clip} />}
                 {tab === "move-time" && <ClipMoveTimeSection clip={clip} />}
                 {tab === "move-track" && <ClipMoveTrackSection clip={clip} />}
                 {tab === "speed" && <ClipSpeedSection clip={clip} />}
@@ -324,6 +332,7 @@ export function RightPanel() {
             ) : textOverlay ? (
               <ScrollArea className="flex min-h-0 flex-col">
                 {tab === "text-content" && <TextContentSection overlay={textOverlay} />}
+                {tab === "text-trim" && <TextTrimSection overlay={textOverlay} />}
                 {tab === "text-font" && <TextFontSection overlay={textOverlay} />}
                 {tab === "text-align" && <TextAlignSection overlay={textOverlay} />}
                 {tab === "text-size" && <TextSizeSection overlay={textOverlay} />}

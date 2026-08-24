@@ -336,6 +336,10 @@ const MOVE_SECONDS_PER_SEC = 6;
  * MOVE_SECONDS_PER_SEC) steps it one slot in the sequence. */
 const REORDER_STEP_SECONDS = 0.35;
 
+/** Full shuttle deflection nudges a trimmed edge by this many seconds per
+ * second — slower than Move, since a trim is usually a finer adjustment. */
+const TRIM_SECONDS_PER_SEC = 4;
+
 /** Sits at the right end of a row, visible once its value has moved off the
  * default. Always occupies its slot so the row doesn't shift when it appears. */
 function ResetButton({ title, show, onClick }: { title: string; show: boolean; onClick: () => void }) {
@@ -395,6 +399,56 @@ function LayoutButtons({
           ))}
         </SelectContent>
       </Select>
+    </div>
+  );
+}
+
+/** Stretches the clip's front or back edge, source-frame accurate (the shuttle
+ * rate applies directly to `in`/`out`, not the timeline-rate `start`). The
+ * front edge keeps the tail anchored — trimming it slides `start` to match —
+ * except on track 0, which has no independent position: closeTrack0Gaps
+ * repacks the whole gapless run against whatever length results. */
+export function ClipTrimSection({ clip }: { clip: VideoClip }) {
+  const asset = useEditor((s) => s.assets.find((a) => a.id === clip.assetId));
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <div className="flex flex-col items-center gap-2 py-1">
+        <span className="self-start text-[13px] text-muted-foreground">Trim start</span>
+        <ShuttleBar
+          onStart={() => useEditor.getState().pushHistory()}
+          onTick={(rate, dt) => {
+            const s = useEditor.getState();
+            const live = s.clips.find((c) => c.id === clip.id);
+            if (!live) return;
+            const delta = rate * TRIM_SECONDS_PER_SEC * dt;
+            const newIn = Math.max(0, Math.min(live.out - MIN_TRIM, live.in + delta));
+            if (live.track === 0) {
+              s.updateClipTransient(clip.id, { in: newIn });
+              s.closeTrack0Gaps();
+            } else {
+              const speed = live.speed && live.speed > 0 ? live.speed : 1;
+              const newStart = Math.max(0, live.start + (newIn - live.in) / speed);
+              s.updateClipTransient(clip.id, { in: newIn, start: newStart });
+            }
+          }}
+        />
+      </div>
+      <div className="flex flex-col items-center gap-2 py-1">
+        <span className="self-start text-[13px] text-muted-foreground">Trim end</span>
+        <ShuttleBar
+          onStart={() => useEditor.getState().pushHistory()}
+          onTick={(rate, dt) => {
+            const s = useEditor.getState();
+            const live = s.clips.find((c) => c.id === clip.id);
+            if (!live) return;
+            const delta = rate * TRIM_SECONDS_PER_SEC * dt;
+            const maxOut = asset?.duration ?? live.out;
+            const newOut = Math.max(live.in + MIN_TRIM, Math.min(maxOut, live.out + delta));
+            s.updateClipTransient(clip.id, { out: newOut });
+            if (live.track === 0) s.closeTrack0Gaps();
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -968,46 +1022,44 @@ const audioLen = (clip: AudioClip) => {
 /** A fade can take at most half the clip so in+out never overlap. */
 const audioMaxFade = (clip: AudioClip) => Math.max(0.1, Math.round((audioLen(clip) / 2) * 10) / 10);
 
+/** Stretches the clip's front or back edge, source-frame accurate. The front
+ * edge keeps the tail anchored — trimming it slides `start` to match, since
+ * an audio clip always free-positions (no track-0 gapless run to repack). */
 export function AudioTrimSection({ clip }: { clip: AudioClip }) {
   const asset = useEditor((s) => s.assets.find((a) => a.id === clip.assetId));
-  const ck = useSliderCheckpoint();
-  const commitAudio = (patch: Partial<AudioClip>) => {
-    ck.begin();
-    useEditor.getState().updateAudioTransient(clip.id, patch);
-    ck.end();
-  };
   return (
     <div className="flex flex-col gap-1 px-3.5 pb-4">
-      <Row label="Trim">
-        <ScrubValue
-          label="Trim start"
-          value={clip.in}
-          min={0}
-          max={clip.out - MIN_TRIM}
-          step={0.1}
-          keyStep={1}
-          format={formatTime}
-          parse={parseTimeInput}
-          onCommit={(v) => commitAudio({ in: v })}
+      <div className="flex flex-col items-center gap-2 py-1">
+        <span className="self-start text-[13px] text-muted-foreground">Trim start</span>
+        <ShuttleBar
+          onStart={() => useEditor.getState().pushHistory()}
+          onTick={(rate, dt) => {
+            const s = useEditor.getState();
+            const live = s.audioClips.find((c) => c.id === clip.id);
+            if (!live) return;
+            const delta = rate * TRIM_SECONDS_PER_SEC * dt;
+            const newIn = Math.max(0, Math.min(live.out - MIN_TRIM, live.in + delta));
+            const speed = live.speed && live.speed > 0 ? live.speed : 1;
+            const newStart = Math.max(0, live.start + (newIn - live.in) / speed);
+            s.updateAudioTransient(clip.id, { in: newIn, start: newStart });
+          }}
         />
-        <Value className="text-muted-foreground">–</Value>
-        <ScrubValue
-          label="Trim end"
-          value={clip.out}
-          min={clip.in + MIN_TRIM}
-          max={asset?.duration ?? clip.out}
-          step={0.1}
-          keyStep={1}
-          format={formatTime}
-          parse={parseTimeInput}
-          onCommit={(v) => commitAudio({ out: v })}
+      </div>
+      <div className="flex flex-col items-center gap-2 py-1">
+        <span className="self-start text-[13px] text-muted-foreground">Trim end</span>
+        <ShuttleBar
+          onStart={() => useEditor.getState().pushHistory()}
+          onTick={(rate, dt) => {
+            const s = useEditor.getState();
+            const live = s.audioClips.find((c) => c.id === clip.id);
+            if (!live) return;
+            const delta = rate * TRIM_SECONDS_PER_SEC * dt;
+            const maxOut = asset?.duration ?? live.out;
+            const newOut = Math.max(live.in + MIN_TRIM, Math.min(maxOut, live.out + delta));
+            s.updateAudioTransient(clip.id, { out: newOut });
+          }}
         />
-        <ResetButton
-          title="Reset trim"
-          show={!!asset && (clip.in > 1e-3 || clip.out < asset.duration - 1e-3)}
-          onClick={() => asset && commitAudio({ in: 0, out: asset.duration })}
-        />
-      </Row>
+      </div>
     </div>
   );
 }
@@ -1337,6 +1389,44 @@ export function TextContentSection({ overlay: o }: { overlay: TextOverlay }) {
         />
       </div>
       <StylePresetsRow overlay={o} />
+    </div>
+  );
+}
+
+/** Stretches the title's front or back edge — an overlay has no source to
+ * run out of, so this just moves `start`/`end` directly, each independently,
+ * down to a minimum span. */
+export function TextTrimSection({ overlay: o }: { overlay: TextOverlay }) {
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <div className="flex flex-col items-center gap-2 py-1">
+        <span className="self-start text-[13px] text-muted-foreground">Trim start</span>
+        <ShuttleBar
+          onStart={() => useEditor.getState().pushHistory()}
+          onTick={(rate, dt) => {
+            const s = useEditor.getState();
+            const live = s.overlays.find((x) => x.id === o.id);
+            if (!live) return;
+            const delta = rate * TRIM_SECONDS_PER_SEC * dt;
+            const newStart = Math.max(0, Math.min(live.end - MIN_TRIM, live.start + delta));
+            s.updateOverlayTransient(o.id, { start: newStart });
+          }}
+        />
+      </div>
+      <div className="flex flex-col items-center gap-2 py-1">
+        <span className="self-start text-[13px] text-muted-foreground">Trim end</span>
+        <ShuttleBar
+          onStart={() => useEditor.getState().pushHistory()}
+          onTick={(rate, dt) => {
+            const s = useEditor.getState();
+            const live = s.overlays.find((x) => x.id === o.id);
+            if (!live) return;
+            const delta = rate * TRIM_SECONDS_PER_SEC * dt;
+            const newEnd = Math.max(live.start + MIN_TRIM, live.end + delta);
+            s.updateOverlayTransient(o.id, { end: newEnd });
+          }}
+        />
+      </div>
     </div>
   );
 }
