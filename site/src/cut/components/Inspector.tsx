@@ -37,7 +37,7 @@ import {
   type OverlayAnimStyle,
   type OverlayLoopStyle,
 } from "@donkeycut/effects-kit";
-import { clipWindow, useEditor, type EditorState } from "@/cut/lib/store";
+import { clipLen, clipWindow, footprints, nextFreeStart, useEditor, type EditorState } from "@/cut/lib/store";
 import { extractClipAudio } from "@/cut/lib/extractAudio";
 import { AnimationTiles } from "@/cut/components/AnimationTiles";
 import { ShuttleBar } from "@/cut/components/ShuttleBar";
@@ -512,7 +512,20 @@ export function ClipMoveTrackSection({ clip }: { clip: VideoClip }) {
       s.closeTrack0Gaps();
       return;
     }
-    const track = live.track + delta;
+    const dir = delta > 0 ? 1 : -1;
+    const len = clipLen(live);
+    // Skip past occupied tracks in this direction to the first one with room
+    // for the clip right where it already sits — landing on the nearest
+    // track and sliding its time to fit reads as the clip jumping sideways,
+    // not moving a track. Only when the search runs off the bottom (nothing
+    // below track 1) does it fall back to that slide.
+    let track = live.track + dir;
+    while (track >= 1) {
+      const others = s.clips.filter((c) => c.id !== live.id && c.track === track);
+      if (nextFreeStart(footprints(others), live.start, len) <= live.start + 1e-3) break;
+      track += dir;
+    }
+    if (track < 1) track = live.track + dir;
     if (track < 1) return;
     s.pushHistory();
     s.dropVideoClip(clip.id, { kind: "track", track }, live.start);
