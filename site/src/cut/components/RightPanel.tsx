@@ -9,9 +9,13 @@ import {
   Gauge,
   MoveHorizontal,
   Palette,
+  Ruler,
   Scissors,
   SlidersHorizontal,
+  Sunrise,
+  Sunset,
   Trash2,
+  Volume1,
   Volume2,
   VolumeX,
   X,
@@ -21,6 +25,14 @@ import { clipLen, useEditor } from "@/cut/lib/store";
 import { useLocalPref } from "@/cut/lib/uiState";
 import { cn } from "@/lib/utils";
 import {
+  AudioDuckSection,
+  AudioFadeInSection,
+  AudioFadeOutSection,
+  AudioHiddenSection,
+  AudioMoveSection,
+  AudioSpeedSection,
+  AudioTrimSection,
+  AudioVolumeSection,
   ClipExtractSection,
   ClipFramingSection,
   ClipHiddenSection,
@@ -43,7 +55,16 @@ type ClipTab =
   | "extract"
   | "hidden"
   | "framing";
-type RightTab = "edit" | ClipTab;
+type AudioTab =
+  | "audio-trim"
+  | "audio-move"
+  | "audio-speed"
+  | "audio-volume"
+  | "audio-fade-in"
+  | "audio-fade-out"
+  | "audio-duck"
+  | "audio-hidden";
+type RightTab = "edit" | ClipTab | AudioTab;
 
 /** One clip property per tab, so only one is ever open in the panel at a
  * time instead of all of them stacked in one scrolling form. Each only
@@ -61,6 +82,18 @@ const CLIP_TABS: { id: ClipTab; label: string; icon: typeof SlidersHorizontal }[
   { id: "framing", label: "Framing", icon: Crop },
 ];
 
+/** Same idea, for an audio clip's own properties. */
+const AUDIO_TABS: { id: AudioTab; label: string; icon: typeof SlidersHorizontal }[] = [
+  { id: "audio-trim", label: "Trim", icon: Ruler },
+  { id: "audio-move", label: "Move", icon: MoveHorizontal },
+  { id: "audio-speed", label: "Speed", icon: Gauge },
+  { id: "audio-volume", label: "Volume", icon: Volume2 },
+  { id: "audio-fade-in", label: "Fade in", icon: Sunrise },
+  { id: "audio-fade-out", label: "Fade out", icon: Sunset },
+  { id: "audio-duck", label: "Duck", icon: Volume1 },
+  { id: "audio-hidden", label: "Hidden", icon: EyeOff },
+];
+
 /** The right rail: focused purely on editing whatever's selected on the
  * timeline — a video, audio, or photo clip. Edit holds the selection
  * inspector (audio clips, text, shapes, effects, stickers); a clip's own
@@ -75,26 +108,35 @@ export function RightPanel() {
   const [tab, setTab] = useLocalPref<RightTab | null>(
     "cut-right-tab",
     "edit",
-    (v) => v === null || v === "edit" || CLIP_TABS.some((t) => t.id === v)
+    (v) =>
+      v === null ||
+      v === "edit" ||
+      CLIP_TABS.some((t) => t.id === v) ||
+      AUDIO_TABS.some((t) => t.id === v)
   );
 
   // A new selection opens Edit when no tab was already open, or when a clip
-  // tab (Speed, Color, ...) was open but the new selection isn't a clip —
-  // those tabs only apply to a video or photo clip. Picking another clip
-  // while "Speed" is open keeps Speed open rather than bouncing back to Edit.
+  // or audio tab (Speed, Trim, ...) was open but the new selection is a
+  // different kind — those tabs only apply to their own kind of clip.
+  // Picking another video clip while "Speed" is open keeps Speed open rather
+  // than bouncing back to Edit.
   const selectionKey = useEditor((s) =>
     s.selection ? `${s.selection.kind}:${s.selection.id}` : null
   );
   const [seenKey, setSeenKey] = useState(selectionKey);
   if (selectionKey !== seenKey) {
     setSeenKey(selectionKey);
-    const isClipTab = tab !== null && tab !== "edit";
+    const isClipTab = tab !== null && CLIP_TABS.some((t) => t.id === tab);
+    const isAudioTab = tab !== null && AUDIO_TABS.some((t) => t.id === tab);
     if (selectionKey && hasEditContent) {
-      const newIsClip = useEditor.getState().selection?.kind === "clip";
-      if (tab === null || (isClipTab && !newIsClip)) setTab("edit");
-    } else if (isClipTab) {
+      const newKind = useEditor.getState().selection?.kind;
+      if (tab === null) setTab("edit");
+      else if (isClipTab && newKind !== "clip") setTab("edit");
+      else if (isAudioTab && newKind !== "audio") setTab("edit");
+    } else if (isClipTab || isAudioTab) {
       // Selection dropped entirely (or moved to a cue/transition) while a
-      // clip-only tab was open — its icon just vanished from the rail.
+      // clip- or audio-only tab was open — its icon just vanished from the
+      // rail.
       setTab("edit");
     }
   }
@@ -152,6 +194,9 @@ export function RightPanel() {
   const clip = useEditor((s) =>
     s.selection?.kind === "clip" ? s.clips.find((c) => c.id === s.selection!.id) : undefined
   );
+  const audio = useEditor((s) =>
+    s.selection?.kind === "audio" ? s.audioClips.find((c) => c.id === s.selection!.id) : undefined
+  );
 
   // Split works off the pointer/playhead, not the selection, so it's always
   // live; Delete needs something picked.
@@ -198,9 +243,24 @@ export function RightPanel() {
                 {tab === "hidden" && <ClipHiddenSection clip={clip} />}
                 {tab === "framing" && <ClipFramingSection clip={clip} />}
               </ScrollArea>
-            ) : (
+            ) : audio ? (
+              <ScrollArea className="flex min-h-0 flex-col">
+                {tab === "audio-trim" && <AudioTrimSection clip={audio} />}
+                {tab === "audio-move" && <AudioMoveSection clip={audio} />}
+                {tab === "audio-speed" && <AudioSpeedSection clip={audio} />}
+                {tab === "audio-volume" && <AudioVolumeSection clip={audio} />}
+                {tab === "audio-fade-in" && <AudioFadeInSection clip={audio} />}
+                {tab === "audio-fade-out" && <AudioFadeOutSection clip={audio} />}
+                {tab === "audio-duck" && <AudioDuckSection clip={audio} />}
+                {tab === "audio-hidden" && <AudioHiddenSection clip={audio} />}
+              </ScrollArea>
+            ) : CLIP_TABS.some((t) => t.id === tab) ? (
               <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
                 Select a video or photo clip to use this.
+              </p>
+            ) : (
+              <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
+                Select an audio clip to use this.
               </p>
             )}
           </div>
@@ -216,7 +276,7 @@ export function RightPanel() {
           active={tab === "edit"}
           onClick={() => setTab(tab === "edit" ? null : "edit")}
         />
-        {clip && (
+        {(clip || audio) && (
           <>
             <div aria-hidden className="my-1 h-px w-8 shrink-0 bg-border" />
             <RailActionButton
@@ -232,15 +292,26 @@ export function RightPanel() {
               disabled={selectionCount === 0}
               onClick={deleteSelection}
             />
-            {CLIP_TABS.map((t) => (
-              <RailButton
-                key={t.id}
-                label={t.label}
-                icon={t.icon}
-                active={tab === t.id}
-                onClick={() => setTab(tab === t.id ? null : t.id)}
-              />
-            ))}
+            {clip &&
+              CLIP_TABS.map((t) => (
+                <RailButton
+                  key={t.id}
+                  label={t.label}
+                  icon={t.icon}
+                  active={tab === t.id}
+                  onClick={() => setTab(tab === t.id ? null : t.id)}
+                />
+              ))}
+            {audio &&
+              AUDIO_TABS.map((t) => (
+                <RailButton
+                  key={t.id}
+                  label={t.label}
+                  icon={t.icon}
+                  active={tab === t.id}
+                  onClick={() => setTab(tab === t.id ? null : t.id)}
+                />
+              ))}
           </>
         )}
       </ScrollArea>

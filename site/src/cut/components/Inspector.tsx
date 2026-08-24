@@ -207,12 +207,10 @@ export function Inspector() {
       render={<aside />}
       className="flex min-h-0 flex-col border-l border-border bg-card"
     >
-      {clip ? (
+      {clip || audio ? (
         <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
           Use the tools below to edit this clip.
         </p>
-      ) : audio ? (
-        <AudioPanel key={audio.id} clip={audio} />
       ) : overlay ? (
         isTextOverlay(overlay) ? (
           <TextPanel key={overlay.id} overlay={overlay} />
@@ -232,19 +230,6 @@ function PanelTitle({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-10 shrink-0 items-center px-3.5 text-sm font-semibold tracking-tight">
       {children}
-    </div>
-  );
-}
-
-/** One-line header for a media clip's panel: the file name (ellipsised, with
- * the full name in its hover tooltip) and the clip's running length. */
-function ClipHead({ name, time }: { name?: string; time: string }) {
-  return (
-    <div className="mb-1.5 flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border">
-      <div className="min-w-0 truncate text-sm font-semibold tracking-tight" title={name}>
-        {name}
-      </div>
-      <Value className="shrink-0 text-muted-foreground">{time}</Value>
     </div>
   );
 }
@@ -971,213 +956,309 @@ function ClipGeneratedAudio({ clip }: { clip: VideoClip }) {
   );
 }
 
-function AudioPanel({ clip }: { clip: AudioClip }) {
-  const asset = useEditor((s) => s.assets.find((a) => a.id === clip.assetId));
-  const updateAudioTransient = useEditor((s) => s.updateAudioTransient);
-  const ck = useSliderCheckpoint();
-  const setAudio = (patch: Partial<AudioClip>) => {
-    ck.begin();
-    updateAudioTransient(clip.id, patch);
-  };
-  // Detached audio can carry a playback rate; its timeline length is (out-in)/speed.
+/** Detached audio can carry a playback rate; its timeline length is
+ * (out-in)/speed. Shared by every audio section that needs the clip's
+ * current length (the fade sections, to cap how far a fade can reach). */
+const audioLen = (clip: AudioClip) => {
   const speed = clip.speed && clip.speed > 0 ? clip.speed : 1;
-  const len = (clip.out - clip.in) / speed;
-  // A fade can take at most half the clip so in+out never overlap.
-  const maxFade = Math.max(0.1, Math.round((len / 2) * 10) / 10);
-  // Commit closes the checkpoint setAudio opened (or opens+closes one for a
-  // typed entry), so any adjustment lands as a single undo step.
+  return (clip.out - clip.in) / speed;
+};
+/** A fade can take at most half the clip so in+out never overlap. */
+const audioMaxFade = (clip: AudioClip) => Math.max(0.1, Math.round((audioLen(clip) / 2) * 10) / 10);
+
+export function AudioTrimSection({ clip }: { clip: AudioClip }) {
+  const asset = useEditor((s) => s.assets.find((a) => a.id === clip.assetId));
+  const ck = useSliderCheckpoint();
   const commitAudio = (patch: Partial<AudioClip>) => {
-    setAudio(patch);
+    ck.begin();
+    useEditor.getState().updateAudioTransient(clip.id, patch);
     ck.end();
   };
   return (
-    <>
-      <div className="flex flex-col gap-1 px-3.5 pb-4">
-        <ClipHead name={asset?.name} time={formatTime(len)} />
-        <Row label="Trim">
-          <ScrubValue
-            label="Trim start"
-            value={clip.in}
-            min={0}
-            max={clip.out - MIN_TRIM}
-            step={0.1}
-            keyStep={1}
-            format={formatTime}
-            parse={parseTimeInput}
-            onCommit={(v) => commitAudio({ in: v })}
-          />
-          <Value className="text-muted-foreground">–</Value>
-          <ScrubValue
-            label="Trim end"
-            value={clip.out}
-            min={clip.in + MIN_TRIM}
-            max={asset?.duration ?? clip.out}
-            step={0.1}
-            keyStep={1}
-            format={formatTime}
-            parse={parseTimeInput}
-            onCommit={(v) => commitAudio({ out: v })}
-          />
-          <ResetButton
-            title="Reset trim"
-            show={!!asset && (clip.in > 1e-3 || clip.out < asset.duration - 1e-3)}
-            onClick={() => asset && commitAudio({ in: 0, out: asset.duration })}
-          />
-        </Row>
-        <Row label="Starts at">
-          <ScrubValue
-            label="Starts at"
-            value={clip.start}
-            min={0}
-            max={Infinity}
-            step={0.1}
-            keyStep={1}
-            format={formatTime}
-            parse={parseTimeInput}
-            onCommit={(v) => commitAudio({ start: v })}
-          />
-        </Row>
-        <Row label="Speed">
-          <Slider
-            className="audio-speed data-horizontal:w-24"
-            min={SPEED_MIN}
-            max={SPEED_MAX}
-            step={0.05}
-            value={speed}
-            onValueChange={(v) => {
-              const n = Number(v);
-              setAudio({ speed: Math.abs(n - 1) < 1e-4 ? undefined : n });
-            }}
-            onValueCommitted={ck.end}
-          />
-          <ScrubValue
-            label="Speed"
-            className="w-9 text-muted-foreground"
-            value={speed}
-            min={SPEED_FLOOR}
-            max={Infinity}
-            step={0.05}
-            format={formatSpeed}
-            parse={parseSpeedInput}
-            onScrub={(v) => setAudio({ speed: Math.abs(v - 1) < 1e-4 ? undefined : v })}
-            onCommit={(v) => commitAudio({ speed: Math.abs(v - 1) < 1e-4 ? undefined : v })}
-          />
-          <ResetButton
-            title="Reset speed"
-            show={Math.abs(speed - 1) > 1e-4}
-            onClick={() => commitAudio({ speed: undefined })}
-          />
-        </Row>
-        <Row label="Volume">
-          <Slider
-            className="data-horizontal:w-24"
-            min={0}
-            max={1.5}
-            step={0.05}
-            value={clip.volume}
-            onValueChange={(v) => setAudio({ volume: Number(v) })}
-            onValueCommitted={ck.end}
-          />
-          <ScrubValue
-            label="Volume"
-            className="w-9 text-muted-foreground"
-            value={clip.volume}
-            min={0}
-            max={1.5}
-            step={0.05}
-            format={formatPercent}
-            parse={parsePercentInput}
-            onScrub={(v) => setAudio({ volume: v })}
-            onCommit={(v) => commitAudio({ volume: v })}
-          />
-        </Row>
-        <Row label="Fade in">
-          <Slider
-            className="fade-in-slider data-horizontal:w-24"
-            min={0}
-            max={maxFade}
-            step={0.1}
-            value={clip.fadeIn ?? 0}
-            onValueChange={(v) => setAudio({ fadeIn: Number(v) })}
-            onValueCommitted={ck.end}
-          />
-          <ScrubValue
-            label="Fade in"
-            className="w-9 text-muted-foreground"
-            value={clip.fadeIn ?? 0}
-            min={0}
-            max={maxFade}
-            step={0.1}
-            format={(v) => `${v.toFixed(1)}s`}
-            parse={parseSecondsInput}
-            onScrub={(v) => setAudio({ fadeIn: v })}
-            onCommit={(v) => commitAudio({ fadeIn: v })}
-          />
-        </Row>
-        <Row label="Fade out">
-          <Slider
-            className="fade-out-slider data-horizontal:w-24"
-            min={0}
-            max={maxFade}
-            step={0.1}
-            value={clip.fadeOut ?? 0}
-            onValueChange={(v) => setAudio({ fadeOut: Number(v) })}
-            onValueCommitted={ck.end}
-          />
-          <ScrubValue
-            label="Fade out"
-            className="w-9 text-muted-foreground"
-            value={clip.fadeOut ?? 0}
-            min={0}
-            max={maxFade}
-            step={0.1}
-            format={(v) => `${v.toFixed(1)}s`}
-            parse={parseSecondsInput}
-            onScrub={(v) => setAudio({ fadeOut: v })}
-            onCommit={(v) => commitAudio({ fadeOut: v })}
-          />
-        </Row>
-        <Row
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Trim">
+        <ScrubValue
+          label="Trim start"
+          value={clip.in}
+          min={0}
+          max={clip.out - MIN_TRIM}
+          step={0.1}
+          keyStep={1}
+          format={formatTime}
+          parse={parseTimeInput}
+          onCommit={(v) => commitAudio({ in: v })}
+        />
+        <Value className="text-muted-foreground">–</Value>
+        <ScrubValue
+          label="Trim end"
+          value={clip.out}
+          min={clip.in + MIN_TRIM}
+          max={asset?.duration ?? clip.out}
+          step={0.1}
+          keyStep={1}
+          format={formatTime}
+          parse={parseTimeInput}
+          onCommit={(v) => commitAudio({ out: v })}
+        />
+        <ResetButton
+          title="Reset trim"
+          show={!!asset && (clip.in > 1e-3 || clip.out < asset.duration - 1e-3)}
+          onClick={() => asset && commitAudio({ in: 0, out: asset.duration })}
+        />
+      </Row>
+    </div>
+  );
+}
+
+export function AudioMoveSection({ clip }: { clip: AudioClip }) {
+  const ck = useSliderCheckpoint();
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Starts at">
+        <ScrubValue
+          label="Starts at"
+          value={clip.start}
+          min={0}
+          max={Infinity}
+          step={0.1}
+          keyStep={1}
+          format={formatTime}
+          parse={parseTimeInput}
+          onCommit={(v) => {
+            ck.begin();
+            useEditor.getState().updateAudioTransient(clip.id, { start: v });
+            ck.end();
+          }}
+        />
+      </Row>
+    </div>
+  );
+}
+
+export function AudioSpeedSection({ clip }: { clip: AudioClip }) {
+  const ck = useSliderCheckpoint();
+  const setAudio = (patch: Partial<AudioClip>) => {
+    ck.begin();
+    useEditor.getState().updateAudioTransient(clip.id, patch);
+  };
+  const speed = clip.speed && clip.speed > 0 ? clip.speed : 1;
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Speed">
+        <Slider
+          className="audio-speed data-horizontal:w-24"
+          min={SPEED_MIN}
+          max={SPEED_MAX}
+          step={0.05}
+          value={speed}
+          onValueChange={(v) => {
+            const n = Number(v);
+            setAudio({ speed: Math.abs(n - 1) < 1e-4 ? undefined : n });
+          }}
+          onValueCommitted={ck.end}
+        />
+        <ScrubValue
+          label="Speed"
+          className="w-9 text-muted-foreground"
+          value={speed}
+          min={SPEED_FLOOR}
+          max={Infinity}
+          step={0.05}
+          format={formatSpeed}
+          parse={parseSpeedInput}
+          onScrub={(v) => setAudio({ speed: Math.abs(v - 1) < 1e-4 ? undefined : v })}
+          onCommit={(v) => {
+            setAudio({ speed: Math.abs(v - 1) < 1e-4 ? undefined : v });
+            ck.end();
+          }}
+        />
+        <ResetButton
+          title="Reset speed"
+          show={Math.abs(speed - 1) > 1e-4}
+          onClick={() => {
+            setAudio({ speed: undefined });
+            ck.end();
+          }}
+        />
+      </Row>
+    </div>
+  );
+}
+
+export function AudioVolumeSection({ clip }: { clip: AudioClip }) {
+  const ck = useSliderCheckpoint();
+  const setAudio = (patch: Partial<AudioClip>) => {
+    ck.begin();
+    useEditor.getState().updateAudioTransient(clip.id, patch);
+  };
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Volume">
+        <Slider
+          className="data-horizontal:w-24"
+          min={0}
+          max={1.5}
+          step={0.05}
+          value={clip.volume}
+          onValueChange={(v) => setAudio({ volume: Number(v) })}
+          onValueCommitted={ck.end}
+        />
+        <ScrubValue
+          label="Volume"
+          className="w-9 text-muted-foreground"
+          value={clip.volume}
+          min={0}
+          max={1.5}
+          step={0.05}
+          format={formatPercent}
+          parse={parsePercentInput}
+          onScrub={(v) => setAudio({ volume: v })}
+          onCommit={(v) => {
+            setAudio({ volume: v });
+            ck.end();
+          }}
+        />
+      </Row>
+    </div>
+  );
+}
+
+export function AudioFadeInSection({ clip }: { clip: AudioClip }) {
+  const ck = useSliderCheckpoint();
+  const setAudio = (patch: Partial<AudioClip>) => {
+    ck.begin();
+    useEditor.getState().updateAudioTransient(clip.id, patch);
+  };
+  const maxFade = audioMaxFade(clip);
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Fade in">
+        <Slider
+          className="fade-in-slider data-horizontal:w-24"
+          min={0}
+          max={maxFade}
+          step={0.1}
+          value={clip.fadeIn ?? 0}
+          onValueChange={(v) => setAudio({ fadeIn: Number(v) })}
+          onValueCommitted={ck.end}
+        />
+        <ScrubValue
+          label="Fade in"
+          className="w-9 text-muted-foreground"
+          value={clip.fadeIn ?? 0}
+          min={0}
+          max={maxFade}
+          step={0.1}
+          format={(v) => `${v.toFixed(1)}s`}
+          parse={parseSecondsInput}
+          onScrub={(v) => setAudio({ fadeIn: v })}
+          onCommit={(v) => {
+            setAudio({ fadeIn: v });
+            ck.end();
+          }}
+        />
+      </Row>
+    </div>
+  );
+}
+
+export function AudioFadeOutSection({ clip }: { clip: AudioClip }) {
+  const ck = useSliderCheckpoint();
+  const setAudio = (patch: Partial<AudioClip>) => {
+    ck.begin();
+    useEditor.getState().updateAudioTransient(clip.id, patch);
+  };
+  const maxFade = audioMaxFade(clip);
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Fade out">
+        <Slider
+          className="fade-out-slider data-horizontal:w-24"
+          min={0}
+          max={maxFade}
+          step={0.1}
+          value={clip.fadeOut ?? 0}
+          onValueChange={(v) => setAudio({ fadeOut: Number(v) })}
+          onValueCommitted={ck.end}
+        />
+        <ScrubValue
+          label="Fade out"
+          className="w-9 text-muted-foreground"
+          value={clip.fadeOut ?? 0}
+          min={0}
+          max={maxFade}
+          step={0.1}
+          format={(v) => `${v.toFixed(1)}s`}
+          parse={parseSecondsInput}
+          onScrub={(v) => setAudio({ fadeOut: v })}
+          onCommit={(v) => {
+            setAudio({ fadeOut: v });
+            ck.end();
+          }}
+        />
+      </Row>
+    </div>
+  );
+}
+
+export function AudioDuckSection({ clip }: { clip: AudioClip }) {
+  const ck = useSliderCheckpoint();
+  const setAudio = (patch: Partial<AudioClip>) => {
+    ck.begin();
+    useEditor.getState().updateAudioTransient(clip.id, patch);
+  };
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row
+        label="Duck others"
+        info={
+          clip.duck !== undefined
+            ? `While this clip plays, everything else drops to ${Math.round(clip.duck * 100)}% volume.`
+            : "While this clip plays, drop everything else to this volume."
+        }
+      >
+        <Slider
+          className="duck-slider data-horizontal:w-24"
+          min={0}
+          max={1}
+          step={0.05}
+          value={clip.duck ?? 1}
+          onValueChange={(v) => {
+            const n = Number(v);
+            setAudio({ duck: n < 0.999 ? n : undefined });
+          }}
+          onValueCommitted={ck.end}
+        />
+        <ScrubValue
           label="Duck others"
-          info={
-            clip.duck !== undefined
-              ? `While this clip plays, everything else drops to ${Math.round(clip.duck * 100)}% volume.`
-              : "While this clip plays, drop everything else to this volume."
-          }
-        >
-          <Slider
-            className="duck-slider data-horizontal:w-24"
-            min={0}
-            max={1}
-            step={0.05}
-            value={clip.duck ?? 1}
-            onValueChange={(v) => {
-              const n = Number(v);
-              setAudio({ duck: n < 0.999 ? n : undefined });
-            }}
-            onValueCommitted={ck.end}
-          />
-          <ScrubValue
-            label="Duck others"
-            className="w-9 text-muted-foreground"
-            value={clip.duck ?? 1}
-            min={0}
-            max={1}
-            step={0.05}
-            format={(v) => (v >= 0.999 ? "Off" : formatPercent(v))}
-            parse={(raw) => (raw.trim().toLowerCase() === "off" ? 1 : parsePercentInput(raw))}
-            onScrub={(v) => setAudio({ duck: v < 0.999 ? v : undefined })}
-            onCommit={(v) => commitAudio({ duck: v < 0.999 ? v : undefined })}
-          />
-        </Row>
-        <Row label="Hidden">
-          <Switch
-            checked={!!clip.hidden}
-            onCheckedChange={(v) => useEditor.getState().updateAudio(clip.id, { hidden: v })}
-          />
-        </Row>
-      </div>
-    </>
+          className="w-9 text-muted-foreground"
+          value={clip.duck ?? 1}
+          min={0}
+          max={1}
+          step={0.05}
+          format={(v) => (v >= 0.999 ? "Off" : formatPercent(v))}
+          parse={(raw) => (raw.trim().toLowerCase() === "off" ? 1 : parsePercentInput(raw))}
+          onScrub={(v) => setAudio({ duck: v < 0.999 ? v : undefined })}
+          onCommit={(v) => {
+            setAudio({ duck: v < 0.999 ? v : undefined });
+            ck.end();
+          }}
+        />
+      </Row>
+    </div>
+  );
+}
+
+export function AudioHiddenSection({ clip }: { clip: AudioClip }) {
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Hidden">
+        <Switch
+          checked={!!clip.hidden}
+          onCheckedChange={(v) => useEditor.getState().updateAudio(clip.id, { hidden: v })}
+        />
+      </Row>
+    </div>
   );
 }
 
