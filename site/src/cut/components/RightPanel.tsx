@@ -2,19 +2,29 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  AlignCenter,
   ArrowUpDown,
   AudioLines,
+  Blend,
+  CaseSensitive,
   Crop,
   EyeOff,
   Gauge,
+  Move,
   MoveHorizontal,
   Palette,
+  PenLine,
+  RectangleHorizontal,
   Ruler,
   Scissors,
   SlidersHorizontal,
+  Sparkles,
   Sunrise,
   Sunset,
+  TextCursorInput,
   Trash2,
+  Type,
+  UserRound,
   Volume1,
   Volume2,
   VolumeX,
@@ -23,6 +33,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { clipLen, useEditor } from "@/cut/lib/store";
 import { useLocalPref } from "@/cut/lib/uiState";
+import { isTextOverlay, type TextOverlay } from "@/cut/lib/types";
 import { cn } from "@/lib/utils";
 import {
   AudioDuckSection,
@@ -43,6 +54,20 @@ import {
   ClipVolumeSection,
   ColorPanel,
   Inspector,
+  TextAlignSection,
+  TextAnimationSection,
+  TextBackdropSection,
+  TextBehindSpeakerSection,
+  TextColorSection,
+  TextContentSection,
+  TextFontSection,
+  TextLineHeightSection,
+  TextOutlineSection,
+  TextShadowSection,
+  TextSizeSection,
+  TextSpacingSection,
+  TextStyleMemory,
+  TextTransformSection,
 } from "./Inspector";
 
 type ClipTab =
@@ -64,7 +89,21 @@ type AudioTab =
   | "audio-fade-out"
   | "audio-duck"
   | "audio-mute";
-type RightTab = "edit" | ClipTab | AudioTab;
+type TextTab =
+  | "text-content"
+  | "text-font"
+  | "text-align"
+  | "text-size"
+  | "text-color"
+  | "text-spacing"
+  | "text-line-height"
+  | "text-outline"
+  | "text-shadow"
+  | "text-backdrop"
+  | "text-behind-speaker"
+  | "text-transform"
+  | "text-animation";
+type RightTab = "edit" | ClipTab | AudioTab | TextTab;
 
 /** One clip property per tab, so only one is ever open in the panel at a
  * time instead of all of them stacked in one scrolling form. Each only
@@ -94,6 +133,23 @@ const AUDIO_TABS: { id: AudioTab; label: string; icon: typeof SlidersHorizontal 
   { id: "audio-mute", label: "Mute", icon: VolumeX },
 ];
 
+/** Same idea, for a text element's own properties. */
+const TEXT_TABS: { id: TextTab; label: string; icon: typeof SlidersHorizontal }[] = [
+  { id: "text-content", label: "Text", icon: TextCursorInput },
+  { id: "text-font", label: "Font", icon: Type },
+  { id: "text-align", label: "Align", icon: AlignCenter },
+  { id: "text-size", label: "Size", icon: CaseSensitive },
+  { id: "text-color", label: "Color", icon: Palette },
+  { id: "text-spacing", label: "Spacing", icon: MoveHorizontal },
+  { id: "text-line-height", label: "Line height", icon: Ruler },
+  { id: "text-outline", label: "Outline", icon: PenLine },
+  { id: "text-shadow", label: "Shadow", icon: Blend },
+  { id: "text-backdrop", label: "Backdrop", icon: RectangleHorizontal },
+  { id: "text-behind-speaker", label: "Behind", icon: UserRound },
+  { id: "text-transform", label: "Transform", icon: Move },
+  { id: "text-animation", label: "Animate", icon: Sparkles },
+];
+
 /** The right rail: focused purely on editing whatever's selected on the
  * timeline — a video, audio, or photo clip. Edit holds the selection
  * inspector (audio clips, text, shapes, effects, stickers); a clip's own
@@ -112,14 +168,15 @@ export function RightPanel() {
       v === null ||
       v === "edit" ||
       CLIP_TABS.some((t) => t.id === v) ||
-      AUDIO_TABS.some((t) => t.id === v)
+      AUDIO_TABS.some((t) => t.id === v) ||
+      TEXT_TABS.some((t) => t.id === v)
   );
 
-  // A new selection opens Edit when no tab was already open, or when a clip
-  // or audio tab (Speed, Trim, ...) was open but the new selection is a
-  // different kind — those tabs only apply to their own kind of clip.
-  // Picking another video clip while "Speed" is open keeps Speed open rather
-  // than bouncing back to Edit.
+  // A new selection opens Edit when no tab was already open, or when a clip,
+  // audio, or text tab (Speed, Trim, Font, ...) was open but the new
+  // selection is a different kind — those tabs only apply to their own kind
+  // of selection. Picking another video clip while "Speed" is open keeps
+  // Speed open rather than bouncing back to Edit.
   const selectionKey = useEditor((s) =>
     s.selection ? `${s.selection.kind}:${s.selection.id}` : null
   );
@@ -128,15 +185,20 @@ export function RightPanel() {
     setSeenKey(selectionKey);
     const isClipTab = tab !== null && CLIP_TABS.some((t) => t.id === tab);
     const isAudioTab = tab !== null && AUDIO_TABS.some((t) => t.id === tab);
+    const isTextTab = tab !== null && TEXT_TABS.some((t) => t.id === tab);
     if (selectionKey && hasEditContent) {
-      const newKind = useEditor.getState().selection?.kind;
+      const sel = useEditor.getState().selection;
+      const newOverlay =
+        sel?.kind === "overlay" ? useEditor.getState().overlays.find((o) => o.id === sel.id) : undefined;
+      const newIsText = !!newOverlay && isTextOverlay(newOverlay);
       if (tab === null) setTab("edit");
-      else if (isClipTab && newKind !== "clip") setTab("edit");
-      else if (isAudioTab && newKind !== "audio") setTab("edit");
-    } else if (isClipTab || isAudioTab) {
+      else if (isClipTab && sel?.kind !== "clip") setTab("edit");
+      else if (isAudioTab && sel?.kind !== "audio") setTab("edit");
+      else if (isTextTab && !newIsText) setTab("edit");
+    } else if (isClipTab || isAudioTab || isTextTab) {
       // Selection dropped entirely (or moved to a cue/transition) while a
-      // clip- or audio-only tab was open — its icon just vanished from the
-      // rail.
+      // clip-, audio-, or text-only tab was open — its icon just vanished
+      // from the rail.
       setTab("edit");
     }
   }
@@ -197,6 +259,10 @@ export function RightPanel() {
   const audio = useEditor((s) =>
     s.selection?.kind === "audio" ? s.audioClips.find((c) => c.id === s.selection!.id) : undefined
   );
+  const overlay = useEditor((s) =>
+    s.selection?.kind === "overlay" ? s.overlays.find((o) => o.id === s.selection!.id) : undefined
+  );
+  const textOverlay = overlay && isTextOverlay(overlay) ? overlay : undefined;
 
   // Split works off the pointer/playhead, not the selection, so it's always
   // live; Delete needs something picked.
@@ -209,6 +275,7 @@ export function RightPanel() {
 
   return (
     <div className="flex min-h-0 border-l border-border bg-card">
+      {textOverlay && <TextStyleMemory overlay={textOverlay} />}
       {tab !== null && (
         <div className="flex w-[264px] min-h-0 shrink-0 flex-col border-r border-border">
           {/* Inspector's own sub-panel headers (PanelTitle, ...) run flush to
@@ -254,13 +321,33 @@ export function RightPanel() {
                 {tab === "audio-duck" && <AudioDuckSection clip={audio} />}
                 {tab === "audio-mute" && <AudioMuteSection clip={audio} />}
               </ScrollArea>
+            ) : textOverlay ? (
+              <ScrollArea className="flex min-h-0 flex-col">
+                {tab === "text-content" && <TextContentSection overlay={textOverlay} />}
+                {tab === "text-font" && <TextFontSection overlay={textOverlay} />}
+                {tab === "text-align" && <TextAlignSection overlay={textOverlay} />}
+                {tab === "text-size" && <TextSizeSection overlay={textOverlay} />}
+                {tab === "text-color" && <TextColorSection overlay={textOverlay} />}
+                {tab === "text-spacing" && <TextSpacingSection overlay={textOverlay} />}
+                {tab === "text-line-height" && <TextLineHeightSection overlay={textOverlay} />}
+                {tab === "text-outline" && <TextOutlineSection overlay={textOverlay} />}
+                {tab === "text-shadow" && <TextShadowSection overlay={textOverlay} />}
+                {tab === "text-backdrop" && <TextBackdropSection overlay={textOverlay} />}
+                {tab === "text-behind-speaker" && <TextBehindSpeakerSection overlay={textOverlay} />}
+                {tab === "text-transform" && <TextTransformSection overlay={textOverlay} />}
+                {tab === "text-animation" && <TextAnimationSection overlay={textOverlay} />}
+              </ScrollArea>
             ) : CLIP_TABS.some((t) => t.id === tab) ? (
               <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
                 Select a video or photo clip to use this.
               </p>
-            ) : (
+            ) : AUDIO_TABS.some((t) => t.id === tab) ? (
               <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
                 Select an audio clip to use this.
+              </p>
+            ) : (
+              <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
+                Select a text element to use this.
               </p>
             )}
           </div>
@@ -312,6 +399,20 @@ export function RightPanel() {
                   onClick={() => setTab(tab === t.id ? null : t.id)}
                 />
               ))}
+          </>
+        )}
+        {textOverlay && (
+          <>
+            <div aria-hidden className="my-1 h-px w-8 shrink-0 bg-border" />
+            {TEXT_TABS.map((t) => (
+              <RailButton
+                key={t.id}
+                label={t.label}
+                icon={t.icon}
+                active={tab === t.id}
+                onClick={() => setTab(tab === t.id ? null : t.id)}
+              />
+            ))}
           </>
         )}
       </ScrollArea>

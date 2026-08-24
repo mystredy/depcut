@@ -213,7 +213,9 @@ export function Inspector() {
         </p>
       ) : overlay ? (
         isTextOverlay(overlay) ? (
-          <TextPanel key={overlay.id} overlay={overlay} />
+          <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
+            Use the tools below to edit this text.
+          </p>
         ) : isShapeOverlay(overlay) ? (
           <ShapePanel key={overlay.id} overlay={overlay} />
         ) : isEffectOverlay(overlay) ? (
@@ -1265,25 +1267,11 @@ export function AudioMuteSection({ clip }: { clip: AudioClip }) {
   );
 }
 
-function TextPanel({ overlay: o }: { overlay: TextOverlay }) {
-  const update = useEditor((s) => s.updateOverlay);
-  const sizeCk = useSliderCheckpoint();
-  const radiusCk = useSliderCheckpoint();
-  const opacityCk = useSliderCheckpoint();
-  const spacingCk = useSliderCheckpoint();
-  const lineHeightCk = useSliderCheckpoint();
-  const strokeCk = useSliderCheckpoint();
-  const shadowCk = useSliderCheckpoint();
-  const taRef = useRef<HTMLTextAreaElement>(null);
-  // The font menu re-reads the registry when Google families finish
-  // registering or an uploaded font lands (the bump re-renders, and the
-  // render re-reads allFonts()).
-  const [, bumpFonts] = useState(0);
-  useEffect(() => onFontsChanged(() => bumpFonts((n) => n + 1)), []);
-  const fonts = allFonts();
-
-  // Remember this title's look across clips and projects, so the next new title
-  // starts from the same style.
+/** Writes this title's current look to the shared "last used" style, purely
+ * as a background effect — mounted once per text-overlay selection
+ * regardless of which property tab is open, since every styling field it
+ * watches can be reached from a different tab. Renders nothing. */
+export function TextStyleMemory({ overlay: o }: { overlay: TextOverlay }) {
   useEffect(() => {
     writeTextStyle({
       size: o.size,
@@ -1302,7 +1290,11 @@ function TextPanel({ overlay: o }: { overlay: TextOverlay }) {
       plateRadius: o.plateRadius,
     });
   }, [o.size, o.font, o.weight, o.italic, o.color, o.stroke, o.letterSpacing, o.lineHeight, o.align, o.shadow, o.plate, o.plateColor, o.plateOpacity, o.plateRadius]);
+  return null;
+}
 
+export function TextContentSection({ overlay: o }: { overlay: TextOverlay }) {
+  const taRef = useRef<HTMLTextAreaElement>(null);
   const insertEmoji = (emoji: string) => {
     const ta = taRef.current;
     const s = useEditor.getState();
@@ -1316,377 +1308,480 @@ function TextPanel({ overlay: o }: { overlay: TextOverlay }) {
     // the textarea even while it's unfocused.
     requestAnimationFrame(() => ta?.setSelectionRange(start + emoji.length, start + emoji.length));
   };
-
   return (
-    <>
-      <PanelTitle>Text</PanelTitle>
-      <div className="flex flex-col gap-1 px-3.5 pb-4">
-        <div className="relative mb-2">
-          <Textarea
-            ref={taRef}
-            className="min-h-16 select-text pr-9"
-            rows={3}
-            value={o.text}
-            onChange={(e) =>
-              useEditor.getState().updateOverlayTransient(o.id, { text: e.target.value })
-            }
-            onFocus={() => useEditor.getState().pushHistory()}
-          />
-          <EmojiPicker
-            onPick={insertEmoji}
-            trigger={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Insert emoji"
-                title="Insert emoji"
-                className="absolute top-1.5 right-1.5 text-muted-foreground"
-              >
-                <Smile />
-              </Button>
-            }
-          />
-        </div>
-        <StylePresetsRow overlay={o} />
-        <Row label="Font">
-          <Select
-            value={o.font}
-            items={Object.fromEntries(fonts.map((f) => [f.id, f.label]))}
-            onValueChange={(v) => update(o.id, { font: v as TextOverlay["font"] })}
-          >
-            <SelectTrigger size="sm" className="w-28">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {fonts.map((f) => (
-                <SelectItem key={f.id} value={f.id}>
-                  <span style={{ fontFamily: f.stack }}>{f.label}</span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label="Bold"
-            aria-pressed={o.weight === 700}
-            className={cn(o.weight === 700 && "border-primary bg-primary/15 text-primary")}
-            onClick={() => update(o.id, { weight: o.weight === 700 ? 400 : 700 })}
-          >
-            <Bold />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label="Italic"
-            aria-pressed={!!o.italic}
-            className={cn(o.italic && "border-primary bg-primary/15 text-primary")}
-            onClick={() => update(o.id, { italic: o.italic ? undefined : true })}
-          >
-            <Italic />
-          </Button>
-        </Row>
-        <Row label="Align">
-          {(
-            [
-              ["left", AlignLeft],
-              ["center", AlignCenter],
-              ["right", AlignRight],
-            ] as const
-          ).map(([a, Icon]) => {
-            const active = (o.align ?? "center") === a;
-            return (
-              <Button
-                key={a}
-                variant="outline"
-                size="icon-sm"
-                aria-label={`Align ${a}`}
-                aria-pressed={active}
-                className={cn(active && "border-primary bg-primary/15 text-primary")}
-                onClick={() => update(o.id, { align: a === "center" ? undefined : a })}
-              >
-                <Icon />
-              </Button>
-            );
-          })}
-        </Row>
-        <Row label="Size">
-          <Slider
-            className="data-horizontal:w-24"
-            min={24}
-            max={240}
-            value={o.size}
-            onValueChange={(v) => {
-              sizeCk.begin();
-              useEditor.getState().updateOverlayTransient(o.id, { size: Number(v) });
-            }}
-            onValueCommitted={sizeCk.end}
-          />
-          <ScrubValue
-            label="Text size"
-            className="w-9 text-muted-foreground"
-            value={o.size}
-            min={24}
-            max={240}
-            step={1}
-            format={(v) => String(Math.round(v))}
-            parse={parseNumberInput}
-            onScrub={(v) => {
-              sizeCk.begin();
-              useEditor.getState().updateOverlayTransient(o.id, { size: v });
-            }}
-            onCommit={(v) => {
-              sizeCk.begin();
-              useEditor.getState().updateOverlayTransient(o.id, { size: v });
-              sizeCk.end();
-            }}
-          />
-        </Row>
-        <Row label="Color">
-          <ColorSwatches
-            value={o.color}
-            onBegin={() => useEditor.getState().pushHistory()}
-            onLive={(c) => useEditor.getState().updateOverlayTransient(o.id, { color: c })}
-            onCommit={(c) => update(o.id, { color: c })}
-          />
-        </Row>
-        <Row label="Spacing">
-          <Slider
-            className="data-horizontal:w-24"
-            min={-0.05}
-            max={0.3}
-            step={0.005}
-            value={o.letterSpacing ?? 0}
-            onValueChange={(v) => {
-              spacingCk.begin();
-              useEditor.getState().updateOverlayTransient(o.id, {
-                letterSpacing: Math.abs(Number(v)) < 0.0025 ? undefined : Number(v),
-              });
-            }}
-            onValueCommitted={spacingCk.end}
-          />
-          <Value className="w-9 text-muted-foreground">
-            {Math.round((o.letterSpacing ?? 0) * 100)}
-          </Value>
-        </Row>
-        <Row label="Line height">
-          <Slider
-            className="data-horizontal:w-24"
-            min={0.8}
-            max={2}
-            step={0.05}
-            value={o.lineHeight ?? 1.25}
-            onValueChange={(v) => {
-              lineHeightCk.begin();
-              useEditor.getState().updateOverlayTransient(o.id, {
-                lineHeight: Math.abs(Number(v) - 1.25) < 0.025 ? undefined : Number(v),
-              });
-            }}
-            onValueCommitted={lineHeightCk.end}
-          />
-          <Value className="w-9 text-muted-foreground">{(o.lineHeight ?? 1.25).toFixed(2)}</Value>
-        </Row>
-        <Section
-          title="Outline"
-          enabled={!!o.stroke}
-          onEnabledChange={(v) =>
-            update(o.id, { stroke: v ? { color: "#111114", width: 0.04 } : undefined })
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <div className="relative mb-2">
+        <Textarea
+          ref={taRef}
+          className="min-h-16 select-text pr-9"
+          rows={3}
+          value={o.text}
+          onChange={(e) =>
+            useEditor.getState().updateOverlayTransient(o.id, { text: e.target.value })
           }
+          onFocus={() => useEditor.getState().pushHistory()}
+        />
+        <EmojiPicker
+          onPick={insertEmoji}
+          trigger={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Insert emoji"
+              title="Insert emoji"
+              className="absolute top-1.5 right-1.5 text-muted-foreground"
+            >
+              <Smile />
+            </Button>
+          }
+        />
+      </div>
+      <StylePresetsRow overlay={o} />
+    </div>
+  );
+}
+
+export function TextFontSection({ overlay: o }: { overlay: TextOverlay }) {
+  const update = useEditor((s) => s.updateOverlay);
+  // The font menu re-reads the registry when Google families finish
+  // registering or an uploaded font lands (the bump re-renders, and the
+  // render re-reads allFonts()).
+  const [, bumpFonts] = useState(0);
+  useEffect(() => onFontsChanged(() => bumpFonts((n) => n + 1)), []);
+  const fonts = allFonts();
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Font">
+        <Select
+          value={o.font}
+          items={Object.fromEntries(fonts.map((f) => [f.id, f.label]))}
+          onValueChange={(v) => update(o.id, { font: v as TextOverlay["font"] })}
         >
-          {o.stroke && (
-            <>
-              <Row label="Color">
-                <ColorSwatches
-                  value={o.stroke.color}
-                  onBegin={() => useEditor.getState().pushHistory()}
-                  onLive={(c) =>
-                    useEditor.getState().updateOverlayTransient(o.id, {
-                      stroke: { ...o.stroke!, color: c },
-                    })
-                  }
-                  onCommit={(c) => update(o.id, { stroke: { ...o.stroke!, color: c } })}
-                />
-              </Row>
-              <Row label="Width">
-                <Slider
-                  className="data-horizontal:w-24"
-                  min={0.01}
-                  max={0.15}
-                  step={0.005}
-                  value={o.stroke.width}
-                  onValueChange={(v) => {
-                    strokeCk.begin();
-                    useEditor.getState().updateOverlayTransient(o.id, {
-                      stroke: { ...o.stroke!, width: Number(v) },
-                    });
-                  }}
-                  onValueCommitted={strokeCk.end}
-                />
-                <Value className="w-9 text-muted-foreground">
-                  {Math.round(o.stroke.width * 100)}
-                </Value>
-              </Row>
-            </>
-          )}
-        </Section>
-        <Section
-          title="Shadow"
-          enabled={!!o.shadow}
-          onEnabledChange={(v) => update(o.id, { shadow: v })}
+          <SelectTrigger size="sm" className="w-28">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {fonts.map((f) => (
+              <SelectItem key={f.id} value={f.id}>
+                <span style={{ fontFamily: f.stack }}>{f.label}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label="Bold"
+          aria-pressed={o.weight === 700}
+          className={cn(o.weight === 700 && "border-primary bg-primary/15 text-primary")}
+          onClick={() => update(o.id, { weight: o.weight === 700 ? 400 : 700 })}
         >
+          <Bold />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label="Italic"
+          aria-pressed={!!o.italic}
+          className={cn(o.italic && "border-primary bg-primary/15 text-primary")}
+          onClick={() => update(o.id, { italic: o.italic ? undefined : true })}
+        >
+          <Italic />
+        </Button>
+      </Row>
+    </div>
+  );
+}
+
+export function TextAlignSection({ overlay: o }: { overlay: TextOverlay }) {
+  const update = useEditor((s) => s.updateOverlay);
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Align">
+        {(
+          [
+            ["left", AlignLeft],
+            ["center", AlignCenter],
+            ["right", AlignRight],
+          ] as const
+        ).map(([a, Icon]) => {
+          const active = (o.align ?? "center") === a;
+          return (
+            <Button
+              key={a}
+              variant="outline"
+              size="icon-sm"
+              aria-label={`Align ${a}`}
+              aria-pressed={active}
+              className={cn(active && "border-primary bg-primary/15 text-primary")}
+              onClick={() => update(o.id, { align: a === "center" ? undefined : a })}
+            >
+              <Icon />
+            </Button>
+          );
+        })}
+      </Row>
+    </div>
+  );
+}
+
+export function TextSizeSection({ overlay: o }: { overlay: TextOverlay }) {
+  const sizeCk = useSliderCheckpoint();
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Size">
+        <Slider
+          className="data-horizontal:w-24"
+          min={24}
+          max={240}
+          value={o.size}
+          onValueChange={(v) => {
+            sizeCk.begin();
+            useEditor.getState().updateOverlayTransient(o.id, { size: Number(v) });
+          }}
+          onValueCommitted={sizeCk.end}
+        />
+        <ScrubValue
+          label="Text size"
+          className="w-9 text-muted-foreground"
+          value={o.size}
+          min={24}
+          max={240}
+          step={1}
+          format={(v) => String(Math.round(v))}
+          parse={parseNumberInput}
+          onScrub={(v) => {
+            sizeCk.begin();
+            useEditor.getState().updateOverlayTransient(o.id, { size: v });
+          }}
+          onCommit={(v) => {
+            sizeCk.begin();
+            useEditor.getState().updateOverlayTransient(o.id, { size: v });
+            sizeCk.end();
+          }}
+        />
+      </Row>
+    </div>
+  );
+}
+
+export function TextColorSection({ overlay: o }: { overlay: TextOverlay }) {
+  const update = useEditor((s) => s.updateOverlay);
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Color">
+        <ColorSwatches
+          value={o.color}
+          onBegin={() => useEditor.getState().pushHistory()}
+          onLive={(c) => useEditor.getState().updateOverlayTransient(o.id, { color: c })}
+          onCommit={(c) => update(o.id, { color: c })}
+        />
+      </Row>
+    </div>
+  );
+}
+
+export function TextSpacingSection({ overlay: o }: { overlay: TextOverlay }) {
+  const spacingCk = useSliderCheckpoint();
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Spacing">
+        <Slider
+          className="data-horizontal:w-24"
+          min={-0.05}
+          max={0.3}
+          step={0.005}
+          value={o.letterSpacing ?? 0}
+          onValueChange={(v) => {
+            spacingCk.begin();
+            useEditor.getState().updateOverlayTransient(o.id, {
+              letterSpacing: Math.abs(Number(v)) < 0.0025 ? undefined : Number(v),
+            });
+          }}
+          onValueCommitted={spacingCk.end}
+        />
+        <Value className="w-9 text-muted-foreground">
+          {Math.round((o.letterSpacing ?? 0) * 100)}
+        </Value>
+      </Row>
+    </div>
+  );
+}
+
+export function TextLineHeightSection({ overlay: o }: { overlay: TextOverlay }) {
+  const lineHeightCk = useSliderCheckpoint();
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Line height">
+        <Slider
+          className="data-horizontal:w-24"
+          min={0.8}
+          max={2}
+          step={0.05}
+          value={o.lineHeight ?? 1.25}
+          onValueChange={(v) => {
+            lineHeightCk.begin();
+            useEditor.getState().updateOverlayTransient(o.id, {
+              lineHeight: Math.abs(Number(v) - 1.25) < 0.025 ? undefined : Number(v),
+            });
+          }}
+          onValueCommitted={lineHeightCk.end}
+        />
+        <Value className="w-9 text-muted-foreground">{(o.lineHeight ?? 1.25).toFixed(2)}</Value>
+      </Row>
+    </div>
+  );
+}
+
+export function TextOutlineSection({ overlay: o }: { overlay: TextOverlay }) {
+  const update = useEditor((s) => s.updateOverlay);
+  const strokeCk = useSliderCheckpoint();
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Section
+        title="Outline"
+        enabled={!!o.stroke}
+        onEnabledChange={(v) =>
+          update(o.id, { stroke: v ? { color: "#111114", width: 0.04 } : undefined })
+        }
+      >
+        {o.stroke && (
           <>
             <Row label="Color">
               <ColorSwatches
-                value={(typeof o.shadow === "object" ? o.shadow.color : undefined) ?? "#000000"}
+                value={o.stroke.color}
                 onBegin={() => useEditor.getState().pushHistory()}
                 onLive={(c) =>
                   useEditor.getState().updateOverlayTransient(o.id, {
-                    shadow: { ...(typeof o.shadow === "object" ? o.shadow : {}), color: c },
+                    stroke: { ...o.stroke!, color: c },
                   })
                 }
-                onCommit={(c) =>
-                  update(o.id, {
-                    shadow: { ...(typeof o.shadow === "object" ? o.shadow : {}), color: c },
-                  })
-                }
+                onCommit={(c) => update(o.id, { stroke: { ...o.stroke!, color: c } })}
               />
             </Row>
-            <Row label="Blur">
+            <Row label="Width">
               <Slider
                 className="data-horizontal:w-24"
-                min={0}
-                max={60}
-                step={1}
-                value={(typeof o.shadow === "object" ? o.shadow.blur : undefined) ?? 14}
+                min={0.01}
+                max={0.15}
+                step={0.005}
+                value={o.stroke.width}
                 onValueChange={(v) => {
-                  shadowCk.begin();
+                  strokeCk.begin();
                   useEditor.getState().updateOverlayTransient(o.id, {
-                    shadow: { ...(typeof o.shadow === "object" ? o.shadow : {}), blur: Number(v) },
+                    stroke: { ...o.stroke!, width: Number(v) },
                   });
                 }}
-                onValueCommitted={shadowCk.end}
+                onValueCommitted={strokeCk.end}
               />
               <Value className="w-9 text-muted-foreground">
-                {(typeof o.shadow === "object" ? o.shadow.blur : undefined) ?? 14}
-              </Value>
-            </Row>
-            <Row label="Opacity">
-              <Slider
-                className="data-horizontal:w-24"
-                min={0}
-                max={1}
-                step={0.01}
-                value={(typeof o.shadow === "object" ? o.shadow.opacity : undefined) ?? 0.65}
-                onValueChange={(v) => {
-                  shadowCk.begin();
-                  useEditor.getState().updateOverlayTransient(o.id, {
-                    shadow: {
-                      ...(typeof o.shadow === "object" ? o.shadow : {}),
-                      opacity: Number(v),
-                    },
-                  });
-                }}
-                onValueCommitted={shadowCk.end}
-              />
-              <Value className="w-9 text-muted-foreground">
-                {Math.round(((typeof o.shadow === "object" ? o.shadow.opacity : undefined) ?? 0.65) * 100)}
+                {Math.round(o.stroke.width * 100)}
               </Value>
             </Row>
           </>
-        </Section>
-        <Section
-          title="Backdrop"
-          enabled={o.plate}
-          onEnabledChange={(v) => update(o.id, { plate: v })}
-        >
-          <>
-            <Row label="Color">
-              <ColorSwatches
-                value={o.plateColor ?? PLATE_COLOR}
-                onBegin={() => useEditor.getState().pushHistory()}
-                onLive={(c) => useEditor.getState().updateOverlayTransient(o.id, { plateColor: c })}
-                onCommit={(c) => update(o.id, { plateColor: c })}
-              />
-            </Row>
-            <Row label="Opacity">
-              <Slider
-                className="data-horizontal:w-24"
-                min={0}
-                max={1}
-                step={0.01}
-                value={o.plateOpacity ?? PLATE_OPACITY}
-                onValueChange={(v) => {
-                  opacityCk.begin();
-                  useEditor.getState().updateOverlayTransient(o.id, { plateOpacity: Number(v) });
-                }}
-                onValueCommitted={opacityCk.end}
-              />
-              <ScrubValue
-                label="Backdrop opacity"
-                className="w-9 text-muted-foreground"
-                value={o.plateOpacity ?? PLATE_OPACITY}
-                min={0}
-                max={1}
-                step={0.01}
-                format={(v) => String(Math.round(v * 100))}
-                parse={parsePercentInput}
-                onScrub={(v) => {
-                  opacityCk.begin();
-                  useEditor.getState().updateOverlayTransient(o.id, { plateOpacity: v });
-                }}
-                onCommit={(v) => {
-                  opacityCk.begin();
-                  useEditor.getState().updateOverlayTransient(o.id, { plateOpacity: v });
-                  opacityCk.end();
-                }}
-              />
-            </Row>
-            <Row label="Radius">
-              <Slider
-                className="data-horizontal:w-24"
-                min={0}
-                max={1}
-                step={0.01}
-                value={o.plateRadius ?? PLATE_RADIUS}
-                onValueChange={(v) => {
-                  radiusCk.begin();
-                  useEditor.getState().updateOverlayTransient(o.id, { plateRadius: Number(v) });
-                }}
-                onValueCommitted={radiusCk.end}
-              />
-              <ScrubValue
-                label="Backdrop radius"
-                className="w-9 text-muted-foreground"
-                value={o.plateRadius ?? PLATE_RADIUS}
-                min={0}
-                max={1}
-                step={0.01}
-                format={(v) => String(Math.round(v * 100))}
-                parse={parsePercentInput}
-                onScrub={(v) => {
-                  radiusCk.begin();
-                  useEditor.getState().updateOverlayTransient(o.id, { plateRadius: v });
-                }}
-                onCommit={(v) => {
-                  radiusCk.begin();
-                  useEditor.getState().updateOverlayTransient(o.id, { plateRadius: v });
-                  radiusCk.end();
-                }}
-              />
-            </Row>
-          </>
-        </Section>
-        <Section
-          title="Behind speaker"
-          info="Sit the text behind the person in the shot. Needs a clearly separated subject; with no person detected it shows as a normal title."
-          enabled={!!o.behindSubject}
-          onEnabledChange={(v) => update(o.id, { behindSubject: v || undefined })}
-        />
-        <TransformRows overlay={o} />
-        <GroupRow overlay={o} />
-        <AnimationRows overlay={o} />
-      </div>
-    </>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+export function TextShadowSection({ overlay: o }: { overlay: TextOverlay }) {
+  const update = useEditor((s) => s.updateOverlay);
+  const shadowCk = useSliderCheckpoint();
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Section
+        title="Shadow"
+        enabled={!!o.shadow}
+        onEnabledChange={(v) => update(o.id, { shadow: v })}
+      >
+        <>
+          <Row label="Color">
+            <ColorSwatches
+              value={(typeof o.shadow === "object" ? o.shadow.color : undefined) ?? "#000000"}
+              onBegin={() => useEditor.getState().pushHistory()}
+              onLive={(c) =>
+                useEditor.getState().updateOverlayTransient(o.id, {
+                  shadow: { ...(typeof o.shadow === "object" ? o.shadow : {}), color: c },
+                })
+              }
+              onCommit={(c) =>
+                update(o.id, {
+                  shadow: { ...(typeof o.shadow === "object" ? o.shadow : {}), color: c },
+                })
+              }
+            />
+          </Row>
+          <Row label="Blur">
+            <Slider
+              className="data-horizontal:w-24"
+              min={0}
+              max={60}
+              step={1}
+              value={(typeof o.shadow === "object" ? o.shadow.blur : undefined) ?? 14}
+              onValueChange={(v) => {
+                shadowCk.begin();
+                useEditor.getState().updateOverlayTransient(o.id, {
+                  shadow: { ...(typeof o.shadow === "object" ? o.shadow : {}), blur: Number(v) },
+                });
+              }}
+              onValueCommitted={shadowCk.end}
+            />
+            <Value className="w-9 text-muted-foreground">
+              {(typeof o.shadow === "object" ? o.shadow.blur : undefined) ?? 14}
+            </Value>
+          </Row>
+          <Row label="Opacity">
+            <Slider
+              className="data-horizontal:w-24"
+              min={0}
+              max={1}
+              step={0.01}
+              value={(typeof o.shadow === "object" ? o.shadow.opacity : undefined) ?? 0.65}
+              onValueChange={(v) => {
+                shadowCk.begin();
+                useEditor.getState().updateOverlayTransient(o.id, {
+                  shadow: {
+                    ...(typeof o.shadow === "object" ? o.shadow : {}),
+                    opacity: Number(v),
+                  },
+                });
+              }}
+              onValueCommitted={shadowCk.end}
+            />
+            <Value className="w-9 text-muted-foreground">
+              {Math.round(((typeof o.shadow === "object" ? o.shadow.opacity : undefined) ?? 0.65) * 100)}
+            </Value>
+          </Row>
+        </>
+      </Section>
+    </div>
+  );
+}
+
+export function TextBackdropSection({ overlay: o }: { overlay: TextOverlay }) {
+  const update = useEditor((s) => s.updateOverlay);
+  const opacityCk = useSliderCheckpoint();
+  const radiusCk = useSliderCheckpoint();
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Section
+        title="Backdrop"
+        enabled={o.plate}
+        onEnabledChange={(v) => update(o.id, { plate: v })}
+      >
+        <>
+          <Row label="Color">
+            <ColorSwatches
+              value={o.plateColor ?? PLATE_COLOR}
+              onBegin={() => useEditor.getState().pushHistory()}
+              onLive={(c) => useEditor.getState().updateOverlayTransient(o.id, { plateColor: c })}
+              onCommit={(c) => update(o.id, { plateColor: c })}
+            />
+          </Row>
+          <Row label="Opacity">
+            <Slider
+              className="data-horizontal:w-24"
+              min={0}
+              max={1}
+              step={0.01}
+              value={o.plateOpacity ?? PLATE_OPACITY}
+              onValueChange={(v) => {
+                opacityCk.begin();
+                useEditor.getState().updateOverlayTransient(o.id, { plateOpacity: Number(v) });
+              }}
+              onValueCommitted={opacityCk.end}
+            />
+            <ScrubValue
+              label="Backdrop opacity"
+              className="w-9 text-muted-foreground"
+              value={o.plateOpacity ?? PLATE_OPACITY}
+              min={0}
+              max={1}
+              step={0.01}
+              format={(v) => String(Math.round(v * 100))}
+              parse={parsePercentInput}
+              onScrub={(v) => {
+                opacityCk.begin();
+                useEditor.getState().updateOverlayTransient(o.id, { plateOpacity: v });
+              }}
+              onCommit={(v) => {
+                opacityCk.begin();
+                useEditor.getState().updateOverlayTransient(o.id, { plateOpacity: v });
+                opacityCk.end();
+              }}
+            />
+          </Row>
+          <Row label="Radius">
+            <Slider
+              className="data-horizontal:w-24"
+              min={0}
+              max={1}
+              step={0.01}
+              value={o.plateRadius ?? PLATE_RADIUS}
+              onValueChange={(v) => {
+                radiusCk.begin();
+                useEditor.getState().updateOverlayTransient(o.id, { plateRadius: Number(v) });
+              }}
+              onValueCommitted={radiusCk.end}
+            />
+            <ScrubValue
+              label="Backdrop radius"
+              className="w-9 text-muted-foreground"
+              value={o.plateRadius ?? PLATE_RADIUS}
+              min={0}
+              max={1}
+              step={0.01}
+              format={(v) => String(Math.round(v * 100))}
+              parse={parsePercentInput}
+              onScrub={(v) => {
+                radiusCk.begin();
+                useEditor.getState().updateOverlayTransient(o.id, { plateRadius: v });
+              }}
+              onCommit={(v) => {
+                radiusCk.begin();
+                useEditor.getState().updateOverlayTransient(o.id, { plateRadius: v });
+                radiusCk.end();
+              }}
+            />
+          </Row>
+        </>
+      </Section>
+    </div>
+  );
+}
+
+export function TextBehindSpeakerSection({ overlay: o }: { overlay: TextOverlay }) {
+  const update = useEditor((s) => s.updateOverlay);
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Section
+        title="Behind speaker"
+        info="Sit the text behind the person in the shot. Needs a clearly separated subject; with no person detected it shows as a normal title."
+        enabled={!!o.behindSubject}
+        onEnabledChange={(v) => update(o.id, { behindSubject: v || undefined })}
+      />
+    </div>
+  );
+}
+
+/** Position, rotation, opacity, and keyframes — plus Group/Ungroup, which
+ * rides along here since it's about the element's place among its peers
+ * rather than a style of its own. */
+export function TextTransformSection({ overlay: o }: { overlay: TextOverlay }) {
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <TransformRows overlay={o} />
+      <GroupRow overlay={o} />
+    </div>
+  );
+}
+
+export function TextAnimationSection({ overlay: o }: { overlay: TextOverlay }) {
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <AnimationRows overlay={o} />
+    </div>
   );
 }
 
