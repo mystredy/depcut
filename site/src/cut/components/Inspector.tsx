@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlignCenter, AlignLeft, AlignRight, AudioLines, Bold, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Diamond, Info, Italic, Loader2, RotateCcw, SlidersHorizontal, Smile, Trash2, Wand2 } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, AudioLines, Bold, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Diamond, Info, Italic, Loader2, RotateCcw, Smile, Trash2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmojiPicker } from "@/cut/components/EmojiPicker";
 import {
@@ -208,7 +208,9 @@ export function Inspector() {
       className="flex min-h-0 flex-col border-l border-border bg-card"
     >
       {clip ? (
-        <ClipPanel key={clip.id} clip={clip} />
+        <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
+          Use the tools below to edit this clip.
+        </p>
       ) : audio ? (
         <AudioPanel key={audio.id} clip={audio} />
       ) : overlay ? (
@@ -410,14 +412,198 @@ function LayoutButtons({
   );
 }
 
-function ClipPanel({ clip }: { clip: VideoClip }) {
-  const asset = useEditor((s) => s.assets.find((a) => a.id === clip.assetId));
-  const updateClip = useEditor((s) => s.updateClip);
+/** Nudges an overlay clip's start by MOVE_SECONDS_PER_SEC per second of full
+ * shuttle deflection; steps a track-0 clip one slot in the sequence per
+ * REORDER_STEP_SECONDS of accumulated motion instead, since the main
+ * sequence has no continuous position to slide through, only an order. */
+export function ClipMoveTimeSection({ clip }: { clip: VideoClip }) {
+  const reorderAccum = useRef(0);
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <div className="flex flex-col items-center gap-2 py-1">
+        <span className="self-start text-[13px] text-muted-foreground">Move in time</span>
+        <ShuttleBar
+          onStart={() => {
+            reorderAccum.current = 0;
+            useEditor.getState().pushHistory();
+          }}
+          onTick={(rate, dt) => {
+            const s = useEditor.getState();
+            const live = s.clips.find((c) => c.id === clip.id);
+            if (!live) return;
+            if (live.track !== 0) {
+              const next = Math.max(0, live.start + rate * MOVE_SECONDS_PER_SEC * dt);
+              s.updateClipTransient(clip.id, { start: next });
+              return;
+            }
+            reorderAccum.current += rate * dt;
+            while (Math.abs(reorderAccum.current) >= REORDER_STEP_SECONDS) {
+              const dir = reorderAccum.current > 0 ? 1 : -1;
+              reorderAccum.current -= dir * REORDER_STEP_SECONDS;
+              const cur = useEditor.getState();
+              const row = cur.clips.filter((c) => c.track === 0).sort((a, b) => a.start - b.start);
+              const idx = row.findIndex((c) => c.id === clip.id);
+              if (idx < 0) break;
+              cur.moveClip(clip.id, idx + dir);
+            }
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Track 0 only ever has one place to go: up, off the gapless main sequence
+ * and onto the first overlay track — closeTrack0Gaps repacks whatever's left
+ * behind so the main sequence stays abutted. Overlay clips move freely
+ * between rows; dropVideoClip keeps the clip's own trim/speed and slides it
+ * to the next free spot if something's already on the destination track at
+ * this start time. */
+export function ClipMoveTrackSection({ clip }: { clip: VideoClip }) {
+  const moveTrack = (delta: number) => {
+    const s = useEditor.getState();
+    const live = s.clips.find((c) => c.id === clip.id);
+    if (!live) return;
+    if (live.track === 0) {
+      if (delta <= 0) return;
+      s.pushHistory();
+      s.dropVideoClip(clip.id, { kind: "track", track: 1 }, live.start);
+      s.closeTrack0Gaps();
+      return;
+    }
+    const track = live.track + delta;
+    if (track < 1) return;
+    s.pushHistory();
+    s.dropVideoClip(clip.id, { kind: "track", track }, live.start);
+  };
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Move track">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          title="Move to the track below"
+          disabled={clip.track <= 1}
+          onClick={() => moveTrack(-1)}
+        >
+          <ChevronDown className="size-3.5" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          title="Move to the track above"
+          onClick={() => moveTrack(1)}
+        >
+          <ChevronUp className="size-3.5" />
+        </Button>
+      </Row>
+    </div>
+  );
+}
+
+export function ClipSpeedSection({ clip }: { clip: VideoClip }) {
   const [speedDraft, setSpeedDraft] = useState<number | null>(null);
+  const speed = speedDraft ?? clip.speed ?? 1;
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Speed">
+        <Slider
+          className="clip-speed data-horizontal:w-24"
+          min={SPEED_MIN}
+          max={SPEED_MAX}
+          step={0.05}
+          value={speed}
+          onValueChange={(v) => setSpeedDraft(Number(v))}
+          onValueCommitted={() => {
+            if (speedDraft != null) useEditor.getState().setClipSpeed(clip.id, speedDraft);
+            setSpeedDraft(null);
+          }}
+        />
+        <ScrubValue
+          label="Speed"
+          className="w-9 text-muted-foreground"
+          value={speed}
+          min={SPEED_FLOOR}
+          max={Infinity}
+          step={0.05}
+          format={formatSpeed}
+          parse={parseSpeedInput}
+          onScrub={setSpeedDraft}
+          onCommit={(v) => {
+            useEditor.getState().setClipSpeed(clip.id, v);
+            setSpeedDraft(null);
+          }}
+        />
+        <ResetButton
+          title="Reset speed"
+          show={Math.abs(speed - 1) > 1e-4}
+          onClick={() => {
+            useEditor.getState().setClipSpeed(clip.id, 1);
+            setSpeedDraft(null);
+          }}
+        />
+      </Row>
+    </div>
+  );
+}
+
+/** Clip volume plus the generated-voiceover volume that rides over it — both
+ * are "how loud does this clip's audio play," so they share a panel. */
+export function ClipVolumeSection({ clip }: { clip: VideoClip }) {
+  const updateClip = useEditor((s) => s.updateClip);
   const [volumeDraft, setVolumeDraft] = useState<number | null>(null);
-  // The panel can push into the color-grade subview, which remembers which
-  // clip opened it, so selecting another clip lands back on the main view.
-  const [colorFor, setColorFor] = useState<string | null>(null);
+  const volume = volumeDraft ?? clip.volume ?? 1;
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Clip volume">
+        <Slider
+          className="clip-volume data-horizontal:w-24"
+          min={0}
+          max={1.5}
+          step={0.05}
+          value={volume}
+          onValueChange={(v) => setVolumeDraft(Number(v))}
+          onValueCommitted={() => {
+            if (volumeDraft != null) {
+              updateClip(clip.id, { volume: volumeDraft === 1 ? undefined : volumeDraft });
+            }
+            setVolumeDraft(null);
+          }}
+        />
+        <ScrubValue
+          label="Clip volume"
+          className="w-9 text-muted-foreground"
+          value={volume}
+          min={0}
+          max={1.5}
+          step={0.05}
+          format={formatPercent}
+          parse={parsePercentInput}
+          onScrub={setVolumeDraft}
+          onCommit={(v) => {
+            updateClip(clip.id, { volume: v === 1 ? undefined : v });
+            setVolumeDraft(null);
+          }}
+        />
+      </Row>
+      <ClipGeneratedAudio clip={clip} />
+    </div>
+  );
+}
+
+export function ClipMuteSection({ clip }: { clip: VideoClip }) {
+  const updateClip = useEditor((s) => s.updateClip);
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Mute audio">
+        <Switch checked={clip.muted} onCheckedChange={(v) => updateClip(clip.id, { muted: v })} />
+      </Row>
+    </div>
+  );
+}
+
+export function ClipExtractSection({ clip }: { clip: VideoClip }) {
+  const asset = useEditor((s) => s.assets.find((a) => a.id === clip.assetId));
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const extractAudio = async () => {
@@ -435,252 +621,85 @@ function ClipPanel({ clip }: { clip: VideoClip }) {
       setExtracting(false);
     }
   };
-  // Track 0 only ever has one place to go: up, off the gapless main
-  // sequence and onto the first overlay track — closeTrack0Gaps repacks
-  // whatever's left behind so the main sequence stays abutted. Overlay
-  // clips move freely between rows; dropVideoClip keeps the clip's own
-  // trim/speed and slides it to the next free spot if something's already
-  // on the destination track at this start time.
-  const moveTrack = (delta: number) => {
-    const s = useEditor.getState();
-    const live = s.clips.find((c) => c.id === clip.id);
-    if (!live) return;
-    if (live.track === 0) {
-      if (delta <= 0) return;
-      s.pushHistory();
-      s.dropVideoClip(clip.id, { kind: "track", track: 1 }, live.start);
-      s.closeTrack0Gaps();
-      return;
-    }
-    const track = live.track + delta;
-    if (track < 1) return;
-    s.pushHistory();
-    s.dropVideoClip(clip.id, { kind: "track", track }, live.start);
-  };
-  // Accumulates shuttle motion for a track-0 clip into whole reorder steps —
-  // the main sequence has no continuous position to slide through, only an
-  // order, so "how far the pointer traveled" becomes "how many slots" rather
-  // than seconds. Distance still sets speed: held further out, it steps more
-  // often.
-  const reorderAccum = useRef(0);
-  const view = colorFor === clip.id ? "color" : "main";
-  const volume = volumeDraft ?? clip.volume ?? 1;
-  const speed = speedDraft ?? clip.speed ?? 1;
-  if (view === "color") {
-    return <ColorPanel clip={clip} onBack={() => setColorFor(null)} />;
-  }
   return (
-    <>
-      <div className="flex flex-col gap-1 px-3.5 pb-4">
-        <div className="flex flex-col items-center gap-2 py-1">
-          <span className="self-start text-[13px] text-muted-foreground">Move in time</span>
-          <ShuttleBar
-            onStart={() => {
-              reorderAccum.current = 0;
-              useEditor.getState().pushHistory();
-            }}
-            onTick={(rate, dt) => {
-              const s = useEditor.getState();
-              const live = s.clips.find((c) => c.id === clip.id);
-              if (!live) return;
-              if (live.track !== 0) {
-                const next = Math.max(0, live.start + rate * MOVE_SECONDS_PER_SEC * dt);
-                s.updateClipTransient(clip.id, { start: next });
-                return;
-              }
-              // No continuous position to slide through on the main
-              // sequence — only an order. Each REORDER_STEP_SECONDS of
-              // accumulated shuttle motion steps the clip one slot.
-              reorderAccum.current += rate * dt;
-              while (Math.abs(reorderAccum.current) >= REORDER_STEP_SECONDS) {
-                const dir = reorderAccum.current > 0 ? 1 : -1;
-                reorderAccum.current -= dir * REORDER_STEP_SECONDS;
-                const cur = useEditor.getState();
-                const row = cur.clips.filter((c) => c.track === 0).sort((a, b) => a.start - b.start);
-                const idx = row.findIndex((c) => c.id === clip.id);
-                if (idx < 0) break;
-                cur.moveClip(clip.id, idx + dir);
-              }
-            }}
-          />
-        </div>
-        <Row label="Move track">
-          <Button
-            variant="outline"
-            size="icon-sm"
-            title="Move to the track below"
-            disabled={clip.track <= 1}
-            onClick={() => moveTrack(-1)}
-          >
-            <ChevronDown className="size-3.5" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            title="Move to the track above"
-            onClick={() => moveTrack(1)}
-          >
-            <ChevronUp className="size-3.5" />
-          </Button>
-        </Row>
-        <Row label="Speed">
-          <Slider
-            className="clip-speed data-horizontal:w-24"
-            min={SPEED_MIN}
-            max={SPEED_MAX}
-            step={0.05}
-            value={speed}
-            onValueChange={(v) => setSpeedDraft(Number(v))}
-            onValueCommitted={() => {
-              if (speedDraft != null) useEditor.getState().setClipSpeed(clip.id, speedDraft);
-              setSpeedDraft(null);
-            }}
-          />
-          <ScrubValue
-            label="Speed"
-            className="w-9 text-muted-foreground"
-            value={speed}
-            min={SPEED_FLOOR}
-            max={Infinity}
-            step={0.05}
-            format={formatSpeed}
-            parse={parseSpeedInput}
-            onScrub={setSpeedDraft}
-            onCommit={(v) => {
-              useEditor.getState().setClipSpeed(clip.id, v);
-              setSpeedDraft(null);
-            }}
-          />
-          <ResetButton
-            title="Reset speed"
-            show={Math.abs(speed - 1) > 1e-4}
-            onClick={() => {
-              useEditor.getState().setClipSpeed(clip.id, 1);
-              setSpeedDraft(null);
-            }}
-          />
-        </Row>
-        <Row label="Color">
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      {asset?.type === "video" ? (
+        <Row label="Extract audio">
           <button
             type="button"
-            className="clip-color flex h-8 w-[8.5rem] items-center justify-between rounded-md border border-input px-2.5 text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-            onClick={() => setColorFor(clip.id)}
+            className="clip-extract-audio flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+            disabled={extracting}
+            onClick={() => void extractAudio()}
           >
-            <span className="flex items-center gap-1.5">
-              <SlidersHorizontal className="size-3.5" />
-              Adjust
-              {!isNeutralGrade(clip.grade) && (
-                <span className="size-1.5 rounded-full bg-violet-500" aria-label="Adjusted" />
-              )}
-            </span>
-            <ChevronRight className="size-3.5" />
+            {extracting ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <AudioLines className="size-3.5" />
+            )}
+            {extracting ? "Extracting…" : "Extract"}
           </button>
         </Row>
+      ) : (
+        <p className="px-0.5 py-2 text-[11.5px] leading-relaxed text-muted-foreground">
+          Extracting audio only works on video clips.
+        </p>
+      )}
+      {extractError && (
+        <p className="clip-extract-error text-[11px] leading-relaxed text-red-600">{extractError}</p>
+      )}
+    </div>
+  );
+}
 
-        {/* Audio */}
-        <div className="my-1.5 h-px bg-border" />
-        <Row label="Clip volume">
-          <Slider
-            className="clip-volume data-horizontal:w-24"
-            min={0}
-            max={1.5}
-            step={0.05}
-            value={volume}
-            onValueChange={(v) => setVolumeDraft(Number(v))}
-            onValueCommitted={() => {
-              if (volumeDraft != null) {
-                updateClip(clip.id, { volume: volumeDraft === 1 ? undefined : volumeDraft });
-              }
-              setVolumeDraft(null);
-            }}
-          />
-          <ScrubValue
-            label="Clip volume"
-            className="w-9 text-muted-foreground"
-            value={volume}
-            min={0}
-            max={1.5}
-            step={0.05}
-            format={formatPercent}
-            parse={parsePercentInput}
-            onScrub={setVolumeDraft}
-            onCommit={(v) => {
-              updateClip(clip.id, { volume: v === 1 ? undefined : v });
-              setVolumeDraft(null);
-            }}
-          />
-        </Row>
-        <Row label="Mute audio">
-          <Switch
-            checked={clip.muted}
-            onCheckedChange={(v) => updateClip(clip.id, { muted: v })}
-          />
-        </Row>
-        {asset?.type === "video" && (
-          <Row label="Extract audio">
+export function ClipHiddenSection({ clip }: { clip: VideoClip }) {
+  const updateClip = useEditor((s) => s.updateClip);
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Hidden">
+        <Switch checked={!!clip.hidden} onCheckedChange={(v) => updateClip(clip.id, { hidden: v })} />
+      </Row>
+    </div>
+  );
+}
+
+export function ClipFramingSection({ clip }: { clip: VideoClip }) {
+  const updateClip = useEditor((s) => s.updateClip);
+  return (
+    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      <Row label="Framing">
+        <div className="clip-framing flex rounded-lg border border-input p-0.5">
+          {(["fit", "fill"] as const).map((mode) => (
             <button
-              type="button"
-              className="clip-extract-audio flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-              disabled={extracting}
-              onClick={() => void extractAudio()}
-            >
-              {extracting ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <AudioLines className="size-3.5" />
+              key={mode}
+              className={cn(
+                "rounded-md px-2.5 py-1 text-[11.5px] font-medium transition-colors",
+                (clip.fit ?? "fit") === mode
+                  ? "bg-neutral-900 text-white"
+                  : "text-muted-foreground hover:text-foreground"
               )}
-              {extracting ? "Extracting…" : "Extract"}
-            </button>
-          </Row>
-        )}
-        {extractError && (
-          <p className="clip-extract-error text-[11px] leading-relaxed text-red-600">{extractError}</p>
-        )}
-
-        {/* Picture */}
-        <div className="my-1.5 h-px bg-border" />
-        <Row label="Hidden">
-          <Switch
-            checked={!!clip.hidden}
-            onCheckedChange={(v) => updateClip(clip.id, { hidden: v })}
-          />
-        </Row>
-        <Row label="Framing">
-          <div className="clip-framing flex rounded-lg border border-input p-0.5">
-            {(["fit", "fill"] as const).map((mode) => (
-              <button
-                key={mode}
-                className={cn(
-                  "rounded-md px-2.5 py-1 text-[11.5px] font-medium transition-colors",
-                  (clip.fit ?? "fit") === mode
-                    ? "bg-neutral-900 text-white"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-                aria-pressed={(clip.fit ?? "fit") === mode}
-                onClick={() => updateClip(clip.id, { fit: mode, panX: 0, panY: 0 })}
-              >
-                {mode === "fit" ? "Fit" : "Fill"}
-              </button>
-            ))}
-          </div>
-        </Row>
-        {clip.fit === "fill" && ((clip.panX ?? 0) !== 0 || (clip.panY ?? 0) !== 0) && (
-          <Row label="Position">
-            <button
-              className="clip-recenter rounded-md border border-input px-2 py-0.5 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
-              onClick={() => updateClip(clip.id, { panX: 0, panY: 0 })}
+              aria-pressed={(clip.fit ?? "fit") === mode}
+              onClick={() => updateClip(clip.id, { fit: mode, panX: 0, panY: 0 })}
             >
-              Center
+              {mode === "fit" ? "Fit" : "Fill"}
             </button>
-          </Row>
-        )}
-        <LayoutButtons
-          rect={rectOf(clip)}
-          onPick={(frame, fit) => updateClip(clip.id, { frame, fit })}
-        />
-        <ClipGeneratedAudio clip={clip} />
-      </div>
-    </>
+          ))}
+        </div>
+      </Row>
+      {clip.fit === "fill" && ((clip.panX ?? 0) !== 0 || (clip.panY ?? 0) !== 0) && (
+        <Row label="Position">
+          <button
+            className="clip-recenter rounded-md border border-input px-2 py-0.5 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
+            onClick={() => updateClip(clip.id, { panX: 0, panY: 0 })}
+          >
+            Center
+          </button>
+        </Row>
+      )}
+      <LayoutButtons
+        rect={rectOf(clip)}
+        onPick={(frame, fit) => updateClip(clip.id, { frame, fit })}
+      />
+    </div>
   );
 }
 
@@ -700,7 +719,7 @@ const formatGradeValue = (key: keyof ColorGrade, v: number) =>
  * adjustment sliders. Slider drags stream through the transient updater under
  * one history checkpoint, so the preview follows live and ⌘Z undoes the whole
  * drag. */
-function ColorPanel({ clip, onBack }: { clip: VideoClip; onBack: () => void }) {
+export function ColorPanel({ clip }: { clip: VideoClip }) {
   const ck = useSliderCheckpoint();
   const updateClip = useEditor((s) => s.updateClip);
   const setField = (key: keyof ColorGrade, v: number) => {
@@ -718,26 +737,17 @@ function ColorPanel({ clip, onBack }: { clip: VideoClip; onBack: () => void }) {
   };
   return (
     <>
-      <div className="flex h-10 shrink-0 items-center gap-1 px-2.5 text-sm font-semibold tracking-tight">
-        <button
-          type="button"
-          aria-label="Back"
-          className="clip-color-back grid size-6 place-items-center rounded text-muted-foreground transition-colors hover:text-foreground"
-          onClick={onBack}
-        >
-          <ChevronLeft className="size-4" />
-        </button>
-        Color
-        <button
-          type="button"
-          className="clip-grade-auto ml-auto flex items-center gap-1 rounded-md border border-input px-2 py-0.5 text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-          onClick={autoGrade}
-        >
-          <Wand2 className="size-3" />
-          Auto
-        </button>
-      </div>
       <div className="flex flex-col gap-1 px-3.5 pb-4">
+        <div className="flex items-center justify-end pt-1 pb-1">
+          <button
+            type="button"
+            className="clip-grade-auto flex items-center gap-1 rounded-md border border-input px-2 py-0.5 text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            onClick={autoGrade}
+          >
+            <Wand2 className="size-3" />
+            Auto
+          </button>
+        </div>
         <Histogram />
         {GRADE_FIELDS.map((f) => {
           const value = clip.grade?.[f.key] ?? 0;

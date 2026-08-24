@@ -1,21 +1,71 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { SlidersHorizontal, X } from "lucide-react";
+import {
+  ArrowUpDown,
+  AudioLines,
+  Crop,
+  EyeOff,
+  Gauge,
+  MoveHorizontal,
+  Palette,
+  SlidersHorizontal,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { clipLen, useEditor } from "@/cut/lib/store";
 import { useLocalPref } from "@/cut/lib/uiState";
 import { cn } from "@/lib/utils";
-import { Inspector } from "./Inspector";
+import {
+  ClipExtractSection,
+  ClipFramingSection,
+  ClipHiddenSection,
+  ClipMoveTimeSection,
+  ClipMoveTrackSection,
+  ClipMuteSection,
+  ClipSpeedSection,
+  ClipVolumeSection,
+  ColorPanel,
+  Inspector,
+} from "./Inspector";
 
-type RightTab = "edit";
+type ClipTab =
+  | "move-time"
+  | "move-track"
+  | "speed"
+  | "color"
+  | "volume"
+  | "mute"
+  | "extract"
+  | "hidden"
+  | "framing";
+type RightTab = "edit" | ClipTab;
+
+/** One clip property per tab, so only one is ever open in the panel at a
+ * time instead of all of them stacked in one scrolling form. Each only
+ * applies to a selected video or photo clip — the tab shows a placeholder
+ * for any other kind of selection. */
+const CLIP_TABS: { id: ClipTab; label: string; icon: typeof SlidersHorizontal }[] = [
+  { id: "move-time", label: "Move", icon: MoveHorizontal },
+  { id: "move-track", label: "Track", icon: ArrowUpDown },
+  { id: "speed", label: "Speed", icon: Gauge },
+  { id: "color", label: "Color", icon: Palette },
+  { id: "volume", label: "Volume", icon: Volume2 },
+  { id: "mute", label: "Mute", icon: VolumeX },
+  { id: "extract", label: "Extract", icon: AudioLines },
+  { id: "hidden", label: "Hidden", icon: EyeOff },
+  { id: "framing", label: "Framing", icon: Crop },
+];
 
 /** The right rail: focused purely on editing whatever's selected on the
  * timeline — a video, audio, or photo clip. Edit holds the selection
- * inspector, the whole of the old Inspector column. Adding content (Overlay,
- * Media, ...) and project-level tools (Aspect ratio, Timeline, Playhead) all
- * live on the left SidePanel instead — this rail doesn't do anything that
- * isn't "change the thing that's selected." */
+ * inspector (audio clips, text, shapes, effects, stickers); a clip's own
+ * properties each get their own tab below it, one panel open at a time.
+ * Adding content (Overlay, Media, ...) and project-level tools (Aspect
+ * ratio, Timeline, Playhead) all live on the left SidePanel instead — this
+ * rail doesn't do anything that isn't "change the thing that's selected." */
 export function RightPanel() {
   const hasEditContent = useEditor(
     (s) => s.selection != null && s.selection.kind !== "cue" && s.selection.kind !== "transition"
@@ -23,18 +73,19 @@ export function RightPanel() {
   const [tab, setTab] = useLocalPref<RightTab | null>(
     "cut-right-tab",
     "edit",
-    (v) => v === null || v === "edit"
+    (v) => v === null || v === "edit" || CLIP_TABS.some((t) => t.id === v)
   );
 
-  // A new selection with its own panel jumps here automatically, the way the
-  // old always-on Inspector column used to just appear.
+  // A new selection opens Edit only when no tab was already open — picking a
+  // clip while "Speed" is open, say, should keep Speed open rather than
+  // bouncing back to Edit.
   const selectionKey = useEditor((s) =>
     s.selection ? `${s.selection.kind}:${s.selection.id}` : null
   );
   const [seenKey, setSeenKey] = useState(selectionKey);
   if (selectionKey !== seenKey) {
     setSeenKey(selectionKey);
-    if (selectionKey && hasEditContent) setTab("edit");
+    if (selectionKey && hasEditContent && tab === null) setTab("edit");
   }
 
   // Remembers the track (video) or lane (audio) a clip selection was last
@@ -55,16 +106,16 @@ export function RightPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectionKey]);
 
-  // With Edit open and nothing selected, fall back to whatever clip sits
+  // With a tab open and nothing selected, fall back to whatever clip sits
   // under the playhead on that remembered track/lane instead of leaving the
-  // panel on the "select something" placeholder — the playhead crossing
-  // into a new clip there re-runs this and follows it. The main track wins
-  // over the remembered one whenever the playhead sits on it: it's the
-  // through-line of the edit, so it's the safer default regardless of
-  // whatever else was last selected (or nothing ever was).
+  // panel on a "select something" placeholder — the playhead crossing into a
+  // new clip there re-runs this and follows it. The main track wins over the
+  // remembered one whenever the playhead sits on it: it's the through-line
+  // of the edit, so it's the safer default regardless of whatever else was
+  // last selected (or nothing ever was).
   const currentTime = useEditor((s) => s.currentTime);
   useEffect(() => {
-    if (tab !== "edit" || hasEditContent) return;
+    if (tab === null || hasEditContent) return;
     const s = useEditor.getState();
     const t = s.currentTime;
     const onMain = s.clips.find((c) => c.track === 0 && c.start <= t && t < c.start + clipLen(c));
@@ -87,27 +138,49 @@ export function RightPanel() {
     }
   }, [tab, hasEditContent, currentTime]);
 
+  const clip = useEditor((s) =>
+    s.selection?.kind === "clip" ? s.clips.find((c) => c.id === s.selection!.id) : undefined
+  );
+
   return (
     <div className="flex min-h-0 border-l border-border bg-card">
-      {tab === "edit" && (
+      {tab !== null && (
         <div className="flex w-[264px] min-h-0 shrink-0 flex-col border-r border-border">
-          {/* Inspector's own sub-panel headers (ClipHead, PanelTitle, ...)
-              run flush to the edge with no room reserved for an overlay
-              button, so the close button gets its own row here instead of
-              floating on top of them. */}
+          {/* Inspector's own sub-panel headers (PanelTitle, ...) run flush to
+              the edge with no room reserved for an overlay button, so the
+              close button gets its own row here instead of floating on top
+              of them. */}
           <div className="flex h-9 shrink-0 items-center pl-2.5">
             <ClosePanelButton onClose={() => setTab(null)} />
           </div>
-          {/* A grid cell (rather than another flex child) stretches
-              Inspector to the full remaining height regardless of its own
+          {/* A grid cell (rather than another flex child) stretches the
+              content to the full remaining height regardless of its own
               root's classes — the same stretch it got for free as Editor's
               direct grid item. */}
           <div className="grid min-h-0 flex-1">
-            {hasEditContent ? (
-              <Inspector />
+            {tab === "edit" ? (
+              hasEditContent ? (
+                <Inspector />
+              ) : (
+                <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
+                  Select a clip, overlay, or audio clip to edit it here.
+                </p>
+              )
+            ) : clip ? (
+              <ScrollArea className="flex min-h-0 flex-col">
+                {tab === "move-time" && <ClipMoveTimeSection clip={clip} />}
+                {tab === "move-track" && <ClipMoveTrackSection clip={clip} />}
+                {tab === "speed" && <ClipSpeedSection clip={clip} />}
+                {tab === "color" && <ColorPanel clip={clip} />}
+                {tab === "volume" && <ClipVolumeSection clip={clip} />}
+                {tab === "mute" && <ClipMuteSection clip={clip} />}
+                {tab === "extract" && <ClipExtractSection clip={clip} />}
+                {tab === "hidden" && <ClipHiddenSection clip={clip} />}
+                {tab === "framing" && <ClipFramingSection clip={clip} />}
+              </ScrollArea>
             ) : (
               <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
-                Select a clip, overlay, or audio clip to edit it here.
+                Select a video or photo clip to use this.
               </p>
             )}
           </div>
@@ -117,31 +190,62 @@ export function RightPanel() {
         className="min-h-0 w-12 shrink-0 sm:w-[68px]"
         contentClassName="flex flex-col items-center gap-0.5 py-2 sm:gap-1 sm:py-3"
       >
-        <button
-          className="flex w-full min-w-0 shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
-          aria-label="Edit"
-          aria-pressed={tab === "edit"}
+        <RailButton
+          label="Edit"
+          icon={SlidersHorizontal}
+          active={tab === "edit"}
           onClick={() => setTab(tab === "edit" ? null : "edit")}
-        >
-          <span
-            className={cn(
-              "grid size-9 place-items-center rounded-lg transition-colors",
-              tab === "edit" ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60"
-            )}
-          >
-            <SlidersHorizontal className="size-4.5" />
-          </span>
-          <span
-            className={cn(
-              "hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block",
-              tab === "edit" && "text-foreground"
-            )}
-          >
-            Edit
-          </span>
-        </button>
+        />
+        <div aria-hidden className="my-1 h-px w-8 shrink-0 bg-border" />
+        {CLIP_TABS.map((t) => (
+          <RailButton
+            key={t.id}
+            label={t.label}
+            icon={t.icon}
+            active={tab === t.id}
+            onClick={() => setTab(tab === t.id ? null : t.id)}
+          />
+        ))}
       </ScrollArea>
     </div>
+  );
+}
+
+function RailButton({
+  label,
+  icon: Icon,
+  active,
+  onClick,
+}: {
+  label: string;
+  icon: typeof SlidersHorizontal;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="flex w-full min-w-0 shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
+      aria-label={label}
+      aria-pressed={active}
+      onClick={onClick}
+    >
+      <span
+        className={cn(
+          "grid size-9 place-items-center rounded-lg transition-colors",
+          active ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60"
+        )}
+      >
+        <Icon className="size-4.5" />
+      </span>
+      <span
+        className={cn(
+          "hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block",
+          active && "text-foreground"
+        )}
+      >
+        {label}
+      </span>
+    </button>
   );
 }
 
