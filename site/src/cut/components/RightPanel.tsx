@@ -1,29 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Layers, Loader2, SlidersHorizontal, X } from "lucide-react";
+import { SlidersHorizontal, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { importFileToProject } from "@/cut/lib/media";
 import { clipLen, useEditor } from "@/cut/lib/store";
 import { useLocalPref } from "@/cut/lib/uiState";
 import { cn } from "@/lib/utils";
 import { Inspector } from "./Inspector";
 
 type RightTab = "edit";
-/** Every rail icon, including "overlay" which isn't a panel tab at all — it
- * fires an action directly instead of toggling one open. */
-type RailId = RightTab | "overlay";
 
-const TABS: { id: RailId; label: string; icon: typeof Layers }[] = [
-  { id: "edit", label: "Edit", icon: SlidersHorizontal },
-  { id: "overlay", label: "Overlay", icon: Layers },
-];
-
-/** The right rail: Edit holds the selection inspector — the whole of the old
- * Inspector column. Overlay isn't a panel; tapping it goes straight to a
- * file picker and adds the result to the overlay track, the same as the
- * Media card's own "Add overlay" action, rather than opening a picker panel
- * first. Aspect ratio, Timeline, and Playhead moved to the left SidePanel. */
+/** The right rail: focused purely on editing whatever's selected on the
+ * timeline — a video, audio, or photo clip. Edit holds the selection
+ * inspector, the whole of the old Inspector column. Adding content (Overlay,
+ * Media, ...) and project-level tools (Aspect ratio, Timeline, Playhead) all
+ * live on the left SidePanel instead — this rail doesn't do anything that
+ * isn't "change the thing that's selected." */
 export function RightPanel() {
   const hasEditContent = useEditor(
     (s) => s.selection != null && s.selection.kind !== "cue" && s.selection.kind !== "transition"
@@ -35,8 +27,7 @@ export function RightPanel() {
   );
 
   // A new selection with its own panel jumps here automatically, the way the
-  // old always-on Inspector column used to just appear — including the clip
-  // Overlay's import just added.
+  // old always-on Inspector column used to just appear.
   const selectionKey = useEditor((s) =>
     s.selection ? `${s.selection.kind}:${s.selection.id}` : null
   );
@@ -96,34 +87,6 @@ export function RightPanel() {
     }
   }, [tab, hasEditContent, currentTime]);
 
-  const overlayInputRef = useRef<HTMLInputElement>(null);
-  const [overlayImporting, setOverlayImporting] = useState(0);
-  const [overlayError, setOverlayError] = useState<string | null>(null);
-  const importOverlayFiles = async (files: FileList) => {
-    const projectId = useEditor.getState().projectId;
-    if (!projectId) return;
-    setOverlayError(null);
-    // One at a time: addOverlayFromAsset packs each new clip against
-    // whatever the overlay tracks already hold, so a batch has to land in
-    // order rather than racing on the same "where's the next gap" read.
-    for (const file of Array.from(files)) {
-      setOverlayImporting((n) => n + 1);
-      try {
-        const asset = await importFileToProject(projectId, file);
-        if (!asset || (asset.type !== "video" && asset.type !== "image")) {
-          setOverlayError(`${file.name} isn't a video or photo.`);
-          continue;
-        }
-        useEditor.getState().addAsset(asset);
-        useEditor.getState().addOverlayFromAsset(asset.id);
-      } catch {
-        setOverlayError(`Couldn't import ${file.name}.`);
-      } finally {
-        setOverlayImporting((n) => n - 1);
-      }
-    }
-  };
-
   return (
     <div className="flex min-h-0 border-l border-border bg-card">
       {tab === "edit" && (
@@ -154,55 +117,30 @@ export function RightPanel() {
         className="min-h-0 w-12 shrink-0 sm:w-[68px]"
         contentClassName="flex flex-col items-center gap-0.5 py-2 sm:gap-1 sm:py-3"
       >
-        {TABS.map(({ id, label, icon: Icon }) => {
-          const isOverlay = id === "overlay";
-          const active = !isOverlay && tab === id;
-          return (
-            <button
-              key={id}
-              className="flex w-full min-w-0 shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
-              aria-label={label}
-              aria-pressed={active}
-              title={isOverlay && overlayError ? overlayError : undefined}
-              onClick={() =>
-                isOverlay ? overlayInputRef.current?.click() : setTab(tab === id ? null : (id as RightTab))
-              }
-            >
-              <span
-                className={cn(
-                  "grid size-9 place-items-center rounded-lg transition-colors",
-                  active ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60"
-                )}
-              >
-                {isOverlay && overlayImporting > 0 ? (
-                  <Loader2 className="size-4.5 animate-spin" />
-                ) : (
-                  <Icon className="size-4.5" />
-                )}
-              </span>
-              <span
-                className={cn(
-                  "hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block",
-                  active && "text-foreground"
-                )}
-              >
-                {label}
-              </span>
-            </button>
-          );
-        })}
+        <button
+          className="flex w-full min-w-0 shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
+          aria-label="Edit"
+          aria-pressed={tab === "edit"}
+          onClick={() => setTab(tab === "edit" ? null : "edit")}
+        >
+          <span
+            className={cn(
+              "grid size-9 place-items-center rounded-lg transition-colors",
+              tab === "edit" ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60"
+            )}
+          >
+            <SlidersHorizontal className="size-4.5" />
+          </span>
+          <span
+            className={cn(
+              "hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block",
+              tab === "edit" && "text-foreground"
+            )}
+          >
+            Edit
+          </span>
+        </button>
       </ScrollArea>
-      <input
-        ref={overlayInputRef}
-        type="file"
-        accept="video/*,image/*"
-        multiple
-        hidden
-        onChange={(e) => {
-          if (e.target.files?.length) void importOverlayFiles(e.target.files);
-          e.target.value = "";
-        }}
-      />
     </div>
   );
 }
