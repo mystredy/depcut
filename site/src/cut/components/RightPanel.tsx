@@ -9,7 +9,9 @@ import {
   Gauge,
   MoveHorizontal,
   Palette,
+  Scissors,
   SlidersHorizontal,
+  Trash2,
   Volume2,
   VolumeX,
   X,
@@ -76,16 +78,25 @@ export function RightPanel() {
     (v) => v === null || v === "edit" || CLIP_TABS.some((t) => t.id === v)
   );
 
-  // A new selection opens Edit only when no tab was already open — picking a
-  // clip while "Speed" is open, say, should keep Speed open rather than
-  // bouncing back to Edit.
+  // A new selection opens Edit when no tab was already open, or when a clip
+  // tab (Speed, Color, ...) was open but the new selection isn't a clip —
+  // those tabs only apply to a video or photo clip. Picking another clip
+  // while "Speed" is open keeps Speed open rather than bouncing back to Edit.
   const selectionKey = useEditor((s) =>
     s.selection ? `${s.selection.kind}:${s.selection.id}` : null
   );
   const [seenKey, setSeenKey] = useState(selectionKey);
   if (selectionKey !== seenKey) {
     setSeenKey(selectionKey);
-    if (selectionKey && hasEditContent && tab === null) setTab("edit");
+    const isClipTab = tab !== null && tab !== "edit";
+    if (selectionKey && hasEditContent) {
+      const newIsClip = useEditor.getState().selection?.kind === "clip";
+      if (tab === null || (isClipTab && !newIsClip)) setTab("edit");
+    } else if (isClipTab) {
+      // Selection dropped entirely (or moved to a cue/transition) while a
+      // clip-only tab was open — its icon just vanished from the rail.
+      setTab("edit");
+    }
   }
 
   // Remembers the track (video) or lane (audio) a clip selection was last
@@ -142,6 +153,15 @@ export function RightPanel() {
     s.selection?.kind === "clip" ? s.clips.find((c) => c.id === s.selection!.id) : undefined
   );
 
+  // Split works off the pointer/playhead, not the selection, so it's always
+  // live; Delete needs something picked.
+  const split = () => {
+    const s = useEditor.getState();
+    s.splitAtPlayhead(s.skimTime ?? undefined);
+  };
+  const selectionCount = useEditor((s) => s.multiSelection.length);
+  const deleteSelection = () => useEditor.getState().deleteSelection();
+
   return (
     <div className="flex min-h-0 border-l border-border bg-card">
       {tab !== null && (
@@ -196,16 +216,33 @@ export function RightPanel() {
           active={tab === "edit"}
           onClick={() => setTab(tab === "edit" ? null : "edit")}
         />
-        <div aria-hidden className="my-1 h-px w-8 shrink-0 bg-border" />
-        {CLIP_TABS.map((t) => (
-          <RailButton
-            key={t.id}
-            label={t.label}
-            icon={t.icon}
-            active={tab === t.id}
-            onClick={() => setTab(tab === t.id ? null : t.id)}
-          />
-        ))}
+        <RailActionButton
+          label="Split"
+          title="Split at pointer, or at playhead (⌘B or S)"
+          icon={Scissors}
+          onClick={split}
+        />
+        <RailActionButton
+          label="Delete"
+          title={selectionCount > 1 ? `Delete ${selectionCount}` : "Delete (⌫)"}
+          icon={Trash2}
+          disabled={selectionCount === 0}
+          onClick={deleteSelection}
+        />
+        {clip && (
+          <>
+            <div aria-hidden className="my-1 h-px w-8 shrink-0 bg-border" />
+            {CLIP_TABS.map((t) => (
+              <RailButton
+                key={t.id}
+                label={t.label}
+                icon={t.icon}
+                active={tab === t.id}
+                onClick={() => setTab(tab === t.id ? null : t.id)}
+              />
+            ))}
+          </>
+        )}
       </ScrollArea>
     </div>
   );
@@ -243,6 +280,40 @@ function RailButton({
           active && "text-foreground"
         )}
       >
+        {label}
+      </span>
+    </button>
+  );
+}
+
+/** A rail tile that fires an action immediately instead of toggling a panel
+ * open — Split and Delete, which act on the timeline rather than showing
+ * their own view. */
+function RailActionButton({
+  label,
+  title,
+  icon: Icon,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  title?: string;
+  icon: typeof SlidersHorizontal;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="flex w-full min-w-0 shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40 sm:py-1.5"
+      aria-label={label}
+      title={title ?? label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <span className="grid size-9 place-items-center rounded-lg transition-colors hover:bg-muted/60">
+        <Icon className="size-4.5" />
+      </span>
+      <span className="hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block">
         {label}
       </span>
     </button>

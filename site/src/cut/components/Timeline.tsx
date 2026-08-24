@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowLeftToLine, ArrowRight, ArrowRightToLine, ArrowUp, ArrowUpToLine, AudioLines, Blend, Check, Circle, Clapperboard, Copy, Diamond, Droplets, EllipsisVertical, Expand, Eye, EyeOff, FolderOpen, FolderPlus, FoldHorizontal, Fullscreen, Loader2, Minus, Moon, MoreHorizontal, MoveRight, Pause, Play, Scissors, SkipBack, SkipForward, Sparkles, Square, Sticker, Sun, Target, Trash2, Type, UnfoldHorizontal, Volume2, VolumeX, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowLeftToLine, ArrowRight, ArrowRightToLine, ArrowUp, ArrowUpToLine, AudioLines, Blend, Check, Circle, Clapperboard, Copy, Diamond, Droplets, EllipsisVertical, Expand, Eye, EyeOff, FolderOpen, FolderPlus, FoldHorizontal, Fullscreen, Loader2, Minus, Moon, MoreHorizontal, MoveRight, Pause, Play, Scissors, SkipBack, SkipForward, Sparkles, Square, Sticker, Sun, Target, Type, UnfoldHorizontal, Volume2, VolumeX, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -357,35 +357,30 @@ export function Timeline() {
   // third arrangement to reason about for no gain. The transport is what the
   // sides have to fit around, so its track is measured, not assumed.
   const barRef = useRef<HTMLDivElement>(null);
-  const toolsFullRef = useRef<HTMLDivElement>(null);
-  const toolsBareRef = useRef<HTMLDivElement>(null);
+  const toolsRef = useRef<HTMLDivElement>(null);
   const zoomRef = useRef<HTMLDivElement>(null);
   const transportRef = useRef<HTMLDivElement>(null);
-  const [barLabels, setBarLabels] = useState(true);
   const [barTight, setBarTight] = useState(false);
   useEffect(() => {
     const bar = barRef.current;
-    const full = toolsFullRef.current;
-    const bare = toolsBareRef.current;
+    const tools = toolsRef.current;
     const zoom = zoomRef.current;
     const transport = transportRef.current;
-    if (!bar || !full || !bare || !zoom || !transport) return;
+    if (!bar || !tools || !zoom || !transport) return;
     const fitBar = () => {
       // Each side track is what is left of the bar once the transport has its
-      // width, halved; the tools keep their own margin inside that.
+      // width, halved; the tools keep their own margin inside that. Once
+      // even the icons stop fitting, they fold into the overflow menu.
       const side = (bar.clientWidth - transport.offsetWidth) / 2 - 10;
-      // Labels first, the menu only once the icons alone have stopped fitting.
-      setBarLabels(full.offsetWidth <= side);
-      setBarTight(bare.offsetWidth > side || zoom.offsetWidth > side);
+      setBarTight(tools.offsetWidth > side || zoom.offsetWidth > side);
     };
     fitBar();
-    // The bar for the window; the measuring rows for their own set changing —
-    // Delete relabels with the selection count and Save template appears with
-    // it — and the transport for the timecode growing an hours field.
+    // The bar for the window; the measuring row for its own set changing —
+    // Save template appears with the selection — and the transport for the
+    // timecode growing an hours field.
     const ro = new ResizeObserver(fitBar);
     ro.observe(bar);
-    ro.observe(full);
-    ro.observe(bare);
+    ro.observe(tools);
     ro.observe(transport);
     return () => ro.disconnect();
   }, []);
@@ -1040,13 +1035,9 @@ export function Timeline() {
     zoomTo(fitZoom(el.clientWidth, dur), 0, PAD_SIDE);
   }, [zoomTo]);
 
-  // The editing tools, as the toolbar button and its menu row both invoke them.
-  const split = useCallback(() => {
-    const s = useEditor.getState();
-    s.splitAtPlayhead(s.skimTime ?? undefined);
-  }, []);
+  // Split and Delete live in the right panel now, since Delete only ever
+  // applies to a selection; Text stays here as a toolbar action.
   const addText = useCallback(() => useEditor.getState().addOverlay(), []);
-  const deleteSelection = useCallback(() => useEditor.getState().deleteSelection(), []);
 
   // Trackpad pinch / cmd+wheel zooms at the cursor; vertical wheel pans.
   useEffect(() => {
@@ -1572,39 +1563,15 @@ export function Timeline() {
             measurement below lands: the overlap stops being something to get
             right and becomes something that cannot be drawn. */}
         <div className="col-start-1 row-start-1 ml-2.5 flex min-w-0 items-center gap-0.5 overflow-hidden">
-          {!barTight && (
-            <TimelineTools
-              labels={barLabels}
-              split={split}
-              addText={addText}
-              deleteSelection={deleteSelection}
-              selectionCount={multiSelection.length}
-            />
-          )}
+          {!barTight && <TimelineTools addText={addText} />}
         </div>
 
-        {/* The two widths the fit is decided against, laid out and never shown.
-            Measuring the row on screen instead would ask it how wide it is in
-            the state it is already in, which cannot say whether the labels it
-            just dropped would fit again — these always can. */}
+        {/* The width the tight/overflow cutoff is decided against, laid out
+            and never shown — measuring the row on screen instead would ask
+            it how wide it is in the state it is already in. */}
         <div aria-hidden className="invisible pointer-events-none absolute flex items-center gap-0.5">
-          <div ref={toolsFullRef} className="flex items-center gap-0.5">
-            <TimelineTools
-              labels
-              split={split}
-              addText={addText}
-              deleteSelection={deleteSelection}
-              selectionCount={multiSelection.length}
-            />
-          </div>
-          <div ref={toolsBareRef} className="flex items-center gap-0.5">
-            <TimelineTools
-              labels={false}
-              split={split}
-              addText={addText}
-              deleteSelection={deleteSelection}
-              selectionCount={multiSelection.length}
-            />
+          <div ref={toolsRef} className="flex items-center gap-0.5">
+            <TimelineTools addText={addText} />
           </div>
         </div>
 
@@ -1634,16 +1601,7 @@ export function Timeline() {
             </Button>
           </div>
           {barTight && (
-            <TimelineToolsMenu
-              pps={pps}
-              zoomMin={zoomMin}
-              zoomTo={zoomTo}
-              fit={fit}
-              split={split}
-              addText={addText}
-              deleteSelection={deleteSelection}
-              selectionCount={multiSelection.length}
-            />
+            <TimelineToolsMenu pps={pps} zoomMin={zoomMin} zoomTo={zoomTo} fit={fit} addText={addText} />
           )}
         </div>
       </div>
@@ -2518,44 +2476,13 @@ function HoverLine({
  * flattened video. Re-adding it re-materializes editable clips, overlays, and
  * captions; the Media panel can push it to the shared Library.
  */
-/** The timeline's editing tools. Dropping `labels` leaves the icons on their
- * own — the step between a full toolbar and folding the lot into the menu. */
-function TimelineTools({
-  labels,
-  split,
-  addText,
-  deleteSelection,
-  selectionCount,
-}: {
-  labels: boolean;
-  split: () => void;
-  addText: () => void;
-  deleteSelection: () => void;
-  selectionCount: number;
-}) {
-  const size = labels ? "sm" : "icon-sm";
+/** The timeline's editing tools that don't depend on a selection — Split and
+ * Delete live in the right panel instead. */
+function TimelineTools({ addText }: { addText: () => void }) {
   return (
     <>
-      <Button
-        variant="ghost"
-        size={size}
-        title="Split at pointer, or at playhead (⌘B or S)"
-        onClick={split}
-      >
-        <Scissors />
-        {labels && <span>Split</span>}
-      </Button>
       <Button variant="ghost" size="icon-sm" title="Text (T)" onClick={addText}>
         <Type />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        title={selectionCount > 1 ? `Delete ${selectionCount}` : "Delete (⌫)"}
-        disabled={selectionCount === 0}
-        onClick={deleteSelection}
-      >
-        <Trash2 />
       </Button>
       <SaveSelectionButton />
     </>
@@ -2570,19 +2497,13 @@ function TimelineToolsMenu({
   zoomMin,
   zoomTo,
   fit,
-  split,
   addText,
-  deleteSelection,
-  selectionCount,
 }: {
   pps: number;
   zoomMin: number;
   zoomTo: (next: number, anchorT?: number, anchorPx?: number) => void;
   fit: () => void;
-  split: () => void;
   addText: () => void;
-  deleteSelection: () => void;
-  selectionCount: number;
 }) {
   const save = useSaveSelection();
   // Held open, because the zoom row is not a pick: dragging the slider has to
@@ -2598,14 +2519,8 @@ function TimelineToolsMenu({
         <MoreHorizontal />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuItem onClick={split}>
-          <Scissors /> Split
-        </DropdownMenuItem>
         <DropdownMenuItem onClick={addText}>
           <Type /> Text
-        </DropdownMenuItem>
-        <DropdownMenuItem disabled={selectionCount === 0} onClick={deleteSelection}>
-          <Trash2 /> {selectionCount > 1 ? `Delete ${selectionCount}` : "Delete"}
         </DropdownMenuItem>
         {save.available && (
           <DropdownMenuItem disabled={save.state === "saving"} onClick={save.save}>
