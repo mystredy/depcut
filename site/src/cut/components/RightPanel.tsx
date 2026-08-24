@@ -216,22 +216,22 @@ export function RightPanel() {
           active={tab === "edit"}
           onClick={() => setTab(tab === "edit" ? null : "edit")}
         />
-        <RailActionButton
-          label="Split"
-          title="Split at pointer, or at playhead (⌘B or S)"
-          icon={Scissors}
-          onClick={split}
-        />
-        <RailActionButton
-          label="Delete"
-          title={selectionCount > 1 ? `Delete ${selectionCount}` : "Delete (⌫)"}
-          icon={Trash2}
-          disabled={selectionCount === 0}
-          onClick={deleteSelection}
-        />
         {clip && (
           <>
             <div aria-hidden className="my-1 h-px w-8 shrink-0 bg-border" />
+            <RailActionButton
+              label="Split"
+              title="Split at pointer, or at playhead (⌘B or S)"
+              icon={Scissors}
+              onClick={split}
+            />
+            <RailActionButton
+              label="Delete"
+              title={selectionCount > 1 ? `Delete ${selectionCount}` : "Delete (⌫)"}
+              icon={Trash2}
+              disabled={selectionCount === 0}
+              onClick={deleteSelection}
+            />
             {CLIP_TABS.map((t) => (
               <RailButton
                 key={t.id}
