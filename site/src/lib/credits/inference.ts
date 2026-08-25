@@ -844,6 +844,96 @@ async function forgiveOverdraft(
   return zeroCreditMicros;
 }
 
+// An async render bills flat at submit, before the outcome is known (see the
+// comment at the assets route's charge site) — so a render that ultimately
+// fails needs this to avoid keeping a charge for work that was never
+// delivered. Idempotent: assets/refresh polls, so this can be asked to
+// refund the same usage event more than once — a "refund" ledger row already
+// on the event is treated as done. A no-op if the event never charged
+// anything (a synchronous failure already bills $0).
+export async function refundInferenceCharge(usageEventId: string) {
+  return withWriteConflictRetry(() =>
+    prisma.$transaction(
+      async (tx) => {
+        const usageEvent = await tx.inferenceUsageEvent.findUnique({
+          where: { id: usageEventId },
+        });
+        if (!usageEvent || usageEvent.creditCostMicros <= zeroCreditMicros) {
+          return null;
+        }
+
+        const alreadyRefunded = await tx.userCreditLedgerEntry.findFirst({
+          where: { type: "refund", usageEventId },
+        });
+        if (alreadyRefunded) {
+          return null;
+        }
+
+        const updatedAccount = await tx.userCreditAccount.update({
+          data: {
+            balanceMicros: {
+              increment: usageEvent.creditCostMicros,
+            },
+            lifetimeChargedMicros: {
+              decrement: usageEvent.creditCostMicros,
+            },
+          },
+          where: {
+            id: usageEvent.accountId,
+          },
+        });
+
+        await tx.userCreditLedgerEntry.create({
+          data: {
+            accountId: usageEvent.accountId,
+            amountMicros: usageEvent.creditCostMicros,
+            balanceAfterMicros: updatedAccount.balanceMicros,
+            description: "Refund: generation did not complete",
+            source: "inference",
+            sourceId: usageEventId,
+            type: "refund",
+            usageEventId,
+            userId: usageEvent.userId,
+          },
+        });
+
+        return { refundedMicros: usageEvent.creditCostMicros };
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    ),
+  );
+}
+
+// Finds the charge a submit recorded for a given client-side generation id, so
+// a later failure (surfaced only through polling, not the original request)
+// can be traced back to what to refund. Submit stamps `generationId` into the
+// usage event's metadata for exactly this purpose.
+export async function findChargedUsageEventByGenerationId(
+  userId: string,
+  route: string,
+  generationId: string,
+) {
+  return prisma.inferenceUsageEvent.findFirst({
+    orderBy: {
+      createdAt: "desc",
+    },
+    where: {
+      creditCostMicros: {
+        gt: zeroCreditMicros,
+      },
+      metadata: {
+        equals: generationId,
+        path: ["generationId"],
+      },
+      route,
+      status: "succeeded",
+      userId,
+    },
+  });
+}
+
 async function debitGrants(
   tx: Prisma.TransactionClient,
   accountId: string,

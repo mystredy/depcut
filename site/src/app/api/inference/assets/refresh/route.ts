@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
 import {
+  findChargedUsageEventByGenerationId,
   inferenceUsageRoutes,
   recordFailedInferenceUsage,
+  refundInferenceCharge,
 } from "@/lib/credits/inference";
 import { refreshedAssetGenerationResponse } from "@/lib/inference/assets";
 import { createProviderRegistry } from "@/lib/inference/router";
@@ -38,7 +40,17 @@ export const POST = withDonkeyAuth(async (request) => {
 
     // An operation that finished as FAILED did no billable work — no charge, but the failure
     // goes on the books so a dead render leaves a diagnostic trail instead of vanishing.
+    // A render that got here bills flat at submit, before the outcome is known (see the
+    // assets route), so a failure discovered only now still needs its original charge undone.
     if (result.status === "failed") {
+      const originalCharge = await findChargedUsageEventByGenerationId(
+        request.donkey.userId,
+        inferenceUsageRoutes.assets,
+        parsed.data.id,
+      );
+      if (originalCharge) {
+        await refundInferenceCharge(originalCharge.id);
+      }
       await recordFailedInferenceUsage({
         clientId: client.clientId,
         conversationId: request.donkey.conversationId,
