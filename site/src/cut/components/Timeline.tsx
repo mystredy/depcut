@@ -41,6 +41,7 @@ import { useExports } from "@/cut/lib/exportStore";
 import { isDragActive, startDrag, subscribeDragActive } from "@/cut/lib/drag";
 import { CLIP_GAP, startLaneMove, startLaneTrim, type LaneDrag } from "@/cut/lib/laneTracks";
 import { ensurePeaks, importImage, importStockMusic, importStockVideo, peekEdgeFrame, requestEdgeFrame, revealMedia } from "@/cut/lib/media";
+import { requestSidePanel } from "@/cut/lib/panelRequest";
 import { track0Clips, laneGapAt, sameLane, type LaneRef, clipLen, clipSpeed, footprints, getClipSpans, nextFreeStart, overlayLaneOrder, overlayLayers, projectDuration, resolveTransitions, rippleInsert, TIMELINE_H_MAX, useEditor } from "@/cut/lib/store";
 import type { VideoTrackPlacement } from "@/cut/lib/store";
 import { laneHidden, subtitleLaneCount } from "@/cut/lib/subtitles";
@@ -1981,6 +1982,45 @@ export function Timeline() {
                 onFrameMenu={openFrameMenu}
               />
             ))}
+            {/* Between each pair of main-track clips: whether their cut carries
+                a transition, and a way in to change it. Hidden once either
+                side of the cut is selected — that clip's own controls (and the
+                bar itself, if one plays here) are already on screen then. */}
+            {spans.slice(0, -1).map((span, i) => {
+              const next = spans[i + 1];
+              if (
+                selKeys.has(`clip:${span.clip.id}`) ||
+                selKeys.has(`clip:${next.clip.id}`)
+              )
+                return null;
+              const existing =
+                transitions.find((x) => x.role?.kind === "cut" && x.role.clipId === span.clip.id)
+                  ?.t ?? null;
+              const Icon = existing ? TRANSITION_ICONS[existing.style] : Blend;
+              return (
+                <button
+                  key={`cut-${span.clip.id}`}
+                  type="button"
+                  className={cn(
+                    "tl-cut-transition absolute top-1/2 z-5 grid size-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border shadow-sm transition-colors",
+                    existing
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-muted-foreground hover:text-foreground"
+                  )}
+                  style={{ left: (span.start + span.len) * pps }}
+                  title={existing ? `${TRANSITION_STYLE_LABELS[existing.style]} — click to change` : "Add a transition"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const s = useEditor.getState();
+                    if (existing) s.select({ kind: "transition", id: existing.id });
+                    else s.select({ kind: "clip", id: span.clip.id });
+                    requestSidePanel("transitions");
+                  }}
+                >
+                  <Icon className="size-3" />
+                </button>
+              );
+            })}
           </div>
           )}
 
