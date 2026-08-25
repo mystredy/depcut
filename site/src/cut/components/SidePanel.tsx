@@ -344,7 +344,7 @@ export function SidePanel({
           // the rail edges. The outline stays off — click focus otherwise
           // draws one around the tile.
           const tileClass =
-            "flex w-full min-w-0 shrink-0 flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5";
+            "flex w-full min-w-0 shrink-0 flex-col items-center gap-0 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5";
           const inner = (
             <>
               <span
@@ -425,7 +425,7 @@ export function SidePanel({
           <>
             <div aria-hidden className="my-1 h-px w-8 shrink-0 bg-border" />
             <button
-              className="flex w-full min-w-0 shrink-0 flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
+              className="flex w-full min-w-0 shrink-0 flex-col items-center gap-0 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
               aria-label="Overlay"
               title={overlayError ?? undefined}
               onClick={() => overlayInputRef.current?.click()}
@@ -449,7 +449,7 @@ export function SidePanel({
         {visibleExtra.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
-            className="flex w-full min-w-0 shrink-0 flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
+            className="flex w-full min-w-0 shrink-0 flex-col items-center gap-0 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
             aria-label={label}
             aria-pressed={extraTab === id}
             onClick={() => {

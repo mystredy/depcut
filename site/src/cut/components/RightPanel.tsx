@@ -485,7 +485,7 @@ function RailButton({
   };
   return (
     <button
-      className="flex w-full min-w-0 shrink-0 flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
+      className="flex w-full min-w-0 shrink-0 flex-col items-center gap-0 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
       aria-label={label}
       aria-pressed={active}
       title={title}
@@ -555,7 +555,7 @@ function RailActionButton({
 }) {
   return (
     <button
-      className="flex w-full min-w-0 shrink-0 flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40 sm:py-1.5"
+      className="flex w-full min-w-0 shrink-0 flex-col items-center gap-0 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40 sm:py-1.5"
       aria-label={label}
       aria-pressed={active}
       title={title ?? label}
