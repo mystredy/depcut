@@ -977,7 +977,7 @@ function ProjectFilesPanel({
           <input
             ref={inputRef}
             type="file"
-            accept="video/*,audio/*"
+            accept="video/*,audio/*,image/*,.mp4,.mov,.m4v,.webm,.mkv,.mp3,.m4a,.aac,.wav,.ogg,.flac,.png,.jpg,.jpeg,.webp,.gif,.avif,.bmp"
             multiple
             hidden
             onChange={(e) => {
