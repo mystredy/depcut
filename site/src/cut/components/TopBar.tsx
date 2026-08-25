@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronLeft, CloudUpload, Loader2, Mic, MoreHorizontal, Redo2, Send, Share2, Sparkles, Undo2, Upload, Video } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, CloudUpload, Loader2, Mic, MoreHorizontal, Redo2, Send, Share2, Sparkles, TriangleAlert, Undo2, Upload, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -304,7 +304,10 @@ export function TopBar({
     // spacer either side of the switches. With room to spare the spacers
     // match and the switches sit centred; as the bar tightens they drift
     // toward whichever side has slack instead of colliding with the rail.
-    <header ref={headerRef} className="relative flex items-center border-b border-border bg-card">
+    <header
+      ref={headerRef}
+      className="relative flex items-center overflow-x-auto overflow-y-hidden border-b border-border bg-card [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
       <div ref={leftRef} className="flex shrink-0 items-center gap-0.5 pl-1 sm:gap-1 sm:pl-2">
         <Button
           variant="ghost"
@@ -356,7 +359,8 @@ export function TopBar({
         >
           {failedImports > 0 ? (
             <>
-              <span className="text-destructive">
+              <TriangleAlert className="size-3 text-destructive" />
+              <span className="hidden text-destructive sm:inline">
                 {failedImports === 1 ? "1 import failed" : `${failedImports} imports failed`}
               </span>
               <button
@@ -369,15 +373,20 @@ export function TopBar({
             </>
           ) : cloudUploading ? (
             <>
-              <Loader2 className="size-3 animate-spin" />{" "}
-              {uploading === 1 ? "Uploading" : `Uploading ${uploading} files`}
+              <Loader2 className="size-3 animate-spin" />
+              <span className="hidden sm:inline">
+                {uploading === 1 ? "Uploading" : `Uploading ${uploading} files`}
+              </span>
             </>
           ) : saveState === "saving" || saveState === "dirty" ? (
             <>
-              <Loader2 className="size-3 animate-spin" /> Saving
+              <Loader2 className="size-3 animate-spin" /> <span className="hidden sm:inline">Saving</span>
             </>
           ) : saveState === "error" ? (
-            <span className="text-destructive">Couldn’t save</span>
+            <>
+              <TriangleAlert className="size-3 text-destructive" />
+              <span className="hidden text-destructive sm:inline">Couldn’t save</span>
+            </>
           ) : (
             <>
               <Check className="size-3" /> <span className="hidden sm:inline">Saved</span>
