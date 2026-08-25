@@ -48,7 +48,6 @@ import {
   AudioVolumeSection,
   ClipExtractSection,
   ClipFramingSection,
-  ClipHiddenSection,
   ClipMoveTimeSection,
   ClipMoveTrackSection,
   ClipSpeedSection,
@@ -81,7 +80,6 @@ type ClipTab =
   | "color"
   | "volume"
   | "extract"
-  | "hidden"
   | "framing";
 type AudioTab =
   | "audio-trim"
@@ -121,7 +119,6 @@ const CLIP_TABS: { id: ClipTab; label: string; icon: typeof SlidersHorizontal }[
   { id: "color", label: "Color", icon: Palette },
   { id: "volume", label: "Volume", icon: Volume2 },
   { id: "extract", label: "Extract", icon: AudioLines },
-  { id: "hidden", label: "Hidden", icon: EyeOff },
   { id: "framing", label: "Framing", icon: Crop },
 ];
 
@@ -317,7 +314,6 @@ export function RightPanel() {
                 {tab === "color" && <ColorPanel clip={clip} />}
                 {tab === "volume" && <ClipVolumeSection clip={clip} />}
                 {tab === "extract" && <ClipExtractSection clip={clip} />}
-                {tab === "hidden" && <ClipHiddenSection clip={clip} />}
                 {tab === "framing" && <ClipFramingSection clip={clip} />}
               </ScrollArea>
             ) : audio ? (
@@ -390,14 +386,29 @@ export function RightPanel() {
               disabled={selectionCount === 0}
               onClick={deleteSelection}
             />
+            {clip && (
+              <RailActionButton
+                label="Hidden"
+                title={clip.hidden ? "Show this clip" : "Hide this clip"}
+                icon={EyeOff}
+                active={!!clip.hidden}
+                onClick={() => useEditor.getState().updateClip(clip.id, { hidden: !clip.hidden })}
+              />
+            )}
             {clip &&
               CLIP_TABS.map((t) => (
                 <RailButton
                   key={t.id}
                   label={t.label}
-                  icon={t.icon}
+                  icon={t.id === "volume" && clip.muted ? VolumeX : t.icon}
                   active={tab === t.id}
                   busy={t.id === "extract" && extractingClipId === clip.id}
+                  title={t.id === "volume" ? "Hold to mute or unmute" : undefined}
+                  onLongPress={
+                    t.id === "volume"
+                      ? () => useEditor.getState().updateClip(clip.id, { muted: !clip.muted })
+                      : undefined
+                  }
                   onClick={() => setTab(tab === t.id ? null : t.id)}
                 />
               ))}
@@ -438,6 +449,8 @@ function RailButton({
   active,
   busy,
   onClick,
+  onLongPress,
+  title,
 }: {
   label: string;
   icon: typeof SlidersHorizontal;
@@ -446,13 +459,43 @@ function RailButton({
    * tab is open or the panel is closed, since the work outlives either. */
   busy?: boolean;
   onClick: () => void;
+  /** Held past the press threshold instead of tapped — a shortcut that
+   * skips opening the tab. Suppresses the click that follows the release. */
+  onLongPress?: () => void;
+  title?: string;
 }) {
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressed = useRef(false);
+  const clearPressTimer = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  };
   return (
     <button
       className="flex w-full min-w-0 shrink-0 flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
       aria-label={label}
       aria-pressed={active}
-      onClick={onClick}
+      title={title}
+      onPointerDown={(e) => {
+        if (!onLongPress || e.button !== 0) return;
+        longPressed.current = false;
+        clearPressTimer();
+        pressTimer.current = setTimeout(() => {
+          longPressed.current = true;
+          onLongPress();
+        }, 500);
+      }}
+      onPointerUp={clearPressTimer}
+      onPointerLeave={clearPressTimer}
+      onClick={() => {
+        if (longPressed.current) {
+          longPressed.current = false;
+          return;
+        }
+        onClick();
+      }}
     >
       <span
         className={cn(
@@ -487,26 +530,41 @@ function RailActionButton({
   title,
   icon: Icon,
   disabled,
+  active,
   onClick,
 }: {
   label: string;
   title?: string;
   icon: typeof SlidersHorizontal;
   disabled?: boolean;
+  /** Toggled on, for an action that's a flip rather than a one-shot — Hidden,
+   * which has no panel of its own to show its state in. */
+  active?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       className="flex w-full min-w-0 shrink-0 flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40 sm:py-1.5"
       aria-label={label}
+      aria-pressed={active}
       title={title ?? label}
       disabled={disabled}
       onClick={onClick}
     >
-      <span className="grid size-9 place-items-center rounded-lg transition-colors hover:bg-muted/60">
+      <span
+        className={cn(
+          "grid size-9 place-items-center rounded-lg transition-colors",
+          active ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60"
+        )}
+      >
         <Icon className="size-4.5" />
       </span>
-      <span className="hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block">
+      <span
+        className={cn(
+          "hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block",
+          active && "text-foreground"
+        )}
+      >
         {label}
       </span>
     </button>

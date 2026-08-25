@@ -720,17 +720,6 @@ export function ClipExtractSection({ clip }: { clip: VideoClip }) {
   );
 }
 
-export function ClipHiddenSection({ clip }: { clip: VideoClip }) {
-  const updateClip = useEditor((s) => s.updateClip);
-  return (
-    <div className="flex flex-col gap-1 px-3.5 pb-4">
-      <Row label="Hidden">
-        <Switch checked={!!clip.hidden} onCheckedChange={(v) => updateClip(clip.id, { hidden: v })} />
-      </Row>
-    </div>
-  );
-}
-
 export function ClipFramingSection({ clip }: { clip: VideoClip }) {
   const updateClip = useEditor((s) => s.updateClip);
   return (
