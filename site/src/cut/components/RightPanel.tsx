@@ -10,6 +10,7 @@ import {
   Crop,
   EyeOff,
   Gauge,
+  Loader2,
   Move,
   MoveHorizontal,
   Palette,
@@ -50,7 +51,6 @@ import {
   ClipHiddenSection,
   ClipMoveTimeSection,
   ClipMoveTrackSection,
-  ClipMuteSection,
   ClipSpeedSection,
   ClipTrimSection,
   ClipVolumeSection,
@@ -80,7 +80,6 @@ type ClipTab =
   | "speed"
   | "color"
   | "volume"
-  | "mute"
   | "extract"
   | "hidden"
   | "framing";
@@ -121,7 +120,6 @@ const CLIP_TABS: { id: ClipTab; label: string; icon: typeof SlidersHorizontal }[
   { id: "speed", label: "Speed", icon: Gauge },
   { id: "color", label: "Color", icon: Palette },
   { id: "volume", label: "Volume", icon: Volume2 },
-  { id: "mute", label: "Mute", icon: VolumeX },
   { id: "extract", label: "Extract", icon: AudioLines },
   { id: "hidden", label: "Hidden", icon: EyeOff },
   { id: "framing", label: "Framing", icon: Crop },
@@ -270,6 +268,7 @@ export function RightPanel() {
     s.selection?.kind === "overlay" ? s.overlays.find((o) => o.id === s.selection!.id) : undefined
   );
   const textOverlay = overlay && isTextOverlay(overlay) ? overlay : undefined;
+  const extractingClipId = useEditor((s) => s.extractingClipId);
 
   // Split works off the pointer/playhead, not the selection, so it's always
   // live; Delete needs something picked.
@@ -283,7 +282,11 @@ export function RightPanel() {
   return (
     <div className="flex min-h-0 border-l border-border bg-card">
       {textOverlay && <TextStyleMemory overlay={textOverlay} />}
-      {tab !== null && (
+      {/* Edit itself carries no content once a clip, audio, or text clip is
+          selected — Split/Delete/its property tabs already show in the rail
+          regardless of whether Edit is the active tab, so Edit is then a
+          pure toggle with nothing of its own to open. */}
+      {tab !== null && !(tab === "edit" && (clip || audio || textOverlay)) && (
         <div className="flex w-[264px] min-h-0 shrink-0 flex-col border-r border-border">
           {/* Inspector's own sub-panel headers (PanelTitle, ...) run flush to
               the edge with no room reserved for an overlay button, so the
@@ -313,7 +316,6 @@ export function RightPanel() {
                 {tab === "speed" && <ClipSpeedSection clip={clip} />}
                 {tab === "color" && <ColorPanel clip={clip} />}
                 {tab === "volume" && <ClipVolumeSection clip={clip} />}
-                {tab === "mute" && <ClipMuteSection clip={clip} />}
                 {tab === "extract" && <ClipExtractSection clip={clip} />}
                 {tab === "hidden" && <ClipHiddenSection clip={clip} />}
                 {tab === "framing" && <ClipFramingSection clip={clip} />}
@@ -395,6 +397,7 @@ export function RightPanel() {
                   label={t.label}
                   icon={t.icon}
                   active={tab === t.id}
+                  busy={t.id === "extract" && extractingClipId === clip.id}
                   onClick={() => setTab(tab === t.id ? null : t.id)}
                 />
               ))}
@@ -433,27 +436,36 @@ function RailButton({
   label,
   icon: Icon,
   active,
+  busy,
   onClick,
 }: {
   label: string;
   icon: typeof SlidersHorizontal;
   active: boolean;
+  /** Work tied to this tab is still running — shown even while some other
+   * tab is open or the panel is closed, since the work outlives either. */
+  busy?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
-      className="flex w-full min-w-0 shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
+      className="flex w-full min-w-0 shrink-0 flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5"
       aria-label={label}
       aria-pressed={active}
       onClick={onClick}
     >
       <span
         className={cn(
-          "grid size-9 place-items-center rounded-lg transition-colors",
+          "relative grid size-9 place-items-center rounded-lg transition-colors",
           active ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60"
         )}
       >
         <Icon className="size-4.5" />
+        {busy && (
+          <span className="absolute -top-1 -right-1 grid size-[15px] place-items-center rounded-full bg-card ring-2 ring-card">
+            <Loader2 className="size-3 animate-spin text-primary" />
+          </span>
+        )}
       </span>
       <span
         className={cn(
@@ -485,7 +497,7 @@ function RailActionButton({
 }) {
   return (
     <button
-      className="flex w-full min-w-0 shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40 sm:py-1.5"
+      className="flex w-full min-w-0 shrink-0 flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40 sm:py-1.5"
       aria-label={label}
       title={title ?? label}
       disabled={disabled}

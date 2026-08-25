@@ -632,6 +632,7 @@ export function ClipVolumeSection({ clip }: { clip: VideoClip }) {
           max={1.5}
           step={0.05}
           value={volume}
+          disabled={clip.muted}
           onValueChange={(v) => setVolumeDraft(Number(v))}
           onValueCommitted={() => {
             if (volumeDraft != null) {
@@ -656,30 +657,28 @@ export function ClipVolumeSection({ clip }: { clip: VideoClip }) {
           }}
         />
       </Row>
-      <ClipGeneratedAudio clip={clip} />
-    </div>
-  );
-}
-
-export function ClipMuteSection({ clip }: { clip: VideoClip }) {
-  const updateClip = useEditor((s) => s.updateClip);
-  return (
-    <div className="flex flex-col gap-1 px-3.5 pb-4">
+      {/* Sits right beside the slider it silences — split into its own tab, a
+          muted clip's volume control looked broken (dragging it did nothing
+          audible) with no visible reason why. */}
       <Row label="Mute audio">
         <Switch checked={clip.muted} onCheckedChange={(v) => updateClip(clip.id, { muted: v })} />
       </Row>
+      <ClipGeneratedAudio clip={clip} />
     </div>
   );
 }
 
 export function ClipExtractSection({ clip }: { clip: VideoClip }) {
   const asset = useEditor((s) => s.assets.find((a) => a.id === clip.assetId));
-  const [extracting, setExtracting] = useState(false);
+  // Lives in the store, not local state — an extraction outlives this section
+  // if the panel closes or the selection changes mid-run, and the rail tile
+  // reads the same flag to keep showing it's working.
+  const extracting = useEditor((s) => s.extractingClipId === clip.id);
   const [extractError, setExtractError] = useState<string | null>(null);
   const extractAudio = async () => {
     const projectId = useEditor.getState().projectId;
-    if (!projectId || !asset || extracting) return;
-    setExtracting(true);
+    if (!projectId || !asset || useEditor.getState().extractingClipId != null) return;
+    useEditor.getState().setExtractingClipId(clip.id);
     setExtractError(null);
     try {
       const extracted = await extractClipAudio(projectId, clip, asset);
@@ -688,7 +687,7 @@ export function ClipExtractSection({ clip }: { clip: VideoClip }) {
     } catch (e) {
       setExtractError(e instanceof Error ? e.message : "Could not extract the audio.");
     } finally {
-      setExtracting(false);
+      useEditor.getState().setExtractingClipId(null);
     }
   };
   return (

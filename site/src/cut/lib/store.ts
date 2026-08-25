@@ -130,6 +130,10 @@ export interface EditorState {
   loadEpoch: number;
   loadError: string | null;
   saveState: SaveState;
+  /** The clip whose audio is currently being extracted, if any — lives here
+   * rather than in the Extract tab's own component so the rail tile can still
+   * show it's working after the tab closes or the selection changes. */
+  extractingClipId: string | null;
   /** Whether the undo/redo stacks have anything to step to — kept in sync
    * with the module-level history/future arrays on every push/pop/reset, so
    * a toolbar button can disable itself reactively instead of reading the
@@ -220,6 +224,7 @@ export interface EditorState {
   loadProject: (id: string, opts?: { inPlace?: boolean }) => Promise<void>;
   setProjectName: (name: string) => void;
   setSaveState: (s: SaveState) => void;
+  setExtractingClipId: (id: string | null) => void;
   /** Enter read-only shared mode; call before loadProject. */
   setSharedView: (features: ShareFeatures) => void;
 
@@ -1104,6 +1109,7 @@ export const useEditor = create<EditorState>((baseSet, get) => {
     loadEpoch: 0,
     loadError: null,
     saveState: "saved",
+    extractingClipId: null,
     canUndo: false,
     canRedo: false,
     resumePush: false,
@@ -1164,6 +1170,7 @@ export const useEditor = create<EditorState>((baseSet, get) => {
         loaded: false,
         loadError: null,
         saveState: "saved",
+        extractingClipId: null,
         resumePush: false,
         assets: [],
         clips: [],
@@ -1435,6 +1442,7 @@ export const useEditor = create<EditorState>((baseSet, get) => {
 
     setProjectName: (name) => set({ projectName: name }),
     setSaveState: (s) => set({ saveState: s }),
+    setExtractingClipId: (id) => set({ extractingClipId: id }),
     setSharedView: (features) => set({ readOnly: true, sharedFeatures: features }),
 
     // Clone so each persist yields a fresh top-level reference: the orchestrator
