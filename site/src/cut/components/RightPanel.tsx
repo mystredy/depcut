@@ -368,7 +368,18 @@ export function RightPanel() {
           label="Edit"
           icon={SlidersHorizontal}
           active={tab === "edit"}
-          onClick={() => setTab(tab === "edit" ? null : "edit")}
+          onClick={() => {
+            // A clip, audio, or text clip's own tabs are already the way to
+            // edit it — Edit carries nothing of its own for them (see the
+            // content-pane check below), so for that selection it doubles as
+            // a deselect instead of just toggling its own highlight.
+            if (clip || audio || textOverlay) {
+              useEditor.getState().select(null);
+              setTab(null);
+              return;
+            }
+            setTab(tab === "edit" ? null : "edit");
+          }}
         />
         {(clip || audio) && (
           <>
