@@ -375,7 +375,16 @@ export function SidePanel({
               aria-pressed={tab === id}
               onClick={() => {
                 setExtraTab(null);
+                const opening = tab !== id;
                 setTab(tab === id ? null : id);
+                // The cut button at a clip's own edges hides while that clip
+                // is selected — its Edit panel already covers it there — so
+                // opening Transitions on an old clip selection can leave every
+                // cut near it looking gone. Clear it so they show again.
+                if (opening && id === "transitions") {
+                  const s = useEditor.getState();
+                  if (s.selection?.kind === "clip") s.select(null);
+                }
               }}
               onDragOver={(e) => {
                 if (!acceptsDrop(id, e)) return;
