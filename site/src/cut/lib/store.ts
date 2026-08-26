@@ -189,6 +189,10 @@ export interface EditorState {
   timelineH: number;
   /** Timeline time under the mouse (the skimmer); null when off the timeline. */
   skimTime: number | null;
+  /** The clip whose bare cut the Transitions panel is scoped to — set by its
+   * "+" button, separate from `selection` so pointing the panel at a cut
+   * never also opens that clip in the Edit rail. */
+  transitionCutClipId: string | null;
   /** TikTok publishing metadata (caption, hashtags, sound title). */
   publish: { caption: string; tags: string; soundTitle: string; handle: string };
   /** Free-form maker notes: published date, source links, reminders. */
@@ -392,6 +396,7 @@ export interface EditorState {
   /** Split at the given time, or the playhead when omitted. */
   splitAtPlayhead: (at?: number) => void;
   setSkimTime: (t: number | null) => void;
+  setTransitionCutClip: (id: string | null) => void;
   setPublish: (patch: Partial<{ caption: string; tags: string; soundTitle: string; handle: string }>) => void;
   setNotes: (patch: Partial<{ text: string; publishedAt: string; links: string[] }>) => void;
   /** Kick off (and poll) an on-device transcription of the current cut. */
@@ -1157,6 +1162,7 @@ export const useEditor = create<EditorState>((baseSet, get) => {
     pxPerSec: 60,
     timelineH: TIMELINE_H_DEFAULT,
     skimTime: null,
+    transitionCutClipId: null,
     publish: { caption: "", tags: "", soundTitle: "", handle: "" },
     notes: { text: "", publishedAt: "", links: [] },
     subtitles: emptySubtitles(),
@@ -3019,6 +3025,9 @@ export const useEditor = create<EditorState>((baseSet, get) => {
     },
     setSkimTime: (t) => {
       if (get().skimTime !== t) set({ skimTime: t });
+    },
+    setTransitionCutClip: (id) => {
+      if (get().transitionCutClipId !== id) set({ transitionCutClipId: id });
     },
     setPublish: (patch) => set((s) => ({ publish: { ...s.publish, ...patch } })),
     setNotes: (patch) => set((s) => ({ notes: { ...s.notes, ...patch } })),

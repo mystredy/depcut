@@ -1963,8 +1963,15 @@ export function Timeline() {
                   onClick={(e) => {
                     e.stopPropagation();
                     const s = useEditor.getState();
-                    if (existing) s.select({ kind: "transition", id: existing.id });
-                    else s.select({ kind: "clip", id: span.clip.id });
+                    if (existing) {
+                      s.setTransitionCutClip(null);
+                      s.select({ kind: "transition", id: existing.id });
+                    } else {
+                      // Scope the panel to this cut without selecting the clip
+                      // itself — that would open it in the Edit rail too.
+                      if (s.selection?.kind === "clip") s.select(null);
+                      s.setTransitionCutClip(span.clip.id);
+                    }
                     requestSidePanel("transitions");
                   }}
                 >

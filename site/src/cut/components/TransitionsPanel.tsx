@@ -35,26 +35,29 @@ import { ScrollArea } from "@/components/ui/scroll-area";
  */
 export function TransitionsPanel() {
   // The bar the tab is tuned to: a selected bar directly, or the one playing
-  // the selected clip's cut.
+  // the cut button's clip's cut. Keyed off `transitionCutClipId`, not
+  // `selection` — that field is what the cut button sets, kept apart from
+  // selection on purpose so pointing this tab at a cut never also opens that
+  // clip in the Edit rail.
   const live = useEditor((s) => {
     if (s.selection?.kind === "transition")
       return s.transitions.find((t) => t.id === s.selection!.id) ?? null;
-    if (s.selection?.kind !== "clip") return null;
+    if (!s.transitionCutClipId) return null;
     const roles = resolveTransitions(s.clips, s.transitions);
     return (
       s.transitions.find((t) => {
         const r = roles.get(t.id);
-        return !!r && r.kind === "cut" && r.clipId === s.selection!.id;
+        return !!r && r.kind === "cut" && r.clipId === s.transitionCutClipId;
       }) ?? null
     );
   });
-  // A selected clip's own cut, when it has one and nothing plays there yet —
-  // the tab can still act on it, this time by adding a bar instead of
+  // The cut button's clip's own cut, when it has one and nothing plays there
+  // yet — the tab can still act on it, this time by adding a bar instead of
   // restyling one. Null once a bar already exists there; `live` covers that.
   const bareCut = useEditor((s) => {
-    if (live || s.selection?.kind !== "clip") return null;
+    if (live || !s.transitionCutClipId) return null;
     const cut = transitionBoundaries(s.clips).find(
-      (b) => b.kind === "cut" && b.clipId === s.selection!.id
+      (b) => b.kind === "cut" && b.clipId === s.transitionCutClipId
     );
     return cut?.at ?? null;
   });

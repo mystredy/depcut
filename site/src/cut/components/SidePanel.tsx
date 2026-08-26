@@ -200,6 +200,16 @@ export function SidePanel({
   );
   // The remembered tab may be hidden in this share; fall back to collapsed.
   const tab = tabPref !== null && !visibleTabs.some((t) => t.id === tabPref) ? null : tabPref;
+  // The cut button at a clip's own edges hides while that clip is selected
+  // (its Edit panel already covers it there), so a clip selection sitting
+  // around while Transitions is open can leave every cut near it looking
+  // gone. Clear it on entry and keep clearing it — selecting a clip directly
+  // on the timeline while the tab is still open would otherwise do the same
+  // thing again.
+  const clipSelected = useEditor((s) => s.selection?.kind === "clip");
+  useEffect(() => {
+    if (tab === "transitions" && clipSelected) useEditor.getState().select(null);
+  }, [tab, clipSelected]);
   const narrow = useNarrowRail();
   // Aspect ratio/Timeline/Playhead's own open state, independent of `tab` —
   // opening one closes the other and vice versa (see the click handlers
@@ -375,16 +385,7 @@ export function SidePanel({
               aria-pressed={tab === id}
               onClick={() => {
                 setExtraTab(null);
-                const opening = tab !== id;
                 setTab(tab === id ? null : id);
-                // The cut button at a clip's own edges hides while that clip
-                // is selected — its Edit panel already covers it there — so
-                // opening Transitions on an old clip selection can leave every
-                // cut near it looking gone. Clear it so they show again.
-                if (opening && id === "transitions") {
-                  const s = useEditor.getState();
-                  if (s.selection?.kind === "clip") s.select(null);
-                }
               }}
               onDragOver={(e) => {
                 if (!acceptsDrop(id, e)) return;
