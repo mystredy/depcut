@@ -9,6 +9,7 @@ import { PICKED_RING, pickGridNav, useAssetPick } from "@/cut/lib/assetPick";
 import { getClipSpans, resolveTransitions, transitionBoundaries, useEditor } from "@/cut/lib/store";
 import {
   TRANSITION_DEFAULT_SECONDS,
+  TRANSITION_MAX,
   TRANSITION_STYLE_GROUPS,
   TRANSITION_STYLE_LABELS,
   type MediaAsset,
@@ -17,16 +18,18 @@ import {
 } from "@/cut/lib/types";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Slider } from "@/components/ui/slider";
 
 /**
  * The Transitions tab: how one clip hands over to the next, and how a clip
  * enters and leaves on its own.
  *
- * Drag a tile onto the timeline and it takes the nearest place with a handover
- * to make: a cut between two clips, or a clip's own head or tail, where it
- * arrives from or leaves to nothing. On the timeline it is a bar of its own
- * above the tracks: drag it along the track to move it, drag its edge to
- * retime it. A click here only picks the tile, the same as every other panel.
+ * A transition lives at the cut or open edge it belongs to and never moves
+ * off it — dropping a tile onto the timeline only lands on a valid one, and
+ * the round button at a cut is the other way in. Duration is the one thing
+ * that's still adjustable here, with the slider below. A click on a tile only
+ * picks it, the same as every other panel, unless a transition is already
+ * live — then it restyles that one.
  *
  * Select a clip carrying a transition — or a bar itself — and the tab follows
  * it: its style is the marked tile, and a click on another tile changes that
@@ -62,12 +65,54 @@ export function TransitionsPanel() {
     return cut?.at ?? null;
   });
   const { a, b } = useCutFrames();
+  // Duration is the one thing a bar no longer has an on-timeline gesture
+  // for. The fixed end mirrors what the old edge-drag kept still: an
+  // entrance grows forward from its start, everything else backward from
+  // its end, so retiming never un-aligns it from the boundary it plays.
+  const [durationDraft, setDurationDraft] = useState<number | null>(null);
+  const setDuration = (seconds: number) => {
+    if (!live) return;
+    const st = useEditor.getState();
+    const growsForward = resolveTransitions(st.clips, st.transitions).get(live.id)?.kind === "in";
+    const fixed = growsForward ? live.start : live.start + live.seconds;
+    st.updateTransitionTransient(live.id, {
+      seconds,
+      start: growsForward ? fixed : fixed - seconds,
+    });
+  };
   return (
     <>
       {/* No header row. The top padding clears the side panel's floating
           close button: the first group's title runs beside it on the left,
           and the first tile row starts below it. */}
       <ScrollArea className="min-h-0 flex-1" contentClassName="px-3.5 pt-5 pb-4">
+        {live && (
+          <div className="mb-3 flex items-center justify-between gap-2.5">
+            <span className="text-[13px] text-muted-foreground">Duration</span>
+            <div className="flex items-center gap-2">
+              <Slider
+                className="data-horizontal:w-24"
+                min={0.1}
+                max={TRANSITION_MAX}
+                step={0.05}
+                value={durationDraft ?? live.seconds}
+                onValueChange={(v) => {
+                  if (durationDraft == null) useEditor.getState().beginHistoryBatch();
+                  const n = Number(v);
+                  setDurationDraft(n);
+                  setDuration(n);
+                }}
+                onValueCommitted={() => {
+                  setDurationDraft(null);
+                  useEditor.getState().endHistoryBatch();
+                }}
+              />
+              <span className="w-9 shrink-0 text-right font-mono text-[11.5px] text-muted-foreground tabular-nums">
+                {(durationDraft ?? live.seconds).toFixed(2)}s
+              </span>
+            </div>
+          </div>
+        )}
         {/* One key handler over every group, so arrows walk the whole list
             across section boundaries. */}
         <div onKeyDown={pickGridNav}>

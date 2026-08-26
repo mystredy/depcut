@@ -154,10 +154,11 @@ export interface EditorState {
    * carries the transition sequence, higher tracks composite in front. A
    * clip's `track` field is the only thing that places it. */
   clips: VideoClip[];
-  /** Transition bars: free objects on the transitions row, owned by no clip.
-   * A bar plays when it lines up with a cut or an open edge (resolveTransitions)
-   * and sits inert anywhere else; the per-clip transition/anim fields are
-   * caches derived from these in the set wrapper. */
+  /** Transition bars: objects of their own, owned by no clip directly, but
+   * only ever placed on the cut or open edge they play (resolveTransitions);
+   * the store drops one on the next write if that boundary stops existing.
+   * The per-clip transition/anim fields are caches derived from these in the
+   * set wrapper. */
   transitions: TimelineTransition[];
   audioClips: AudioClip[];
   overlays: Overlay[];
