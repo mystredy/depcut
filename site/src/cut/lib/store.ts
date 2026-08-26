@@ -199,6 +199,10 @@ export interface EditorState {
    * effect checks this so it doesn't keep re-selecting a clip Transitions
    * just cleared. */
   transitionsPanelOpen: boolean;
+  /** On a narrow viewport, which shuttle (if any) should render as an inline
+   * strip under the preview instead of opening the side panel column and
+   * pushing the preview over. Set by SidePanel, read by Preview. */
+  mobileShuttleTab: "timeline" | "playhead" | null;
   /** TikTok publishing metadata (caption, hashtags, sound title). */
   publish: { caption: string; tags: string; soundTitle: string; handle: string };
   /** Free-form maker notes: published date, source links, reminders. */
@@ -407,6 +411,7 @@ export interface EditorState {
   setSkimTime: (t: number | null) => void;
   setTransitionCutClip: (id: string | null) => void;
   setTransitionsPanelOpen: (open: boolean) => void;
+  setMobileShuttleTab: (tab: "timeline" | "playhead" | null) => void;
   setPublish: (patch: Partial<{ caption: string; tags: string; soundTitle: string; handle: string }>) => void;
   setNotes: (patch: Partial<{ text: string; publishedAt: string; links: string[] }>) => void;
   /** Kick off (and poll) an on-device transcription of the current cut. */
@@ -1174,6 +1179,7 @@ export const useEditor = create<EditorState>((baseSet, get) => {
     skimTime: null,
     transitionCutClipId: null,
     transitionsPanelOpen: false,
+    mobileShuttleTab: null,
     publish: { caption: "", tags: "", soundTitle: "", handle: "" },
     notes: { text: "", publishedAt: "", links: [] },
     subtitles: emptySubtitles(),
@@ -3079,6 +3085,9 @@ export const useEditor = create<EditorState>((baseSet, get) => {
     },
     setTransitionsPanelOpen: (open) => {
       if (get().transitionsPanelOpen !== open) set({ transitionsPanelOpen: open });
+    },
+    setMobileShuttleTab: (tab) => {
+      if (get().mobileShuttleTab !== tab) set({ mobileShuttleTab: tab });
     },
     setPublish: (patch) => set((s) => ({ publish: { ...s.publish, ...patch } })),
     setNotes: (patch) => set((s) => ({ notes: { ...s.notes, ...patch } })),

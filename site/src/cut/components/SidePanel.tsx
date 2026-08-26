@@ -120,8 +120,7 @@ import {
   DrawerTrigger,
   DrawerViewport,
 } from "@/components/ui/drawer";
-import { ShuttleBar } from "./ShuttleBar";
-import { timelineScrollBy } from "@/cut/lib/timelineScroll";
+import { PlayheadShuttleControl, TimelineShuttleControl } from "./ShuttleBar";
 
 type Tab = SidePanelTab;
 
@@ -232,10 +231,31 @@ export function SidePanel({
     (v) => v === null || EXTRA_TABS.some((t) => t.id === v)
   );
   const visibleExtra = sharedFeatures ? [] : EXTRA_TABS;
-  // On a narrow viewport, Aspect ratio's content moves into the bottom sheet
-  // below instead of docking inline — Timeline and Playhead still dock at
-  // every width, so only that one tab skips the column here.
-  const extraDocksInline = !(narrow && extraTab === "aspect");
+  // On a narrow viewport, none of the three dock inline: Aspect ratio's
+  // content moves into the bottom sheet below, and Timeline/Playhead move
+  // into a strip under the preview instead — docking either here would push
+  // the preview itself off to the side on a screen with no room to spare.
+  const extraDocksInline = !(
+    narrow &&
+    (extraTab === "aspect" || extraTab === "timeline" || extraTab === "playhead")
+  );
+  // Timeline/Playhead's inline-under-the-preview handoff, narrow only: keep
+  // the flag Preview reads in sync with the tab that owns it here.
+  useEffect(() => {
+    useEditor.getState().setMobileShuttleTab(
+      narrow && (extraTab === "timeline" || extraTab === "playhead") ? extraTab : null
+    );
+  }, [narrow, extraTab]);
+  // The other direction: Preview's own close button clears the flag
+  // directly, so this tab closes in response instead of the two
+  // independently agreeing to both be open.
+  const mobileShuttleTab = useEditor((s) => s.mobileShuttleTab);
+  useEffect(() => {
+    if (narrow && mobileShuttleTab === null && (extraTab === "timeline" || extraTab === "playhead")) {
+      setExtraTab(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mobileShuttleTab]);
   // Overlay isn't a panel here either (same as the right rail's copy): tapping
   // it goes straight to a file picker and adds the result to the overlay
   // track, no docked column involved.
@@ -686,40 +706,27 @@ function AspectPanel() {
 }
 
 /** Shuttles the timeline's own horizontal scroll — panning the view without
- * touching the playhead or the project. */
+ * touching the playhead or the project. On a narrow viewport this doesn't
+ * dock here at all; the inline strip under the preview takes over instead. */
 function TimelineShuttlePanel() {
-  const MAX_PX_PER_SEC = 900;
   return (
     <>
       <PanelHead title="Timeline" hint="Press and drag to pan the timeline" />
       <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 pb-8">
-        <ShuttleBar onTick={(rate, dt) => timelineScrollBy(rate * MAX_PX_PER_SEC * dt)} />
+        <TimelineShuttleControl />
       </div>
     </>
   );
 }
 
 /** Shuttles the playhead itself, like a jog wheel — pauses playback first,
- * same as grabbing the ruler does. */
+ * same as grabbing the ruler does. Same narrow-viewport handoff as Timeline's. */
 function PlayheadShuttlePanel() {
-  const MAX_SECONDS_PER_SEC = 12;
-  const startShuttle = () => {
-    const s = useEditor.getState();
-    if (s.playing) s.setPlaying(false);
-  };
   return (
     <>
       <PanelHead title="Playhead" hint="Press and drag to shuttle the playhead" />
-      <div
-        className="flex flex-1 flex-col items-center justify-center gap-4 px-4 pb-8"
-        onPointerDownCapture={startShuttle}
-      >
-        <ShuttleBar
-          onTick={(rate, dt) => {
-            const s = useEditor.getState();
-            s.seek(s.currentTime + rate * MAX_SECONDS_PER_SEC * dt);
-          }}
-        />
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 px-4 pb-8">
+        <PlayheadShuttleControl />
       </div>
     </>
   );
