@@ -24,9 +24,8 @@ function timeAgo(iso: string) {
   return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
-// Every ticket a signed-in user has filed via POST /api/support-tickets.
-// There's no creator-facing "contact support" page yet that calls it, so
-// this stays empty until one exists — same honest-empty pattern as Payouts.
+// Every ticket a signed-in user has filed via the account menu's "Give
+// feedback" dialog (POST /api/support-tickets).
 export default function AdminSupportPage() {
   const tickets = useAdminSupportTickets();
   const open = (tickets.data?.tickets ?? []).filter((t) => t.status !== "Resolved");
@@ -39,8 +38,7 @@ export default function AdminSupportPage() {
           <HelpCircle className="size-5 text-muted-foreground" /> Support Requests
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Tickets filed via the support API. No creator-facing contact-support page links to it
-          yet, so this list is empty until one does.
+          Feedback and bug reports filed from the account menu.
         </p>
       </div>
 
@@ -107,6 +105,22 @@ function TicketCard({ ticket }: { ticket: AdminSupportTicket }) {
       </p>
 
       <p className="rounded-lg border bg-muted/20 p-2.5 text-xs">{ticket.message}</p>
+
+      {ticket.attachmentContentType && (
+        <a
+          href={`/api/admin/support-tickets/${ticket.id}/attachment`}
+          target="_blank"
+          rel="noreferrer"
+          className="block w-fit"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- an admin-only inline-DB image, not worth a remote loader config for */}
+          <img
+            src={`/api/admin/support-tickets/${ticket.id}/attachment`}
+            alt="Attachment"
+            className="h-24 w-auto rounded-lg border object-cover transition-opacity hover:opacity-90"
+          />
+        </a>
+      )}
 
       {ticket.status === "Resolved" ? (
         <p className="rounded-lg border bg-emerald-500/10 p-2.5 text-xs text-emerald-700 dark:text-emerald-400">

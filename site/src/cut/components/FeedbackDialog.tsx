@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, MessageCircleHeart } from "lucide-react";
+import { useRef, useState } from "react";
+import { Loader2, MessageCircleHeart, Paperclip, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,6 +15,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateSupportTicket } from "@/queries/support";
 
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+const ALLOWED_ATTACHMENT_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+
+function readAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read that file."));
+    reader.readAsDataURL(file);
+  });
+}
+
 /** A subject + message form that files a SupportTicket — bugs, feature asks,
  * anything else a user wants the team to see. Lands in /admin/support and
  * pings the team on Telegram; the sender sees no reply flow here, only
@@ -23,14 +35,47 @@ export function FeedbackDialog({ onClose }: { onClose: () => void }) {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
+  const [attachment, setAttachment] = useState<{ dataUrl: string; contentType: string } | null>(
+    null
+  );
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const createTicket = useCreateSupportTicket();
 
   const canSubmit = subject.trim().length > 0 && message.trim().length > 0;
 
+  const pickFile = async (file: File | undefined) => {
+    setAttachError(null);
+    if (!file) return;
+    if (!ALLOWED_ATTACHMENT_TYPES.has(file.type)) {
+      setAttachError("Attach a PNG, JPEG, WebP, or GIF image.");
+      return;
+    }
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setAttachError("That image is over the 5 MB limit.");
+      return;
+    }
+    const dataUrl = await readAsDataURL(file);
+    setAttachment({ dataUrl, contentType: file.type });
+  };
+
   const submit = () => {
     if (!canSubmit || createTicket.isPending) return;
     createTicket.mutate(
-      { subject: subject.trim(), message: message.trim() },
+      {
+        subject: subject.trim(),
+        message: message.trim(),
+        ...(attachment
+          ? {
+              attachment: {
+                // Everything after the comma in a data: URL is the base64
+                // payload — the part the server actually wants.
+                data: attachment.dataUrl.slice(attachment.dataUrl.indexOf(",") + 1),
+                contentType: attachment.contentType,
+              },
+            }
+          : {}),
+      },
       { onSuccess: () => setSent(true) }
     );
   };
@@ -85,6 +130,45 @@ export function FeedbackDialog({ onClose }: { onClose: () => void }) {
                   onChange={(e) => setMessage(e.target.value)}
                 />
               </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                hidden
+                onChange={(e) => {
+                  void pickFile(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+              {attachment ? (
+                <div className="relative w-fit">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- a local data: URL preview, not worth a remote loader config for */}
+                  <img
+                    src={attachment.dataUrl}
+                    alt="Attachment preview"
+                    className="h-20 w-auto rounded-lg border object-cover"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Remove attachment"
+                    className="absolute -top-1.5 -right-1.5 grid size-5 place-items-center rounded-full border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+                    onClick={() => setAttachment(null)}
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-fit"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Paperclip data-icon="inline-start" /> Attach a screenshot
+                </Button>
+              )}
+              {attachError && <p className="text-xs text-red-600">{attachError}</p>}
             </div>
             {createTicket.isError && (
               <p className="text-sm text-red-600">

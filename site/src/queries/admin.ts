@@ -298,6 +298,7 @@ export type AdminSupportTicket = {
   raisedByEmail: string;
   resolvedAt: string | null;
   createdAt: string;
+  attachmentContentType: string | null;
 };
 
 export type AnnouncementTargetType = "all" | "super_users" | "specific_user";
