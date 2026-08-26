@@ -42,9 +42,13 @@ export function NavUser() {
   const base = useCutBase();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const { data: session } = authClient.useSession();
-  // Mounted above the session check so the hook order is stable; it stays idle
-  // until there's a session to read a profile for.
-  const { data: profile, isPending } = useAccountProfile({ enabled: Boolean(session) });
+  // Mounted above the session check so the hook order is stable, and started
+  // unconditionally rather than waiting on the session hook to resolve first —
+  // /api/account/profile reads the session cookie itself, server-side, so
+  // gating it behind the client's own session state only serialized two
+  // independent round trips into one that had to finish before the other
+  // could start.
+  const { data: profile, isPending } = useAccountProfile();
   const credits = useCreditBalance();
   if (!session) return null;
 
