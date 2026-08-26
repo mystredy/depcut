@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowLeftToLine, ArrowRight, ArrowRightToLine, ArrowUp, ArrowUpToLine, AudioLines, Blend, Check, Circle, Clapperboard, Copy, Diamond, Droplets, EllipsisVertical, Expand, Eye, EyeOff, FolderOpen, FolderPlus, FoldHorizontal, Fullscreen, Loader2, Minus, Moon, MoreHorizontal, MoveRight, Pause, Play, Scissors, SkipBack, SkipForward, Sparkles, Square, Sticker, Sun, Target, Type, UnfoldHorizontal, Volume2, VolumeX, type LucideIcon } from "lucide-react";
+import { ArrowDown, ArrowDownToLine, ArrowLeft, ArrowLeftFromLine, ArrowLeftToLine, ArrowRight, ArrowRightFromLine, ArrowRightToLine, ArrowUp, ArrowUpToLine, AudioLines, Blend, Check, Circle, Clapperboard, Copy, Diamond, Droplets, EllipsisVertical, Expand, Eye, EyeOff, FolderOpen, FolderPlus, FoldHorizontal, Fullscreen, Loader2, Minus, Moon, MoreHorizontal, MoveRight, Pause, Play, Scissors, SkipBack, SkipForward, Sparkles, Square, Sticker, Sun, Target, Type, UnfoldHorizontal, Volume2, VolumeX, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -2474,13 +2474,47 @@ function HoverLine({
  * flattened video. Re-adding it re-materializes editable clips, overlays, and
  * captions; the Media panel can push it to the shared Library.
  */
-/** The timeline's editing tools that don't depend on a selection — Split and
- * Delete live in the right panel instead. */
+/** The timeline's editing tools that don't depend on a selection — Delete
+ * lives in the right panel instead. Split is here too, and also there: this
+ * copy works from the pointer/playhead the same way, for reaching it without
+ * a clip selected first. */
 function TimelineTools({ addText }: { addText: () => void }) {
+  const split = () => {
+    const s = useEditor.getState();
+    s.splitAtPlayhead(s.skimTime ?? undefined);
+  };
+  const splitAndDrop = (side: "left" | "right") => {
+    const s = useEditor.getState();
+    s.splitAndDrop(side, s.skimTime ?? undefined);
+  };
   return (
     <>
       <Button variant="ghost" size="icon-sm" title="Text (T)" onClick={addText}>
         <Type />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        title="Split at pointer, or at playhead (⌘B or S)"
+        onClick={split}
+      >
+        <Scissors />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        title="Split and drop the left side"
+        onClick={() => splitAndDrop("left")}
+      >
+        <ArrowLeftFromLine />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        title="Split and drop the right side"
+        onClick={() => splitAndDrop("right")}
+      >
+        <ArrowRightFromLine />
       </Button>
       <SaveSelectionButton />
     </>
@@ -2519,6 +2553,30 @@ function TimelineToolsMenu({
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem onClick={addText}>
           <Type /> Text
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => {
+            const s = useEditor.getState();
+            s.splitAtPlayhead(s.skimTime ?? undefined);
+          }}
+        >
+          <Scissors /> Split
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => {
+            const s = useEditor.getState();
+            s.splitAndDrop("left", s.skimTime ?? undefined);
+          }}
+        >
+          <ArrowLeftFromLine /> Split, drop left
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => {
+            const s = useEditor.getState();
+            s.splitAndDrop("right", s.skimTime ?? undefined);
+          }}
+        >
+          <ArrowRightFromLine /> Split, drop right
         </DropdownMenuItem>
         {save.available && (
           <DropdownMenuItem disabled={save.state === "saving"} onClick={save.save}>

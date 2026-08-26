@@ -400,6 +400,9 @@ export interface EditorState {
   detachAudio: () => void;
   /** Split at the given time, or the playhead when omitted. */
   splitAtPlayhead: (at?: number) => void;
+  /** Split at the given time (or the playhead), then drop the named side —
+   * a quick trim-to-here. A no-op if there's nothing to split there. */
+  splitAndDrop: (side: "left" | "right", at?: number) => void;
   setSkimTime: (t: number | null) => void;
   setTransitionCutClip: (id: string | null) => void;
   setTransitionsPanelOpen: (open: boolean) => void;
@@ -2592,6 +2595,43 @@ export const useEditor = create<EditorState>((baseSet, get) => {
         next.splice(idx, 1, left, right);
         return { clips: next, ...sole({ kind: "clip", id: right.id }) };
       });
+    },
+
+    splitAndDrop: (side, at) => {
+      const before = {
+        clips: get().clips.map((c) => c.id),
+        audioClips: get().audioClips.map((c) => c.id),
+        overlays: get().overlays.map((o) => o.id),
+        cues: get().subtitles.cues.map((c) => c.id),
+      };
+      get().beginHistoryBatch();
+      get().splitAtPlayhead(at);
+      // Whichever list gained exactly one id is the one that split — every
+      // branch of splitAtPlayhead inserts [left, right] adjacently (splice or
+      // flatMap), so the new id's neighbor is the left half.
+      const grew = (beforeIds: string[], items: { id: string }[]) => {
+        if (items.length !== beforeIds.length + 1) return null;
+        const beforeSet = new Set(beforeIds);
+        const idx = items.findIndex((x) => !beforeSet.has(x.id));
+        return idx > 0 ? { leftId: items[idx - 1].id, rightId: items[idx].id } : null;
+      };
+      const s = get();
+      const hit = (() => {
+        let r = grew(before.clips, s.clips);
+        if (r) return { kind: "clip" as const, ...r };
+        r = grew(before.audioClips, s.audioClips);
+        if (r) return { kind: "audio" as const, ...r };
+        r = grew(before.overlays, s.overlays);
+        if (r) return { kind: "overlay" as const, ...r };
+        r = grew(before.cues, s.subtitles.cues);
+        if (r) return { kind: "cue" as const, ...r };
+        return null;
+      })();
+      if (hit) {
+        get().select({ kind: hit.kind, id: side === "left" ? hit.leftId : hit.rightId });
+        get().deleteSelection();
+      }
+      get().endHistoryBatch();
     },
 
     deleteSelection: () => {
