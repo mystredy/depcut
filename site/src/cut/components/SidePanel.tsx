@@ -213,6 +213,14 @@ export function SidePanel({
       useEditor.getState().select(null);
     }
   }, [tab]);
+  // The other direction: claiming the Edit rail clears the flag directly
+  // (rather than going through `tab` here), so this tab closes in response
+  // instead of the two independently agreeing to both be open.
+  const transitionsPanelOpenFlag = useEditor((s) => s.transitionsPanelOpen);
+  useEffect(() => {
+    if (!transitionsPanelOpenFlag && tab === "transitions") setTab(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transitionsPanelOpenFlag]);
   const narrow = useNarrowRail();
   // Aspect ratio/Timeline/Playhead's own open state, independent of `tab` —
   // opening one closes the other and vice versa (see the click handlers

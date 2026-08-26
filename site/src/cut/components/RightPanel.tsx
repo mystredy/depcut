@@ -388,6 +388,11 @@ export function RightPanel() {
               setTab(null);
               return;
             }
+            // Edit and Transitions are never both open — claiming this rail
+            // closes that one. Its own selected-clip-under-the-playhead
+            // fallback stands down while Transitions is open, and picks
+            // right back up the moment this clears it.
+            useEditor.getState().setTransitionsPanelOpen(false);
             setTab(tab === "edit" ? null : "edit");
           }}
         />
