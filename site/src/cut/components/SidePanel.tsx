@@ -201,15 +201,18 @@ export function SidePanel({
   // The remembered tab may be hidden in this share; fall back to collapsed.
   const tab = tabPref !== null && !visibleTabs.some((t) => t.id === tabPref) ? null : tabPref;
   // The cut button at a clip's own edges hides while that clip is selected
-  // (its Edit panel already covers it there), so a clip selection sitting
-  // around while Transitions is open can leave every cut near it looking
-  // gone. Clear it on entry and keep clearing it — selecting a clip directly
-  // on the timeline while the tab is still open would otherwise do the same
-  // thing again.
-  const clipSelected = useEditor((s) => s.selection?.kind === "clip");
+  // (its Edit panel already covers it there), so a clip selection left over
+  // from before can leave every cut near it looking gone. Clear it the
+  // moment the tab opens. Keyed on `tab` alone (not the selection) and read
+  // fresh rather than subscribed to: with nothing selected, the Edit rail's
+  // own effect re-selects whatever clip sits under the playhead, and a
+  // reactive clear here would undo that every time, forever.
   useEffect(() => {
-    if (tab === "transitions" && clipSelected) useEditor.getState().select(null);
-  }, [tab, clipSelected]);
+    if (tab === "transitions" && useEditor.getState().selection?.kind === "clip") {
+      useEditor.getState().select(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
   const narrow = useNarrowRail();
   // Aspect ratio/Timeline/Playhead's own open state, independent of `tab` —
   // opening one closes the other and vice versa (see the click handlers
