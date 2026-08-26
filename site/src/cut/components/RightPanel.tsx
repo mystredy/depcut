@@ -229,10 +229,21 @@ export function RightPanel() {
   // new clip there re-runs this and follows it. The main track wins over the
   // remembered one whenever the playhead sits on it: it's the through-line
   // of the edit, so it's the safer default regardless of whatever else was
-  // last selected (or nothing ever was).
+  // last selected (or nothing ever was). Stands down while the Transitions
+  // tab is open: it deliberately clears the selection so a cut's own button
+  // shows instead of that clip's Edit controls, and this would otherwise
+  // select the same clip right back. With nothing to fall back onto, Edit
+  // itself closes too — otherwise it sits open showing only its own
+  // placeholder, next to a Transitions column that could use the room.
   const currentTime = useEditor((s) => s.currentTime);
+  const transitionsPanelOpen = useEditor((s) => s.transitionsPanelOpen);
   useEffect(() => {
-    if (tab === null || hasEditContent) return;
+    if (tab === null) return;
+    if (transitionsPanelOpen) {
+      if (tab === "edit" && !hasEditContent) setTab(null);
+      return;
+    }
+    if (hasEditContent) return;
     const s = useEditor.getState();
     const t = s.currentTime;
     const onMain = s.clips.find((c) => c.track === 0 && c.start <= t && t < c.start + clipLen(c));
@@ -253,7 +264,7 @@ export function RightPanel() {
       );
       if (hit) s.select({ kind: "audio", id: hit.id });
     }
-  }, [tab, hasEditContent, currentTime]);
+  }, [tab, hasEditContent, currentTime, transitionsPanelOpen]);
 
   const clip = useEditor((s) =>
     s.selection?.kind === "clip" ? s.clips.find((c) => c.id === s.selection!.id) : undefined
