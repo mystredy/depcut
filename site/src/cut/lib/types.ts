@@ -283,11 +283,14 @@ export const TRANSITION_MAX = 2;
 /** What a transition runs for when one is placed on a bare cut. */
 export const TRANSITION_DEFAULT_SECONDS = 0.5;
 
-/** A transition as a timeline object of its own: a bar on the transitions row
- * at an absolute time, belonging to no clip. It plays when its window lines up
- * with a place that has a handover to make — a cut it ends on, an open head it
- * starts on, an open tail it ends on — and sits inert anywhere else. Clips
- * moving or deleting leave it exactly where it is. */
+/** A transition as a timeline object of its own: a bar at an absolute time,
+ * belonging to no clip directly, but only ever placed where it lines up with
+ * a place that has a handover to make — a cut it ends on, an open head it
+ * starts on, an open tail it ends on. It cannot be moved off that boundary;
+ * only retimed (a shorter or longer window on the same one) or deleted. If
+ * the boundary it played stops existing — its clips move apart, one is
+ * deleted — the store drops the bar on the next write rather than leaving it
+ * parked. */
 export interface TimelineTransition {
   id: string;
   /** Bar start on the timeline, seconds; the window is [start, start+seconds]. */

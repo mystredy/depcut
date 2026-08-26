@@ -961,7 +961,29 @@ export const useEditor = create<EditorState>((baseSet, get) => {
       // can never disagree.
       if (next.clips || next.transitions) {
         const clips = next.clips ?? prev.clips;
-        const derived = deriveTransitionFields(clips, next.transitions ?? prev.transitions);
+        let transitions = next.transitions ?? prev.transitions;
+        // A transition belongs to the cut or open edge it lines up with. Two
+        // ways it can lose that: nothing lines up with it at all, or — the
+        // one `resolveTransitions` alone wouldn't catch — the pair it cut
+        // between came apart and its position now merely lines up with the
+        // open edge that leaves behind, which reads as the same bar quietly
+        // turning into an unrelated exit fade. A cut is only ever a cut; drop
+        // it instead of letting it re-home as something the user never asked
+        // for. Nothing drags a bar back into place anymore, so there is
+        // nothing to preserve it for.
+        const prevRoles = resolveTransitions(prev.clips, prev.transitions);
+        const roles = resolveTransitions(clips, transitions);
+        const orphaned = (t: TimelineTransition) => {
+          const now = roles.get(t.id);
+          if (!now) return true;
+          const was = prevRoles.get(t.id);
+          return was?.kind === "cut" && now.kind !== "cut";
+        };
+        if (transitions.some(orphaned)) {
+          transitions = transitions.filter((t) => !orphaned(t));
+          next = { ...next, transitions };
+        }
+        const derived = deriveTransitionFields(clips, transitions);
         if (derived !== clips) next = { ...next, clips: derived };
       }
       // The playhead cannot outlive the timeline. Deleting the last of a long
@@ -3973,7 +3995,7 @@ type TransitionBoundary = TransitionRole & { at: number };
 /** Every place on every video track with a handover to make: a cut where one
  * clip touches the next, and the open edges — a head with nothing before it,
  * a tail with nothing after. */
-function transitionBoundaries(clips: VideoClip[]): TransitionBoundary[] {
+export function transitionBoundaries(clips: VideoClip[]): TransitionBoundary[] {
   const out: TransitionBoundary[] = [];
   const tracks = [...new Set(clips.map((c) => c.track))].sort((a, b) => a - b);
   for (const track of tracks) {
@@ -3994,8 +4016,8 @@ function transitionBoundaries(clips: VideoClip[]): TransitionBoundary[] {
 /**
  * Match each transition bar to the boundary it lines up with, by time alone:
  * a bar plays the cut or open tail its end sits on, or the open head its
- * start sits on. A bar aligned with nothing is inert — it stays on the row,
- * does nothing, and starts playing the moment a boundary lines up with it.
+ * start sits on. A bar aligned with nothing gets dropped by the store's set
+ * wrapper on the next write, so in practice every live bar resolves to one.
  * One bar per boundary; when two claim the same one, the newest wins.
  */
 export function resolveTransitions(

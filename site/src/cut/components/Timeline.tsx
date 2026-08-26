@@ -874,63 +874,25 @@ export function Timeline() {
     transitions.find((x) => x.role && x.role.kind === a.kind && x.role.clipId === a.clipId)?.t ??
     null;
 
-  /** Land a new bar from the panel: it takes the nearest anchor when one is
-   * around, replacing whatever played there, and sits free anywhere else. */
+  /** Land a new bar from the panel: only onto a boundary that has a handover
+   * to make — no free placement, since a bar with nothing to belong to gets
+   * dropped by the store on its next write anyway. */
   const dropTransitionAt = (time: number, style: TransitionStyle) => {
     const st = useEditor.getState();
     if (st.readOnly) return;
     const a = nearestAnchor(time);
-    const len = a?.len ?? TRANSITION_DEFAULT_SECONDS;
+    if (!a) return;
+    const len = a.len;
     st.beginHistoryBatch();
-    const incumbent = a ? barAt(a) : null;
+    const incumbent = barAt(a);
     if (incumbent) st.removeTransition(incumbent.id);
     const id = st.addTransition({
-      start: a ? anchorBarStart(a, len) : time,
+      start: anchorBarStart(a, len),
       seconds: len,
       style,
     });
     st.endHistoryBatch();
     st.select({ kind: "transition", id });
-  };
-
-  // Drag a bar anywhere along the row. An anchor within reach pulls the drop
-  // onto itself and lights the room it takes; released anywhere else the bar
-  // stays exactly there — parked, playing nothing until a cut or a clip edge
-  // lines up with it. A press that never moved selects the bar.
-  const moveTransition = (e: React.PointerEvent, x: XBar) => {
-    if (e.button !== 0) return;
-    e.stopPropagation();
-    const s = useEditor.getState();
-    if (s.readOnly) return;
-    let landing: { start: number; anchor: Anchor | null } | null = null;
-    startDrag(e, {
-      onMove: (dx) => {
-        const free = Math.max(-x.t.seconds + 0.1, x.t.start + dx / pps);
-        const near = anchors.reduce<{ a: Anchor; gap: number } | null>((best, a) => {
-          const gap = Math.abs(anchorBarStart(a, x.t.seconds) - free);
-          return !best || gap < best.gap ? { a, gap } : best;
-        }, null);
-        const snapped = near && near.gap <= XBAR_MAGNET_PX / pps ? near.a : null;
-        landing = snapped
-          ? { start: anchorBarStart(snapped, x.t.seconds), anchor: snapped }
-          : { start: free, anchor: null };
-        setSnapX(snapped ? snapped.at * pps : null);
-        setJointDrop(snapped ? { ...snapped, len: x.t.seconds } : null);
-        setTransitionDrag({ ...x, t: { ...x.t, start: landing.start } });
-      },
-      onUp: (_dx, _dy, moved) => {
-        setSnapX(null);
-        setJointDrop(null);
-        setTransitionDrag(null);
-        const st = useEditor.getState();
-        if (!moved || !landing) return st.select({ kind: "transition", id: x.t.id });
-        st.beginHistoryBatch();
-        const incumbent = landing.anchor ? barAt(landing.anchor) : null;
-        if (incumbent && incumbent.id !== x.t.id) st.removeTransition(incumbent.id);
-        st.updateTransition(x.t.id, { start: landing.start });
-        st.endHistoryBatch();
-      },
-    });
   };
 
   // Drag the loose edge to retime. A playing bar keeps the boundary end still —
@@ -964,10 +926,8 @@ export function Timeline() {
   // would take while it is in flight.
   const [jointDrop, setJointDrop] = useState<Anchor | null>(null);
   // A transition tile from the panel is over the timeline: the row lights
-  // every place a drop could play, the same as a bar drag does.
+  // every place a drop could play.
   const [xTileDrag, setXTileDrag] = useState(false);
-  // A transition bar mid-drag, drawn where the pointer has it.
-  const [transitionDrag, setTransitionDrag] = useState<XBar | null>(null);
   // A drag past the top edge opens a row there, pushing the stack down by one
   // for as long as it is aimed that way.
   const topRowShift =
@@ -1767,8 +1727,8 @@ export function Timeline() {
             </div>
           )}
 
-          {/* Transitions: free bars on their own row. Each plays the cut or
-              clip edge it lines up with, and sits parked anywhere else. */}
+          {/* Transitions: each bar sits fixed on the cut or open edge it
+              belongs to — retimeable at its edge, never draggable off it. */}
           {(transitions.length > 0 || jointDrop !== null || xTileDrag) && (
             <div
               data-tl-xrows=""
@@ -1777,26 +1737,21 @@ export function Timeline() {
               onPointerDown={deselectIfSelf}
             >
               {laneRail(TEXT_H - 4, "xrail")}
-              {(transitionDrag !== null || xTileDrag) &&
-                // While a transition is in flight, every place it could play
-                // lights up in the timeline's usual drop-zone dress: one slot
-                // per cut and open edge, each the size the bar would take
-                // there.
-                anchors.map((a) => {
-                  const len = transitionDrag ? transitionDrag.t.seconds : a.len;
-                  return (
-                    <div
-                      key={`xzone-${a.kind}-${a.clipId}`}
-                      className="pointer-events-none absolute rounded-md bg-[#0a84ff]/10 shadow-[inset_0_0_0_1.5px_rgba(10,132,255,0.4)]"
-                      style={{
-                        left: anchorBarStart(a, len) * pps,
-                        top: 2,
-                        width: Math.max(14, len * pps - CLIP_GAP),
-                        height: TEXT_H - 6,
-                      }}
-                    />
-                  );
-                })}
+              {xTileDrag &&
+                // A tile from the panel is over the timeline: every boundary
+                // it could land on lights up in the usual drop-zone dress.
+                anchors.map((a) => (
+                  <div
+                    key={`xzone-${a.kind}-${a.clipId}`}
+                    className="pointer-events-none absolute rounded-md bg-[#0a84ff]/10 shadow-[inset_0_0_0_1.5px_rgba(10,132,255,0.4)]"
+                    style={{
+                      left: anchorBarStart(a, a.len) * pps,
+                      top: 2,
+                      width: Math.max(14, a.len * pps - CLIP_GAP),
+                      height: TEXT_H - 6,
+                    }}
+                  />
+                ))}
               {jointDrop && (
                 // The zone the drop is aimed at burns brighter than the rest.
                 <div
@@ -1809,25 +1764,17 @@ export function Timeline() {
                   }}
                 />
               )}
-              {transitions.map((live) => {
-                const x = transitionDrag?.t.id === live.t.id ? transitionDrag : live;
+              {transitions.map((x) => {
                 const Icon = TRANSITION_ICONS[x.t.style];
-                const playing = !!x.role;
                 return (
                   <div
                     key={x.t.id}
                     role="button"
                     tabIndex={0}
-                    title={`${x.label} ${x.t.seconds.toFixed(1)}s — drag it anywhere along the row; it plays where it lines up with a cut or a clip edge`}
+                    title={`${x.label} ${x.t.seconds.toFixed(1)}s`}
                     className={cn(
-                      "tl-xfade-bar group absolute flex cursor-grab items-center gap-1 overflow-hidden rounded-md px-1.5 text-[10.5px] font-medium text-white shadow-[inset_0_0_0_1px_rgba(0,0,0,0.1)]",
-                      // A parked bar reads muted: it is on the row but playing
-                      // nothing until a boundary lines up with it.
-                      playing ? "bg-[#2B6FD4]" : "bg-muted-foreground/50",
-                      selKeys.has(`transition:${x.t.id}`) && SELECTED_SHADOW,
-                      // Mid-drag it rides over the zone it would land on, so
-                      // the marked room stays readable underneath.
-                      x === transitionDrag && "opacity-75"
+                      "tl-xfade-bar group absolute flex cursor-pointer items-center gap-1 overflow-hidden rounded-md px-1.5 text-[10.5px] font-medium text-white shadow-[inset_0_0_0_1px_rgba(0,0,0,0.1)] bg-[#2B6FD4]",
+                      selKeys.has(`transition:${x.t.id}`) && SELECTED_SHADOW
                     )}
                     style={{
                       left: x.t.start * pps,
@@ -1835,7 +1782,11 @@ export function Timeline() {
                       width: Math.max(14, x.t.seconds * pps - CLIP_GAP),
                       height: TEXT_H - 6,
                     }}
-                    onPointerDown={(e) => moveTransition(e, x)}
+                    onPointerDown={(e) => {
+                      if (e.button !== 0) return;
+                      e.stopPropagation();
+                      useEditor.getState().select({ kind: "transition", id: x.t.id });
+                    }}
                   >
                     <Icon className="size-2.5 shrink-0" />
                     <span className="truncate">{x.label}</span>

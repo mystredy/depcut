@@ -6,8 +6,9 @@ import { SectionTitle } from "@/cut/components/SectionTitle";
 import { clearElementDrag, setElementDragData } from "@/cut/lib/assetDrag";
 import { peekEdgeFrame, requestEdgeFrame } from "@/cut/lib/media";
 import { PICKED_RING, pickGridNav, useAssetPick } from "@/cut/lib/assetPick";
-import { getClipSpans, resolveTransitions, useEditor } from "@/cut/lib/store";
+import { getClipSpans, resolveTransitions, transitionBoundaries, useEditor } from "@/cut/lib/store";
 import {
+  TRANSITION_DEFAULT_SECONDS,
   TRANSITION_STYLE_GROUPS,
   TRANSITION_STYLE_LABELS,
   type MediaAsset,
@@ -47,6 +48,16 @@ export function TransitionsPanel() {
       }) ?? null
     );
   });
+  // A selected clip's own cut, when it has one and nothing plays there yet —
+  // the tab can still act on it, this time by adding a bar instead of
+  // restyling one. Null once a bar already exists there; `live` covers that.
+  const bareCut = useEditor((s) => {
+    if (live || s.selection?.kind !== "clip") return null;
+    const cut = transitionBoundaries(s.clips).find(
+      (b) => b.kind === "cut" && b.clipId === s.selection!.id
+    );
+    return cut?.at ?? null;
+  });
   const { a, b } = useCutFrames();
   return (
     <>
@@ -62,7 +73,7 @@ export function TransitionsPanel() {
               <SectionTitle>{g.label}</SectionTitle>
               <div className="grid grid-cols-2 gap-2">
                 {g.ids.map((id) => (
-                  <TransitionTile key={id} style={id} live={live} a={a} b={b} />
+                  <TransitionTile key={id} style={id} live={live} bareCutAt={bareCut} a={a} b={b} />
                 ))}
               </div>
             </section>
@@ -157,11 +168,13 @@ const X_RUN = 1.2;
 function TransitionTile({
   style,
   live,
+  bareCutAt,
   a,
   b,
 }: {
   style: TransitionStyle;
   live: TimelineTransition | null;
+  bareCutAt: number | null;
   a: string | null;
   b: string | null;
 }) {
@@ -192,9 +205,23 @@ function TransitionTile({
       onPointerEnter={() => setRunEpoch((n) => n + 1)}
       onFocus={() => setRunEpoch((n) => n + 1)}
       onClick={() => {
-        if (!live) return pick();
-        if (!isLive) useEditor.getState().updateTransition(live.id, { style });
-        previewBar(live);
+        if (live) {
+          if (!isLive) useEditor.getState().updateTransition(live.id, { style });
+          return previewBar(live);
+        }
+        // A clip is selected on a bare cut: a click applies straight to it,
+        // the same as dropping a tile there does.
+        if (bareCutAt != null) {
+          const s = useEditor.getState();
+          const id = s.addTransition({
+            start: bareCutAt - TRANSITION_DEFAULT_SECONDS,
+            seconds: TRANSITION_DEFAULT_SECONDS,
+            style,
+          });
+          s.select({ kind: "transition", id });
+          return;
+        }
+        pick();
       }}
       // Scroll margin keeps the whole tile — selection ring included — clear
       // of the scroller's edges when scrollIntoView lands it there. The picked
