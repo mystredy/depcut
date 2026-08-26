@@ -349,12 +349,12 @@ export function SidePanel({
             <>
               <span
                 className={cn(
-                  "relative grid size-9 place-items-center rounded-lg transition-colors",
+                  "relative grid size-7 place-items-center rounded-lg transition-colors",
                   tab === id ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60",
                   dropTab === id && "bg-primary/15 text-primary"
                 )}
               >
-                <Icon className="size-4.5" />
+                <Icon className="size-3.5" />
                 <TileStatus count={unseenCount} busy={!!busy[id]} />
               </span>
               <span
@@ -430,11 +430,11 @@ export function SidePanel({
               title={overlayError ?? undefined}
               onClick={() => overlayInputRef.current?.click()}
             >
-              <span className="grid size-9 place-items-center rounded-lg transition-colors hover:bg-muted/60">
+              <span className="grid size-7 place-items-center rounded-lg transition-colors hover:bg-muted/60">
                 {overlayImporting > 0 ? (
-                  <Loader2 className="size-4.5 animate-spin" />
+                  <Loader2 className="size-3.5 animate-spin" />
                 ) : (
-                  <Layers className="size-4.5" />
+                  <Layers className="size-3.5" />
                 )}
               </span>
               <span className="hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block">
@@ -459,11 +459,11 @@ export function SidePanel({
           >
             <span
               className={cn(
-                "grid size-9 place-items-center rounded-lg transition-colors",
+                "grid size-7 place-items-center rounded-lg transition-colors",
                 extraTab === id ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60"
               )}
             >
-              <Icon className="size-4.5" />
+              <Icon className="size-3.5" />
             </span>
             <span
               className={cn(

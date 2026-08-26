@@ -510,11 +510,11 @@ function RailButton({
     >
       <span
         className={cn(
-          "relative grid size-9 place-items-center rounded-lg transition-colors",
+          "relative grid size-7 place-items-center rounded-lg transition-colors",
           active ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60"
         )}
       >
-        <Icon className="size-4.5" />
+        <Icon className="size-3.5" />
         {busy && (
           <span className="absolute -top-1 -right-1 grid size-[15px] place-items-center rounded-full bg-card ring-2 ring-card">
             <Loader2 className="size-3 animate-spin text-primary" />
@@ -564,11 +564,11 @@ function RailActionButton({
     >
       <span
         className={cn(
-          "grid size-9 place-items-center rounded-lg transition-colors",
+          "grid size-7 place-items-center rounded-lg transition-colors",
           active ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60"
         )}
       >
-        <Icon className="size-4.5" />
+        <Icon className="size-3.5" />
       </span>
       <span
         className={cn(
