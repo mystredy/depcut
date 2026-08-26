@@ -230,17 +230,16 @@ export function RightPanel() {
   // remembered one whenever the playhead sits on it: it's the through-line
   // of the edit, so it's the safer default regardless of whatever else was
   // last selected (or nothing ever was). Stands down while the Transitions
-  // tab is open: it deliberately clears the selection so a cut's own button
-  // shows instead of that clip's Edit controls, and this would otherwise
-  // select the same clip right back. With nothing to fall back onto, Edit
-  // itself closes too — otherwise it sits open showing only its own
-  // placeholder, next to a Transitions column that could use the room.
+  // tab is open — and closes this whole rail outright, whichever of its own
+  // tabs happened to be open: the two are never both on at once, and a
+  // fall-back reselect here would otherwise fight the selection Transitions
+  // deliberately clears so a cut's own button shows instead.
   const currentTime = useEditor((s) => s.currentTime);
   const transitionsPanelOpen = useEditor((s) => s.transitionsPanelOpen);
   useEffect(() => {
     if (tab === null) return;
     if (transitionsPanelOpen) {
-      if (tab === "edit" && !hasEditContent) setTab(null);
+      setTab(null);
       return;
     }
     if (hasEditContent) return;
