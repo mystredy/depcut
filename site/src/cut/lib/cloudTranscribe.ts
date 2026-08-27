@@ -12,6 +12,7 @@
 
 import { renderMix as mixAudio } from "./audioMix";
 import { apiFetch } from "./backend";
+import { cloudBackend } from "./backend/cloud";
 import { mediaUrl, type SubtitleCue } from "./types";
 
 /** Mirror of the engine's TranscribeSpec (server/transcribe.ts) minus projectId. */
@@ -108,13 +109,22 @@ interface WireCue {
 async function postChunk(
   samples: Float32Array,
   offset: number,
-  locale: string | undefined
+  locale: string | undefined,
+  forceCloud: boolean
 ): Promise<WireCue[]> {
   const form = new FormData();
   form.append("audio", new File([encodeWav(samples)], "chunk.wav", { type: "audio/wav" }));
   form.append("offset", String(round(offset)));
   if (locale) form.append("locale", locale);
-  const res = await apiFetch("/api/cut/transcribe", { method: "POST", body: form });
+  // The ambient backend (apiFetch) is whichever project is open — right for
+  // the editor's own mic dictation and Subtitles panel, which want the local
+  // engine when one's running. A caller with no project (nothing to be
+  // "local" about) forces the hosted route instead of inheriting whatever
+  // getBackend() defaults to with nothing open.
+  const res = await (forceCloud ? cloudBackend : { fetch: apiFetch }).fetch("/api/cut/transcribe", {
+    method: "POST",
+    body: form,
+  });
   const body = (await res.json().catch(() => null)) as
     | { cues?: WireCue[]; error?: string; message?: string }
     | null;
@@ -156,7 +166,8 @@ function interpolateWords(
 export async function transcribeSamples(
   samples: Float32Array,
   locale: string | undefined,
-  isStale?: () => boolean
+  isStale?: () => boolean,
+  forceCloud = false
 ): Promise<SubtitleCue[] | null> {
   const duration = samples.length / RATE;
   const step = (CHUNK_SECONDS - OVERLAP_SECONDS) * RATE;
@@ -178,7 +189,7 @@ export async function transcribeSamples(
       const i = next++;
       if (i >= chunks.length || failed !== undefined || isStale?.()) return;
       try {
-        results[i] = await postChunk(chunks[i].slice, chunks[i].offset, locale);
+        results[i] = await postChunk(chunks[i].slice, chunks[i].offset, locale, forceCloud);
       } catch (error) {
         failed = error;
         return;
