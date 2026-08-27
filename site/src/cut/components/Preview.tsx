@@ -15,10 +15,19 @@ import {
 import { setPreviewCanvas } from "@/cut/lib/previewCanvas";
 import { frameOf, isFullRect, rectOf, type Aspect, type ClipSpan, type FrameRect, type MediaAsset, type VideoClip } from "@/cut/lib/types";
 import { cn } from "@/lib/utils";
-import { ClipExtractStrip, ClipSpeedStrip } from "./Inspector";
+import { ClipExtractStrip, ClipMoveTrackStrip, ClipSpeedStrip } from "./Inspector";
 import { OverlayLayer } from "./OverlayLayer";
 import { PlayheadShuttleControl, TimelineShuttleControl } from "./ShuttleBar";
 import { StageEffectPaint, stageSlices, useEffectLanes, useStageEffects } from "./StageEffects";
+
+/** The header each mobileClipTab strip shows itself under (see the render
+ * below) — the docked column's own Row label doesn't apply here since the
+ * strip carries no label internally. */
+const MOBILE_CLIP_TAB_LABEL: Record<"extract" | "speed" | "move-track", string> = {
+  extract: "Extract audio",
+  speed: "Speed",
+  "move-track": "Move track",
+};
 
 /** The clip under the playhead, when it overflows the frame in fill mode. */
 function pannableSpan(s: {
@@ -268,13 +277,13 @@ export function Preview() {
         </div>
       )}
       {/* Same idea, for the Edit rail's clip tabs with no room to dock on a
-          narrow viewport (Extract audio, Speed): each hands its content here
-          instead of the right rail column. */}
+          narrow viewport (Extract audio, Speed, Move track): each hands its
+          content here instead of the right rail column. */}
       {mobileClipTab && mobileClipTabClip && (
         <div className="flex shrink-0 flex-col items-center gap-2 border-t border-border px-4 py-3">
           <div className="flex w-full max-w-56 items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">
-              {mobileClipTab === "extract" ? "Extract audio" : "Speed"}
+              {MOBILE_CLIP_TAB_LABEL[mobileClipTab]}
             </span>
             <button
               type="button"
@@ -287,8 +296,10 @@ export function Preview() {
           </div>
           {mobileClipTab === "extract" ? (
             <ClipExtractStrip clip={mobileClipTabClip} />
-          ) : (
+          ) : mobileClipTab === "speed" ? (
             <ClipSpeedStrip clip={mobileClipTabClip} />
+          ) : (
+            <ClipMoveTrackStrip clip={mobileClipTabClip} />
           )}
         </div>
       )}

@@ -516,8 +516,11 @@ export function ClipMoveTimeSection({ clip }: { clip: VideoClip }) {
  * between rows; dropVideoClip keeps the clip's own trim/speed and slides it
  * to the next free spot if something's already on the destination track at
  * this start time. */
-export function ClipMoveTrackSection({ clip }: { clip: VideoClip }) {
-  const moveTrack = (delta: number) => {
+/** The move-track action itself, shared by the Edit rail's row (desktop/wide)
+ * and the under-the-preview strip Preview renders on a narrow viewport
+ * instead (see ClipMoveTrackStrip and Preview). */
+function useMoveTrack(clip: VideoClip) {
+  return (delta: number) => {
     const s = useEditor.getState();
     const live = s.clips.find((c) => c.id === clip.id);
     if (!live) return;
@@ -546,27 +549,47 @@ export function ClipMoveTrackSection({ clip }: { clip: VideoClip }) {
     s.pushHistory();
     s.dropVideoClip(clip.id, { kind: "track", track }, live.start);
   };
+}
+
+/** The move-track button pair, decoupled from where it's laid out. */
+function ClipMoveTrackControl({ clip }: { clip: VideoClip }) {
+  const moveTrack = useMoveTrack(clip);
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="icon-sm"
+        title="Move to the track below"
+        disabled={clip.track <= 1}
+        onClick={() => moveTrack(-1)}
+      >
+        <ChevronDown className="size-3.5" />
+      </Button>
+      <Button variant="outline" size="icon-sm" title="Move to the track above" onClick={() => moveTrack(1)}>
+        <ChevronUp className="size-3.5" />
+      </Button>
+    </>
+  );
+}
+
+export function ClipMoveTrackSection({ clip }: { clip: VideoClip }) {
   return (
     <div className="flex flex-col gap-1 px-3.5 pb-4">
       <Row label="Move track">
-        <Button
-          variant="outline"
-          size="icon-sm"
-          title="Move to the track below"
-          disabled={clip.track <= 1}
-          onClick={() => moveTrack(-1)}
-        >
-          <ChevronDown className="size-3.5" />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon-sm"
-          title="Move to the track above"
-          onClick={() => moveTrack(1)}
-        >
-          <ChevronUp className="size-3.5" />
-        </Button>
+        <ClipMoveTrackControl clip={clip} />
       </Row>
+    </div>
+  );
+}
+
+/** The narrow-viewport equivalent of ClipMoveTrackSection: no room to dock
+ * the rail column, so Preview renders this compact, label-free version
+ * inline under the video instead — the strip's own header already names
+ * it. */
+export function ClipMoveTrackStrip({ clip }: { clip: VideoClip }) {
+  return (
+    <div className="flex items-center gap-2">
+      <ClipMoveTrackControl clip={clip} />
     </div>
   );
 }

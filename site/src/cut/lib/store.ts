@@ -204,10 +204,10 @@ export interface EditorState {
    * pushing the preview over. Set by SidePanel, read by Preview. */
   mobileShuttleTab: "timeline" | "playhead" | null;
   /** Same idea as mobileShuttleTab, for Edit-rail clip tabs with no natural
-   * dock room on a narrow viewport (Extract audio, Speed): which one (if
-   * any) should render under the preview instead of opening the right rail
-   * column. Set by RightPanel, read by Preview. */
-  mobileClipTab: "extract" | "speed" | null;
+   * dock room on a narrow viewport (Extract audio, Speed, Move track): which
+   * one (if any) should render under the preview instead of opening the
+   * right rail column. Set by RightPanel, read by Preview. */
+  mobileClipTab: "extract" | "speed" | "move-track" | null;
   /** TikTok publishing metadata (caption, hashtags, sound title). */
   publish: { caption: string; tags: string; soundTitle: string; handle: string };
   /** Free-form maker notes: published date, source links, reminders. */
@@ -417,7 +417,7 @@ export interface EditorState {
   setTransitionCutClip: (id: string | null) => void;
   setTransitionsPanelOpen: (open: boolean) => void;
   setMobileShuttleTab: (tab: "timeline" | "playhead" | null) => void;
-  setMobileClipTab: (tab: "extract" | "speed" | null) => void;
+  setMobileClipTab: (tab: "extract" | "speed" | "move-track" | null) => void;
   setPublish: (patch: Partial<{ caption: string; tags: string; soundTitle: string; handle: string }>) => void;
   setNotes: (patch: Partial<{ text: string; publishedAt: string; links: string[] }>) => void;
   /** Kick off (and poll) an on-device transcription of the current cut. */
