@@ -39,6 +39,30 @@ import { RecordDialog, type RecordMode } from "./RecordDialog";
 import { ShareDialog } from "./ShareDialog";
 import { StoragePill } from "./StoragePill";
 
+/** Below `sm`, matching the rest of this bar's step-down breakpoints. Starts
+ * `false` unconditionally (matching the server-rendered guess, which has no
+ * `window` to read) and corrects itself post-mount — reading `window` in the
+ * initializer instead would disagree with SSR on the very first client
+ * render and trip a hydration mismatch on the project name text below. */
+function useNarrowBar(): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 640px)");
+    const onChange = () => setNarrow(!query.matches);
+    onChange();
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return narrow;
+}
+
+/** A pixel-width `truncate` looks inconsistent across names (a few wide
+ * capitals vs. many narrow lowercase letters land at different lengths) —
+ * clipping to a fixed character count on mobile makes it predictable. */
+const MOBILE_NAME_CHARS = 7;
+const clipName = (name: string, narrow: boolean) =>
+  narrow && name.length > MOBILE_NAME_CHARS ? `${name.slice(0, MOBILE_NAME_CHARS)}…` : name;
+
 export function TopBar({
   onImport,
   from,
@@ -54,6 +78,7 @@ export function TopBar({
   uploading?: number;
 }) {
   const base = useCutBase();
+  const narrowBar = useNarrowBar();
   const back = backTarget(base, from, folder);
   const hasClips = useEditor((s) => s.clips.length > 0);
   const projectName = useEditor((s) => s.projectName);
@@ -348,7 +373,7 @@ export function TopBar({
               setEditing(true);
             }}
           >
-            {projectName}
+            {clipName(projectName, narrowBar)}
           </button>
         )}
         <span
