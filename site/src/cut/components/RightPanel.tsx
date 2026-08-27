@@ -153,15 +153,14 @@ const TEXT_TABS: { id: TextTab; label: string; icon: typeof SlidersHorizontal }[
 ];
 
 /** Below `sm` there's no room to dock a 264px column without swallowing the
- * canvas, so on a narrow viewport Extract, Speed, Move track, Trim, and Move
- * in time hand their content to Preview instead (see the
- * dockInline/mobileClipTab wiring below) — Color, Volume, and Framing aren't
- * in that list: they need real screen width (a color wheel, a framing crop
- * handle) that a strip can't give them, so they stay dock-only. Starts
- * `false` unconditionally, matching what SSR renders with no `window` to
- * read, and only corrects itself post-mount — guessing eagerly from
- * `window` here would disagree with the server on the first client render
- * and trip a hydration mismatch. */
+ * canvas, so on a narrow viewport Extract, Speed, Move track, Trim, Move in
+ * time, Volume, and Framing hand their content to Preview instead (see the
+ * dockInline/mobileClipTab wiring below) — Color isn't in that list: its
+ * grading sliders and histogram need more room than a strip can give them,
+ * so it stays dock-only. Starts `false` unconditionally, matching what SSR
+ * renders with no `window` to read, and only corrects itself post-mount —
+ * guessing eagerly from `window` here would disagree with the server on
+ * the first client render and trip a hydration mismatch. */
 function useNarrowPanel(): boolean {
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
@@ -309,7 +308,9 @@ export function RightPanel() {
     tab === "speed" ||
     tab === "move-track" ||
     tab === "trim" ||
-    tab === "move-time"
+    tab === "move-time" ||
+    tab === "volume" ||
+    tab === "framing"
       ? tab
       : null;
   const dockInline = !(narrow && mobileClipTabWanted !== null);

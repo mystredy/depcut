@@ -17,10 +17,12 @@ import { frameOf, isFullRect, rectOf, type Aspect, type ClipSpan, type FrameRect
 import { cn } from "@/lib/utils";
 import {
   ClipExtractStrip,
+  ClipFramingSection,
   ClipMoveTimeSection,
   ClipMoveTrackStrip,
   ClipSpeedStrip,
   ClipTrimSection,
+  ClipVolumeSection,
 } from "./Inspector";
 import { OverlayLayer } from "./OverlayLayer";
 import { PlayheadShuttleControl, TimelineShuttleControl } from "./ShuttleBar";
@@ -29,14 +31,15 @@ import { StageEffectPaint, stageSlices, useEffectLanes, useStageEffects } from "
 /** Each Edit-rail clip tab with no room to dock on a narrow viewport: its
  * header label (shown above the content, next to the close button — the
  * docked column's own Row label doesn't apply here) and the content Preview
- * renders for it below. Trim and Move in time already carry their own
- * top-of-content label ("Trim start"/"Trim end", "Move in time" — same
+ * renders for it below. Trim, Move in time, Volume, and Framing already
+ * carry their own top-of-content label(s) via Row ("Trim start"/"Trim end",
+ * "Move in time", "Clip volume"/"Mute audio", "Framing"/"Layout" — same
  * width convention as a shuttle strip), so their section component doubles
  * as its own strip and the header goes label-less rather than repeat it;
  * Extract/Speed/Move track needed a compact, label-free variant split out
  * from their Row-wrapped desktop layout instead. */
 const MOBILE_CLIP_TABS: Record<
-  "extract" | "speed" | "move-track" | "trim" | "move-time",
+  "extract" | "speed" | "move-track" | "trim" | "move-time" | "volume" | "framing",
   { label: string | null; Content: (props: { clip: VideoClip }) => ReactNode }
 > = {
   extract: { label: "Extract audio", Content: ClipExtractStrip },
@@ -44,6 +47,8 @@ const MOBILE_CLIP_TABS: Record<
   "move-track": { label: "Move track", Content: ClipMoveTrackStrip },
   trim: { label: null, Content: ClipTrimSection },
   "move-time": { label: null, Content: ClipMoveTimeSection },
+  volume: { label: null, Content: ClipVolumeSection },
+  framing: { label: null, Content: ClipFramingSection },
 };
 
 /** The clip under the playhead, when it overflows the frame in fill mode. */
@@ -296,8 +301,8 @@ export function Preview() {
       )}
       {/* Same idea, for the Edit rail's clip tabs with no room to dock on a
           narrow viewport (Extract audio, Speed, Move track, Trim, Move in
-          time): each hands its content here instead of the right rail
-          column. */}
+          time, Volume, Framing): each hands its content here instead of the
+          right rail column. */}
       {mobileClipTab && mobileClipTabClip && MobileClipTabContent && (
         <div className="flex shrink-0 flex-col items-center gap-2 border-t border-border px-4 py-3">
           <div className="flex w-full max-w-56 items-center justify-between">
