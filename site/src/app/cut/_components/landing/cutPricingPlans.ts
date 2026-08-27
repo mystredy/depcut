@@ -30,7 +30,7 @@ export function cutPricingPlans(): PricingPlan[] {
       detail: "For everyone",
       features: [
         "Full access to the video editor",
-        "250 MB of cloud storage",
+        "1 GB of cloud storage",
         "Import, export, and local transcription",
         "Connect your Claude or Codex subscription",
       ],

@@ -10,7 +10,7 @@ export type CutLimits = {
   renderJobsPerDay: number | null;
 };
 
-export const FREE_STORAGE_BYTES = 250 * 1024 ** 2;
+export const FREE_STORAGE_BYTES = 1 * 1024 ** 3;
 
 /** Headroom an export may render into past the storage quota. A finished
  * export counts against storage like any other object, so a full account would

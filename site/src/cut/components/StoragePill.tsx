@@ -23,9 +23,9 @@ import { formatBytes } from "./desktopFolders";
 const PILL =
   "flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium shadow-xs transition-colors";
 
-/** "278 / 250 MB" — the pill sits in a crowded top bar, so a unit is spelled
+/** "1.5 / 1.0 GB" — the pill sits in a crowded top bar, so a unit is spelled
  * out only where it carries information: repeat it just when the two numbers
- * land on different ones ("1.2 GB / 250 MB"). */
+ * land on different ones ("780 MB / 1.0 GB"). */
 export function usageLabel(bytes: number, quotaBytes: number): string {
   const used = formatBytes(bytes);
   const cap = formatBytes(quotaBytes);
