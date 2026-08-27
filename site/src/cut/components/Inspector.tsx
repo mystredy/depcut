@@ -571,48 +571,71 @@ export function ClipMoveTrackSection({ clip }: { clip: VideoClip }) {
   );
 }
 
-export function ClipSpeedSection({ clip }: { clip: VideoClip }) {
+/** The speed slider trio, decoupled from where it's laid out — the Edit
+ * rail's row (desktop/wide) and the under-the-preview strip Preview renders
+ * on a narrow viewport instead (see ClipSpeedStrip and Preview) both wrap
+ * this same control. */
+function ClipSpeedControl({ clip }: { clip: VideoClip }) {
   const [speedDraft, setSpeedDraft] = useState<number | null>(null);
   const speed = speedDraft ?? clip.speed ?? 1;
   return (
+    <>
+      <Slider
+        className="clip-speed data-horizontal:w-24"
+        min={SPEED_MIN}
+        max={SPEED_MAX}
+        step={0.05}
+        value={speed}
+        onValueChange={(v) => setSpeedDraft(Number(v))}
+        onValueCommitted={() => {
+          if (speedDraft != null) useEditor.getState().setClipSpeed(clip.id, speedDraft);
+          setSpeedDraft(null);
+        }}
+      />
+      <ScrubValue
+        label="Speed"
+        className="w-9 text-muted-foreground"
+        value={speed}
+        min={SPEED_FLOOR}
+        max={Infinity}
+        step={0.05}
+        format={formatSpeed}
+        parse={parseSpeedInput}
+        onScrub={setSpeedDraft}
+        onCommit={(v) => {
+          useEditor.getState().setClipSpeed(clip.id, v);
+          setSpeedDraft(null);
+        }}
+      />
+      <ResetButton
+        title="Reset speed"
+        show={Math.abs(speed - 1) > 1e-4}
+        onClick={() => {
+          useEditor.getState().setClipSpeed(clip.id, 1);
+          setSpeedDraft(null);
+        }}
+      />
+    </>
+  );
+}
+
+export function ClipSpeedSection({ clip }: { clip: VideoClip }) {
+  return (
     <div className="flex flex-col gap-1 px-3.5 pb-4">
       <Row label="Speed">
-        <Slider
-          className="clip-speed data-horizontal:w-24"
-          min={SPEED_MIN}
-          max={SPEED_MAX}
-          step={0.05}
-          value={speed}
-          onValueChange={(v) => setSpeedDraft(Number(v))}
-          onValueCommitted={() => {
-            if (speedDraft != null) useEditor.getState().setClipSpeed(clip.id, speedDraft);
-            setSpeedDraft(null);
-          }}
-        />
-        <ScrubValue
-          label="Speed"
-          className="w-9 text-muted-foreground"
-          value={speed}
-          min={SPEED_FLOOR}
-          max={Infinity}
-          step={0.05}
-          format={formatSpeed}
-          parse={parseSpeedInput}
-          onScrub={setSpeedDraft}
-          onCommit={(v) => {
-            useEditor.getState().setClipSpeed(clip.id, v);
-            setSpeedDraft(null);
-          }}
-        />
-        <ResetButton
-          title="Reset speed"
-          show={Math.abs(speed - 1) > 1e-4}
-          onClick={() => {
-            useEditor.getState().setClipSpeed(clip.id, 1);
-            setSpeedDraft(null);
-          }}
-        />
+        <ClipSpeedControl clip={clip} />
       </Row>
+    </div>
+  );
+}
+
+/** The narrow-viewport equivalent of ClipSpeedSection: no room to dock the
+ * rail column, so Preview renders this compact, label-free version inline
+ * under the video instead — the strip's own header already names it. */
+export function ClipSpeedStrip({ clip }: { clip: VideoClip }) {
+  return (
+    <div className="flex w-full max-w-56 items-center gap-2">
+      <ClipSpeedControl clip={clip} />
     </div>
   );
 }

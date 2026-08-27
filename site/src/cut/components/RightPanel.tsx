@@ -153,12 +153,12 @@ const TEXT_TABS: { id: TextTab; label: string; icon: typeof SlidersHorizontal }[
 ];
 
 /** Below `sm` there's no room to dock a 264px column without swallowing the
- * canvas, so on a narrow viewport the Extract tab hands its content to
- * Preview instead (see the dockInline/mobileExtractOpen wiring below). Starts
- * `false` unconditionally, matching what SSR renders with no `window` to
- * read, and only corrects itself post-mount — guessing eagerly from `window`
- * here would disagree with the server on the first client render and trip a
- * hydration mismatch. */
+ * canvas, so on a narrow viewport the Extract and Speed tabs hand their
+ * content to Preview instead (see the dockInline/mobileClipTab wiring
+ * below). Starts `false` unconditionally, matching what SSR renders with no
+ * `window` to read, and only corrects itself post-mount — guessing eagerly
+ * from `window` here would disagree with the server on the first client
+ * render and trip a hydration mismatch. */
 function useNarrowPanel(): boolean {
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
@@ -296,23 +296,24 @@ export function RightPanel() {
   const textOverlay = overlay && isTextOverlay(overlay) ? overlay : undefined;
   const extractingClipId = useEditor((s) => s.extractingClipId);
 
-  // On a narrow viewport, Extract doesn't dock here: Preview renders it as a
-  // strip under the video instead (docking would push the preview itself off
-  // to the side on a screen with no room to spare) — same idea as SidePanel's
-  // Aspect ratio/Timeline/Playhead.
+  // On a narrow viewport, Extract and Speed don't dock here: Preview renders
+  // whichever is open as a strip under the video instead (docking would push
+  // the preview itself off to the side on a screen with no room to spare) —
+  // same idea as SidePanel's Aspect ratio/Timeline/Playhead.
   const narrow = useNarrowPanel();
-  const dockInline = !(narrow && tab === "extract");
+  const mobileClipTabWanted = tab === "extract" || tab === "speed" ? tab : null;
+  const dockInline = !(narrow && mobileClipTabWanted !== null);
   useEffect(() => {
-    useEditor.getState().setMobileExtractOpen(narrow && tab === "extract" && !!clip);
-  }, [narrow, tab, clip]);
+    useEditor.getState().setMobileClipTab(narrow && clip ? mobileClipTabWanted : null);
+  }, [narrow, mobileClipTabWanted, clip]);
   // The other direction: Preview's own close button clears the flag directly,
   // so this tab closes in response instead of the two independently agreeing
   // to both be open.
-  const mobileExtractOpen = useEditor((s) => s.mobileExtractOpen);
+  const mobileClipTab = useEditor((s) => s.mobileClipTab);
   useEffect(() => {
-    if (narrow && !mobileExtractOpen && tab === "extract") setTab(null);
+    if (narrow && mobileClipTab === null && mobileClipTabWanted !== null) setTab(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mobileExtractOpen]);
+  }, [mobileClipTab]);
 
   // Split works off the pointer/playhead, not the selection, so it's always
   // live; Delete needs something picked.

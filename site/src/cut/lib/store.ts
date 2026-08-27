@@ -203,10 +203,11 @@ export interface EditorState {
    * strip under the preview instead of opening the side panel column and
    * pushing the preview over. Set by SidePanel, read by Preview. */
   mobileShuttleTab: "timeline" | "playhead" | null;
-  /** Same idea as mobileShuttleTab, for the Edit rail's Extract-audio action:
-   * on a narrow viewport it renders under the preview instead of opening the
-   * right rail column. Set by RightPanel, read by Preview. */
-  mobileExtractOpen: boolean;
+  /** Same idea as mobileShuttleTab, for Edit-rail clip tabs with no natural
+   * dock room on a narrow viewport (Extract audio, Speed): which one (if
+   * any) should render under the preview instead of opening the right rail
+   * column. Set by RightPanel, read by Preview. */
+  mobileClipTab: "extract" | "speed" | null;
   /** TikTok publishing metadata (caption, hashtags, sound title). */
   publish: { caption: string; tags: string; soundTitle: string; handle: string };
   /** Free-form maker notes: published date, source links, reminders. */
@@ -416,7 +417,7 @@ export interface EditorState {
   setTransitionCutClip: (id: string | null) => void;
   setTransitionsPanelOpen: (open: boolean) => void;
   setMobileShuttleTab: (tab: "timeline" | "playhead" | null) => void;
-  setMobileExtractOpen: (open: boolean) => void;
+  setMobileClipTab: (tab: "extract" | "speed" | null) => void;
   setPublish: (patch: Partial<{ caption: string; tags: string; soundTitle: string; handle: string }>) => void;
   setNotes: (patch: Partial<{ text: string; publishedAt: string; links: string[] }>) => void;
   /** Kick off (and poll) an on-device transcription of the current cut. */
@@ -1185,7 +1186,7 @@ export const useEditor = create<EditorState>((baseSet, get) => {
     transitionCutClipId: null,
     transitionsPanelOpen: false,
     mobileShuttleTab: null,
-    mobileExtractOpen: false,
+    mobileClipTab: null,
     publish: { caption: "", tags: "", soundTitle: "", handle: "" },
     notes: { text: "", publishedAt: "", links: [] },
     subtitles: emptySubtitles(),
@@ -3095,8 +3096,8 @@ export const useEditor = create<EditorState>((baseSet, get) => {
     setMobileShuttleTab: (tab) => {
       if (get().mobileShuttleTab !== tab) set({ mobileShuttleTab: tab });
     },
-    setMobileExtractOpen: (open) => {
-      if (get().mobileExtractOpen !== open) set({ mobileExtractOpen: open });
+    setMobileClipTab: (tab) => {
+      if (get().mobileClipTab !== tab) set({ mobileClipTab: tab });
     },
     setPublish: (patch) => set((s) => ({ publish: { ...s.publish, ...patch } })),
     setNotes: (patch) => set((s) => ({ notes: { ...s.notes, ...patch } })),
