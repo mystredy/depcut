@@ -2314,12 +2314,14 @@ export const useEditor = create<EditorState>((baseSet, get) => {
       })),
 
     moveClip: (id, toIndex) => {
-      // The AI reorder op: lift the clip out (its old spot becomes a gap) and
-      // open a slot at the target index — the landing clip and everything
-      // after it shift right by the moved footprint, everything else keeps
-      // its absolute time, so audio, titles, and captions stay synced to the
-      // clips they annotate. Pointer drags never come here — they free-place
-      // through the lane coordinator.
+      // The AI reorder op (also the mobile "Move in time" shuttle's track-0
+      // step, one call per REORDER_STEP_SECONDS of accumulated drag): pull
+      // the clip out by its index among the other track-0 clips, repack
+      // those so the gap it leaves behind closes (the main track is never
+      // supposed to have gaps), then reopen a slot for it at the target
+      // index — it and everything from there on shift right by its
+      // footprint. Pointer drags never come here — they free-place through
+      // the lane coordinator.
       const row = track0Clips(get().clips).sort((a, b) => a.start - b.start);
       const from = row.findIndex((c) => c.id === id);
       if (from < 0) return;
@@ -2327,7 +2329,14 @@ export const useEditor = create<EditorState>((baseSet, get) => {
       if (to === from) return;
       push();
       const moved = row[from];
-      const others = row.filter((c) => c.id !== id);
+      let t = 0;
+      const others = row
+        .filter((c) => c.id !== id)
+        .map((c) => {
+          const start = t;
+          t += clipLen(c);
+          return { ...c, start };
+        });
       const len = clipLen(moved);
       const anchor = to < others.length ? others[to] : null;
       const newStart = anchor ? anchor.start : totalDuration(others);

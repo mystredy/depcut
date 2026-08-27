@@ -178,6 +178,50 @@ describe("video placement", () => {
   });
 });
 
+describe("moveClip (AI reorder op, and the mobile Move-in-time shuttle on track 0)", () => {
+  test("swapping the first two clips leaves the main track gapless with the same total length", () => {
+    const a = vclip({ track: 0, start: 0, out: 3 });
+    const b = vclip({ track: 0, start: 3, out: 3 });
+    const c = vclip({ track: 0, start: 6, out: 3 });
+    useEditor.setState({ clips: [a, b, c] });
+    s().moveClip(a.id, 1);
+    expect(clipById(b.id).start).toBeCloseTo(0);
+    expect(clipById(a.id).start).toBeCloseTo(3);
+    expect(clipById(c.id).start).toBeCloseTo(6);
+    expectLaneSound(videoLane(0));
+    expect(projectDuration(s())).toBeCloseTo(9);
+  });
+
+  test("repeated moves (one shuttle drag's worth of steps) never open a gap or grow the total", () => {
+    const a = vclip({ track: 0, start: 0, out: 3 });
+    const b = vclip({ track: 0, start: 3, out: 3 });
+    const c = vclip({ track: 0, start: 6, out: 3 });
+    const d = vclip({ track: 0, start: 9, out: 3 });
+    useEditor.setState({ clips: [a, b, c, d] });
+    // Each call re-reads the current row, same as the reorder loop's
+    // one-call-per-accumulated-step pattern.
+    s().moveClip(a.id, 1);
+    s().moveClip(a.id, 2);
+    s().moveClip(a.id, 3);
+    expectLaneSound(videoLane(0));
+    expect(projectDuration(s())).toBeCloseTo(12);
+    expect(clipById(a.id).start).toBeCloseTo(9); // walked to the last slot
+  });
+
+  test("moving the last clip to the front leaves the rest gapless", () => {
+    const a = vclip({ track: 0, start: 0, out: 2 });
+    const b = vclip({ track: 0, start: 2, out: 2 });
+    const c = vclip({ track: 0, start: 4, out: 3 });
+    useEditor.setState({ clips: [a, b, c] });
+    s().moveClip(c.id, 0);
+    expect(clipById(c.id).start).toBeCloseTo(0);
+    expect(clipById(a.id).start).toBeCloseTo(3);
+    expect(clipById(b.id).start).toBeCloseTo(5);
+    expectLaneSound(videoLane(0));
+    expect(projectDuration(s())).toBeCloseTo(7);
+  });
+});
+
 describe("committed video updates (AI chat / inspector)", () => {
   test("a start move into a resident slides to the next free slot", () => {
     const c1 = vclip({ track: 1, start: 0, out: 2 });
