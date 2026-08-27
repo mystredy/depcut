@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChartColumn,
@@ -34,6 +34,36 @@ import { authClient } from "@/lib/auth-client";
 import { useAccountProfile, visibleName } from "@/queries/accountProfile";
 import { useCreditBalance } from "@/queries/credits";
 
+type CachedNavProfile = { name: string; image: string | null };
+
+function navProfileCacheKey(userId: string) {
+  return `cut-nav-profile:${userId}`;
+}
+
+/** Last visit's resolved name/image for this account, if this browser has
+ * one — read synchronously during render (not an effect) so it's there for
+ * the very first paint, not a frame after. */
+function readCachedNavProfile(userId: string): CachedNavProfile | null {
+  try {
+    const raw = localStorage.getItem(navProfileCacheKey(userId));
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof (parsed as CachedNavProfile).name === "string"
+      ? (parsed as CachedNavProfile)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedNavProfile(userId: string, profile: CachedNavProfile) {
+  try {
+    localStorage.setItem(navProfileCacheKey(userId), JSON.stringify(profile));
+  } catch {
+    // A private window or full storage just means no instant paint next time.
+  }
+}
+
 // Signed-in user row in the app header; the whole row opens the account
 // menu. Hidden while signed out — the editor itself needs no account, so the
 // row only surfaces once a session exists.
@@ -42,16 +72,35 @@ export function NavUser() {
   const base = useCutBase();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const { data: session } = authClient.useSession();
-  // Mounted above the session check so the hook order is stable; it stays idle
-  // until there's a session to read a profile for.
-  const { data: profile, isPending } = useAccountProfile({ enabled: Boolean(session) });
+  // Started unconditionally rather than waiting on the session hook to
+  // resolve first — /api/account/profile reads the session cookie itself,
+  // server-side, so gating it behind the client's own session state only
+  // serialized two independent round trips into one that had to finish
+  // before the other could start.
+  const { data: profile, isPending } = useAccountProfile();
   const credits = useCreditBalance();
+
+  // The name and picture the user chose live in the profile, not the
+  // session — resolved only once `profile` actually lands.
+  const userId = session?.user.id;
+  const resolvedName = profile && session ? visibleName(profile, session.user.name) : null;
+  const resolvedImage = profile && session ? (profile.image ?? session.user.image ?? null) : null;
+
+  // Every visit after the first paints this immediately instead of a
+  // skeleton, then quietly confirms/updates it once the real fetch lands —
+  // the skeleton is left for a browser that's never loaded this account
+  // before (or cleared storage). All hooks stay above the session check so
+  // the call order never depends on whether one's been reached.
+  useEffect(() => {
+    if (userId && resolvedName) {
+      writeCachedNavProfile(userId, { name: resolvedName, image: resolvedImage });
+    }
+  }, [userId, resolvedName, resolvedImage]);
+
   if (!session) return null;
 
-  // The name and picture the user chose live in the profile, not the session.
-  // The row waits for them behind a skeleton of its own shape rather than
-  // painting the provider's name and swapping it out a beat later.
-  if (isPending) {
+  const cached = isPending ? readCachedNavProfile(session.user.id) : null;
+  if (isPending && !cached) {
     return (
       <div className="flex items-center gap-2.5 px-2 py-1.5">
         <Skeleton className="size-8 rounded-lg" />
@@ -60,9 +109,10 @@ export function NavUser() {
     );
   }
 
-  // The name the user chose wins over the one the provider gave us.
-  const name = visibleName(profile, session.user.name);
-  const image = profile?.image ?? session.user.image;
+  // The name the user chose wins over the one the provider gave us; the
+  // cache only ever fills in for a fetch still in flight.
+  const name = resolvedName ?? cached!.name;
+  const image = resolvedImage ?? cached?.image ?? null;
 
   const signOut = () => {
     // Sign out everywhere: revoke every session for this user (so the Mac app

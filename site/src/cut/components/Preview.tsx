@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type RefObject } from "react";
+import { X } from "lucide-react";
 import { usePlayback } from "@/cut/hooks/usePlayback";
 import { clearAssetDrag, setAssetDragData } from "@/cut/lib/assetDrag";
 import { startDrag } from "@/cut/lib/drag";
@@ -15,6 +16,7 @@ import { setPreviewCanvas } from "@/cut/lib/previewCanvas";
 import { frameOf, isFullRect, rectOf, type Aspect, type ClipSpan, type FrameRect, type MediaAsset, type VideoClip } from "@/cut/lib/types";
 import { cn } from "@/lib/utils";
 import { OverlayLayer } from "./OverlayLayer";
+import { PlayheadShuttleControl, TimelineShuttleControl } from "./ShuttleBar";
 import { StageEffectPaint, stageSlices, useEffectLanes, useStageEffects } from "./StageEffects";
 
 /** The clip under the playhead, when it overflows the frame in fill mode. */
@@ -76,6 +78,7 @@ export function Preview() {
   const pannable = useEditor((s) => pannableSpan(s) !== null);
   const aspect = useEditor((s) => s.aspect);
   const frame = frameOf(aspect);
+  const mobileShuttleTab = useEditor((s) => s.mobileShuttleTab);
 
   usePlayback(canvasRef);
   // An effect grades what plays under it, so the stage is built in slices:
@@ -236,6 +239,27 @@ export function Preview() {
           )}
         </div>
       </div>
+      {/* A narrow viewport hands Timeline/Playhead's shuttle here instead of
+          the side panel column, which would otherwise push this preview off
+          to the side on a screen with no room to spare. */}
+      {mobileShuttleTab && (
+        <div className="flex shrink-0 flex-col items-center gap-2 border-t border-border px-4 py-3">
+          <div className="flex w-full max-w-56 items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">
+              {mobileShuttleTab === "timeline" ? "Pan the timeline" : "Shuttle the playhead"}
+            </span>
+            <button
+              type="button"
+              aria-label="Close"
+              className="grid size-5 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              onClick={() => useEditor.getState().setMobileShuttleTab(null)}
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+          {mobileShuttleTab === "timeline" ? <TimelineShuttleControl /> : <PlayheadShuttleControl />}
+        </div>
+      )}
     </section>
   );
 }

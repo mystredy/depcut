@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AudioLines, Check, ChevronDown, Download, Info, Loader2 } from "lucide-react";
+import { AudioLines, Check, ChevronDown, Download, Info, LibraryBig, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { SectionTitle } from "@/cut/components/SectionTitle";
 import { useSpeakerVoice, useSpeechLanguage, VoicePicker } from "@/cut/components/VoicePicker";
 import { creditsUrl, signInUrl, useSignedIn } from "@/cut/lib/generate";
+import { uploadToLibrary } from "@/cut/lib/library";
 import { NoCreditsError, renderSpeechClip } from "@/cut/lib/tts";
 
 // Starting points for the direction prompt — same set the Audio panel's voice
@@ -28,7 +29,7 @@ const DIRECTION_PRESETS: { label: string; text: string }[] = [
   { label: "Bedtime story", text: "Read slowly and gently, like a bedtime story" },
 ];
 
-type Result = { url: string; language?: string };
+type Result = { url: string; blob: Blob; language?: string };
 
 // Standalone version of the Audio panel's voice generator: same hosted speech
 // backend (Gemini TTS via renderSpeechClip) and the same shared voice/direction
@@ -44,6 +45,7 @@ export default function TextToSpeechPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; credits?: boolean } | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+  const [libraryState, setLibraryState] = useState<"idle" | "adding" | "added">("idle");
   const directionInput = useRef<HTMLTextAreaElement>(null);
 
   // The object URL only makes sense for the clip that made it — release it
@@ -67,8 +69,9 @@ export default function TextToSpeechPage() {
       });
       setResult((prev) => {
         if (prev) URL.revokeObjectURL(prev.url);
-        return { url: URL.createObjectURL(blob), language: spoken };
+        return { url: URL.createObjectURL(blob), blob, language: spoken };
       });
+      setLibraryState("idle");
     } catch (e) {
       setError(
         e instanceof Error
@@ -77,6 +80,26 @@ export default function TextToSpeechPage() {
       );
     } finally {
       setBusy(false);
+    }
+  };
+
+  const addToLibrary = async () => {
+    if (!result || libraryState !== "idle") return;
+    setLibraryState("adding");
+    setError(null);
+    try {
+      // The script becomes the file's name, so it needs to survive as one —
+      // strip anything that isn't safe in a filename rather than pass the
+      // raw line through.
+      const safeName = script.trim().replace(/[^\p{L}\p{N} -]+/gu, "").trim().slice(0, 60);
+      const file = new File([result.blob], `${safeName || "text-to-speech"}.wav`, {
+        type: result.blob.type || "audio/wav",
+      });
+      await uploadToLibrary(file);
+      setLibraryState("added");
+    } catch (e) {
+      setLibraryState("idle");
+      setError(e instanceof Error ? { text: e.message } : { text: "Could not add to library." });
     }
   };
 
@@ -204,14 +227,31 @@ export default function TextToSpeechPage() {
           <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
             <div className="flex items-center justify-between">
               <SectionTitle>Result</SectionTitle>
-              <a
-                href={result.url}
-                download="text-to-speech.wav"
-                className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-              >
-                <Download className="size-3.5" />
-                Download
-              </a>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={libraryState !== "idle"}
+                  onClick={() => void addToLibrary()}
+                  className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline disabled:pointer-events-none disabled:opacity-60"
+                >
+                  {libraryState === "adding" ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : libraryState === "added" ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <LibraryBig className="size-3.5" />
+                  )}
+                  {libraryState === "added" ? "Added" : "Add to library"}
+                </button>
+                <a
+                  href={result.url}
+                  download="text-to-speech.wav"
+                  className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                >
+                  <Download className="size-3.5" />
+                  Download
+                </a>
+              </div>
             </div>
             {/* eslint-disable-next-line jsx-a11y/media-has-caption -- generated speech has no separate caption track */}
             <audio controls src={result.url} className="w-full" />

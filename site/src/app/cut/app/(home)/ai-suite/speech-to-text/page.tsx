@@ -17,7 +17,8 @@ const RATE = 16000;
 /** Decode an uploaded file's audio, resample it to the transcriber's mono
  * 16 kHz wire format, and transcribe it — the same steps
  * cloudTranscribeRecording runs for mic dictation, just returning the timed
- * cues instead of one joined string. */
+ * cues instead of one joined string. No project is open here, so `postChunk`
+ * has no ambient backend to route through — force the hosted route. */
 async function transcribeFile(file: File): Promise<SubtitleCue[]> {
   const bytes = await file.arrayBuffer();
   const probe = new AudioContext();
@@ -35,7 +36,7 @@ async function transcribeFile(file: File): Promise<SubtitleCue[]> {
   src.connect(ctx.destination);
   src.start();
   const mono = (await ctx.startRendering()).getChannelData(0);
-  const cues = await transcribeSamples(mono, undefined);
+  const cues = await transcribeSamples(mono, undefined, undefined, true);
   if (!cues) throw new Error("Transcription was interrupted.");
   if (cues.length === 0) throw new Error("Couldn't find any speech in that file.");
   return cues;
@@ -70,9 +71,10 @@ function download(text: string, filename: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
-// Real transcription: the same hosted transcriber the mic-dictation feature
-// and the editor's Subtitles panel use (cloudTranscribe.ts, /api/cut/transcribe),
-// run here on an uploaded file instead of a live recording or project clip.
+// Real transcription: the same hosted, ElevenLabs-backed transcriber the
+// mic-dictation feature and the editor's Subtitles panel use
+// (cloudTranscribe.ts, /api/cut-cloud/transcribe), run here on an uploaded
+// file instead of a live recording or project clip.
 export default function SpeechToTextPage() {
   const signedOut = useSignedIn() === false;
 

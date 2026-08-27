@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { timelineScrollBy } from "@/cut/lib/timelineScroll";
+import { useEditor } from "@/cut/lib/store";
 import { cn } from "@/lib/utils";
 
 /** How far the pointer has to travel from the press point to reach full
@@ -72,23 +74,51 @@ export function ShuttleBar({
       <div
         onPointerDown={startDrag}
         className={cn(
-          "relative h-12 w-full max-w-56 cursor-ew-resize touch-none rounded-lg border bg-muted select-none",
+          "relative h-8 w-full max-w-56 cursor-ew-resize touch-none rounded-lg border bg-muted select-none",
           dragging ? "border-primary" : "border-border"
         )}
       >
-        <div aria-hidden className="absolute inset-y-2 left-1/2 w-px -translate-x-1/2 bg-border" />
+        <div aria-hidden className="absolute inset-y-1.5 left-1/2 w-px -translate-x-1/2 bg-border" />
         <div
           aria-hidden
           className={cn(
-            "absolute top-1/2 size-8 -translate-y-1/2 rounded-full border bg-card shadow-sm transition-colors",
+            "absolute top-1/2 size-6 -translate-y-1/2 rounded-full border bg-card shadow-sm transition-colors",
             dragging ? "border-primary" : "border-border"
           )}
-          style={{ left: `calc(50% + ${rate * (SHUTTLE_RANGE / 2)}px - 16px)` }}
+          style={{ left: `calc(50% + ${rate * (SHUTTLE_RANGE / 2)}px - 12px)` }}
         />
       </div>
       <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
         {dragging ? `${rate >= 0 ? "" : "-"}${Math.abs(rate).toFixed(1)}x` : "Press and drag"}
       </span>
+    </div>
+  );
+}
+
+/** Shuttles the timeline's own horizontal scroll — panning the view without
+ * touching the playhead or the project. Shared between the side panel and
+ * the inline strip a narrow viewport shows under the preview instead. */
+export function TimelineShuttleControl() {
+  const MAX_PX_PER_SEC = 900;
+  return <ShuttleBar onTick={(rate, dt) => timelineScrollBy(rate * MAX_PX_PER_SEC * dt)} />;
+}
+
+/** Shuttles the playhead itself, like a jog wheel — pauses playback first,
+ * same as grabbing the ruler does. Shared the same way as the timeline one. */
+export function PlayheadShuttleControl() {
+  const MAX_SECONDS_PER_SEC = 12;
+  const startShuttle = () => {
+    const s = useEditor.getState();
+    if (s.playing) s.setPlaying(false);
+  };
+  return (
+    <div onPointerDownCapture={startShuttle}>
+      <ShuttleBar
+        onTick={(rate, dt) => {
+          const s = useEditor.getState();
+          s.seek(s.currentTime + rate * MAX_SECONDS_PER_SEC * dt);
+        }}
+      />
     </div>
   );
 }
