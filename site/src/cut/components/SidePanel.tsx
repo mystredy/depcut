@@ -367,10 +367,11 @@ export function SidePanel({
           border becomes the single line between the rail and the canvas. It
           scrolls down its own length when a short window cannot show every tab;
           the floating scrollbar keeps all 68px for the tiles, so the widest
-          label still fits. */}
+          label still fits. Labelled at every width — the label under each
+          icon is what turns a tile from a guess into a name. */}
       <ScrollArea
         className={cn(
-          "min-h-0 w-12 shrink-0 sm:w-[68px]",
+          "min-h-0 w-[68px] shrink-0",
           (tab !== null || extraTab !== null) && "border-r border-border"
         )}
         contentClassName="flex flex-col items-center gap-0.5 py-2 sm:gap-1 sm:py-3"
@@ -400,7 +401,7 @@ export function SidePanel({
               </span>
               <span
                 className={cn(
-                  "hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block",
+                  "w-full truncate text-center text-[10px] font-medium tracking-tight",
                   tab === id && "text-foreground"
                 )}
               >
@@ -478,7 +479,7 @@ export function SidePanel({
                   <Layers className="size-3.5" />
                 )}
               </span>
-              <span className="hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block">
+              <span className="w-full truncate text-center text-[10px] font-medium tracking-tight">
                 Overlay
               </span>
             </button>
@@ -508,7 +509,7 @@ export function SidePanel({
             </span>
             <span
               className={cn(
-                "hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block",
+                "w-full truncate text-center text-[10px] font-medium tracking-tight",
                 extraTab === id && "text-foreground"
               )}
             >

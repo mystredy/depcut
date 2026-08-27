@@ -419,7 +419,7 @@ export function RightPanel() {
         </div>
       )}
       <ScrollArea
-        className="min-h-0 w-12 shrink-0 sm:w-[68px]"
+        className="min-h-0 w-[68px] shrink-0"
         contentClassName="flex flex-col items-center gap-0.5 py-2 sm:gap-1 sm:py-3"
       >
         <RailButton
@@ -586,7 +586,7 @@ function RailButton({
       </span>
       <span
         className={cn(
-          "hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block",
+          "w-full truncate text-center text-[10px] font-medium tracking-tight",
           active && "text-foreground"
         )}
       >
@@ -635,7 +635,7 @@ function RailActionButton({
       </span>
       <span
         className={cn(
-          "hidden w-full truncate text-center text-[10px] font-medium tracking-tight sm:block",
+          "w-full truncate text-center text-[10px] font-medium tracking-tight",
           active && "text-foreground"
         )}
       >
