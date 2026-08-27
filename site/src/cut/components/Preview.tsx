@@ -15,6 +15,7 @@ import {
 import { setPreviewCanvas } from "@/cut/lib/previewCanvas";
 import { frameOf, isFullRect, rectOf, type Aspect, type ClipSpan, type FrameRect, type MediaAsset, type VideoClip } from "@/cut/lib/types";
 import { cn } from "@/lib/utils";
+import { ClipExtractStrip } from "./Inspector";
 import { OverlayLayer } from "./OverlayLayer";
 import { PlayheadShuttleControl, TimelineShuttleControl } from "./ShuttleBar";
 import { StageEffectPaint, stageSlices, useEffectLanes, useStageEffects } from "./StageEffects";
@@ -79,6 +80,12 @@ export function Preview() {
   const aspect = useEditor((s) => s.aspect);
   const frame = frameOf(aspect);
   const mobileShuttleTab = useEditor((s) => s.mobileShuttleTab);
+  const mobileExtractOpen = useEditor((s) => s.mobileExtractOpen);
+  const extractClip = useEditor((s) =>
+    s.mobileExtractOpen && s.selection?.kind === "clip"
+      ? s.clips.find((c) => c.id === s.selection!.id)
+      : undefined
+  );
 
   usePlayback(canvasRef);
   // An effect grades what plays under it, so the stage is built in slices:
@@ -258,6 +265,24 @@ export function Preview() {
             </button>
           </div>
           {mobileShuttleTab === "timeline" ? <TimelineShuttleControl /> : <PlayheadShuttleControl />}
+        </div>
+      )}
+      {/* Same idea, for the Edit rail's Extract-audio action: a narrow
+          viewport hands it here instead of the right rail column. */}
+      {mobileExtractOpen && extractClip && (
+        <div className="flex shrink-0 flex-col items-center gap-2 border-t border-border px-4 py-3">
+          <div className="flex w-full max-w-56 items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">Extract audio</span>
+            <button
+              type="button"
+              aria-label="Close"
+              className="grid size-5 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              onClick={() => useEditor.getState().setMobileExtractOpen(false)}
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+          <ClipExtractStrip clip={extractClip} />
         </div>
       )}
     </section>

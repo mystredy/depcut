@@ -668,11 +668,15 @@ export function ClipVolumeSection({ clip }: { clip: VideoClip }) {
   );
 }
 
-export function ClipExtractSection({ clip }: { clip: VideoClip }) {
+/** Extracting audio for a clip: the network call, its per-clip live flag
+ * (lives in the store, not local state — an extraction outlives this section
+ * if the panel closes or the selection changes mid-run, and the rail tile
+ * reads the same flag to keep showing it's working), and any error from the
+ * attempt. Shared by the Edit rail's row (desktop/wide) and the
+ * under-the-preview strip Preview renders on a narrow viewport instead (this
+ * whole rail column doesn't dock there — see RightPanel and Preview). */
+function useClipExtractAudio(clip: VideoClip) {
   const asset = useEditor((s) => s.assets.find((a) => a.id === clip.assetId));
-  // Lives in the store, not local state — an extraction outlives this section
-  // if the panel closes or the selection changes mid-run, and the rail tile
-  // reads the same flag to keep showing it's working.
   const extracting = useEditor((s) => s.extractingClipId === clip.id);
   const [extractError, setExtractError] = useState<string | null>(null);
   const extractAudio = async () => {
@@ -690,29 +694,59 @@ export function ClipExtractSection({ clip }: { clip: VideoClip }) {
       useEditor.getState().setExtractingClipId(null);
     }
   };
+  return { asset, extracting, extractError, extractAudio };
+}
+
+/** The extract action's own button, decoupled from where it's laid out. */
+function ClipExtractButton({ extracting, onClick }: { extracting: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="clip-extract-audio flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+      disabled={extracting}
+      onClick={onClick}
+    >
+      {extracting ? <Loader2 className="size-3.5 animate-spin" /> : <AudioLines className="size-3.5" />}
+      {extracting ? "Extracting…" : "Extract"}
+    </button>
+  );
+}
+
+export function ClipExtractSection({ clip }: { clip: VideoClip }) {
+  const { asset, extracting, extractError, extractAudio } = useClipExtractAudio(clip);
   return (
     <div className="flex flex-col gap-1 px-3.5 pb-4">
       {asset?.type === "video" ? (
         <Row label="Extract audio">
-          <button
-            type="button"
-            className="clip-extract-audio flex h-8 items-center gap-1.5 rounded-md border border-input px-2.5 text-[11.5px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-            disabled={extracting}
-            onClick={() => void extractAudio()}
-          >
-            {extracting ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <AudioLines className="size-3.5" />
-            )}
-            {extracting ? "Extracting…" : "Extract"}
-          </button>
+          <ClipExtractButton extracting={extracting} onClick={() => void extractAudio()} />
         </Row>
       ) : (
         <p className="px-0.5 py-2 text-[11.5px] leading-relaxed text-muted-foreground">
           Extracting audio only works on video clips.
         </p>
       )}
+      {extractError && (
+        <p className="clip-extract-error text-[11px] leading-relaxed text-red-600">{extractError}</p>
+      )}
+    </div>
+  );
+}
+
+/** The narrow-viewport equivalent of ClipExtractSection: no room to dock the
+ * rail column, so Preview renders this compact, label-free version inline
+ * under the video instead — the strip's own header already names it. */
+export function ClipExtractStrip({ clip }: { clip: VideoClip }) {
+  const { asset, extracting, extractError, extractAudio } = useClipExtractAudio(clip);
+  if (asset?.type !== "video") {
+    return (
+      <p className="px-0.5 py-2 text-center text-[11.5px] leading-relaxed text-muted-foreground">
+        Extracting audio only works on video clips.
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <ClipExtractButton extracting={extracting} onClick={() => void extractAudio()} />
       {extractError && (
         <p className="clip-extract-error text-[11px] leading-relaxed text-red-600">{extractError}</p>
       )}
