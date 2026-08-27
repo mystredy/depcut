@@ -224,7 +224,11 @@ export async function transcribeSamples(
 
 /** Transcribe a finished mic recording: decode it, downmix/resample to the
  * wire format, run the chunk pipeline, and join the cue texts. */
-export async function cloudTranscribeRecording(blob: Blob, locale?: string): Promise<string> {
+export async function cloudTranscribeRecording(
+  blob: Blob,
+  locale?: string,
+  forceCloud = false
+): Promise<string> {
   const bytes = await blob.arrayBuffer();
   // Decode at the device rate, then resample/downmix through an offline
   // render — decodeAudioData resamples to its context's rate, but the mono
@@ -244,7 +248,7 @@ export async function cloudTranscribeRecording(blob: Blob, locale?: string): Pro
   src.connect(ctx.destination);
   src.start();
   const mono = (await ctx.startRendering()).getChannelData(0);
-  const cues = await transcribeSamples(mono, locale);
+  const cues = await transcribeSamples(mono, locale, undefined, forceCloud);
   return (cues ?? [])
     .map((c) => c.text)
     .join(" ")

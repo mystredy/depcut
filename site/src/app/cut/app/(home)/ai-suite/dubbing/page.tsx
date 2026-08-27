@@ -73,7 +73,7 @@ export default function DubbingPage() {
 
     try {
       setStage("transcribing");
-      const text = (await cloudTranscribeRecording(file)).trim();
+      const text = (await cloudTranscribeRecording(file, undefined, true)).trim();
       if (!text) throw new Error("Couldn't find any speech in that file.");
       setTranscript(text);
 
