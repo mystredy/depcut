@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { X } from "lucide-react";
 import { usePlayback } from "@/cut/hooks/usePlayback";
 import { clearAssetDrag, setAssetDragData } from "@/cut/lib/assetDrag";
@@ -15,18 +15,35 @@ import {
 import { setPreviewCanvas } from "@/cut/lib/previewCanvas";
 import { frameOf, isFullRect, rectOf, type Aspect, type ClipSpan, type FrameRect, type MediaAsset, type VideoClip } from "@/cut/lib/types";
 import { cn } from "@/lib/utils";
-import { ClipExtractStrip, ClipMoveTrackStrip, ClipSpeedStrip } from "./Inspector";
+import {
+  ClipExtractStrip,
+  ClipMoveTimeSection,
+  ClipMoveTrackStrip,
+  ClipSpeedStrip,
+  ClipTrimSection,
+} from "./Inspector";
 import { OverlayLayer } from "./OverlayLayer";
 import { PlayheadShuttleControl, TimelineShuttleControl } from "./ShuttleBar";
 import { StageEffectPaint, stageSlices, useEffectLanes, useStageEffects } from "./StageEffects";
 
-/** The header each mobileClipTab strip shows itself under (see the render
- * below) — the docked column's own Row label doesn't apply here since the
- * strip carries no label internally. */
-const MOBILE_CLIP_TAB_LABEL: Record<"extract" | "speed" | "move-track", string> = {
-  extract: "Extract audio",
-  speed: "Speed",
-  "move-track": "Move track",
+/** Each Edit-rail clip tab with no room to dock on a narrow viewport: its
+ * header label (shown above the content, next to the close button — the
+ * docked column's own Row label doesn't apply here) and the content Preview
+ * renders for it below. Trim and Move in time already carry their own
+ * top-of-content label ("Trim start"/"Trim end", "Move in time" — same
+ * width convention as a shuttle strip), so their section component doubles
+ * as its own strip and the header goes label-less rather than repeat it;
+ * Extract/Speed/Move track needed a compact, label-free variant split out
+ * from their Row-wrapped desktop layout instead. */
+const MOBILE_CLIP_TABS: Record<
+  "extract" | "speed" | "move-track" | "trim" | "move-time",
+  { label: string | null; Content: (props: { clip: VideoClip }) => ReactNode }
+> = {
+  extract: { label: "Extract audio", Content: ClipExtractStrip },
+  speed: { label: "Speed", Content: ClipSpeedStrip },
+  "move-track": { label: "Move track", Content: ClipMoveTrackStrip },
+  trim: { label: null, Content: ClipTrimSection },
+  "move-time": { label: null, Content: ClipMoveTimeSection },
 };
 
 /** The clip under the playhead, when it overflows the frame in fill mode. */
@@ -95,6 +112,7 @@ export function Preview() {
       ? s.clips.find((c) => c.id === s.selection!.id)
       : undefined
   );
+  const MobileClipTabContent = mobileClipTab ? MOBILE_CLIP_TABS[mobileClipTab].Content : null;
 
   usePlayback(canvasRef);
   // An effect grades what plays under it, so the stage is built in slices:
@@ -277,13 +295,14 @@ export function Preview() {
         </div>
       )}
       {/* Same idea, for the Edit rail's clip tabs with no room to dock on a
-          narrow viewport (Extract audio, Speed, Move track): each hands its
-          content here instead of the right rail column. */}
-      {mobileClipTab && mobileClipTabClip && (
+          narrow viewport (Extract audio, Speed, Move track, Trim, Move in
+          time): each hands its content here instead of the right rail
+          column. */}
+      {mobileClipTab && mobileClipTabClip && MobileClipTabContent && (
         <div className="flex shrink-0 flex-col items-center gap-2 border-t border-border px-4 py-3">
           <div className="flex w-full max-w-56 items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">
-              {MOBILE_CLIP_TAB_LABEL[mobileClipTab]}
+              {MOBILE_CLIP_TABS[mobileClipTab].label}
             </span>
             <button
               type="button"
@@ -294,13 +313,7 @@ export function Preview() {
               <X className="size-3.5" />
             </button>
           </div>
-          {mobileClipTab === "extract" ? (
-            <ClipExtractStrip clip={mobileClipTabClip} />
-          ) : mobileClipTab === "speed" ? (
-            <ClipSpeedStrip clip={mobileClipTabClip} />
-          ) : (
-            <ClipMoveTrackStrip clip={mobileClipTabClip} />
-          )}
+          <MobileClipTabContent clip={mobileClipTabClip} />
         </div>
       )}
     </section>

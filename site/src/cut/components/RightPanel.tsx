@@ -153,12 +153,15 @@ const TEXT_TABS: { id: TextTab; label: string; icon: typeof SlidersHorizontal }[
 ];
 
 /** Below `sm` there's no room to dock a 264px column without swallowing the
- * canvas, so on a narrow viewport the Extract, Speed, and Move track tabs
- * hand their content to Preview instead (see the dockInline/mobileClipTab
- * wiring below). Starts `false` unconditionally, matching what SSR renders
- * with no `window` to read, and only corrects itself post-mount — guessing
- * eagerly from `window` here would disagree with the server on the first
- * client render and trip a hydration mismatch. */
+ * canvas, so on a narrow viewport Extract, Speed, Move track, Trim, and Move
+ * in time hand their content to Preview instead (see the
+ * dockInline/mobileClipTab wiring below) — Color, Volume, and Framing aren't
+ * in that list: they need real screen width (a color wheel, a framing crop
+ * handle) that a strip can't give them, so they stay dock-only. Starts
+ * `false` unconditionally, matching what SSR renders with no `window` to
+ * read, and only corrects itself post-mount — guessing eagerly from
+ * `window` here would disagree with the server on the first client render
+ * and trip a hydration mismatch. */
 function useNarrowPanel(): boolean {
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
@@ -296,13 +299,19 @@ export function RightPanel() {
   const textOverlay = overlay && isTextOverlay(overlay) ? overlay : undefined;
   const extractingClipId = useEditor((s) => s.extractingClipId);
 
-  // On a narrow viewport, Extract, Speed, and Move track don't dock here:
-  // Preview renders whichever is open as a strip under the video instead
-  // (docking would push the preview itself off to the side on a screen with
-  // no room to spare) — same idea as SidePanel's Aspect ratio/Timeline/Playhead.
+  // On a narrow viewport, some clip tabs don't dock here: Preview renders
+  // whichever is open as a strip under the video instead (docking would
+  // push the preview itself off to the side on a screen with no room to
+  // spare) — same idea as SidePanel's Aspect ratio/Timeline/Playhead.
   const narrow = useNarrowPanel();
   const mobileClipTabWanted =
-    tab === "extract" || tab === "speed" || tab === "move-track" ? tab : null;
+    tab === "extract" ||
+    tab === "speed" ||
+    tab === "move-track" ||
+    tab === "trim" ||
+    tab === "move-time"
+      ? tab
+      : null;
   const dockInline = !(narrow && mobileClipTabWanted !== null);
   useEffect(() => {
     useEditor.getState().setMobileClipTab(narrow && clip ? mobileClipTabWanted : null);
