@@ -330,7 +330,7 @@ export function TopBar({
         {editing ? (
           <input
             autoFocus
-            className="ml-1.5 h-7 w-52 rounded-md border border-input bg-transparent px-2 text-sm font-medium outline-none select-text focus:border-ring"
+            className="ml-1.5 h-7 w-28 rounded-md border border-input bg-transparent px-2 text-sm font-medium outline-none select-text focus:border-ring sm:w-52"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commitName}
@@ -341,7 +341,7 @@ export function TopBar({
           />
         ) : (
           <button
-            className="ml-1.5 max-w-64 cursor-text truncate rounded-md px-2 py-1 text-sm font-medium tracking-tight hover:bg-muted"
+            className="ml-1.5 max-w-28 cursor-text truncate rounded-md px-2 py-1 text-sm font-medium tracking-tight hover:bg-muted sm:max-w-64"
             title="Rename project"
             onClick={() => {
               setDraft(projectName);
