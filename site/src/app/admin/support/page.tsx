@@ -106,20 +106,25 @@ function TicketCard({ ticket }: { ticket: AdminSupportTicket }) {
 
       <p className="rounded-lg border bg-muted/20 p-2.5 text-xs">{ticket.message}</p>
 
-      {ticket.attachmentContentType && (
-        <a
-          href={`/api/admin/support-tickets/${ticket.id}/attachment`}
-          target="_blank"
-          rel="noreferrer"
-          className="block w-fit"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element -- an admin-only inline-DB image, not worth a remote loader config for */}
-          <img
-            src={`/api/admin/support-tickets/${ticket.id}/attachment`}
-            alt="Attachment"
-            className="h-24 w-auto rounded-lg border object-cover transition-opacity hover:opacity-90"
-          />
-        </a>
+      {ticket.attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {ticket.attachments.map((a) => (
+            <a
+              key={a.id}
+              href={`/api/admin/support-tickets/attachment/${a.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="block w-fit"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- an admin-only inline-DB image, not worth a remote loader config for */}
+              <img
+                src={`/api/admin/support-tickets/attachment/${a.id}`}
+                alt="Attachment"
+                className="h-24 w-auto rounded-lg border object-cover transition-opacity hover:opacity-90"
+              />
+            </a>
+          ))}
+        </div>
       )}
 
       {ticket.status === "Resolved" ? (

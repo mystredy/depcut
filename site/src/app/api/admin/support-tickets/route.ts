@@ -15,11 +15,12 @@ export const GET = withDonkeyAuth(async (request) => {
   }
 
   const rows = await prisma.supportTicket.findMany({
-    // The attachment's bytes never ride the list — attachmentContentType
-    // alone (non-null when one exists) is enough to link to the route that
-    // serves them.
-    omit: { attachmentData: true },
-    include: { user: { select: { displayName: true, email: true, name: true } } },
+    include: {
+      // Each attachment's bytes never ride the list — id and contentType
+      // alone are enough to link to the route that serves them.
+      attachments: { select: { contentType: true, id: true } },
+      user: { select: { displayName: true, email: true, name: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 

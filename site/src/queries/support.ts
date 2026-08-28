@@ -13,7 +13,7 @@ export type SupportTicket = {
   response: string | null;
   createdAt: string;
   updatedAt: string;
-  attachmentContentType: string | null;
+  attachments: { id: string; contentType: string }[];
 };
 
 export function useCreateSupportTicket() {
@@ -21,7 +21,7 @@ export function useCreateSupportTicket() {
     mutationFn: (input: {
       subject: string;
       message: string;
-      attachment?: { data: string; contentType: string };
+      attachments?: { data: string; contentType: string }[];
     }) =>
       apiFetch<{ ticket: SupportTicket }>("/api/support-tickets", {
         body: JSON.stringify(input),

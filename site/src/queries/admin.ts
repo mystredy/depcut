@@ -298,7 +298,7 @@ export type AdminSupportTicket = {
   raisedByEmail: string;
   resolvedAt: string | null;
   createdAt: string;
-  attachmentContentType: string | null;
+  attachments: { id: string; contentType: string }[];
 };
 
 export type AnnouncementTargetType = "all" | "super_users" | "specific_user";
