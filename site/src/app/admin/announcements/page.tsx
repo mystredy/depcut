@@ -140,9 +140,9 @@ export default function AdminAnnouncementsPage() {
       <div>
         <h1 className="text-lg font-semibold tracking-tight">Announcements</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Compose and target broadcast announcements. No delivery pipeline exists yet — this
-          stores content and targeting rules, ready for whenever an in-app banner or email surface
-          reads from it.
+          Compose and target broadcast announcements. An instant broadcast lands in every matching
+          user's notification bell right away; a scheduled one is stored only — nothing delivers it
+          automatically yet.
         </p>
       </div>
 

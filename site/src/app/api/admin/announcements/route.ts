@@ -74,5 +74,26 @@ export const POST = withDonkeyAuth(async (request) => {
     include: { targetUser: { select: { displayName: true, email: true, name: true } } },
   });
 
+  // An instant (non-scheduled) broadcast delivers now, into every matching
+  // user's real notification bell — the only surface that actually reads
+  // announcements today. A future-dated one stays stored only; nothing
+  // sweeps scheduled announcements to deliver them when their time comes.
+  if (status === "Active") {
+    const recipients = await prisma.user.findMany({
+      select: { id: true },
+      where:
+        targetType === "specific_user"
+          ? { id: targetUserId }
+          : targetType === "super_users"
+            ? { superUser: true }
+            : {},
+    });
+    if (recipients.length > 0) {
+      await prisma.notification.createMany({
+        data: recipients.map((u) => ({ body: announcement.headline, title: "Announcement", userId: u.id })),
+      });
+    }
+  }
+
   return NextResponse.json({ announcement });
 });
