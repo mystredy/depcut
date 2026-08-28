@@ -40,7 +40,6 @@ model User {
   financeTransactions FinanceTransaction[]
   giveawayPayments GiveawayPayment[]
   referralCommission ReferralCommission?
-  targetedAnnouncements Announcement[]
 
   @@map("user")
 }

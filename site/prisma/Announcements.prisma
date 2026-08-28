@@ -1,20 +1,22 @@
-// Broadcast announcements shown to users. No delivery pipeline exists yet
-// (no email/push integration, no in-app banner slot reads this table) —
-// this is the admin-managed content and targeting rules, ready for whenever
-// that surface is built. targetType: "all" | "super_users" | "specific_user".
-// priority: "Info" | "Warning" | "Critical". status: "Active" | "Scheduled".
+// Broadcast announcements shown to users. An instant (non-scheduled) one
+// fans out into every matching user's notification bell at creation time —
+// see notifyTelegram-style delivery in the announcements route. A scheduled
+// one just stores, since nothing sweeps future-dated announcements yet.
+// targetType: "all" | "super_users" | "specific_user". priority: "Info" |
+// "Warning" | "Critical". status: "Active" | "Scheduled".
 model Announcement {
-  id           String    @id @default(cuid())
-  headline     String
-  priority     String    @default("Info")
-  isPinned     Boolean   @default(false)
-  targetType   String    @default("all")
-  targetUserId String?
-  targetUser   User?     @relation(fields: [targetUserId], references: [id], onDelete: SetNull)
-  status       String    @default("Active")
-  scheduledAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  headline      String
+  priority      String    @default("Info")
+  isPinned      Boolean   @default(false)
+  targetType    String    @default("all")
+  // Only meaningful when targetType is "specific_user" — one or more ids,
+  // resolved against the user list client-side rather than a relation.
+  targetUserIds String[]  @default([])
+  status        String    @default("Active")
+  scheduledAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([status])
   @@map("announcement")

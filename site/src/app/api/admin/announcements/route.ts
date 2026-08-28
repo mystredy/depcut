@@ -15,10 +15,7 @@ export const GET = withDonkeyAuth(async (request) => {
     );
   }
 
-  const announcements = await prisma.announcement.findMany({
-    include: { targetUser: { select: { displayName: true, email: true, name: true } } },
-    orderBy: { createdAt: "desc" },
-  });
+  const announcements = await prisma.announcement.findMany({ orderBy: { createdAt: "desc" } });
 
   return NextResponse.json({ announcements });
 });
@@ -29,12 +26,12 @@ const createSchema = z
     priority: z.enum(["Info", "Warning", "Critical"]),
     isPinned: z.boolean(),
     targetType: z.enum(["all", "super_users", "specific_user"]),
-    targetUserId: z.string().trim().min(1).optional(),
+    targetUserIds: z.array(z.string().trim().min(1)).optional(),
     scheduledAt: z.string().datetime().optional(),
   })
   .strict()
-  .refine((v) => v.targetType !== "specific_user" || v.targetUserId, {
-    message: "targetUserId is required when targetType is specific_user",
+  .refine((v) => v.targetType !== "specific_user" || (v.targetUserIds && v.targetUserIds.length > 0), {
+    message: "At least one targetUserIds entry is required when targetType is specific_user",
   });
 
 export const POST = withDonkeyAuth(async (request) => {
@@ -59,7 +56,7 @@ export const POST = withDonkeyAuth(async (request) => {
     );
   }
 
-  const { scheduledAt, targetType, targetUserId, ...rest } = parsed.data;
+  const { scheduledAt, targetType, targetUserIds, ...rest } = parsed.data;
   const scheduledDate = scheduledAt ? new Date(scheduledAt) : null;
   const status = scheduledDate && scheduledDate > new Date() ? "Scheduled" : "Active";
 
@@ -69,9 +66,8 @@ export const POST = withDonkeyAuth(async (request) => {
       scheduledAt: scheduledDate,
       status,
       targetType,
-      targetUserId: targetType === "specific_user" ? targetUserId : null,
+      targetUserIds: targetType === "specific_user" ? (targetUserIds ?? []) : [],
     },
-    include: { targetUser: { select: { displayName: true, email: true, name: true } } },
   });
 
   // An instant (non-scheduled) broadcast delivers now, into every matching
@@ -83,7 +79,7 @@ export const POST = withDonkeyAuth(async (request) => {
       select: { id: true },
       where:
         targetType === "specific_user"
-          ? { id: targetUserId }
+          ? { id: { in: targetUserIds ?? [] } }
           : targetType === "super_users"
             ? { superUser: true }
             : {},
