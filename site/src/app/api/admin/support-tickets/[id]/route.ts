@@ -7,7 +7,7 @@ import {
   withDonkeyAuth,
 } from "@/lib/donkey-api-auth";
 import { prisma } from "@/lib/prisma";
-import { notifyUser } from "@/lib/notify";
+import { notifyUserEverywhere } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -63,15 +63,14 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
   });
 
   // The only surface a raiser has for a reply — there's no ticket-status
-  // page and no email send for this yet, just the notification bell.
+  // page and no email send for this yet. Also DMs Telegram for a raiser
+  // who's linked their bot and opted into telegramAlerts.
   if (parsed.data.response) {
-    await prisma.notification.create(
-      notifyUser({
-        body: parsed.data.response,
-        title: `Reply to "${ticket.subject}"`,
-        userId: ticket.userId,
-      })
-    );
+    await notifyUserEverywhere({
+      body: parsed.data.response,
+      title: `Reply to "${ticket.subject}"`,
+      userId: ticket.userId,
+    });
   }
 
   return NextResponse.json({

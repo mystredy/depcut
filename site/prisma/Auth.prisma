@@ -11,6 +11,12 @@ model User {
   // Stripe customer id, one per user, shared across every billing product
   // (Pro, Vision, one-time credit top-ups) so a customer is never duplicated.
   stripeCustomerId String? @unique
+  // Set by the Preferences page's "Link bot" flow once the webhook redeems a
+  // TelegramLinkToken for this account. telegramUsername is display-only.
+  telegramChatId   String? @unique
+  telegramUsername String?
+  telegramLinkTokens TelegramLinkToken[]
+  notificationPreferences UserNotificationPreferences?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   sessions      Session[]

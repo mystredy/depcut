@@ -1,0 +1,15 @@
+// One row per user: which channels get proactive alerts, set from the
+// Preferences section of /settings/profile. Push and email digest store
+// intent only — no push infrastructure and no digest job exist yet.
+// Telegram is real once User.telegramChatId is set (see TelegramLinkToken):
+// a linked, opted-in user gets a Telegram DM alongside their notification
+// bell entry, wherever a call site opts into notifyUserEverywhere over the
+// bell-only notifyUser.
+model UserNotificationPreferences {
+  userId         String   @id
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushPayouts    Boolean  @default(false)
+  telegramAlerts Boolean  @default(false)
+  emailDigest    Boolean  @default(false)
+  updatedAt      DateTime @updatedAt
+}
