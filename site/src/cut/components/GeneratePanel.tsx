@@ -39,9 +39,11 @@ import { HostedErrorText } from "./hostedError";
 import { cardIconButton } from "./iconButton";
 import { PillSelect } from "./PillSelect";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { StockVideosPanel } from "./StockVideosPanel";
 
-// The generate-video panel: an always-on column in the Video tab, sitting left
-// of the stock-clip browser. Clicking a stock tile loads its saved prompt here.
+// The generate-video panel: the Video tab's whole column — the generate form,
+// then (in the same scroll) the stock-clip browser below it. Clicking a stock
+// tile loads its saved prompt into the form above.
 //
 // A visual reference (dragged in or @name-mentioned) seeds the render: the model
 // takes one input image, so the first reference's picture becomes the start
@@ -54,6 +56,9 @@ const ASPECT_WORD: Record<VideoAspect, string> = {
 
 export function GenerateVideoPanel({ projectId }: { projectId: string }) {
   const readOnly = useEditor((s) => s.readOnly);
+  // A shared view shows only the project's own generations — no stock
+  // browsing (same rule the rest of the side panel follows).
+  const sharedFeatures = useEditor((s) => s.sharedFeatures);
   const signedIn = useSignedIn();
   const allJobs = useGenerate((s) => s.jobs);
   // Panel renders only — a chat- or scene-owned job lives on its chat card.
@@ -254,6 +259,8 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
             ))}
           </div>
         )}
+
+        {!sharedFeatures && <StockVideosPanel />}
       </ScrollArea>
     </>
   );

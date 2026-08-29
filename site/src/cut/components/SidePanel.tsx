@@ -92,7 +92,6 @@ import { TransitionsPanel } from "./TransitionsPanel";
 import { ElementsPanel } from "./ElementsPanel";
 import { StockImagesPanel } from "./StockImagesPanel";
 import { SampleLibrary } from "./StockMusicPanel";
-import { StockVideosPanel } from "./StockVideosPanel";
 import { STOCK_MUSIC } from "@/cut/lib/stockMusicManifest";
 import { STOCK_VIDEOS } from "@/cut/lib/stockVideoManifest";
 import { LibraryCard, ShelfBadge } from "./LibraryView";
@@ -586,14 +585,17 @@ export function SidePanel({
       {(tab !== null || (extraTab !== null && extraDocksInline)) && (
         <div className="flex min-h-0">
           {tab === "image" || tab === "video" ? (
-        // The generate tabs are two columns: the generate input on the left,
-        // the stock reference browser on the right. Clicking a stock tile loads
-        // its prompt into the generate panel beside it.
+        // Image is two columns: the generate input on the left, the stock
+        // reference browser on the right (clicking a stock tile loads its
+        // prompt into the generate panel beside it). Video's stock browser
+        // instead scrolls in below its own generate form, in the one column
+        // — see GenerateVideoPanel.
         <>
           <div
             className={cn(
-              "relative flex w-[252px] min-h-0 shrink-0 flex-col",
-              !sharedFeatures && "border-r border-border"
+              "relative flex min-h-0 shrink-0 flex-col",
+              tab === "video" ? "w-[300px]" : "w-[252px]",
+              !sharedFeatures && tab === "image" && "border-r border-border"
             )}
           >
             <ClosePanelButton onClose={() => setTab(null)} />
@@ -610,16 +612,12 @@ export function SidePanel({
               <GenerateVideoPanel projectId={projectId} />
             )}
           </div>
-          {/* Video browses wider: 16:9 clip tiles need the room. A shared view
-              shows only the project's own generations — no stock browsing. */}
-          {!sharedFeatures && (
-            <div
-              className={cn(
-                "flex min-h-0 shrink-0 flex-col",
-                tab === "image" ? "w-[264px]" : "w-[340px]"
-              )}
-            >
-              {tab === "image" ? <StockImagesPanel /> : <StockVideosPanel />}
+          {/* Image only now — Video no longer has a second column (see
+              above). A shared view shows only the project's own
+              generations — no stock browsing. */}
+          {!sharedFeatures && tab === "image" && (
+            <div className="flex min-h-0 w-[264px] shrink-0 flex-col">
+              <StockImagesPanel />
             </div>
           )}
         </>

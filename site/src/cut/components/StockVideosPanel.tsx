@@ -10,12 +10,13 @@ import { STOCK_CATEGORIES, stockTitle, type StockCategory, type StockVideo } fro
 import { STOCK_VIDEOS } from "@/cut/lib/stockVideoManifest";
 import { cn } from "@/lib/utils";
 import { CopyRefButton, RefHandlePill } from "./AssetRefs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
-// The Video tab's reference browser: a catalog of AI-generated stock clips.
-// Every clip carries the prompt that made it — clicking one loads that
-// prompt into the generate panel beside it to edit and render on the user's
-// account. Videos the user generates show up in that panel, not here.
+// The Video tab's reference browser: a catalog of AI-generated stock clips,
+// embedded in GenerateVideoPanel below its own generate form (in the same
+// scrolling column — no separate sidebar). Every clip carries the prompt
+// that made it — clicking one loads that prompt into the generate form
+// above it to edit and render on the user's account. Videos the user
+// generates show up in that form's own job list, not here.
 //
 // Two sections: "Talking Characters" (talking-head clips whose prompt ends in
 // an editable spoken line), then the "Stock Videos" footage grid. "View all"
@@ -95,7 +96,7 @@ export function StockVideosPanel() {
   );
 
   return (
-    <ScrollArea className="min-h-0 flex-1" contentClassName="flex flex-col gap-3 px-3.5 pt-3 pb-4">
+    <div className="flex flex-col gap-3 border-t border-border pt-3">
       {STOCK_VIDEOS.length === 0 ? (
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           No stock videos are bundled yet.
@@ -148,7 +149,7 @@ export function StockVideosPanel() {
           )}
         </>
       )}
-    </ScrollArea>
+    </div>
   );
 }
 
