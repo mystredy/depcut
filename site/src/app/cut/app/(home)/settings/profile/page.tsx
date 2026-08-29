@@ -10,6 +10,7 @@ import { PreferencesSection } from "@/app/cut/app/(home)/settings/profile/Prefer
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import {
   useAccountProfile,
@@ -18,9 +19,23 @@ import {
 } from "@/queries/accountProfile";
 
 // The account's own page: who you're signed in as, and the one thing about it
-// you can change. The display name is the product's; the Google account keeps
-// the name and email it signed in with.
+// you can change. Every section below fetches its own data independently and
+// renders as soon as it's ready — none of them wait on ProfileCard's own
+// fetch, so they all load in parallel instead of one after another.
 export default function CutProfilePage() {
+  return (
+    <div className="max-w-2xl space-y-6 pb-9">
+      <ProfileCard />
+      <PreferencesSection />
+      <EmailSection />
+      <FeatureFlagsSection />
+    </div>
+  );
+}
+
+// The display name is the product's; the Google account keeps the name and
+// email it signed in with.
+function ProfileCard() {
   const { data: profile, isPending, isError } = useAccountProfile();
   const update = useUpdateDisplayName();
   // Null means "not edited yet", so the field follows the saved value until
@@ -29,10 +44,14 @@ export default function CutProfilePage() {
   const [editingAvatar, setEditingAvatar] = useState(false);
 
   if (isPending) {
-    return <p className="text-sm text-muted-foreground">Loading…</p>;
+    return <Skeleton className="h-[9.75rem] w-full rounded-xl" />;
   }
   if (isError || !profile) {
-    return <p className="text-sm text-red-600">Couldn&apos;t load your profile.</p>;
+    return (
+      <div className="rounded-xl border bg-card p-5">
+        <p className="text-sm text-red-600">Couldn&apos;t load your profile.</p>
+      </div>
+    );
   }
 
   const value = draft ?? profile.displayName ?? "";
@@ -43,7 +62,7 @@ export default function CutProfilePage() {
   };
 
   return (
-    <div className="max-w-2xl space-y-6 pb-9">
+    <>
       <div className="rounded-xl border bg-card p-5">
         <div className="flex items-center gap-3">
           {/* The picture is the way into its own editor — pick, frame, save. */}
@@ -100,16 +119,11 @@ export default function CutProfilePage() {
         </div>
       </div>
 
-      <PreferencesSection />
-      <EmailSection />
-
-      <FeatureFlagsSection />
-
       <AvatarDialog
         open={editingAvatar}
         onOpenChange={setEditingAvatar}
         hasCustomImage={profile.image?.startsWith("/api/account/avatar") === true}
       />
-    </div>
+    </>
   );
 }

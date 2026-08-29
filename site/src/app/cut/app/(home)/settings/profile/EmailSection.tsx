@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
   useEmailPreferences,
@@ -13,7 +14,7 @@ export function EmailSection() {
   const { data: prefs } = useEmailPreferences();
   const set = useSetEmailPreferences();
 
-  if (!prefs) return null;
+  if (!prefs) return <Skeleton className="h-24 w-full rounded-xl" />;
 
   return (
     <div className="rounded-xl border bg-card p-5">

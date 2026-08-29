@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronRight, Loader2, Send } from "lucide-react";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
@@ -25,7 +26,7 @@ export function PreferencesSection() {
   const prefs = useNotificationPreferences();
   const setPrefs = useSetNotificationPreferences();
 
-  if (!prefs.data) return null;
+  if (!prefs.data) return <Skeleton className="h-56 w-full rounded-xl" />;
 
   return (
     <div className="rounded-xl border bg-card p-5">
