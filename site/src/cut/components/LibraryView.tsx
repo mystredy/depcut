@@ -672,26 +672,29 @@ export function LibraryCard({
             durationClassName={!!onUse && "transition-opacity group-hover:opacity-0"}
           />
         )}
-        {a.type === "audio"
-          ? sizeBytes != null && (
-              // Clear of the play circle, matching the face's duration pill.
-              <span className="absolute bottom-3 left-12 rounded-md bg-[#2b4e42] px-1.5 py-0.5 font-mono text-[10px] text-[#d6eddf] tabular-nums">
-                {formatBytes(sizeBytes)}
-              </span>
-            )
-          : (sizeBytes != null || a.type === "video") && (
-              <div
-                className={cn(
-                  "absolute bottom-1.5 left-1.5 flex items-center gap-1 font-mono text-[9px] text-white tabular-nums [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]",
-                  // The + button only occupies the corner on hover; sit
-                  // flush at rest and slide over once it appears.
-                  onUse && "transition-[left] group-hover:left-8"
-                )}
-              >
-                {sizeBytes != null && <span>{formatBytes(sizeBytes)}</span>}
-                {a.type === "video" && <span>{formatTime(a.duration)}</span>}
-              </div>
+        {a.type === "video" && (
+          <span className="absolute right-1.5 bottom-1.5 font-mono text-[9px] text-white tabular-nums [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]">
+            {formatTime(a.duration)}
+          </span>
+        )}
+        {sizeBytes != null && (
+          <span
+            className={cn(
+              "absolute font-mono tabular-nums",
+              a.type === "audio"
+                ? // Clear of the play circle, matching the face's duration pill.
+                  "bottom-3 left-12 rounded-md bg-[#2b4e42] px-1.5 py-0.5 text-[10px] text-[#d6eddf]"
+                : cn(
+                    "bottom-1.5 left-1.5 text-[9px] text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]",
+                    // The + button only occupies the corner on hover; sit
+                    // flush at rest and slide over once it appears.
+                    onUse && "transition-[left] group-hover:left-8"
+                  )
             )}
+          >
+            {formatBytes(sizeBytes)}
+          </span>
+        )}
         {onUse && (
           <button
             aria-label="Add to timeline"
