@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { AudioPlayer } from "@/cut/components/AudioPlayer";
 import { SectionTitle } from "@/cut/components/SectionTitle";
 import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { useSpeakerVoice, useSpeechLanguage, VoicePicker } from "@/cut/components/VoicePicker";
@@ -267,8 +268,7 @@ export default function TextToSpeechPage() {
                 </a>
               </div>
             </div>
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption -- generated speech has no separate caption track */}
-            <audio controls src={result.url} className="w-full" />
+            <AudioPlayer src={result.url} />
           </div>
         )}
       </div>
@@ -287,6 +287,5 @@ export default function TextToSpeechPage() {
 function AudioHistoryPreview({ blob }: { blob: Blob }) {
   const url = useBlobUrl(blob);
   if (!url) return null;
-  // eslint-disable-next-line jsx-a11y/media-has-caption -- generated speech has no separate caption track
-  return <audio controls src={url} className="w-full" />;
+  return <AudioPlayer src={url} />;
 }

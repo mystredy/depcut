@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AudioPlayer } from "@/cut/components/AudioPlayer";
 import { SectionTitle } from "@/cut/components/SectionTitle";
 import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { useSpeakerVoice, VoicePicker } from "@/cut/components/VoicePicker";
@@ -258,8 +259,7 @@ export default function DubbingPage() {
                 Download
               </a>
             </div>
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption -- generated speech has no separate caption track */}
-            <audio controls src={result.url} className="w-full" />
+            <AudioPlayer src={result.url} />
           </div>
         )}
       </div>
@@ -288,10 +288,7 @@ function DubHistoryPreview({
   return (
     <div className="space-y-2">
       {transcript && <p className="text-[12.5px] leading-relaxed text-muted-foreground">{transcript}</p>}
-      {url && (
-        // eslint-disable-next-line jsx-a11y/media-has-caption -- generated speech has no separate caption track
-        <audio controls src={url} className="w-full" />
-      )}
+      {url && <AudioPlayer src={url} />}
     </div>
   );
 }
