@@ -24,3 +24,17 @@ model TelegramBotUser {
 
   @@map("telegram_bot_user")
 }
+
+// Single-use, short-lived credential for the Preferences page's "Link bot"
+// flow: issued to a signed-in user as both a `?start=` deep-link token and a
+// human-typeable 6-digit pin (for when the deep link doesn't open Telegram
+// cleanly — no app installed, wrong device). Either redeems the same row via
+// the webhook's handler (commands.ts), which sets User.telegramChatId and
+// deletes it. A row older than 15 minutes is treated as expired.
+model TelegramLinkToken {
+  token     String   @id @default(cuid())
+  pin       String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}

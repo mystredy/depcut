@@ -66,7 +66,7 @@ export default function AdminAnnouncementsPage() {
   const [priority, setPriority] = useState<"Info" | "Warning" | "Critical">("Info");
   const [isPinned, setIsPinned] = useState(false);
   const [targetType, setTargetType] = useState<AnnouncementTargetType>("all");
-  const [targetUserId, setTargetUserId] = useState("");
+  const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
   const [scheduledAt, setScheduledAt] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,8 +83,14 @@ export default function AdminAnnouncementsPage() {
     users.data?.users.filter((u) => {
       if (targetType === "all") return true;
       if (targetType === "super_users") return u.superUser;
-      return u.id === targetUserId;
+      return targetUserIds.includes(u.id);
     }) ?? [];
+
+  const toggleTargetUser = (userId: string) => {
+    setTargetUserIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
 
   const resetForm = () => {
     setEditingId(null);
@@ -92,7 +98,7 @@ export default function AdminAnnouncementsPage() {
     setPriority("Info");
     setIsPinned(false);
     setTargetType("all");
-    setTargetUserId("");
+    setTargetUserIds([]);
     setScheduledAt("");
   };
 
@@ -102,7 +108,7 @@ export default function AdminAnnouncementsPage() {
     setPriority(ann.priority);
     setIsPinned(ann.isPinned);
     setTargetType(ann.targetType);
-    setTargetUserId(ann.targetUserId ?? "");
+    setTargetUserIds(ann.targetUserIds);
     setScheduledAt(ann.scheduledAt ? ann.scheduledAt.slice(0, 16) : "");
   };
 
@@ -111,8 +117,8 @@ export default function AdminAnnouncementsPage() {
       setError("Headline cannot be empty.");
       return;
     }
-    if (targetType === "specific_user" && !targetUserId) {
-      setError("Pick a creator to target.");
+    if (targetType === "specific_user" && targetUserIds.length === 0) {
+      setError("Pick at least one creator to target.");
       return;
     }
     setError(null);
@@ -123,7 +129,7 @@ export default function AdminAnnouncementsPage() {
       priority,
       scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
       targetType,
-      targetUserId: targetType === "specific_user" ? targetUserId : undefined,
+      targetUserIds: targetType === "specific_user" ? targetUserIds : undefined,
     };
 
     if (editingId) {
@@ -140,9 +146,9 @@ export default function AdminAnnouncementsPage() {
       <div>
         <h1 className="text-lg font-semibold tracking-tight">Announcements</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Compose and target broadcast announcements. No delivery pipeline exists yet — this
-          stores content and targeting rules, ready for whenever an in-app banner or email surface
-          reads from it.
+          Compose and target broadcast announcements. An instant broadcast lands in every matching
+          user's notification bell right away; a scheduled one is stored only — nothing delivers it
+          automatically yet.
         </p>
       </div>
 
@@ -240,18 +246,27 @@ export default function AdminAnnouncementsPage() {
               ))}
             </div>
             {targetType === "specific_user" && (
-              <select
-                value={targetUserId}
-                onChange={(e) => setTargetUserId(e.target.value)}
-                className="w-full rounded-xl border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
-              >
-                <option value="">Select a user…</option>
+              <div className="max-h-40 space-y-0.5 overflow-y-auto rounded-xl border p-1.5">
                 {users.data?.users.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.displayName || u.name} ({u.email})
-                  </option>
+                  <label
+                    key={u.id}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 text-xs hover:bg-muted/60"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={targetUserIds.includes(u.id)}
+                      onChange={() => toggleTargetUser(u.id)}
+                      className="size-3.5"
+                    />
+                    <span className="min-w-0 flex-1 truncate">
+                      {u.displayName || u.name} <span className="text-muted-foreground">({u.email})</span>
+                    </span>
+                  </label>
                 ))}
-              </select>
+                {users.data?.users.length === 0 && (
+                  <p className="px-1.5 py-2 text-center text-xs text-muted-foreground">No users found.</p>
+                )}
+              </div>
             )}
           </div>
 
@@ -333,7 +348,13 @@ export default function AdminAnnouncementsPage() {
                           ? "All Users"
                           : ann.targetType === "super_users"
                             ? "Super Users"
-                            : ann.targetUser?.displayName || ann.targetUser?.name || "—"}
+                            : ann.targetUserIds
+                                .map((id) => {
+                                  const u = users.data?.users.find((u) => u.id === id);
+                                  return u ? u.displayName || u.name : null;
+                                })
+                                .filter(Boolean)
+                                .join(", ") || "—"}
                       </span>
                     </span>
                     <span>

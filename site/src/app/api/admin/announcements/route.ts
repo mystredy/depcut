@@ -15,10 +15,7 @@ export const GET = withDonkeyAuth(async (request) => {
     );
   }
 
-  const announcements = await prisma.announcement.findMany({
-    include: { targetUser: { select: { displayName: true, email: true, name: true } } },
-    orderBy: { createdAt: "desc" },
-  });
+  const announcements = await prisma.announcement.findMany({ orderBy: { createdAt: "desc" } });
 
   return NextResponse.json({ announcements });
 });
@@ -29,12 +26,12 @@ const createSchema = z
     priority: z.enum(["Info", "Warning", "Critical"]),
     isPinned: z.boolean(),
     targetType: z.enum(["all", "super_users", "specific_user"]),
-    targetUserId: z.string().trim().min(1).optional(),
+    targetUserIds: z.array(z.string().trim().min(1)).optional(),
     scheduledAt: z.string().datetime().optional(),
   })
   .strict()
-  .refine((v) => v.targetType !== "specific_user" || v.targetUserId, {
-    message: "targetUserId is required when targetType is specific_user",
+  .refine((v) => v.targetType !== "specific_user" || (v.targetUserIds && v.targetUserIds.length > 0), {
+    message: "At least one targetUserIds entry is required when targetType is specific_user",
   });
 
 export const POST = withDonkeyAuth(async (request) => {
@@ -59,7 +56,7 @@ export const POST = withDonkeyAuth(async (request) => {
     );
   }
 
-  const { scheduledAt, targetType, targetUserId, ...rest } = parsed.data;
+  const { scheduledAt, targetType, targetUserIds, ...rest } = parsed.data;
   const scheduledDate = scheduledAt ? new Date(scheduledAt) : null;
   const status = scheduledDate && scheduledDate > new Date() ? "Scheduled" : "Active";
 
@@ -69,10 +66,30 @@ export const POST = withDonkeyAuth(async (request) => {
       scheduledAt: scheduledDate,
       status,
       targetType,
-      targetUserId: targetType === "specific_user" ? targetUserId : null,
+      targetUserIds: targetType === "specific_user" ? (targetUserIds ?? []) : [],
     },
-    include: { targetUser: { select: { displayName: true, email: true, name: true } } },
   });
+
+  // An instant (non-scheduled) broadcast delivers now, into every matching
+  // user's real notification bell — the only surface that actually reads
+  // announcements today. A future-dated one stays stored only; nothing
+  // sweeps scheduled announcements to deliver them when their time comes.
+  if (status === "Active") {
+    const recipients = await prisma.user.findMany({
+      select: { id: true },
+      where:
+        targetType === "specific_user"
+          ? { id: { in: targetUserIds ?? [] } }
+          : targetType === "super_users"
+            ? { superUser: true }
+            : {},
+    });
+    if (recipients.length > 0) {
+      await prisma.notification.createMany({
+        data: recipients.map((u) => ({ body: announcement.headline, title: "Announcement", userId: u.id })),
+      });
+    }
+  }
 
   return NextResponse.json({ announcement });
 });

@@ -8,6 +8,38 @@ type TelegramUpdate = {
   };
 };
 
+// Two ways into the same row from Preferences' "Link bot" flow: the deep
+// link opens https://t.me/<bot>?start=<token>, which Telegram turns into
+// the message "/start <token>" here; the 6-digit pin is the fallback for
+// when that link doesn't open Telegram cleanly (no app installed, wrong
+// device) — the user just DMs the bot with it directly. Either redeems the
+// same row, once, within 15 minutes of issue.
+const LINK_TOKEN_TTL_MS = 15 * 60 * 1000;
+
+async function tryRedeemLinkToken(
+  where: { token: string } | { pin: string },
+  chatId: number | string,
+  username: string | undefined
+): Promise<boolean> {
+  const link = await prisma.telegramLinkToken.findUnique({ where });
+  if (!link) return false;
+
+  await prisma.telegramLinkToken.delete({ where: { token: link.token } }).catch(() => {});
+  if (Date.now() - link.createdAt.getTime() > LINK_TOKEN_TTL_MS) return false;
+
+  // Only one account may hold a given chat — clear any previous owner
+  // before assigning it here, so the unique constraint never trips.
+  await prisma.user.updateMany({
+    data: { telegramChatId: null, telegramUsername: null },
+    where: { telegramChatId: String(chatId) },
+  });
+  await prisma.user.update({
+    data: { telegramChatId: String(chatId), telegramUsername: username ?? null },
+    where: { id: link.userId },
+  });
+  return true;
+}
+
 // The real bot behavior: an incoming message's first word (its command,
 // e.g. "/start" — Telegram also allows "/start@YourBot", so the @mention
 // suffix is stripped) is matched against admin-defined commands (see
@@ -33,18 +65,42 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
       where: { chatId: String(chatId) },
     });
 
-    const trigger = text.split(/\s+/)[0].split("@")[0];
+    const botToken =
+      process.env.TELEGRAM_BOT_TOKEN?.trim() || (bot.credentials as Record<string, string> | null)?.botToken;
+
+    const [rawTrigger, payload] = text.split(/\s+/);
+    const trigger = rawTrigger.split("@")[0];
+    const from = update.message?.from;
+    const isBarePin = /^\d{6}$/.test(text);
+
+    if ((trigger === "/start" && payload) || isBarePin) {
+      const linked = await tryRedeemLinkToken(
+        isBarePin ? { pin: text } : { token: payload },
+        chatId,
+        from?.username
+      );
+      if (botToken) {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: linked
+              ? "✅ Your Depcut account is now linked — real-time alerts you've opted into will DM here."
+              : "That code expired or wasn't recognized — generate a new one from Preferences and try again.",
+          }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        });
+      }
+      return;
+    }
+
     const command = await prisma.telegramCommand.findUnique({ where: { trigger } });
     if (!command?.enabled) return;
 
-    const from = update.message?.from;
     const replyText = command.replyText
       .replaceAll("{{first_name}}", from?.first_name ?? "")
       .replaceAll("{{username}}", from?.username ? `@${from.username}` : "");
 
-    const botToken =
-      process.env.TELEGRAM_BOT_TOKEN?.trim() ||
-      (bot.credentials as Record<string, string> | null)?.botToken;
     if (!botToken) return;
 
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {

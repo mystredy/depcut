@@ -298,7 +298,7 @@ export type AdminSupportTicket = {
   raisedByEmail: string;
   resolvedAt: string | null;
   createdAt: string;
-  attachmentContentType: string | null;
+  attachments: { id: string; contentType: string }[];
 };
 
 export type AnnouncementTargetType = "all" | "super_users" | "specific_user";
@@ -309,8 +309,9 @@ export type AdminAnnouncement = {
   priority: "Info" | "Warning" | "Critical";
   isPinned: boolean;
   targetType: AnnouncementTargetType;
-  targetUserId: string | null;
-  targetUser: { name: string; displayName: string | null; email: string } | null;
+  // Only meaningful when targetType is "specific_user" — resolve display
+  // names against the user list client-side, there's no relation to include.
+  targetUserIds: string[];
   status: "Active" | "Scheduled";
   scheduledAt: string | null;
   createdAt: string;
@@ -1396,7 +1397,7 @@ export type AnnouncementInput = {
   priority: "Info" | "Warning" | "Critical";
   isPinned: boolean;
   targetType: AnnouncementTargetType;
-  targetUserId?: string;
+  targetUserIds?: string[];
   scheduledAt?: string;
 };
 

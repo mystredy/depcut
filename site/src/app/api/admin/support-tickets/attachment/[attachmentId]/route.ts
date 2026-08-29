@@ -5,10 +5,10 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-type RouteContext = { params: Promise<{ id: string }> };
+type RouteContext = { params: Promise<{ attachmentId: string }> };
 
-// Super-user only. The bytes a ticket's create request attached, served the
-// same way the avatar route serves its own inline-DB image.
+// Super-user only. One ticket's screenshot, served the same way the avatar
+// route serves its own inline-DB image.
 export const GET = withDonkeyAuth(async (request, context: RouteContext) => {
   if (!(await isDonkeySuperUser(request.donkey.userId))) {
     return NextResponse.json(
@@ -17,19 +17,17 @@ export const GET = withDonkeyAuth(async (request, context: RouteContext) => {
     );
   }
 
-  const { id } = await context.params;
-  const ticket = await prisma.supportTicket.findUnique({
-    select: { attachmentContentType: true, attachmentData: true },
-    where: { id },
+  const { attachmentId } = await context.params;
+  const attachment = await prisma.supportTicketAttachment.findUnique({
+    select: { contentType: true, data: true },
+    where: { id: attachmentId },
   });
-  if (!ticket?.attachmentData || !ticket.attachmentContentType) {
-    return notFoundResponse();
-  }
+  if (!attachment) return notFoundResponse();
 
-  return new NextResponse(new Blob([ticket.attachmentData], { type: ticket.attachmentContentType }), {
+  return new NextResponse(new Blob([attachment.data], { type: attachment.contentType }), {
     headers: {
       "Cache-Control": "private, max-age=31536000, immutable",
-      "Content-Type": ticket.attachmentContentType,
+      "Content-Type": attachment.contentType,
       "X-Content-Type-Options": "nosniff",
     },
   });

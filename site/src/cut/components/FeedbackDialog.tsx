@@ -16,7 +16,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCreateSupportTicket } from "@/queries/support";
 
 const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+const MAX_ATTACHMENTS = 7;
 const ALLOWED_ATTACHMENT_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+
+type Attachment = { dataUrl: string; contentType: string };
 
 function readAsDataURL(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -35,28 +38,34 @@ export function FeedbackDialog({ onClose }: { onClose: () => void }) {
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
-  const [attachment, setAttachment] = useState<{ dataUrl: string; contentType: string } | null>(
-    null
-  );
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const createTicket = useCreateSupportTicket();
 
   const canSubmit = subject.trim().length > 0 && message.trim().length > 0;
 
-  const pickFile = async (file: File | undefined) => {
+  const pickFiles = async (files: FileList | null) => {
     setAttachError(null);
-    if (!file) return;
-    if (!ALLOWED_ATTACHMENT_TYPES.has(file.type)) {
-      setAttachError("Attach a PNG, JPEG, WebP, or GIF image.");
-      return;
+    if (!files || files.length === 0) return;
+    const room = MAX_ATTACHMENTS - attachments.length;
+    const picked = Array.from(files).slice(0, room);
+    if (files.length > room) {
+      setAttachError(`Up to ${MAX_ATTACHMENTS} screenshots — the rest weren't added.`);
     }
-    if (file.size > MAX_ATTACHMENT_BYTES) {
-      setAttachError("That image is over the 5 MB limit.");
-      return;
+    const next: Attachment[] = [];
+    for (const file of picked) {
+      if (!ALLOWED_ATTACHMENT_TYPES.has(file.type)) {
+        setAttachError("Attach a PNG, JPEG, WebP, or GIF image.");
+        continue;
+      }
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        setAttachError("That image is over the 5 MB limit.");
+        continue;
+      }
+      next.push({ contentType: file.type, dataUrl: await readAsDataURL(file) });
     }
-    const dataUrl = await readAsDataURL(file);
-    setAttachment({ dataUrl, contentType: file.type });
+    if (next.length > 0) setAttachments((prev) => [...prev, ...next]);
   };
 
   const submit = () => {
@@ -65,14 +74,14 @@ export function FeedbackDialog({ onClose }: { onClose: () => void }) {
       {
         subject: subject.trim(),
         message: message.trim(),
-        ...(attachment
+        ...(attachments.length > 0
           ? {
-              attachment: {
+              attachments: attachments.map((a) => ({
                 // Everything after the comma in a data: URL is the base64
                 // payload — the part the server actually wants.
-                data: attachment.dataUrl.slice(attachment.dataUrl.indexOf(",") + 1),
-                contentType: attachment.contentType,
-              },
+                contentType: a.contentType,
+                data: a.dataUrl.slice(a.dataUrl.indexOf(",") + 1),
+              })),
             }
           : {}),
       },
@@ -134,40 +143,45 @@ export function FeedbackDialog({ onClose }: { onClose: () => void }) {
                 ref={fileInputRef}
                 type="file"
                 accept="image/png,image/jpeg,image/webp,image/gif"
+                multiple
                 hidden
                 onChange={(e) => {
-                  void pickFile(e.target.files?.[0]);
+                  void pickFiles(e.target.files);
                   e.target.value = "";
                 }}
               />
-              {attachment ? (
-                <div className="relative w-fit">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- a local data: URL preview, not worth a remote loader config for */}
-                  <img
-                    src={attachment.dataUrl}
-                    alt="Attachment preview"
-                    className="h-20 w-auto rounded-lg border object-cover"
-                  />
-                  <button
+              <div className="flex flex-wrap items-center gap-2">
+                {attachments.map((a, i) => (
+                  <div key={i} className="relative w-fit">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- a local data: URL preview, not worth a remote loader config for */}
+                    <img
+                      src={a.dataUrl}
+                      alt="Attachment preview"
+                      className="h-16 w-16 rounded-lg border object-cover"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Remove attachment"
+                      className="absolute -top-1.5 -right-1.5 grid size-5 place-items-center rounded-full border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground"
+                      onClick={() => setAttachments((prev) => prev.filter((_, j) => j !== i))}
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                ))}
+                {attachments.length < MAX_ATTACHMENTS && (
+                  <Button
                     type="button"
-                    aria-label="Remove attachment"
-                    className="absolute -top-1.5 -right-1.5 grid size-5 place-items-center rounded-full border bg-card text-muted-foreground shadow-sm transition-colors hover:text-foreground"
-                    onClick={() => setAttachment(null)}
+                    variant="outline"
+                    size="sm"
+                    className="w-fit"
+                    onClick={() => fileInputRef.current?.click()}
                   >
-                    <X className="size-3" />
-                  </button>
-                </div>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-fit"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Paperclip data-icon="inline-start" /> Attach a screenshot
-                </Button>
-              )}
+                    <Paperclip data-icon="inline-start" />
+                    {attachments.length > 0 ? "Add more" : "Attach screenshots"}
+                  </Button>
+                )}
+              </div>
               {attachError && <p className="text-xs text-red-600">{attachError}</p>}
             </div>
             {createTicket.isError && (

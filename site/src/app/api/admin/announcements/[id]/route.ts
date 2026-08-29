@@ -18,7 +18,7 @@ const updateSchema = z
     priority: z.enum(["Info", "Warning", "Critical"]).optional(),
     isPinned: z.boolean().optional(),
     targetType: z.enum(["all", "super_users", "specific_user"]).optional(),
-    targetUserId: z.string().trim().min(1).nullable().optional(),
+    targetUserIds: z.array(z.string().trim().min(1)).optional(),
     scheduledAt: z.string().datetime().nullable().optional(),
   })
   .strict();
@@ -51,7 +51,7 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
     );
   }
 
-  const { scheduledAt, targetType, targetUserId, ...rest } = parsed.data;
+  const { scheduledAt, targetType, targetUserIds, ...rest } = parsed.data;
   const scheduledDate = scheduledAt === undefined ? undefined : scheduledAt ? new Date(scheduledAt) : null;
 
   const announcement = await prisma.announcement.update({
@@ -60,9 +60,8 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
       scheduledAt: scheduledDate,
       status: scheduledDate === undefined ? undefined : scheduledDate && scheduledDate > new Date() ? "Scheduled" : "Active",
       targetType,
-      targetUserId: targetType === undefined ? undefined : targetType === "specific_user" ? targetUserId : null,
+      targetUserIds: targetType === undefined ? undefined : targetType === "specific_user" ? (targetUserIds ?? []) : [],
     },
-    include: { targetUser: { select: { displayName: true, email: true, name: true } } },
     where: { id },
   });
 
