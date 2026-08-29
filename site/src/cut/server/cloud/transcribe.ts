@@ -74,21 +74,53 @@ function groupWordsIntoCues(
   return cues.filter((c) => c.end > c.start).sort((a, b) => a.start - b.start);
 }
 
+interface TranscribeExtras {
+  tagAudioEvents: boolean;
+  diarize: boolean;
+  noVerbatim: boolean;
+  keyterms: string[];
+}
+
+function readExtras(form: FormData): TranscribeExtras {
+  return {
+    diarize: form.get("diarize") === "true",
+    keyterms: form.getAll("keyterms").filter((v): v is string => typeof v === "string" && v.trim().length > 0),
+    noVerbatim: form.get("noVerbatim") === "true",
+    tagAudioEvents: form.get("tagAudioEvents") === "true",
+  };
+}
+
 export const transcribeCloud = {
   async transcribe(userId: string, req: Request): Promise<Response> {
     let audio: File | null = null;
+    let sourceUrl: string | null = null;
     let locale = "";
+    let extras: TranscribeExtras;
     try {
       const form = await req.formData();
       const a = form.get("audio");
       audio = a instanceof File ? a : null;
+      const u = form.get("sourceUrl");
+      sourceUrl = typeof u === "string" && u.trim() ? u.trim() : null;
       const l = form.get("locale");
       locale = typeof l === "string" ? l.trim() : "";
+      extras = readExtras(form);
     } catch {
       return err("Send multipart form data with an audio file.", 400);
     }
-    if (!audio || audio.size === 0) return err("Missing audio.", 400);
-    if (audio.size > MAX_AUDIO_BYTES) return err("Audio chunk too large.", 413);
+    if (!audio && !sourceUrl) return err("Provide an audio file or a source URL.", 400);
+    if (audio && sourceUrl) return err("Provide either an audio file or a source URL, not both.", 400);
+    if (audio) {
+      if (audio.size === 0) return err("Missing audio.", 400);
+      if (audio.size > MAX_AUDIO_BYTES) return err("Audio chunk too large.", 413);
+    }
+    if (sourceUrl) {
+      try {
+        new URL(sourceUrl);
+      } catch {
+        return err("That doesn't look like a valid URL.", 400);
+      }
+    }
 
     const apiKey = process.env.ELEVENLABS_API_KEY?.trim() ?? "";
     if (!apiKey) {
@@ -104,21 +136,30 @@ export const transcribeCloud = {
     });
     if (!credits.ok) return credits.response;
 
-    // Seconds of 16 kHz s16 mono after the 44-byte RIFF header — the clamp
-    // ceiling for cue times and the billed audio duration.
-    const audioSeconds = Math.max(1, (audio.size - 44) / 32000);
     // Scribe wants ISO-639-1/3; the client passes BCP-47 locales like "en-US".
     const languageCode = locale ? locale.split("-")[0] : undefined;
+    const requestExtras = {
+      diarize: extras.diarize || undefined,
+      keyterms: extras.keyterms.length ? extras.keyterms : undefined,
+      noVerbatim: extras.noVerbatim || undefined,
+      tagAudioEvents: extras.tagAudioEvents || undefined,
+    };
 
     let result: Awaited<ReturnType<ElevenLabsClient["speechToText"]["convert"]>>;
     try {
       const client = new ElevenLabsClient({ apiKey });
-      result = await client.speechToText.convert({
-        modelId: MODEL,
-        file: audio,
-        languageCode,
-      });
+      result = await client.speechToText.convert(
+        sourceUrl
+          ? { modelId: MODEL, sourceUrl, languageCode, ...requestExtras }
+          : { modelId: MODEL, file: audio!, languageCode, ...requestExtras }
+      );
     } catch (error) {
+      console.error("[transcribe] provider call failed", {
+        body: error instanceof ElevenLabsError ? error.body : undefined,
+        message: error instanceof Error ? error.message : String(error),
+        sourceUrl: sourceUrl ?? undefined,
+        statusCode: error instanceof ElevenLabsError ? error.statusCode : undefined,
+      });
       await recordFailedInferenceUsage({
         clientId: null,
         errorCode: "provider_error",
@@ -136,8 +177,22 @@ export const transcribeCloud = {
       return err("Transcription failed.", 502);
     }
 
-    // The call succeeded and used billable audio time; record and charge
-    // before judging the payload, exactly like the /api/inference routes.
+    if ("words" in result === false) {
+      // Multichannel/webhook response shapes aren't requested by this route.
+      return err("The transcription model returned an unreadable response — try again.", 502);
+    }
+
+    // Audio chunks arrive in a known fixed format, so their billed duration
+    // is estimated from the byte size before the call. A sourceUrl has no
+    // local bytes to estimate from — bill from what the provider reports
+    // instead, after the call, falling back to the transcript's own span so
+    // a real transcription is never billed zero.
+    const audioSeconds = audio
+      ? Math.max(1, (audio.size - 44) / 32000)
+      : result.audioDurationSecs && result.audioDurationSecs > 0
+        ? result.audioDurationSecs
+        : Math.max(1, ...result.words.map((w) => w.end ?? 0));
+
     try {
       await recordInferenceUsage({
         clientId: null,
@@ -155,10 +210,6 @@ export const transcribeCloud = {
       throw error;
     }
 
-    if ("words" in result === false) {
-      // Multichannel/webhook response shapes aren't requested by this route.
-      return err("The transcription model returned an unreadable response — try again.", 502);
-    }
     const cues = groupWordsIntoCues(result.words, audioSeconds);
     return Response.json({ cues });
   },

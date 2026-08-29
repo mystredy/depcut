@@ -106,16 +106,48 @@ interface WireCue {
   text: string;
 }
 
+/** Extra Scribe request options, beyond the base audio/locale that every
+ * chunk already sends. All optional — a caller that passes nothing gets
+ * today's exact request. */
+export interface TranscribeSettings {
+  tagAudioEvents?: boolean;
+  diarize?: boolean;
+  noVerbatim?: boolean;
+  keyterms?: string[];
+}
+
+function appendSettings(form: FormData, settings?: TranscribeSettings) {
+  if (!settings) return;
+  if (settings.tagAudioEvents) form.append("tagAudioEvents", "true");
+  if (settings.diarize) form.append("diarize", "true");
+  if (settings.noVerbatim) form.append("noVerbatim", "true");
+  for (const term of settings.keyterms ?? []) form.append("keyterms", term);
+}
+
+/** Thrown when a transcription is rejected for lack of inference credits —
+ * callers can catch this specifically to show an "Add credits" link, the
+ * same pattern tts.ts's NoCreditsError already establishes. */
+export class NoCreditsError extends Error {}
+
+async function readTranscribeError(res: Response): Promise<never> {
+  const body = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
+  const message = body?.message ?? body?.error ?? "Transcription failed.";
+  if (res.status === 402) throw new NoCreditsError(message);
+  throw new Error(message);
+}
+
 async function postChunk(
   samples: Float32Array,
   offset: number,
   locale: string | undefined,
-  forceCloud: boolean
+  forceCloud: boolean,
+  settings?: TranscribeSettings
 ): Promise<WireCue[]> {
   const form = new FormData();
   form.append("audio", new File([encodeWav(samples)], "chunk.wav", { type: "audio/wav" }));
   form.append("offset", String(round(offset)));
   if (locale) form.append("locale", locale);
+  appendSettings(form, settings);
   // The ambient backend (apiFetch) is whichever project is open — right for
   // the editor's own mic dictation and Subtitles panel, which want the local
   // engine when one's running. A caller with no project (nothing to be
@@ -125,10 +157,8 @@ async function postChunk(
     method: "POST",
     body: form,
   });
-  const body = (await res.json().catch(() => null)) as
-    | { cues?: WireCue[]; error?: string; message?: string }
-    | null;
-  if (!res.ok) throw new Error(body?.message ?? body?.error ?? "Transcription failed.");
+  if (!res.ok) await readTranscribeError(res);
+  const body = (await res.json().catch(() => null)) as { cues?: WireCue[] } | null;
   return (body?.cues ?? []).filter(
     (c) =>
       typeof c?.start === "number" &&
@@ -167,8 +197,10 @@ export async function transcribeSamples(
   samples: Float32Array,
   locale: string | undefined,
   isStale?: () => boolean,
-  forceCloud = false
+  options?: { forceCloud?: boolean; settings?: TranscribeSettings }
 ): Promise<SubtitleCue[] | null> {
+  const forceCloud = options?.forceCloud ?? false;
+  const settings = options?.settings;
   const duration = samples.length / RATE;
   const step = (CHUNK_SECONDS - OVERLAP_SECONDS) * RATE;
   const chunks: { slice: Float32Array; offset: number; last: boolean }[] = [];
@@ -189,7 +221,7 @@ export async function transcribeSamples(
       const i = next++;
       if (i >= chunks.length || failed !== undefined || isStale?.()) return;
       try {
-        results[i] = await postChunk(chunks[i].slice, chunks[i].offset, locale, forceCloud);
+        results[i] = await postChunk(chunks[i].slice, chunks[i].offset, locale, forceCloud, settings);
       } catch (error) {
         failed = error;
         return;
@@ -222,13 +254,10 @@ export async function transcribeSamples(
   return cues.sort((a, b) => a.start - b.start);
 }
 
-/** Transcribe a finished mic recording: decode it, downmix/resample to the
- * wire format, run the chunk pipeline, and join the cue texts. */
-export async function cloudTranscribeRecording(
-  blob: Blob,
-  locale?: string,
-  forceCloud = false
-): Promise<string> {
+/** Decode an arbitrary audio Blob and downmix/resample it to the transcriber's
+ * mono 16 kHz wire format — shared by every caller that starts from a
+ * recording, upload, or other in-memory clip rather than a project timeline. */
+async function decodeToMono(blob: Blob): Promise<Float32Array> {
   const bytes = await blob.arrayBuffer();
   // Decode at the device rate, then resample/downmix through an offline
   // render — decodeAudioData resamples to its context's rate, but the mono
@@ -238,7 +267,7 @@ export async function cloudTranscribeRecording(
   try {
     decoded = await probe.decodeAudioData(bytes);
   } catch {
-    throw new Error("Could not read the recording's audio.");
+    throw new Error("Could not read that clip's audio.");
   } finally {
     void probe.close().catch(() => {});
   }
@@ -247,10 +276,67 @@ export async function cloudTranscribeRecording(
   src.buffer = decoded;
   src.connect(ctx.destination);
   src.start();
-  const mono = (await ctx.startRendering()).getChannelData(0);
-  const cues = await transcribeSamples(mono, locale, undefined, forceCloud);
+  return (await ctx.startRendering()).getChannelData(0);
+}
+
+/** Transcribe a finished mic recording: decode it, downmix/resample to the
+ * wire format, run the chunk pipeline, and join the cue texts. */
+export async function cloudTranscribeRecording(
+  blob: Blob,
+  locale?: string,
+  forceCloud = false
+): Promise<string> {
+  const mono = await decodeToMono(blob);
+  const cues = await transcribeSamples(mono, locale, undefined, { forceCloud });
   return (cues ?? [])
     .map((c) => c.text)
     .join(" ")
     .trim();
+}
+
+/** Transcribe any audio/video Blob (an upload or a finished recording) and
+ * keep the timed cues, unlike cloudTranscribeRecording which only returns
+ * the joined text. Always routes through the hosted transcriber — callers
+ * are project-less pages with no local engine to prefer. */
+export async function transcribeBlob(
+  blob: Blob,
+  locale: string | undefined,
+  settings?: TranscribeSettings,
+  forceCloud = false
+): Promise<SubtitleCue[] | null> {
+  const mono = await decodeToMono(blob);
+  return transcribeSamples(mono, locale, undefined, { forceCloud, settings });
+}
+
+/** Transcribe directly from a URL — a hosted media file, or a YouTube/TikTok
+ * link — with no local audio to upload; the hosted transcriber fetches it
+ * itself. One request, no chunking (there's no local drift to compensate for
+ * across a stitched multi-chunk upload). */
+export async function transcribeSourceUrl(
+  sourceUrl: string,
+  locale: string | undefined,
+  settings?: TranscribeSettings
+): Promise<SubtitleCue[]> {
+  const form = new FormData();
+  form.append("sourceUrl", sourceUrl);
+  if (locale) form.append("locale", locale);
+  appendSettings(form, settings);
+  const res = await cloudBackend.fetch("/api/cut/transcribe", { method: "POST", body: form });
+  if (!res.ok) await readTranscribeError(res);
+  const body = (await res.json().catch(() => null)) as { cues?: WireCue[] } | null;
+  return (body?.cues ?? [])
+    .filter(
+      (c) =>
+        typeof c?.start === "number" &&
+        typeof c?.end === "number" &&
+        typeof c?.text === "string" &&
+        Number.isFinite(c.start) &&
+        Number.isFinite(c.end)
+    )
+    .map((c) => {
+      const text = c.text.trim();
+      return { id: uid(), start: round(c.start), end: round(c.end), text, words: interpolateWords(text, c.start, c.end) };
+    })
+    .filter((c) => c.text && c.end > c.start)
+    .sort((a, b) => a.start - b.start);
 }
