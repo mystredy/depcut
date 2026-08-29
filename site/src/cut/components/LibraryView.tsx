@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Cloud,
+  EllipsisVertical,
   Film,
   FolderOpen,
   FolderPlus,
@@ -19,6 +20,12 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LiveElapsed } from "@/cut/components/Elapsed";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -457,7 +464,7 @@ export function LibraryView() {
         </button>
       ) : shown.length === 0 && uploading === 0 ? null : (
         <Marquee
-          className="grid min-h-[40vh] grid-cols-[repeat(auto-fill,minmax(160px,1fr))] content-start gap-4"
+          className="grid min-h-[40vh] grid-cols-[repeat(auto-fill,minmax(80px,1fr))] content-start gap-4"
           selected={selected}
           setSelected={setSelected}
         >
@@ -666,7 +673,7 @@ export function LibraryCard({
           />
         )}
         {a.type === "video" && (
-          <span className="absolute right-1.5 bottom-1.5 rounded-md bg-black/65 px-1.5 py-0.5 font-mono text-[10px] text-white tabular-nums">
+          <span className="absolute right-1.5 bottom-1.5 font-mono text-[9px] text-white tabular-nums [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]">
             {formatTime(a.duration)}
           </span>
         )}
@@ -678,10 +685,10 @@ export function LibraryCard({
                 ? // Clear of the play circle, matching the face's duration pill.
                   "bottom-3 left-12 rounded-md bg-[#2b4e42] px-1.5 py-0.5 text-[10px] text-[#d6eddf]"
                 : cn(
-                    "bottom-1.5 left-1.5 rounded-md bg-black/65 px-1.5 py-0.5 text-[10px] text-white",
+                    "bottom-1.5 left-1.5 text-[9px] text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]",
                     // The + button only occupies the corner on hover; sit
                     // flush at rest and slide over once it appears.
-                    onUse && "transition-[left] group-hover:left-9"
+                    onUse && "transition-[left] group-hover:left-8"
                   )
             )}
           >
@@ -705,42 +712,36 @@ export function LibraryCard({
             <Plus className="size-3.5" />
           </button>
         )}
-        {bothShelves && (
-          <ShelfBadge
-            residency={a.residency}
-            offline={offline}
-            className={cn(
-              "absolute top-2 right-2 transition-opacity",
-              offline ? "text-muted-foreground" : "text-white/85",
-              // The delete button takes this corner on hover.
-              onDelete && "group-hover:opacity-0"
-            )}
-          />
+        {(bothShelves || onDelete) && (
+          <div className="absolute top-1.5 right-1.5">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                onClick={(e) => e.stopPropagation()}
+                aria-label="Card options"
+                className="grid size-6 place-items-center rounded-[min(var(--radius-md),10px)] bg-black/40 text-white transition-colors hover:bg-black/60"
+              >
+                <EllipsisVertical className="size-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                {bothShelves && (
+                  <div className="flex items-center gap-2 px-1.5 py-1 text-xs text-muted-foreground">
+                    {a.residency === "cloud" ? <Cloud className="size-3.5" /> : <Laptop className="size-3.5" />}
+                    {offline ? "On this Mac — open the Depcut app to use it" : RESIDENCY_LABEL[a.residency]}
+                  </div>
+                )}
+                {onDelete && (
+                  <DropdownMenuItem variant="destructive" onClick={() => onDelete()}>
+                    <Trash2 /> Remove from library
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         )}
-        <div className="absolute top-1.5 right-1.5 flex gap-1">
-          {onDelete && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label="Remove from library"
-              className="bg-black/40 text-white hover:bg-black/60 hover:text-white"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete();
-              }}
-            >
-              <Trash2 />
-            </Button>
-          )}
-        </div>
         <CopyNameLabel
           name={a.name}
           dark={a.type === "audio"}
-          className={cn(
-            "absolute top-1.5 left-1.5 max-w-[70%] px-2 py-1 text-[11px] font-medium text-white transition-[max-width] group-hover:max-w-[calc(100%-2.75rem)]",
-            // The emerald fill is its own backdrop; thumbnails need the scrim pill.
-            a.type !== "audio" && "rounded-lg bg-black/55 backdrop-blur-sm"
-          )}
+          className="absolute top-1.5 left-1.5 max-w-[70%] px-1 py-0.5 text-[10px] font-medium text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.85)] transition-[max-width] group-hover:max-w-[calc(100%-2.75rem)]"
         />
       </div>
     </div>
