@@ -672,29 +672,26 @@ export function LibraryCard({
             durationClassName={!!onUse && "transition-opacity group-hover:opacity-0"}
           />
         )}
-        {a.type === "video" && (
-          <span className="absolute right-1.5 bottom-1.5 font-mono text-[9px] text-white tabular-nums [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]">
-            {formatTime(a.duration)}
-          </span>
-        )}
-        {sizeBytes != null && (
-          <span
-            className={cn(
-              "absolute font-mono tabular-nums",
-              a.type === "audio"
-                ? // Clear of the play circle, matching the face's duration pill.
-                  "bottom-3 left-12 rounded-md bg-[#2b4e42] px-1.5 py-0.5 text-[10px] text-[#d6eddf]"
-                : cn(
-                    "bottom-1.5 left-1.5 text-[9px] text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]",
-                    // The + button only occupies the corner on hover; sit
-                    // flush at rest and slide over once it appears.
-                    onUse && "transition-[left] group-hover:left-8"
-                  )
+        {a.type === "audio"
+          ? sizeBytes != null && (
+              // Clear of the play circle, matching the face's duration pill.
+              <span className="absolute bottom-3 left-12 rounded-md bg-[#2b4e42] px-1.5 py-0.5 font-mono text-[10px] text-[#d6eddf] tabular-nums">
+                {formatBytes(sizeBytes)}
+              </span>
+            )
+          : (sizeBytes != null || a.type === "video") && (
+              <div
+                className={cn(
+                  "absolute bottom-1.5 left-1.5 flex items-center gap-1 font-mono text-[9px] text-white tabular-nums [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]",
+                  // The + button only occupies the corner on hover; sit
+                  // flush at rest and slide over once it appears.
+                  onUse && "transition-[left] group-hover:left-8"
+                )}
+              >
+                {sizeBytes != null && <span>{formatBytes(sizeBytes)}</span>}
+                {a.type === "video" && <span>{formatTime(a.duration)}</span>}
+              </div>
             )}
-          >
-            {formatBytes(sizeBytes)}
-          </span>
-        )}
         {onUse && (
           <button
             aria-label="Add to timeline"
@@ -718,9 +715,9 @@ export function LibraryCard({
               <DropdownMenuTrigger
                 onClick={(e) => e.stopPropagation()}
                 aria-label="Card options"
-                className="grid size-6 place-items-center rounded-[min(var(--radius-md),10px)] bg-black/40 text-white transition-colors hover:bg-black/60"
+                className="grid size-6 place-items-center rounded-[min(var(--radius-md),10px)] text-white transition-transform hover:scale-110"
               >
-                <EllipsisVertical className="size-3.5" />
+                <EllipsisVertical className="size-3.5 drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                 {bothShelves && (
@@ -738,12 +735,11 @@ export function LibraryCard({
             </DropdownMenu>
           </div>
         )}
-        <CopyNameLabel
-          name={a.name}
-          dark={a.type === "audio"}
-          className="absolute top-1.5 left-1.5 max-w-[70%] px-1 py-0.5 text-[10px] font-medium text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.85)] transition-[max-width] group-hover:max-w-[calc(100%-2.75rem)]"
-        />
       </div>
+      <CopyNameLabel
+        name={a.name}
+        className="mt-1 px-0.5 text-[10px] font-medium text-muted-foreground"
+      />
     </div>
   );
 }
