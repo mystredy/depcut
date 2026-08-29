@@ -11,18 +11,23 @@ import {
 /** The shape the next generated clip is composed in — landscape or portrait. */
 export type VideoAspect = "16:9" | "9:16";
 
+/** A render's resolution — the option set each tier accepts differs (see
+ * GeneratePanel's RESOLUTION_OPTIONS), so this union just spans all of them. */
+export type VideoResolution = "360p" | "720p" | "1080p";
+
 export const VIDEO_ASPECT_LABEL: Record<VideoAspect, string> = {
   "16:9": "Landscape (16:9)",
   "9:16": "Portrait (9:16)",
 };
 
 /** A selectable video model. Every tier takes text plus an optional seed or
- * reference images and returns the whole clip with audio in one pass — the
- * model picks the length, so there is no duration or resolution knob. Omni
- * runs on its own Interactions-API provider; the three Veo 3.1 tiers share
- * the generateVideos provider and trade render time for quality at different
- * price points. Adding a tier here plus its price (provider-pricing.ts) is
- * the whole client-side change. */
+ * reference images and returns the whole clip with audio in one pass, plus a
+ * resolution and duration pick. Veo's are documented API parameters; Omni's
+ * ride the same undocumented field its task already does and may go ignored
+ * (see gemini-omni-video.ts). Omni runs on its own Interactions-API provider;
+ * the three Veo 3.1 tiers share the generateVideos provider and trade render
+ * time for quality at different price points. Adding a tier here plus its
+ * price (provider-pricing.ts) is the whole client-side change. */
 export type VideoTier = "omni" | "veo-lite" | "veo-fast" | "veo-quality";
 
 export interface VideoModelOption {

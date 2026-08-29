@@ -38,7 +38,12 @@ import { useEditor } from "@/cut/lib/store";
 import { nearestAspect } from "@/cut/lib/types";
 import { useLocalPref } from "@/cut/lib/uiState";
 import { useVideoGen, type VideoRefMode } from "@/cut/lib/videoGen";
-import { VIDEO_MODELS, type VideoAspect, type VideoModelOption } from "@/cut/lib/videoModels";
+import {
+  VIDEO_MODELS,
+  type VideoAspect,
+  type VideoModelOption,
+  type VideoResolution,
+} from "@/cut/lib/videoModels";
 import { cn } from "@/lib/utils";
 import { AddRefButton, CopyHandlePill, MentionTextarea, RefChips } from "./AssetRefs";
 import { DictationControl } from "./MicDictation";
@@ -69,16 +74,37 @@ const ASPECT_OPTIONS: { value: VideoAspect; label: string; icon: ComponentType<{
   { value: "16:9", label: "16:9", icon: RectangleHorizontal },
 ];
 
-const RESOLUTION_OPTIONS: { value: "720p" | "1080p"; label: string }[] = [
-  { value: "720p", label: "720p" },
-  { value: "1080p", label: "1080p" },
-];
+// Veo's set is confirmed against its published API (720p/1080p; 4, 6, or 8
+// second clips). Omni's has no documented resolution or duration parameter
+// at all — the request rides on the same best-effort, undocumented field its
+// task already does (see gemini-omni-video.ts) and may simply be ignored.
+const RESOLUTION_OPTIONS: Record<
+  VideoModelOption["provider"],
+  { value: VideoResolution; label: string }[]
+> = {
+  "gemini-omni": [
+    { value: "360p", label: "360p" },
+    { value: "720p", label: "720p" },
+  ],
+  "gemini-veo": [
+    { value: "720p", label: "720p" },
+    { value: "1080p", label: "1080p" },
+  ],
+};
 
-const DURATION_OPTIONS: { value: 4 | 6 | 8; label: string }[] = [
-  { value: 4, label: "4s" },
-  { value: 6, label: "6s" },
-  { value: 8, label: "8s" },
-];
+const DURATION_OPTIONS: Record<VideoModelOption["provider"], { value: number; label: string }[]> = {
+  "gemini-omni": [
+    { value: 4, label: "4s" },
+    { value: 6, label: "6s" },
+    { value: 8, label: "8s" },
+    { value: 10, label: "10s" },
+  ],
+  "gemini-veo": [
+    { value: 4, label: "4s" },
+    { value: 6, label: "6s" },
+    { value: 8, label: "8s" },
+  ],
+};
 
 const COUNT_OPTIONS: { value: 1 | 2 | 3 | 4; label: string }[] = [
   { value: 1, label: "x1" },
@@ -158,17 +184,18 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
     "omni",
     (v) => VIDEO_MODELS.some((m) => m.tier === v)
   );
-  // Resolution and duration are Veo-only knobs — Omni's API has neither, so
-  // these prefs simply go unread when Omni is the selected tier.
-  const [resolution, setResolution] = useLocalPref<"720p" | "1080p">(
-    "cut-gen-veo-resolution",
+  // Every tier gets Resolution and Duration controls; the option set (and
+  // whether the provider actually honors the pick) differs — see
+  // RESOLUTION_OPTIONS/DURATION_OPTIONS above.
+  const [resolution, setResolution] = useLocalPref<VideoResolution>(
+    "cut-gen-resolution",
     "720p",
-    (v) => v === "720p" || v === "1080p"
+    (v) => v === "360p" || v === "720p" || v === "1080p"
   );
-  const [durationSeconds, setDurationSeconds] = useLocalPref<4 | 6 | 8>(
-    "cut-gen-veo-duration",
+  const [durationSeconds, setDurationSeconds] = useLocalPref<number>(
+    "cut-gen-duration",
     8,
-    (v) => v === 4 || v === 6 || v === 8
+    (v) => typeof v === "number"
   );
   // How many independent takes one click renders — plain repeated submits
   // (no provider batch parameter), so it works the same for every tier and
@@ -180,10 +207,18 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
   );
 
   // Every knob renders from — and is clamped to — what the selected model
-  // supports, so a stored pick from another model can never reach the API.
+  // supports, so a stored pick from another model (or tier) can never reach
+  // the API with a value it doesn't offer.
   const model = VIDEO_MODELS.find((m) => m.tier === tier) ?? VIDEO_MODELS[0];
   const effAspect = nearestAspect(aspect, model.aspects);
-  const isVeo = model.provider === "gemini-veo";
+  const resolutionOptions = RESOLUTION_OPTIONS[model.provider] ?? RESOLUTION_OPTIONS["gemini-omni"];
+  const durationOptions = DURATION_OPTIONS[model.provider] ?? DURATION_OPTIONS["gemini-omni"];
+  const effResolution = resolutionOptions.some((o) => o.value === resolution)
+    ? resolution
+    : resolutionOptions[0].value;
+  const effDurationSeconds = durationOptions.some((o) => o.value === durationSeconds)
+    ? durationSeconds
+    : durationOptions[durationOptions.length - 1].value;
 
   // Default the shape to the project's own orientation when the panel opens,
   // same as the image panel (the user can still pick the other one). A custom
@@ -209,7 +244,8 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
       void useGenerate.getState().generateVideo(projectId, composed, {
         tier,
         aspect: effAspect,
-        ...(isVeo ? { resolution, durationSeconds } : {}),
+        resolution: effResolution,
+        durationSeconds: effDurationSeconds,
         ...(asIngredients
           ? // Identity anchors: the prompt rides as written, no compose rewrite.
             { referenceImages: seedRefs, composeRefs: false }
@@ -299,6 +335,8 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
             <AddRefButton
               onPick={(ref) => useVideoGen.getState().addRef(ref)}
               onUploadFiles={attachFiles}
+              prompt={prompt}
+              onPromptChange={(v) => useVideoGen.getState().setPrompt(v)}
               className="bg-background/70 backdrop-blur-sm"
             />
             <DictationControl
@@ -344,24 +382,21 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
           onChange={setTier}
         />
 
-        {/* Resolution and duration are Veo-only: Omni's API has neither
-            knob, so these only show once a Veo tier is picked. */}
-        {isVeo && (
-          <SegRow
-            title="Resolution"
-            value={resolution}
-            onChange={setResolution}
-            options={RESOLUTION_OPTIONS}
-          />
-        )}
-        {isVeo && (
-          <SegRow
-            title="Duration"
-            value={durationSeconds}
-            onChange={setDurationSeconds}
-            options={DURATION_OPTIONS}
-          />
-        )}
+        {/* Resolution and duration — the option set (and whether the
+            provider actually honors the pick) follows the selected model;
+            see RESOLUTION_OPTIONS/DURATION_OPTIONS above. */}
+        <SegRow
+          title="Resolution"
+          value={effResolution}
+          onChange={setResolution}
+          options={resolutionOptions}
+        />
+        <SegRow
+          title="Duration"
+          value={effDurationSeconds}
+          onChange={setDurationSeconds}
+          options={durationOptions}
+        />
 
         {/* How many independent takes to render at once. */}
         <SegRow title="Number of takes" value={count} onChange={setCount} options={COUNT_OPTIONS} />

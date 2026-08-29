@@ -335,11 +335,19 @@ export function RefChips({
 export function AddRefButton({
   onPick,
   onUploadFiles,
+  prompt,
+  onPromptChange,
   accept = "image/*,video/*",
   className,
 }: {
   onPick: (ref: AssetRef) => void;
   onUploadFiles: (files: File[]) => void;
+  /** The composer's current text and setter. Picking a Media or Library item
+   * inserts its @mention token here too — the same as picking one from the
+   * `@` autocomplete does — so the reference reads in the prompt, not just
+   * as an attached chip the model has to be told about separately. */
+  prompt: string;
+  onPromptChange: (v: string) => void;
   accept?: string;
   className?: string;
 }) {
@@ -347,6 +355,12 @@ export function AddRefButton({
   const media = candidates.filter((c) => c.scope === "project");
   const library = candidates.filter((c) => c.scope === "library");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const pick = (ref: AssetRef) => {
+    onPick(ref);
+    const token = refToken(ref);
+    onPromptChange(prompt.trim() ? `${prompt.trimEnd()} ${token} ` : `${token} `);
+  };
 
   return (
     <>
@@ -369,7 +383,7 @@ export function AddRefButton({
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Media</DropdownMenuLabel>
               {media.map((ref) => (
-                <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => onPick(ref)}>
+                <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => pick(ref)}>
                   <RefThumb item={ref} className="size-6 rounded" />
                   <span className="truncate">{ref.name}</span>
                 </DropdownMenuItem>
@@ -381,7 +395,7 @@ export function AddRefButton({
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Library</DropdownMenuLabel>
               {library.map((ref) => (
-                <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => onPick(ref)}>
+                <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => pick(ref)}>
                   <RefThumb item={ref} className="size-6 rounded" />
                   <span className="truncate">{ref.name}</span>
                 </DropdownMenuItem>

@@ -23,7 +23,7 @@ import { useGenNotify } from "./genNotify";
 import { IMAGE_ASPECTS, useImageGen } from "./imageGen";
 import { useEditor } from "./store";
 import { mediaSlug, nearestAspect, type MediaAsset, type RenderRecord } from "./types";
-import { aspectFramingNote, videoModel, type VideoTier } from "./videoModels";
+import { aspectFramingNote, videoModel, type VideoResolution, type VideoTier } from "./videoModels";
 import { walkLadder, type VideoAttempt } from "./videoLadder";
 
 // AI generation jobs, held outside the panels so a tab switch (which unmounts
@@ -161,10 +161,12 @@ export interface VideoGenOptions {
   tier?: VideoTier;
   /** Composition shape; defaults to the project's orientation. */
   aspect?: "16:9" | "9:16";
-  /** Veo tiers only — Omni has no resolution knob, so this is ignored there. */
-  resolution?: "720p" | "1080p";
-  /** Veo tiers only (4, 6, or 8) — Omni's clip length is fixed, so this is
-   * ignored there. */
+  /** Veo's is a documented API parameter (720p/1080p); Omni has no
+   * documented resolution knob, so this rides on its best-effort field and
+   * may be silently ignored (see gemini-omni-video.ts). */
+  resolution?: VideoResolution;
+  /** Veo's is documented (4, 6, or 8 seconds). Omni's clip length has no
+   * documented knob either — same best-effort caveat as resolution above. */
   durationSeconds?: number;
   /** What the render must avoid — the wrong medium's tells, letterbox bars,
    * on-screen text. The model has no negative-prompt parameter, so the
