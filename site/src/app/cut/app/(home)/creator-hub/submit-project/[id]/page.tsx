@@ -682,6 +682,12 @@ export default function SubmitProjectEditorPage() {
     if (selectedWorkspaceId === wsId) updateSelectedWorkspaceId("");
   };
 
+  // Submitted straight from the editor (TopBar's "Submit to marketplace")
+  // carries a projectId, pulling video/thumbnail from that project instead
+  // of an upload — the same signal marks the source as internal, so the
+  // remote-workspace pipeline below (built for outside editors bringing in
+  // their own cut) doesn't apply.
+  const isInternalSource = Boolean(submission?.projectId);
   const connectedWorkspaces = workspaces.filter((w) => w.connected);
   const isAlphanumeric = /^[a-zA-Z0-9]+$/.test(couponCode.trim());
   const startsWithTwoLetters = /^[a-zA-Z]{2}/.test(couponCode.trim());
@@ -700,7 +706,7 @@ export default function SubmitProjectEditorPage() {
       category &&
       hasVideo &&
       hasThumbnail &&
-      selectedWorkspaceId &&
+      (isInternalSource || selectedWorkspaceId) &&
       (submissionType === "Inspire" ? inspirationLink.trim() : taskReference.trim()) &&
       vocalScript.trim() &&
       checkedConfirm &&
@@ -1133,7 +1139,10 @@ export default function SubmitProjectEditorPage() {
           </div>
           )}
 
-          {/* Linked Collaboration Pipeline */}
+          {/* Linked Collaboration Pipeline — only for submissions brought in from
+              outside the app; a project submitted from the editor itself has
+              no outside workspace to reconcile with. */}
+          {!isInternalSource && (
           <div className="space-y-3 rounded-2xl border border-dashed p-4">
             <div className="flex items-center justify-between">
               <Label className="flex items-center gap-1.5">
@@ -1203,6 +1212,7 @@ export default function SubmitProjectEditorPage() {
               </div>
             )}
           </div>
+          )}
 
           {isProMode && (
             <div className="space-y-4 rounded-2xl border border-primary/20 bg-primary/5 p-4">
