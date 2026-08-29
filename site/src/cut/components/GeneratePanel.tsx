@@ -60,6 +60,7 @@ import { cardIconButton } from "./iconButton";
 import { PillSelect } from "./PillSelect";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { StockVideosPanel } from "./StockVideosPanel";
+import { COUNT_OPTIONS, DURATION_OPTIONS, RESOLUTION_OPTIONS, SegRow } from "./VideoGenControls";
 
 // The generate-video panel: the Video tab's whole column — the generate form,
 // then (in the same scroll) the stock-clip browser below it. Clicking a stock
@@ -81,88 +82,6 @@ const ASPECT_OPTIONS: { value: VideoAspect; label: string; icon: ComponentType<{
   { value: "16:9", label: "16:9", icon: RectangleHorizontal },
 ];
 
-// Veo's set is confirmed against its published API (720p/1080p; 4, 6, or 8
-// second clips). Omni's has no documented resolution or duration parameter
-// at all — the request rides on the same best-effort, undocumented field its
-// task already does (see gemini-omni-video.ts) and may simply be ignored.
-const RESOLUTION_OPTIONS: Record<
-  VideoModelOption["provider"],
-  { value: VideoResolution; label: string }[]
-> = {
-  "gemini-omni": [
-    { value: "360p", label: "360p" },
-    { value: "720p", label: "720p" },
-  ],
-  "gemini-veo": [
-    { value: "720p", label: "720p" },
-    { value: "1080p", label: "1080p" },
-  ],
-};
-
-const DURATION_OPTIONS: Record<VideoModelOption["provider"], { value: number; label: string }[]> = {
-  "gemini-omni": [
-    { value: 4, label: "4s" },
-    { value: 6, label: "6s" },
-    { value: 8, label: "8s" },
-    { value: 10, label: "10s" },
-  ],
-  "gemini-veo": [
-    { value: 4, label: "4s" },
-    { value: 6, label: "6s" },
-    { value: 8, label: "8s" },
-  ],
-};
-
-const COUNT_OPTIONS: { value: 1 | 2 | 3 | 4; label: string }[] = [
-  { value: 1, label: "x1" },
-  { value: 2, label: "x2" },
-  { value: 3, label: "x3" },
-  { value: 4, label: "x4" },
-];
-
-/** A row of equal-width segments — the aspect/resolution/duration/count knobs
- * below the composer. One selected value, click to switch; an icon is
- * optional per option. */
-function SegRow<T extends string | number>({
-  title,
-  value,
-  onChange,
-  options,
-  disabled,
-}: {
-  title: string;
-  value: T;
-  onChange: (v: T) => void;
-  options: { value: T; label: string; icon?: ComponentType<{ className?: string }> }[];
-  disabled?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex shrink-0 gap-1 rounded-lg bg-muted p-1",
-        disabled && "pointer-events-none opacity-50"
-      )}
-      title={title}
-    >
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          onClick={() => onChange(o.value)}
-          className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-[12px] font-medium transition-colors",
-            value === o.value
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          {o.icon && <o.icon className="size-3.5" />}
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 export function GenerateVideoPanel({ projectId }: { projectId: string }) {
   const readOnly = useEditor((s) => s.readOnly);
