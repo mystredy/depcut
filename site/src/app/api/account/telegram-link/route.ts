@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { withDonkeyAuth } from "@/lib/donkey-api-auth";
 import { prisma } from "@/lib/prisma";
@@ -62,11 +63,40 @@ export const POST = withDonkeyAuth(async (request) => {
   });
 });
 
-// Unlink — clears the chat id/username so no more DMs go out and the
-// Preferences card falls back to showing "Link bot" again.
+const unlinkSchema = z.object({ code: z.string().trim().min(1) }).strict();
+
+// Unlink — requires the code POST /unlink-code sent to the linked chat, so
+// removing the link proves control of that chat rather than just the
+// browser session. Clears the chat id/username so no more DMs go out and
+// the Preferences card falls back to showing "Link bot" again.
 export const DELETE = withDonkeyAuth(async (request) => {
+  const parsed = unlinkSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request", message: "A confirmation code is required." }, { status: 400 });
+  }
+
+  const user = await prisma.user.findUnique({
+    select: { telegramUnlinkCode: true, telegramUnlinkCodeExpiresAt: true },
+    where: { id: request.donkey.userId },
+  });
+  const valid =
+    user?.telegramUnlinkCode === parsed.data.code &&
+    user.telegramUnlinkCodeExpiresAt !== null &&
+    user.telegramUnlinkCodeExpiresAt > new Date();
+  if (!valid) {
+    return NextResponse.json(
+      { error: "Invalid code", message: "That code is wrong or expired — send a new one and try again." },
+      { status: 400 },
+    );
+  }
+
   await prisma.user.update({
-    data: { telegramChatId: null, telegramUsername: null },
+    data: {
+      telegramChatId: null,
+      telegramUnlinkCode: null,
+      telegramUnlinkCodeExpiresAt: null,
+      telegramUsername: null,
+    },
     where: { id: request.donkey.userId },
   });
   return NextResponse.json({ ok: true });

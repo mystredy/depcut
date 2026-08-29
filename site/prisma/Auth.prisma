@@ -15,6 +15,12 @@ model User {
   // TelegramLinkToken for this account. telegramUsername is display-only.
   telegramChatId   String? @unique
   telegramUsername String?
+  // Pending confirmation for unlinking Telegram: set when "Unlink" sends a
+  // code to the linked chat, cleared once redeemed or overwritten by a
+  // fresh unlink request. Confirms the unlink came from whoever controls
+  // the linked Telegram chat, not just whoever's signed into the browser.
+  telegramUnlinkCode          String?
+  telegramUnlinkCodeExpiresAt DateTime?
   telegramLinkTokens TelegramLinkToken[]
   notificationPreferences UserNotificationPreferences?
   createdAt     DateTime  @default(now())

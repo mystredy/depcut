@@ -36,10 +36,23 @@ export function useCreateTelegramLink() {
   });
 }
 
+// Sends a 6-digit code to the linked Telegram chat — required before
+// useUnlinkTelegram will succeed.
+export function useSendUnlinkCode() {
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<{ sent: true }>("/api/account/telegram-link/unlink-code", { method: "POST" }),
+  });
+}
+
 export function useUnlinkTelegram() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => apiFetch<{ ok: true }>("/api/account/telegram-link", { method: "DELETE" }),
+    mutationFn: (code: string) =>
+      apiFetch<{ ok: true }>("/api/account/telegram-link", {
+        body: JSON.stringify({ code }),
+        method: "DELETE",
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: telegramLinkQueryKey }),
   });
 }
