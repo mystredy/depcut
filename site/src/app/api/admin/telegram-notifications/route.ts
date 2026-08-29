@@ -36,6 +36,7 @@ const updateSchema = z
     notifyWithdrawals: z.boolean().optional(),
     notifySupportTickets: z.boolean().optional(),
     notifySignups: z.boolean().optional(),
+    notifySystemErrors: z.boolean().optional(),
   })
   .strict();
 

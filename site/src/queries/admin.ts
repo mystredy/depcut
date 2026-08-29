@@ -98,6 +98,7 @@ export type AdminTelegramNotificationSettings = {
   notifyWithdrawals: boolean;
   notifySupportTickets: boolean;
   notifySignups: boolean;
+  notifySystemErrors: boolean;
   updatedAt: string;
 };
 

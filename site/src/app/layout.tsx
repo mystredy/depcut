@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 import { QueryProvider } from "@/queries/QueryProvider";
+import { ErrorReporter } from "./_components/ErrorReporter";
 import { PostHogProvider } from "./_components/PostHogProvider";
 
 const geistSans = Geist({
@@ -32,7 +33,10 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <PostHogProvider>
-          <QueryProvider>{children}</QueryProvider>
+          <QueryProvider>
+            {children}
+            <ErrorReporter />
+          </QueryProvider>
         </PostHogProvider>
       </body>
     </html>
