@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { ArrowUp, Loader2, Plus, X } from "lucide-react";
+import { ArrowUp, Loader2, Plus, SlidersHorizontal, X } from "lucide-react";
 import { useAssetDrop } from "@/cut/lib/assetRef";
 import { seedNewProjectDoc } from "@/cut/lib/docCache";
 import { useGenerate } from "@/cut/lib/generate";
@@ -77,6 +77,10 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
     (v) => v === 1 || v === 2 || v === 3 || v === 4
   );
   const [busy, setBusy] = useState(false);
+  // Every knob past the prompt lives behind one toggle, collapsed by default
+  // — the composer reads as a plain "describe it and go" box until someone
+  // wants to dig into the details.
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Clamped to the picked model's own set, same as the editor's Video tab —
   // a Veo-only pick (say, 1080p) never leaks into an Omni request or vice
@@ -94,6 +98,17 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
   // Ingredient slots are capped the same way the editor caps identity
   // anchors — the registry's per-model reference-image limit.
   const ingredientFilesCapped = ingredientFiles.slice(0, model.maxReferenceImages);
+  // What the collapsed settings toggle reads while closed, so the current
+  // picks stay visible without opening the panel.
+  const settingsSummary = [
+    model.model,
+    VIDEO_ASPECT_LABEL[effAspect].split(" ")[0],
+    effResolution,
+    `${effDurationSeconds}s`,
+    count > 1 ? `x${count}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const go = async () => {
     const text = prompt.trim();
@@ -173,66 +188,85 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
         className="min-h-[72px] w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
       />
       <div className="flex flex-col gap-2 px-3 pb-3">
-        <SegRow
-          title="How references are used"
-          value={refMode}
-          onChange={setRefMode}
-          options={REF_MODE_OPTIONS}
-        />
-        {refMode === "frames" ? (
-          <div className="flex items-center gap-1.5 px-0.5">
-            <FileSlot label="Start" file={startFile} onChange={setStartFile} />
-            <span className="text-muted-foreground">⇄</span>
-            <FileSlot label="End" file={endFile} onChange={setEndFile} />
-          </div>
-        ) : (
-          <IngredientRow
-            files={ingredientFilesCapped}
-            onChange={setIngredientFiles}
-            max={model.maxReferenceImages}
-          />
+        {settingsOpen && (
+          <>
+            <SegRow
+              title="How references are used"
+              value={refMode}
+              onChange={setRefMode}
+              options={REF_MODE_OPTIONS}
+            />
+            {refMode === "frames" ? (
+              <div className="flex items-center gap-1.5 px-0.5">
+                <FileSlot label="Start" file={startFile} onChange={setStartFile} />
+                <span className="text-muted-foreground">⇄</span>
+                <FileSlot label="End" file={endFile} onChange={setEndFile} />
+              </div>
+            ) : (
+              <IngredientRow
+                files={ingredientFilesCapped}
+                onChange={setIngredientFiles}
+                max={model.maxReferenceImages}
+              />
+            )}
+            <div className="flex items-center gap-1.5">
+              <PillSelect
+                title="Model"
+                value={tier}
+                display={model.model}
+                options={VIDEO_MODELS.map((m) => ({ value: m.tier, label: m.model }))}
+                onChange={setTier}
+                className="py-1 pr-2 pl-3 text-[12px]"
+              />
+              <PillSelect
+                title="Aspect ratio"
+                value={effAspect}
+                display={VIDEO_ASPECT_LABEL[effAspect].split(" ")[0]}
+                options={model.aspects.map((a) => ({
+                  value: a,
+                  label: VIDEO_ASPECT_LABEL[a],
+                }))}
+                onChange={setAspect}
+                className="py-1 pr-2 pl-3 text-[12px]"
+              />
+            </div>
+            <SegRow
+              title="Resolution"
+              value={effResolution}
+              onChange={setResolution}
+              options={resolutionOptions}
+            />
+            <SegRow
+              title="Duration"
+              value={effDurationSeconds}
+              onChange={setDurationSeconds}
+              options={durationOptions}
+            />
+            <SegRow
+              title="Number of takes"
+              value={count}
+              onChange={setCount}
+              options={COUNT_OPTIONS}
+            />
+          </>
         )}
-        <div className="flex items-center gap-1.5">
-          <PillSelect
-            title="Model"
-            value={tier}
-            display={model.model}
-            options={VIDEO_MODELS.map((m) => ({ value: m.tier, label: m.model }))}
-            onChange={setTier}
-            className="py-1 pr-2 pl-3 text-[12px]"
-          />
-          <PillSelect
-            title="Aspect ratio"
-            value={effAspect}
-            display={VIDEO_ASPECT_LABEL[effAspect].split(" ")[0]}
-            options={model.aspects.map((a) => ({
-              value: a,
-              label: VIDEO_ASPECT_LABEL[a],
-            }))}
-            onChange={setAspect}
-            className="py-1 pr-2 pl-3 text-[12px]"
-          />
-        </div>
-        <SegRow
-          title="Resolution"
-          value={effResolution}
-          onChange={setResolution}
-          options={resolutionOptions}
-        />
-        <SegRow
-          title="Duration"
-          value={effDurationSeconds}
-          onChange={setDurationSeconds}
-          options={durationOptions}
-        />
         <div className="flex items-center justify-between gap-2">
-          <SegRow
-            title="Number of takes"
-            value={count}
-            onChange={setCount}
-            options={COUNT_OPTIONS}
-            className="flex-1"
-          />
+          <button
+            type="button"
+            title="Generation settings"
+            aria-label="Generation settings"
+            aria-pressed={settingsOpen}
+            onClick={() => setSettingsOpen((v) => !v)}
+            className={cn(
+              "flex min-w-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] transition-colors",
+              settingsOpen
+                ? "border-ring bg-muted text-foreground"
+                : "border-input text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <SlidersHorizontal className="size-3.5 shrink-0" />
+            <span className="min-w-0 truncate">{settingsSummary}</span>
+          </button>
           <button
             type="button"
             title="Generate video"
