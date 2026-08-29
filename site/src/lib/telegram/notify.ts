@@ -1,13 +1,22 @@
 import { prisma } from "@/lib/prisma";
 
-export type TelegramNotificationEvent = "submission" | "withdrawal" | "supportTicket" | "systemError";
+export type TelegramNotificationEvent =
+  | "submission"
+  | "withdrawal"
+  | "supportTicket"
+  | "signup"
+  | "systemError";
 
 const EVENT_FLAG: Partial<
-  Record<TelegramNotificationEvent, "notifySubmissions" | "notifyWithdrawals" | "notifySupportTickets">
+  Record<
+    TelegramNotificationEvent,
+    "notifySubmissions" | "notifyWithdrawals" | "notifySupportTickets" | "notifySignups"
+  >
 > = {
+  signup: "notifySignups",
   submission: "notifySubmissions",
-  withdrawal: "notifyWithdrawals",
   supportTicket: "notifySupportTickets",
+  withdrawal: "notifyWithdrawals",
   // "systemError" has no settings row of its own (would need a schema change/
   // migration this codebase's rules keep out of an agent's hands) — it rides
   // the bot's plain Enable toggle instead of a per-category one.

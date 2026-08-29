@@ -4,8 +4,10 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 
 import { DONKEYCUT_CANONICAL } from "@/cut/lib/hosts";
+import { formatUsd } from "@/lib/credits/format-usd";
 import { provisionSignupGrants } from "@/lib/onboarding/signup-grants";
 import { prisma } from "@/lib/prisma";
+import { notifyTelegram } from "@/lib/telegram/notify";
 
 // Prefix for issued Vision API keys. The full secret is shown to the developer
 // once at creation; only a hash is stored (handled by the apiKey plugin).
@@ -25,6 +27,27 @@ const baseURL = process.env.VERCEL
   ? { allowedHosts: ["donkeycut.com", "depcut.vercel.app"], fallback: DONKEYCUT_CANONICAL }
   : undefined;
 
+// Best-effort admin alert for a new signup — never blocks account creation.
+// Country reads Vercel's edge geo header (absent locally, so "Unknown" in
+// dev); balance reads back the just-granted signup credit rather than
+// hardcoding the amount, so the alert stays right if that ever changes.
+async function notifyNewSignup(userId: string, name: string, headers: Headers | null): Promise<void> {
+  try {
+    const country = headers?.get("x-vercel-ip-country") ?? "Unknown";
+    const account = await prisma.userCreditAccount.findUnique({
+      select: { balanceMicros: true },
+      where: { userId },
+    });
+    const balance = formatUsd(account ? String(Number(account.balanceMicros) / 1_000_000) : null);
+    await notifyTelegram(
+      "signup",
+      `🆕 New user joined and requests approval.\n\n👤 Name: ${name}\ncountry: ${country}\nbalance: ${balance}`,
+    );
+  } catch {
+    // Best-effort — never let a notification failure affect signup.
+  }
+}
+
 export const auth = betterAuth({
   baseURL,
   secret: process.env.BETTER_AUTH_SECRET,
@@ -43,8 +66,9 @@ export const auth = betterAuth({
         // Every new account is provisioned with its signup grants (app credits
         // + free Vision API calls). provisionSignupGrants is idempotent and
         // swallows its own errors, so it never blocks user creation.
-        after: async (user) => {
+        after: async (user, context) => {
           await provisionSignupGrants(user.id);
+          await notifyNewSignup(user.id, user.name, context?.request?.headers ?? null);
         },
       },
     },

@@ -218,6 +218,7 @@ function NotificationRoutingForm({ adminId }: { adminId: string | null }) {
   const [notifySubmissions, setNotifySubmissions] = useState(false);
   const [notifyWithdrawals, setNotifyWithdrawals] = useState(false);
   const [notifySupportTickets, setNotifySupportTickets] = useState(false);
+  const [notifySignups, setNotifySignups] = useState(false);
 
   useEffect(() => {
     const s = settings.data?.settings;
@@ -225,6 +226,7 @@ function NotificationRoutingForm({ adminId }: { adminId: string | null }) {
     setNotifySubmissions(s.notifySubmissions);
     setNotifyWithdrawals(s.notifyWithdrawals);
     setNotifySupportTickets(s.notifySupportTickets);
+    setNotifySignups(s.notifySignups);
   }, [settings.data]);
 
   const s = settings.data?.settings;
@@ -232,10 +234,11 @@ function NotificationRoutingForm({ adminId }: { adminId: string | null }) {
     Boolean(s) &&
     (notifySubmissions !== s!.notifySubmissions ||
       notifyWithdrawals !== s!.notifyWithdrawals ||
-      notifySupportTickets !== s!.notifySupportTickets);
+      notifySupportTickets !== s!.notifySupportTickets ||
+      notifySignups !== s!.notifySignups);
 
   const save = () => {
-    update.mutate({ notifySubmissions, notifyWithdrawals, notifySupportTickets });
+    update.mutate({ notifySignups, notifySubmissions, notifySupportTickets, notifyWithdrawals });
   };
 
   return (
@@ -271,6 +274,7 @@ function NotificationRoutingForm({ adminId }: { adminId: string | null }) {
               { label: "New submission", value: notifySubmissions, set: setNotifySubmissions },
               { label: "Withdrawal request", value: notifyWithdrawals, set: setNotifyWithdrawals },
               { label: "Support ticket", value: notifySupportTickets, set: setNotifySupportTickets },
+              { label: "New signup", value: notifySignups, set: setNotifySignups },
             ].map((row) => (
               <div key={row.label} className="flex items-center justify-between rounded-xl border p-3">
                 <span className="text-sm font-medium">{row.label}</span>
