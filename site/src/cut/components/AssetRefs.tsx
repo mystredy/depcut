@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { Check, Copy, FileText, X } from "lucide-react";
+import { Check, Copy, FileText, Plus, Upload, X } from "lucide-react";
 import {
   highlightMentions,
   mentionToken,
@@ -18,6 +18,15 @@ import { clipLen, getClipSpans, useEditor } from "@/cut/lib/store";
 import { AudioPillSurface } from "@/cut/components/AudioPanel";
 import { ScrubValue, parseTimeInput } from "@/cut/components/ScrubValue";
 import { Slider } from "@/components/ui/slider";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 // Shared UI for asset references: the preview thumbnail, attachment chips,
@@ -316,6 +325,84 @@ export function RefChips({
       })}
       {trailing}
     </div>
+  );
+}
+
+/** A "+" button beside the composer's mic: pick an existing project (Media) or
+ * Library asset as a reference, or upload a file from disk. Project/Library
+ * items come from the same candidate list the `@` mention menu searches, so
+ * the two pickers never drift apart. */
+export function AddRefButton({
+  onPick,
+  onUploadFiles,
+  accept = "image/*,video/*",
+  className,
+}: {
+  onPick: (ref: AssetRef) => void;
+  onUploadFiles: (files: File[]) => void;
+  accept?: string;
+  className?: string;
+}) {
+  const candidates = useRefCandidates();
+  const media = candidates.filter((c) => c.scope === "project");
+  const library = candidates.filter((c) => c.scope === "library");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          title="Add reference"
+          className={cn(
+            "grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground/70 outline-none transition-colors hover:bg-muted hover:text-foreground",
+            className
+          )}
+        >
+          <Plus className="size-3.5" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" side="top" className="w-56">
+          <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+            <Upload /> Upload file
+          </DropdownMenuItem>
+          {media.length > 0 && (
+            <DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Media</DropdownMenuLabel>
+              {media.map((ref) => (
+                <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => onPick(ref)}>
+                  <RefThumb item={ref} className="size-6 rounded" />
+                  <span className="truncate">{ref.name}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          )}
+          {library.length > 0 && (
+            <DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Library</DropdownMenuLabel>
+              {library.map((ref) => (
+                <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => onPick(ref)}>
+                  <RefThumb item={ref} className="size-6 rounded" />
+                  <span className="truncate">{ref.name}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuGroup>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={accept}
+        multiple
+        hidden
+        onChange={(e) => {
+          const files = e.target.files;
+          if (files && files.length > 0) onUploadFiles(Array.from(files));
+          e.target.value = "";
+        }}
+      />
+    </>
   );
 }
 

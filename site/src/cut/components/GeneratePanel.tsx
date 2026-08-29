@@ -32,7 +32,7 @@ import {
   type VideoModelOption,
 } from "@/cut/lib/videoModels";
 import { cn } from "@/lib/utils";
-import { CopyHandlePill, MentionTextarea, RefChips } from "./AssetRefs";
+import { AddRefButton, CopyHandlePill, MentionTextarea, RefChips } from "./AssetRefs";
 import { DictationControl } from "./MicDictation";
 import { GeneratedAssetMenu } from "./GeneratedAssetMenu";
 import { HostedErrorText } from "./hostedError";
@@ -165,7 +165,7 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
             peekSide="bottom"
           />
           <MentionTextarea
-            className="gen-prompt min-h-[88px] w-full resize-y bg-transparent px-2.5 py-2 pr-9 text-[12.5px] leading-relaxed outline-none"
+            className="gen-prompt min-h-[88px] w-full resize-y bg-transparent px-2.5 py-2 pr-16 text-[12.5px] leading-relaxed outline-none"
             placeholder={
               character
                 ? "What should they say?"
@@ -185,11 +185,18 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
               if (last) useVideoGen.getState().removeRef(last);
             }}
           />
-          <DictationControl
-            text={prompt}
-            onResult={(v) => useVideoGen.getState().setPrompt(v)}
-            buttonClassName="absolute right-2 bottom-2 bg-background/70 backdrop-blur-sm"
-          />
+          <div className="absolute right-2 bottom-2 flex items-center gap-0.5">
+            <AddRefButton
+              onPick={(ref) => useVideoGen.getState().addRef(ref)}
+              onUploadFiles={attachFiles}
+              className="bg-background/70 backdrop-blur-sm"
+            />
+            <DictationControl
+              text={prompt}
+              onResult={(v) => useVideoGen.getState().setPrompt(v)}
+              buttonClassName="bg-background/70 backdrop-blur-sm"
+            />
+          </div>
         </div>
 
         {/* Which model renders the clip — a dropdown, since the catalog grows.
