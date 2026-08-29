@@ -11,10 +11,15 @@ export type TelegramLinkStatus = {
   telegramUsername: string | null;
 };
 
-export function useTelegramLinkStatus() {
+// The link completes on Telegram's side (the deep link or a manually typed
+// pin, redeemed by the webhook) — nothing pushes that back to this tab, so
+// while `poll` is on (the row's expanded, credential shown, not linked yet)
+// this refetches every few seconds until `linked` flips true, then stops.
+export function useTelegramLinkStatus(poll = false) {
   return useQuery({
     queryFn: () => apiFetch<TelegramLinkStatus>("/api/account/telegram-link"),
     queryKey: telegramLinkQueryKey,
+    refetchInterval: (query) => (poll && !query.state.data?.linked ? 3000 : false),
   });
 }
 
@@ -36,10 +41,23 @@ export function useCreateTelegramLink() {
   });
 }
 
+// Sends a 6-digit code to the linked Telegram chat — required before
+// useUnlinkTelegram will succeed.
+export function useSendUnlinkCode() {
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<{ sent: true }>("/api/account/telegram-link/unlink-code", { method: "POST" }),
+  });
+}
+
 export function useUnlinkTelegram() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => apiFetch<{ ok: true }>("/api/account/telegram-link", { method: "DELETE" }),
+    mutationFn: (code: string) =>
+      apiFetch<{ ok: true }>("/api/account/telegram-link", {
+        body: JSON.stringify({ code }),
+        method: "DELETE",
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: telegramLinkQueryKey }),
   });
 }

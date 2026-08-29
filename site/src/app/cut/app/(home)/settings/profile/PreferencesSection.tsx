@@ -12,6 +12,7 @@ import {
 import {
   type TelegramLinkCredential,
   useCreateTelegramLink,
+  useSendUnlinkCode,
   useTelegramLinkStatus,
   useUnlinkTelegram,
 } from "@/queries/telegramLink";
@@ -56,9 +57,12 @@ export function PreferencesSection() {
 function TelegramRow() {
   const [expanded, setExpanded] = useState(false);
   const [credential, setCredential] = useState<TelegramLinkCredential | null>(null);
+  const [codeSent, setCodeSent] = useState(false);
+  const [codeInput, setCodeInput] = useState("");
 
-  const link = useTelegramLinkStatus();
+  const link = useTelegramLinkStatus(expanded);
   const createLink = useCreateTelegramLink();
+  const sendUnlinkCode = useSendUnlinkCode();
   const unlink = useUnlinkTelegram();
   const prefs = useNotificationPreferences();
   const setPrefs = useSetNotificationPreferences();
@@ -74,10 +78,21 @@ function TelegramRow() {
     }
   };
 
-  const doUnlink = () => {
-    unlink.mutate(undefined, {
+  const requestUnlink = () => {
+    sendUnlinkCode.mutate(undefined, { onSuccess: () => setCodeSent(true) });
+  };
+
+  const cancelUnlink = () => {
+    setCodeSent(false);
+    setCodeInput("");
+  };
+
+  const confirmUnlink = () => {
+    unlink.mutate(codeInput.trim(), {
       onSuccess: () => {
         setCredential(null);
+        setCodeSent(false);
+        setCodeInput("");
         setExpanded(false);
       },
     });
@@ -124,28 +139,67 @@ function TelegramRow() {
       {expanded && (
         <div className="pb-4">
           {linked ? (
-            <div className="flex items-center justify-between gap-6 rounded-lg border bg-muted/30 p-3">
-              <span className="min-w-0">
-                <span className="block text-sm font-medium">Real-time notifications</span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  DM alerts to your linked Telegram, alongside the notification bell.
+            <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+              <div className="flex items-center justify-between gap-6">
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">Real-time notifications</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    DM alerts to your linked Telegram, alongside the notification bell.
+                  </span>
                 </span>
-              </span>
-              <div className="flex shrink-0 items-center gap-3">
-                <Switch
-                  aria-label="Telegram real-time notifications"
-                  checked={prefs.data.telegramAlerts}
-                  onCheckedChange={(v) => setPrefs.mutate({ telegramAlerts: v === true })}
-                />
-                <button
-                  type="button"
-                  disabled={unlink.isPending}
-                  onClick={doUnlink}
-                  className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-60"
-                >
-                  Unlink
-                </button>
+                <div className="flex shrink-0 items-center gap-3">
+                  <Switch
+                    aria-label="Telegram real-time notifications"
+                    checked={prefs.data.telegramAlerts}
+                    onCheckedChange={(v) => setPrefs.mutate({ telegramAlerts: v === true })}
+                  />
+                  {!codeSent && (
+                    <button
+                      type="button"
+                      disabled={sendUnlinkCode.isPending}
+                      onClick={requestUnlink}
+                      className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:pointer-events-none disabled:opacity-60"
+                    >
+                      {sendUnlinkCode.isPending ? "Sending code…" : "Unlink"}
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {codeSent && (
+                <div className="space-y-2 border-t pt-3">
+                  <p className="text-xs text-muted-foreground">
+                    We sent a code to your linked Telegram — enter it to confirm unlinking.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={codeInput}
+                      onChange={(e) => setCodeInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      placeholder="6-digit code"
+                      inputMode="numeric"
+                      className="w-32 rounded-md border bg-card px-2.5 py-1 font-mono text-sm tracking-widest outline-none focus-visible:border-ring"
+                    />
+                    <button
+                      type="button"
+                      disabled={codeInput.length !== 6 || unlink.isPending}
+                      onClick={confirmUnlink}
+                      className="rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/20 disabled:pointer-events-none disabled:opacity-50"
+                    >
+                      {unlink.isPending ? "Confirming…" : "Confirm unlink"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelUnlink}
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  {unlink.isError && (
+                    <p className="text-xs text-red-600">That code is wrong or expired — try again.</p>
+                  )}
+                </div>
+              )}
             </div>
           ) : createLink.isPending || !credential ? (
             <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
