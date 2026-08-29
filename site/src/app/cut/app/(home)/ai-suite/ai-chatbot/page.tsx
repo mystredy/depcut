@@ -80,7 +80,7 @@ export default function AiChatbotPage() {
         </p>
       </div>
 
-      <div className="flex flex-col overflow-hidden rounded-3xl border bg-card">
+      <div className="flex flex-col">
         <div ref={listRef} className="max-h-[60vh] min-h-[320px] space-y-3 overflow-y-auto p-6">
           {messages.length === 0 ? (
             <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-2 text-center text-muted-foreground">

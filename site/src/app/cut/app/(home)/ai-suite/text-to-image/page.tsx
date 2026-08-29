@@ -88,14 +88,18 @@ export default function TextToImagePage() {
       history.save({
         inputs: { aspect, prompt: text, resolution },
         result: { blob, filename: "text-to-image.png", kind: "blob", mimeType: blob.type || "image/png" },
+        status: "succeeded",
         summary: text.slice(0, 80),
       });
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? { text: e.message, credits: e.message === NO_CREDITS_MESSAGE }
-          : { text: "Image generation failed." }
-      );
+      const message = e instanceof Error ? e.message : "Image generation failed.";
+      setError({ text: message, credits: message === NO_CREDITS_MESSAGE });
+      history.save({
+        errorMessage: message,
+        inputs: { aspect, prompt: text, resolution },
+        status: "failed",
+        summary: text.slice(0, 80),
+      });
     } finally {
       setBusy(false);
     }
@@ -123,7 +127,7 @@ export default function TextToImagePage() {
         </p>
       </div>
 
-      <div className="space-y-5 rounded-3xl border bg-card p-6">
+      <div className="space-y-5">
         <div className="space-y-2">
           <SectionTitle>Prompt</SectionTitle>
           <textarea

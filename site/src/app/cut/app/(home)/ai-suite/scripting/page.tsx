@@ -96,14 +96,18 @@ export default function ScriptingPage() {
       history.save({
         inputs: { duration, platform, tone, topic: text },
         result: { kind: "text", text: reply },
+        status: "succeeded",
         summary: text.slice(0, 80),
       });
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? { text: e.message, credits: e.message === NO_CREDITS_MESSAGE }
-          : { text: "Script generation failed." }
-      );
+      const message = e instanceof Error ? e.message : "Script generation failed.";
+      setError({ text: message, credits: message === NO_CREDITS_MESSAGE });
+      history.save({
+        errorMessage: message,
+        inputs: { duration, platform, tone, topic: text },
+        status: "failed",
+        summary: text.slice(0, 80),
+      });
     } finally {
       setBusy(false);
     }
@@ -143,7 +147,7 @@ export default function ScriptingPage() {
         </p>
       </div>
 
-      <div className="space-y-5 rounded-3xl border bg-card p-6">
+      <div className="space-y-5">
         <div className="space-y-2">
           <Label htmlFor="script-topic">
             What's the video about? <span className="text-destructive">*</span>

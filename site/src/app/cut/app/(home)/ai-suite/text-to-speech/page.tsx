@@ -80,14 +80,18 @@ export default function TextToSpeechPage() {
       history.save({
         inputs: { direction, script: text },
         result: { blob, filename: "text-to-speech.wav", kind: "blob", mimeType: blob.type || "audio/wav" },
+        status: "succeeded",
         summary: text.slice(0, 80),
       });
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? { text: e.message, credits: e instanceof NoCreditsError }
-          : { text: "Voice generation failed." }
-      );
+      const message = e instanceof Error ? e.message : "Voice generation failed.";
+      setError({ text: message, credits: e instanceof NoCreditsError });
+      history.save({
+        errorMessage: message,
+        inputs: { direction, script: text },
+        status: "failed",
+        summary: text.slice(0, 80),
+      });
     } finally {
       setBusy(false);
     }
@@ -127,7 +131,7 @@ export default function TextToSpeechPage() {
         </p>
       </div>
 
-      <div className="space-y-5 rounded-3xl border bg-card p-6">
+      <div className="space-y-5">
         <VoicePicker direction={direction} onError={(e) => setError(e instanceof Error ? { text: e.message } : { text: "Could not play the sample." })} />
 
         <div className="flex flex-col gap-1.5">

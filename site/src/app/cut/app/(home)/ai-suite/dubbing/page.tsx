@@ -93,14 +93,18 @@ export default function DubbingPage() {
       history.save({
         inputs: { style, targetLanguage },
         result: { blob, data: { transcript: text }, filename: "dubbed-audio.wav", kind: "blob", mimeType: blob.type || "audio/wav" },
+        status: "succeeded",
         summary: `${file.name} → ${target.label}`,
       });
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? { text: e.message, credits: e instanceof NoCreditsError }
-          : { text: "Dubbing failed." }
-      );
+      const message = e instanceof Error ? e.message : "Dubbing failed.";
+      setError({ text: message, credits: e instanceof NoCreditsError });
+      history.save({
+        errorMessage: message,
+        inputs: { style, targetLanguage },
+        status: "failed",
+        summary: `${file.name} → ${target.label}`,
+      });
     } finally {
       setStage("idle");
     }
@@ -125,7 +129,7 @@ export default function DubbingPage() {
         </p>
       </div>
 
-      <div className="space-y-5 rounded-3xl border bg-card p-6">
+      <div className="space-y-5">
         <div className="space-y-2">
           <Label>
             Source audio or video <span className="text-destructive">*</span>
