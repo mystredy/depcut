@@ -5,6 +5,7 @@ import { Download, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PillSelect } from "@/cut/components/PillSelect";
 import { SectionTitle } from "@/cut/components/SectionTitle";
+import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { bytesFromBase64 } from "@/cut/lib/bytes";
 import { creditsUrl, NO_CREDITS_MESSAGE, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { hostedPost } from "@/cut/lib/hosted";
@@ -14,6 +15,8 @@ import {
   type ImageAspect,
   type ImageResolution,
 } from "@/cut/lib/imageGen";
+import { useToolHistory } from "@/lib/toolHistory";
+import { useBlobUrl } from "@/lib/useBlobUrl";
 
 const ASPECT_WORD: Record<ImageAspect, string> = { "16:9": "Landscape", "9:16": "Portrait", "1:1": "Square" };
 
@@ -52,6 +55,7 @@ export default function TextToImagePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; credits?: boolean } | null>(null);
   const [result, setResult] = useState<{ url: string } | null>(null);
+  const history = useToolHistory("text-to-image");
 
   useEffect(() => {
     return () => {
@@ -81,6 +85,11 @@ export default function TextToImagePage() {
         if (prev) URL.revokeObjectURL(prev.url);
         return { url: URL.createObjectURL(blob) };
       });
+      history.save({
+        inputs: { aspect, prompt: text, resolution },
+        result: { blob, filename: "text-to-image.png", kind: "blob", mimeType: blob.type || "image/png" },
+        summary: text.slice(0, 80),
+      });
     } catch (e) {
       setError(
         e instanceof Error
@@ -89,6 +98,19 @@ export default function TextToImagePage() {
       );
     } finally {
       setBusy(false);
+    }
+  };
+
+  const reuse = (inputs: Record<string, unknown>) => {
+    if (typeof inputs.prompt === "string") setPrompt(inputs.prompt);
+    if (typeof inputs.aspect === "string" && (IMAGE_ASPECTS as string[]).includes(inputs.aspect)) {
+      setAspect(inputs.aspect as ImageAspect);
+    }
+    if (
+      typeof inputs.resolution === "string" &&
+      inputs.resolution in IMAGE_RESOLUTION_LABEL
+    ) {
+      setResolution(inputs.resolution as ImageResolution);
     }
   };
 
@@ -185,6 +207,23 @@ export default function TextToImagePage() {
           </div>
         )}
       </div>
+
+      <ToolHistoryList
+        tool="text-to-image"
+        onReuse={reuse}
+        renderPreview={(entry) =>
+          entry.result.kind === "blob" ? (
+            <ImageHistoryPreview blob={entry.result.blob} alt={entry.summary} />
+          ) : null
+        }
+      />
     </div>
   );
+}
+
+function ImageHistoryPreview({ blob, alt }: { blob: Blob; alt: string }) {
+  const url = useBlobUrl(blob);
+  if (!url) return null;
+  // eslint-disable-next-line @next/next/no-img-element -- a stored blob preview, not a remote image
+  return <img src={url} alt={alt} className="w-full rounded-lg" />;
 }

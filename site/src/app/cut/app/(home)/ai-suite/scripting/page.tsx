@@ -13,8 +13,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SectionTitle } from "@/cut/components/SectionTitle";
+import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { creditsUrl, NO_CREDITS_MESSAGE, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { hostedPost } from "@/cut/lib/hosted";
+import { useToolHistory } from "@/lib/toolHistory";
 
 const DURATIONS = ["15 seconds", "30 seconds", "60 seconds", "2–3 minutes", "5+ minutes"];
 const PLATFORMS = ["General", "YouTube", "TikTok / Reels / Shorts", "Instagram", "LinkedIn"];
@@ -74,6 +76,7 @@ export default function ScriptingPage() {
   const [error, setError] = useState<{ text: string; credits?: boolean } | null>(null);
   const [script, setScript] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const history = useToolHistory("scripting");
 
   const generate = async () => {
     const text = topic.trim();
@@ -90,6 +93,11 @@ export default function ScriptingPage() {
       const reply = data.choices[0]?.message.content?.trim();
       if (!reply) throw new Error("The assistant returned an empty script.");
       setScript(reply);
+      history.save({
+        inputs: { duration, platform, tone, topic: text },
+        result: { kind: "text", text: reply },
+        summary: text.slice(0, 80),
+      });
     } catch (e) {
       setError(
         e instanceof Error
@@ -117,6 +125,13 @@ export default function ScriptingPage() {
     a.download = "script.txt";
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const reuse = (inputs: Record<string, unknown>) => {
+    if (typeof inputs.topic === "string") setTopic(inputs.topic);
+    if (typeof inputs.duration === "string") setDuration(inputs.duration);
+    if (typeof inputs.platform === "string") setPlatform(inputs.platform);
+    if (typeof inputs.tone === "string") setTone(inputs.tone);
   };
 
   return (
@@ -247,6 +262,18 @@ export default function ScriptingPage() {
           </div>
         )}
       </div>
+
+      <ToolHistoryList
+        tool="scripting"
+        onReuse={reuse}
+        renderPreview={(entry) =>
+          entry.result.kind === "text" ? (
+            <p className="max-h-60 overflow-y-auto text-[12.5px] leading-relaxed whitespace-pre-wrap">
+              {entry.result.text}
+            </p>
+          ) : null
+        }
+      />
     </div>
   );
 }
