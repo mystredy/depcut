@@ -90,7 +90,6 @@ import { ImageGenPanel } from "./ImageGenPanel";
 import { EffectsPanel } from "./EffectsPanel";
 import { TransitionsPanel } from "./TransitionsPanel";
 import { ElementsPanel } from "./ElementsPanel";
-import { StockImagesPanel } from "./StockImagesPanel";
 import { SampleLibrary } from "./StockMusicPanel";
 import { STOCK_MUSIC } from "@/cut/lib/stockMusicManifest";
 import { STOCK_VIDEOS } from "@/cut/lib/stockVideoManifest";
@@ -585,42 +584,24 @@ export function SidePanel({
       {(tab !== null || (extraTab !== null && extraDocksInline)) && (
         <div className="flex min-h-0">
           {tab === "image" || tab === "video" ? (
-        // Image is two columns: the generate input on the left, the stock
-        // reference browser on the right (clicking a stock tile loads its
-        // prompt into the generate panel beside it). Video's stock browser
-        // instead scrolls in below its own generate form, in the one column
-        // — see GenerateVideoPanel.
-        <>
-          <div
-            className={cn(
-              "relative flex min-h-0 shrink-0 flex-col",
-              tab === "video" ? "w-[300px]" : "w-[252px]",
-              !sharedFeatures && tab === "image" && "border-r border-border"
-            )}
-          >
-            <ClosePanelButton onClose={() => setTab(null)} />
-            <GenTabSwitcher
-              tab={tab}
-              onSelect={(id) => {
-                lastGenTab.current = id;
-                setTab(id);
-              }}
-            />
-            {tab === "image" ? (
-              <ImageGenPanel projectId={projectId} />
-            ) : (
-              <GenerateVideoPanel projectId={projectId} />
-            )}
-          </div>
-          {/* Image only now — Video no longer has a second column (see
-              above). A shared view shows only the project's own
-              generations — no stock browsing. */}
-          {!sharedFeatures && tab === "image" && (
-            <div className="flex min-h-0 w-[264px] shrink-0 flex-col">
-              <StockImagesPanel />
-            </div>
+        // Both generate tabs are a single column: the generate form, then
+        // (in the same scroll) the stock browser below it — see
+        // ImageGenPanel and GenerateVideoPanel.
+        <div className="relative flex min-h-0 w-[300px] shrink-0 flex-col">
+          <ClosePanelButton onClose={() => setTab(null)} />
+          <GenTabSwitcher
+            tab={tab}
+            onSelect={(id) => {
+              lastGenTab.current = id;
+              setTab(id);
+            }}
+          />
+          {tab === "image" ? (
+            <ImageGenPanel projectId={projectId} />
+          ) : (
+            <GenerateVideoPanel projectId={projectId} />
           )}
-        </>
+        </div>
       ) : tab === "audio" ? (
         // Music is two columns like the generate tabs — the generator on the
         // left, the sample library on the right; Voice is a single column.

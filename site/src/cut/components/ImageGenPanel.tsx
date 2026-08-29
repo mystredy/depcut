@@ -31,11 +31,13 @@ import { PillSelect } from "./PillSelect";
 import { GeneratedAssetMenu } from "./GeneratedAssetMenu";
 import { HostedErrorText } from "./hostedError";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { StockImagesPanel } from "./StockImagesPanel";
 
-// The generate-image panel: an always-on column in the Image tab, sitting left
-// of the stock browser. Clicking a stock tile loads its saved prompt here; the
-// user picks a size, edits the prompt, generates on their Donkey account, and
-// the results stack below as big tiles.
+// The generate-image panel: the Image tab's whole column — the generate form,
+// then (in the same scroll) the stock-image browser below it. Clicking a
+// stock tile loads its saved prompt into the form above. The user picks a
+// size, edits the prompt, generates on their Donkey account, and the results
+// stack below as big tiles.
 //
 // References ride along as input images: drag any image or video in (stock
 // tile, media card, library clip, timeline clip) or mention it by @name.
@@ -62,6 +64,7 @@ function pixelDims(aspect: ImageAspect, resolution: ImageResolution): string {
 export function ImageGenPanel({ projectId }: { projectId: string }) {
   const { prompt, aspect, resolution, refs } = useImageGen();
   const readOnly = useEditor((s) => s.readOnly);
+  const sharedFeatures = useEditor((s) => s.sharedFeatures);
   const signedIn = useSignedIn();
   const candidates = useRefCandidates();
   const allJobs = useGenerate((s) => s.jobs);
@@ -213,6 +216,8 @@ export function ImageGenPanel({ projectId }: { projectId: string }) {
             </div>
           </div>
         )}
+
+        {!sharedFeatures && <StockImagesPanel />}
       </ScrollArea>
     </div>
   );

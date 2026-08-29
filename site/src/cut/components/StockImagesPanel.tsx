@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, Maximize2, Search } from "lucide-react";
+import { ChevronRight, Maximize2, Search } from "lucide-react";
 import { clearRefDrag, refFromStock, setRefDragData } from "@/cut/lib/assetRef";
 import { useLightbox } from "@/cut/lib/lightbox";
 import { useRevealEffect, useRevealFlash } from "@/cut/lib/refReveal";
@@ -10,16 +10,17 @@ import { STOCK_CATEGORIES, type StockCategory, type StockImage } from "@/cut/lib
 import { STOCK_IMAGES } from "@/cut/lib/stockManifest";
 import { cn } from "@/lib/utils";
 import { CopyRefButton, RefHandlePill } from "./AssetRefs";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 /** A readable title from a stock id, e.g. "business-boardroom" → "Business Boardroom". */
 const titleFromId = (id: string) =>
   id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 // The Image tab's reference browser: a searchable catalog of AI-generated stock
-// images. Every image carries the prompt that made it — clicking one loads that
-// prompt into the generate panel beside it to edit and render on the user's
-// account. Images the user generates show up in that panel, not here.
+// images, embedded in ImageGenPanel below its own generate form (in the same
+// scrolling column — no separate sidebar). Every image carries the prompt that
+// made it — clicking one loads that prompt into the generate form above it to
+// edit and render on the user's account. Images the user generates show up in
+// that form's own results grid, not here.
 
 type View = "all" | StockCategory;
 
@@ -54,80 +55,76 @@ export function StockImagesPanel() {
   const stock = STOCK_IMAGES.filter(matches);
 
   return (
-    <>
-      <div className="flex h-12 shrink-0 items-center pr-2.5 pl-2.5">
-        <span className="flex min-w-0 items-center gap-1 text-sm font-semibold tracking-tight">
-          {view !== "all" && (
-            <button
-              title="All stock images"
-              className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground hover:text-foreground"
-              onClick={() => setView("all")}
-            >
-              <ChevronLeft className="size-4" />
-            </button>
-          )}
-          <span className={cn("truncate", view === "all" && "pl-1.5")}>
-            {view === "all" ? "Stock Images" : view}
-          </span>
-        </span>
-      </div>
-
-      <ScrollArea className="min-h-0 flex-1" contentClassName="flex flex-col gap-3 px-3.5 pb-4">
-        <label className="flex shrink-0 items-center gap-2 rounded-lg border border-input px-2.5 py-1.5 focus-within:border-ring">
-          <Search className="size-3.5 shrink-0 text-muted-foreground" />
-          <input
-            className="w-full bg-transparent text-[12px] outline-none placeholder:text-muted-foreground"
-            placeholder="Search…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </label>
-
-        <div className="flex shrink-0 flex-wrap gap-1">
-          <button className={chip(view === "all")} onClick={() => setView("all")}>
+    <div className="flex flex-col gap-3 border-t border-border pt-3">
+      {view === "all" ? (
+        <span className="text-[12px] font-semibold">Stock Images</span>
+      ) : (
+        <div className="flex shrink-0 items-center gap-1 text-[12px]">
+          <button
+            className="text-muted-foreground transition-colors hover:text-foreground"
+            onClick={() => setView("all")}
+          >
             All
           </button>
-          {STOCK_CATEGORIES.map((c) => (
-            <button key={c} className={chip(view === c)} onClick={() => setView(c)}>
-              {c}
-            </button>
-          ))}
+          <ChevronRight className="size-3 text-muted-foreground" />
+          <span className="font-semibold">{view}</span>
         </div>
+      )}
 
-        {view === "all" ? (
-          <>
-            {STOCK_CATEGORIES.map((c) => {
-              const items = stock.filter((i) => i.category === c);
-              if (items.length === 0) return null;
-              return (
-                <section key={c} className="shrink-0">
-                  <SectionHead title={c} onViewAll={items.length > 6 ? () => setView(c) : undefined} />
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {items.slice(0, 6).map((i) => (
-                      <StockTile key={i.id} item={i} />
-                    ))}
-                  </div>
-                </section>
-              );
-            })}
-            {stock.length === 0 && <Empty />}
-          </>
-        ) : (
-          (() => {
-            const items = stock.filter((i) => i.category === view);
-            return items.length > 0 ? (
-              <div className="grid grid-cols-2 gap-1.5">
-                {items.map((i) => (
-                  <StockTile key={i.id} item={i} />
-                ))}
-              </div>
-            ) : (
-              <Empty />
+      <label className="flex shrink-0 items-center gap-2 rounded-lg border border-input px-2.5 py-1.5 focus-within:border-ring">
+        <Search className="size-3.5 shrink-0 text-muted-foreground" />
+        <input
+          className="w-full bg-transparent text-[12px] outline-none placeholder:text-muted-foreground"
+          placeholder="Search…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </label>
+
+      <div className="flex shrink-0 flex-wrap gap-1">
+        <button className={chip(view === "all")} onClick={() => setView("all")}>
+          All
+        </button>
+        {STOCK_CATEGORIES.map((c) => (
+          <button key={c} className={chip(view === c)} onClick={() => setView(c)}>
+            {c}
+          </button>
+        ))}
+      </div>
+
+      {view === "all" ? (
+        <>
+          {STOCK_CATEGORIES.map((c) => {
+            const items = stock.filter((i) => i.category === c);
+            if (items.length === 0) return null;
+            return (
+              <section key={c} className="shrink-0">
+                <SectionHead title={c} onViewAll={items.length > 6 ? () => setView(c) : undefined} />
+                <div className="grid grid-cols-2 gap-1.5">
+                  {items.slice(0, 6).map((i) => (
+                    <StockTile key={i.id} item={i} />
+                  ))}
+                </div>
+              </section>
             );
-          })()
-        )}
-      </ScrollArea>
-    </>
+          })}
+          {stock.length === 0 && <Empty />}
+        </>
+      ) : (
+        (() => {
+          const items = stock.filter((i) => i.category === view);
+          return items.length > 0 ? (
+            <div className="grid grid-cols-2 gap-1.5">
+              {items.map((i) => (
+                <StockTile key={i.id} item={i} />
+              ))}
+            </div>
+          ) : (
+            <Empty />
+          );
+        })()
+      )}
+    </div>
   );
 }
 
