@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ComponentType } from "react";
 import {
+  ArrowLeftRight,
   Copy,
   Film,
   Frame,
@@ -45,7 +46,13 @@ import {
   type VideoResolution,
 } from "@/cut/lib/videoModels";
 import { cn } from "@/lib/utils";
-import { AddRefButton, CopyHandlePill, MentionTextarea, RefChips } from "./AssetRefs";
+import {
+  AddRefButton,
+  CopyHandlePill,
+  FrameSlotButton,
+  MentionTextarea,
+  RefChips,
+} from "./AssetRefs";
 import { DictationControl } from "./MicDictation";
 import { GeneratedAssetMenu } from "./GeneratedAssetMenu";
 import { HostedErrorText } from "./hostedError";
@@ -166,7 +173,7 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
   const allJobs = useGenerate((s) => s.jobs);
   // Panel renders only — a chat- or scene-owned job lives on its chat card.
   const jobs = allJobs.filter((j) => j.projectId === projectId && j.kind === "video" && !j.chatId);
-  const { prompt, refs, refMode, character, aspect } = useVideoGen();
+  const { prompt, refs, refMode, endFrame, character, aspect } = useVideoGen();
   const candidates = useRefCandidates();
   // OS files handed to the panel — dropped on it or pasted into the prompt —
   // attach as references (media files import into the project on the way;
@@ -179,6 +186,16 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
     (ref) => useVideoGen.getState().addRef(ref),
     attachFiles
   );
+  // Frames mode's Start/End slots each import a directly-picked file on their
+  // own (not through the composer's general attach), replacing that slot.
+  const uploadToStart = (file: File) =>
+    void refsFromDroppedFiles(projectId, [file]).then(([r]) => {
+      if (r) useVideoGen.getState().setSeedFrame(r);
+    });
+  const uploadToEnd = (file: File) =>
+    void refsFromDroppedFiles(projectId, [file]).then(([r]) => {
+      if (r) useVideoGen.getState().setEndFrame(r);
+    });
   const [tier, setTier] = useLocalPref<VideoModelOption["tier"]>(
     "cut-gen-tier",
     "omni",
@@ -255,6 +272,10 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
               // must deliver the line — so free-form prompts alone get the
               // ref rewrite.
               composeRefs: !character,
+              // The End slot only makes sense alongside a Start frame, and
+              // only Veo has a documented last-frame parameter to send it to
+              // (see generate.ts) — Omni silently drops it.
+              ...(!character && endFrame ? { endFrame } : {}),
             }),
       }).settled;
     }
@@ -303,13 +324,46 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
               </button>
             </div>
           )}
-          <RefChips
-            refs={refs}
-            onRemove={(ref) => useVideoGen.getState().removeRef(ref)}
-            onUpdate={(ref) => useVideoGen.getState().updateRef(ref)}
-            className="p-2 pb-0"
-            peekSide="bottom"
-          />
+          {/* Frames mode: Start is the render's opening frame (the same seed
+              the general refs/mention flow already sets — refs[0] — so a
+              drag onto the whole composer or an @ mention still lands here),
+              End is its closing frame. Ingredients mode keeps the plain
+              RefChips list instead — several anchors, not two named slots. */}
+          {refMode === "frames" && !character ? (
+            <div className="flex shrink-0 items-center gap-1.5 p-2 pb-0">
+              <FrameSlotButton
+                label="Start"
+                value={refs[0] ?? null}
+                onChange={(ref) => {
+                  if (ref) useVideoGen.getState().setSeedFrame(ref);
+                  else if (refs[0]) useVideoGen.getState().removeRef(refs[0]);
+                }}
+                onUploadFile={uploadToStart}
+              />
+              <button
+                type="button"
+                title="Swap start and end"
+                className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground hover:text-foreground"
+                onClick={() => useVideoGen.getState().swapFrames()}
+              >
+                <ArrowLeftRight className="size-3.5" />
+              </button>
+              <FrameSlotButton
+                label="End"
+                value={endFrame}
+                onChange={(ref) => useVideoGen.getState().setEndFrame(ref)}
+                onUploadFile={uploadToEnd}
+              />
+            </div>
+          ) : (
+            <RefChips
+              refs={refs}
+              onRemove={(ref) => useVideoGen.getState().removeRef(ref)}
+              onUpdate={(ref) => useVideoGen.getState().updateRef(ref)}
+              className="p-2 pb-0"
+              peekSide="bottom"
+            />
+          )}
           <MentionTextarea
             className="gen-prompt min-h-[88px] w-full resize-y bg-transparent px-2.5 py-2 pr-16 text-[12.5px] leading-relaxed outline-none"
             placeholder={

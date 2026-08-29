@@ -22,10 +22,15 @@ interface VideoGenState {
   /** The shape the next generation is composed in. */
   aspect: VideoAspect;
   /** Visual references attached to the next generation (dragged in or picked
-   * via @name mentions resolved on send). */
+   * via @name mentions resolved on send). In frames mode, the first one is
+   * the render's start frame — the Start slot below reads/replaces it. */
   refs: AssetRef[];
   /** How the attached refs above condition the render — see VideoRefMode. */
   refMode: VideoRefMode;
+  /** Frames mode's End slot: the render's closing frame. Sent as the model's
+   * last-frame parameter — a documented Veo input; Omni has no equivalent, so
+   * this rides unsent when Omni is the selected tier. */
+  endFrame: AssetRef | null;
   /** Character mode: the picked talking character. The panel's text is the
    * line they speak, composed with the character's persona on send; null is
    * free-form prompting. */
@@ -45,6 +50,12 @@ interface VideoGenState {
    * typed mention. */
   updateRef: (ref: AssetRef) => void;
   removeRef: (ref: AssetRef) => void;
+  /** Set the frames-mode Start slot, replacing whatever was attached — only
+   * one picture ever plays as the start frame. */
+  setSeedFrame: (ref: AssetRef) => void;
+  setEndFrame: (ref: AssetRef | null) => void;
+  /** Start ⇄ End: swap the render's opening and closing frames. */
+  swapFrames: () => void;
 }
 
 export const useVideoGen = create<VideoGenState>((set) => ({
@@ -52,9 +63,12 @@ export const useVideoGen = create<VideoGenState>((set) => ({
   aspect: "16:9",
   refs: [],
   refMode: "frames",
+  endFrame: null,
   character: null,
-  openWith: (prompt) => set({ prompt, refs: [], refMode: "frames", character: null }),
-  openCharacter: (character) => set({ character, prompt: "", refs: [], refMode: "frames" }),
+  openWith: (prompt) =>
+    set({ prompt, refs: [], refMode: "frames", endFrame: null, character: null }),
+  openCharacter: (character) =>
+    set({ character, prompt: "", refs: [], refMode: "frames", endFrame: null }),
   clearCharacter: () => set({ character: null }),
   setPrompt: (prompt) => set({ prompt }),
   setAspect: (aspect) => set({ aspect }),
@@ -62,4 +76,11 @@ export const useVideoGen = create<VideoGenState>((set) => ({
   addRef: (ref) => set((s) => ({ refs: addRefOnce(s.refs, ref) })),
   updateRef: (ref) => set((s) => ({ refs: upsertRef(s.refs, ref) })),
   removeRef: (ref) => set((s) => ({ refs: s.refs.filter((r) => !sameRef(r, ref)) })),
+  setSeedFrame: (ref) => set({ refs: [ref] }),
+  setEndFrame: (endFrame) => set({ endFrame }),
+  swapFrames: () =>
+    set((s) => ({
+      refs: s.endFrame ? [s.endFrame] : [],
+      endFrame: s.refs[0] ?? null,
+    })),
 }));

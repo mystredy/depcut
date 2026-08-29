@@ -10,7 +10,7 @@ import {
   type AssetRef,
 } from "@/cut/lib/assetRef";
 import { MEDIA_CORS } from "@/cut/lib/mediaCors";
-import { useRefFor, useRefCandidates } from "@/cut/lib/assetRef";
+import { useRefFor, useRefCandidates, useAssetDrop } from "@/cut/lib/assetRef";
 import { useInView } from "@/cut/hooks/useInView";
 import { revealRef } from "@/cut/lib/refReveal";
 import { formatTime } from "@/cut/lib/time";
@@ -351,9 +351,6 @@ export function AddRefButton({
   accept?: string;
   className?: string;
 }) {
-  const candidates = useRefCandidates();
-  const media = candidates.filter((c) => c.scope === "project");
-  const library = candidates.filter((c) => c.scope === "library");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const pick = (ref: AssetRef) => {
@@ -378,30 +375,7 @@ export function AddRefButton({
           <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
             <Upload /> Upload file
           </DropdownMenuItem>
-          {media.length > 0 && (
-            <DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>Media</DropdownMenuLabel>
-              {media.map((ref) => (
-                <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => pick(ref)}>
-                  <RefThumb item={ref} className="size-6 rounded" />
-                  <span className="truncate">{ref.name}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuGroup>
-          )}
-          {library.length > 0 && (
-            <DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>Library</DropdownMenuLabel>
-              {library.map((ref) => (
-                <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => pick(ref)}>
-                  <RefThumb item={ref} className="size-6 rounded" />
-                  <span className="truncate">{ref.name}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuGroup>
-          )}
+          <MediaLibraryMenuItems onPick={pick} />
         </DropdownMenuContent>
       </DropdownMenu>
       <input
@@ -417,6 +391,124 @@ export function AddRefButton({
         }}
       />
     </>
+  );
+}
+
+/** The Media/Library picks inside a reference dropdown — shared by
+ * AddRefButton (adds to a list) and FrameSlotButton (replaces one slot). */
+function MediaLibraryMenuItems({ onPick }: { onPick: (ref: AssetRef) => void }) {
+  const candidates = useRefCandidates();
+  const media = candidates.filter((c) => c.scope === "project");
+  const library = candidates.filter((c) => c.scope === "library");
+  return (
+    <>
+      {media.length > 0 && (
+        <DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>Media</DropdownMenuLabel>
+          {media.map((ref) => (
+            <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => onPick(ref)}>
+              <RefThumb item={ref} className="size-6 rounded" />
+              <span className="truncate">{ref.name}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+      )}
+      {library.length > 0 && (
+        <DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>Library</DropdownMenuLabel>
+          {library.map((ref) => (
+            <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => onPick(ref)}>
+              <RefThumb item={ref} className="size-6 rounded" />
+              <span className="truncate">{ref.name}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+      )}
+    </>
+  );
+}
+
+/** A single-image slot pill — Start/End in the video composer's frames mode.
+ * Empty, it's a labeled button that opens the same upload/Media/Library
+ * picker as AddRefButton (replacing whatever was there, since a slot only
+ * ever holds one picture) and takes a direct drop too; filled, it's a small
+ * thumbnail with a remove button. */
+export function FrameSlotButton({
+  label,
+  value,
+  onChange,
+  onUploadFile,
+  className,
+}: {
+  label: string;
+  value: AssetRef | null;
+  onChange: (ref: AssetRef | null) => void;
+  /** A file picked or dropped straight onto the slot (not through Media or
+   * Library) — the caller imports it into the project and hands back its ref. */
+  onUploadFile: (file: File) => void;
+  className?: string;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { active, attachTarget, targetProps } = useAssetDrop((ref) => onChange(ref));
+
+  if (value) {
+    return (
+      <div
+        ref={attachTarget}
+        {...targetProps}
+        className={cn(
+          "relative size-14 shrink-0 overflow-hidden rounded-xl border",
+          active ? "border-[#0a84ff] ring-2 ring-[#0a84ff]/30" : "border-border",
+          className
+        )}
+      >
+        <RefThumb item={value} className="size-full rounded-none border-none" />
+        <button
+          title={`Remove ${label.toLowerCase()}`}
+          className="absolute top-0.5 right-0.5 grid size-4.5 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
+          onClick={() => onChange(null)}
+        >
+          <X className="size-2.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        ref={attachTarget}
+        {...targetProps}
+        className={cn(
+          "flex h-14 shrink-0 items-center justify-center rounded-xl border px-4 text-[13px] font-medium outline-none transition-colors",
+          active
+            ? "border-[#0a84ff] bg-[#0a84ff]/10 text-[#0a84ff]"
+            : "border-border text-foreground hover:bg-muted",
+          className
+        )}
+      >
+        {label}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-56">
+        <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+          <Upload /> Upload file
+        </DropdownMenuItem>
+        <MediaLibraryMenuItems onPick={onChange} />
+      </DropdownMenuContent>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,video/*"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onUploadFile(file);
+          e.target.value = "";
+        }}
+      />
+    </DropdownMenu>
   );
 }
 

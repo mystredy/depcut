@@ -30,6 +30,8 @@ import {
 // Omni, Veo takes no reference-image identity anchors as a single flat list —
 // each carries a type (ASSET keeps a subject consistent; STYLE carries a look) —
 // so an anchor set rides as ASSET references, the closer match to Omni's usage.
+// A start frame can also pair with a documented closing frame (lastFrame);
+// Omni has no equivalent, so the panel only sends it here.
 const providerID = "gemini-veo";
 
 export type GeminiVeoClient = Pick<GoogleGenAI, "models" | "operations">;
@@ -90,6 +92,7 @@ export function createGeminiVeoVideoAssetProvider(
     const inputs = toJsonObject(request.inputs ?? {});
     const seed = firstInlineImage(inputs.images);
     const references = inlineImages(inputs.referenceImages);
+    const endFrame = firstInlineImage(inputs.lastFrame);
     // A render takes one conditioning mode: a seed frame XOR identity
     // references. Both at once is a caller bug — reject it rather than
     // silently dropping the identity anchors from a billed render.
@@ -138,6 +141,11 @@ export function createGeminiVeoVideoAssetProvider(
                   referenceType: "ASSET" as never,
                 })),
               }
+            : {}),
+          // Only meaningful alongside a start frame — Google's own docs mark
+          // it image-to-video only.
+          ...(seed && endFrame
+            ? { lastFrame: { imageBytes: endFrame.data, mimeType: endFrame.mimeType } }
             : {}),
         },
       });

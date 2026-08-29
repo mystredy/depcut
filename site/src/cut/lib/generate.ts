@@ -176,6 +176,9 @@ export interface VideoGenOptions {
    * one seed image, so at most one picture seeds the render as its literal
    * opening frame; audio and text contribute through the compose rewrite. */
   refs?: AssetRef[];
+  /** Frames mode's closing frame — a documented Veo parameter (lastFrame);
+   * Omni has no equivalent, so this only reaches the render on a Veo tier. */
+  endFrame?: AssetRef;
   /** Identity anchors (up to the registry's maxReferenceImages): the render
    * keeps these characters/objects/scenes consistent instead of playing one
    * as the first frame. Mutually exclusive with a `refs` image seed; the
@@ -648,6 +651,15 @@ export const useGenerate = create<GenerateState>((set, get) => {
         ? { prompt, images: [] as InlineImage[] }
         : await promptAndImages("video", prompt, opts?.refs ?? [], opts?.composeRefs !== false, 1);
       const images = await Promise.all(rawImages.map(videoSafeInline));
+      // The closing frame, alongside the seed above — Veo's documented
+      // last-frame parameter; the anchors path (identity references, no
+      // literal frame) has no use for it, so it only rides with a seed.
+      const [endFrameImage] =
+        !anchors.length && opts?.endFrame
+          ? await Promise.all(
+              (await refsToInlineImages(visualRefs([opts.endFrame]))).map(videoSafeInline)
+            )
+          : [];
       const projectAspect = useEditor.getState().aspect;
       const aspectRatio = opts?.aspect ?? nearestAspect(projectAspect, selected.aspects);
       // A project on a shape the model can't render gets its clip cropped, so
@@ -660,8 +672,13 @@ export const useGenerate = create<GenerateState>((set, get) => {
         model: selected.modelId,
         ...(anchors.length > 0
           ? { inputs: { referenceImages: anchors } }
-          : images.length > 0
-            ? { inputs: { images } }
+          : images.length > 0 || endFrameImage
+            ? {
+                inputs: {
+                  ...(images.length > 0 ? { images } : {}),
+                  ...(endFrameImage ? { lastFrame: [endFrameImage] } : {}),
+                },
+              }
             : {}),
         parameters: {
           aspectRatio,
