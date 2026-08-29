@@ -692,7 +692,7 @@ export function LibraryCard({
                   )
             )}
           >
-            {formatBytes(sizeBytes)}
+            {a.type === "audio" ? formatBytes(sizeBytes) : formatBytes(sizeBytes).replace(" ", "")}
           </span>
         )}
         {onUse && (
