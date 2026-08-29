@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Captions, Check, Clapperboard, ClipboardList, Copy, Crosshair, Download, Ellipsis, Film, FolderOpen, FolderPlus, Image as ImageIcon, Layers, Loader2, MoveHorizontal, Music, Plus, Ratio, Shapes, Sparkles, Trash2, Upload, X, Blend } from "lucide-react";
+import { Captions, Check, Clapperboard, ClipboardList, Copy, Crosshair, Download, Ellipsis, Film, FolderOpen, FolderPlus, Image as ImageIcon, Layers, Loader2, MoveHorizontal, Music, Plus, Ratio, Shapes, Sparkles, Trash2, Upload, Wand2, X, Blend } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { LiveElapsed } from "@/cut/components/Elapsed";
@@ -136,6 +136,45 @@ const TABS: { id: Tab; label: string; icon: typeof Film }[] = [
   { id: "publish", label: "Details", icon: ClipboardList },
 ];
 
+/** Video/Image/Audio generation share one rail tile ("AI Gen") instead of
+ * three — each still opens its own panel by its own tab id underneath (the
+ * assistant's set_side_panel tool, unseen badges, and busy state all still
+ * key off "video"/"image"/"audio" individually), this only merges how the
+ * three PRESENT on the rail. Once one is open, GenTabSwitcher (rendered atop
+ * its panel) lets the user flip between the three without going back to the
+ * rail. */
+const GEN_TABS: { id: "video" | "image" | "audio"; label: string; icon: typeof Film }[] = [
+  { id: "video", label: "Video", icon: Film },
+  { id: "image", label: "Image", icon: ImageIcon },
+  { id: "audio", label: "Audio", icon: Music },
+];
+
+/** Sits where each generate panel's own PanelHead would go — same h-12
+ * height, so the side panel's floating close button still lands right. */
+function GenTabSwitcher({ tab, onSelect }: { tab: Tab | null; onSelect: (id: "video" | "image" | "audio") => void }) {
+  return (
+    <div className="flex h-12 shrink-0 items-center gap-1 pr-10 pl-2.5">
+      {GEN_TABS.map(({ id, label, icon: Icon }) => (
+        <button
+          key={id}
+          type="button"
+          aria-pressed={tab === id}
+          onClick={() => onSelect(id)}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-[12px] font-medium transition-colors",
+            tab === id
+              ? "bg-foreground/10 text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Icon className="size-3.5" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** Aspect ratio, Timeline, and Playhead — editor tools rather than project
  * surfaces, so they're a separate tab set from `Tab`/`TABS` above: their own
  * open/closed state, no drop targets, no busy/unseen badges, and (unlike the
@@ -199,6 +238,15 @@ export function SidePanel({
   );
   // The remembered tab may be hidden in this share; fall back to collapsed.
   const tab = tabPref !== null && !visibleTabs.some((t) => t.id === tabPref) ? null : tabPref;
+  // Which of Video/Image/Audio the merged "AI Gen" rail tile reopens to —
+  // whichever was open last this session, defaulting to Video the first
+  // time. A ref, not state: it only matters at the moment of the next
+  // click, so tracking it doesn't need to trigger a render of its own.
+  const lastGenTab = useRef<"video" | "image" | "audio">("video");
+  useEffect(() => {
+    if (tab === "video" || tab === "image" || tab === "audio") lastGenTab.current = tab;
+  }, [tab]);
+  const genTabOpen = tab === "video" || tab === "image" || tab === "audio";
   // The cut button at a clip's own edges hides while that clip is selected
   // (its Edit panel already covers it there), so a clip selection left over
   // from before can leave every cut near it looking gone. Clear it the
@@ -377,8 +425,23 @@ export function SidePanel({
         contentClassName="flex flex-col items-center gap-0.5 py-2 sm:gap-1 sm:py-3"
       >
         {visibleTabs.map(({ id, label, icon: Icon }, tabIndex) => {
+          // Image and Audio fold into the "video" iteration below as the
+          // merged "AI Gen" tile — they don't get one of their own.
+          if (id === "image" || id === "audio") return null;
+          const merged = id === "video";
+          const effectiveLabel = merged ? "AI Gen" : label;
+          const EffectiveIcon = merged ? Wand2 : Icon;
+          const active = merged ? genTabOpen : tab === id;
           // The open tab never badges — its completions are already on screen.
-          const unseenCount = isGenTab(id) && id !== tab ? unseen[id].length : 0;
+          // Merged sums whichever of the three isn't the one currently open
+          // (all three, if the group is closed) — same rule as a single tab,
+          // just applied across all three at once.
+          const unseenCount = merged
+            ? GEN_TABS.reduce((n, g) => n + (g.id !== tab ? unseen[g.id].length : 0), 0)
+            : isGenTab(id) && id !== tab
+              ? unseen[id].length
+              : 0;
+          const tileBusy = merged ? GEN_TABS.some((g) => !!busy[g.id]) : !!busy[id];
           // Full width of the rail, whatever a scrollbar has left of it, so a
           // label that no longer fits ellipsises inside the tile rather than
           // running out past both edges of a centred one. The open tab reads
@@ -392,20 +455,20 @@ export function SidePanel({
               <span
                 className={cn(
                   "relative grid size-7 place-items-center rounded-lg transition-colors",
-                  tab === id ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60",
+                  active ? "bg-foreground/10 text-foreground" : "hover:bg-muted/60",
                   dropTab === id && "bg-primary/15 text-primary"
                 )}
               >
-                <Icon className="size-3.5" />
-                <TileStatus count={unseenCount} busy={!!busy[id]} />
+                <EffectiveIcon className="size-3.5" />
+                <TileStatus count={unseenCount} busy={tileBusy} />
               </span>
               <span
                 className={cn(
                   "w-full truncate text-center text-[10px] font-medium tracking-tight",
-                  tab === id && "text-foreground"
+                  active && "text-foreground"
                 )}
               >
-                {label}
+                {effectiveLabel}
               </span>
             </>
           );
@@ -413,11 +476,12 @@ export function SidePanel({
           const tile = (
             <button
               className={tileClass}
-              aria-label={label}
-              aria-pressed={tab === id}
+              aria-label={effectiveLabel}
+              aria-pressed={active}
               onClick={() => {
                 setExtraTab(null);
-                setTab(tab === id ? null : id);
+                if (merged) setTab(genTabOpen ? null : lastGenTab.current);
+                else setTab(tab === id ? null : id);
               }}
               onDragOver={(e) => {
                 if (!acceptsDrop(id, e)) return;
@@ -533,6 +597,13 @@ export function SidePanel({
             )}
           >
             <ClosePanelButton onClose={() => setTab(null)} />
+            <GenTabSwitcher
+              tab={tab}
+              onSelect={(id) => {
+                lastGenTab.current = id;
+                setTab(id);
+              }}
+            />
             {tab === "image" ? (
               <ImageGenPanel projectId={projectId} />
             ) : (
@@ -563,6 +634,13 @@ export function SidePanel({
             )}
           >
             <ClosePanelButton onClose={() => setTab(null)} />
+            <GenTabSwitcher
+              tab={tab}
+              onSelect={(id) => {
+                lastGenTab.current = id;
+                setTab(id);
+              }}
+            />
             <AudioPanel
               projectId={projectId}
               importing={importing}
