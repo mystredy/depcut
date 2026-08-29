@@ -1,9 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentType, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { ArrowUp, Loader2, Plus, SlidersHorizontal, X } from "lucide-react";
+import {
+  ArrowLeftRight,
+  ArrowUp,
+  ChevronDown,
+  Clock,
+  Film,
+  Layers,
+  Loader2,
+  Plus,
+  Scaling,
+  SlidersHorizontal,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { useAssetDrop } from "@/cut/lib/assetRef";
 import { seedNewProjectDoc } from "@/cut/lib/docCache";
 import { useGenerate } from "@/cut/lib/generate";
@@ -14,7 +27,6 @@ import { activeResidency, backendFor } from "@/cut/lib/residency";
 import type { ProjectSummary } from "@/cut/lib/types";
 import { nearestAspect } from "@/cut/lib/types";
 import { useLocalPref } from "@/cut/lib/uiState";
-import type { VideoRefMode } from "@/cut/lib/videoGen";
 import {
   VIDEO_ASPECT_LABEL,
   VIDEO_MODELS,
@@ -24,14 +36,7 @@ import {
 } from "@/cut/lib/videoModels";
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
-import { PillSelect } from "./PillSelect";
-import {
-  COUNT_OPTIONS,
-  DURATION_OPTIONS,
-  REF_MODE_OPTIONS,
-  RESOLUTION_OPTIONS,
-  SegRow,
-} from "./VideoGenControls";
+import { COUNT_OPTIONS, DURATION_OPTIONS, RESOLUTION_OPTIONS, SegRow } from "./VideoGenControls";
 
 /** A one-shot text-to-video composer for the dashboard: describe a clip, hit
  * go, and land in a brand-new project with the render already under way —
@@ -40,19 +45,23 @@ import {
  *
  * References work differently here than in the editor: no project exists
  * yet to hold Media, and the account's Library isn't wired into this
- * composer, so Frames/Ingredients only take raw file uploads (picked or
- * dropped) — staged as plain Files and imported into the brand-new project
- * at generate time, right before the render request. */
+ * composer, so the Image/Start/End slots only take raw file uploads (picked
+ * or dropped) — staged as plain Files and imported into the brand-new
+ * project at generate time, right before the render request.
+ *
+ * Image and the Start/End pair are mutually exclusive, mirroring the
+ * backend's own constraint: a render takes a seed frame (Start/End) or
+ * identity reference images (Image), never both. Filling one disables the
+ * other rather than silently overriding it. */
 export function DashboardGenerateVideo({ className }: { className?: string }) {
   const router = useRouter();
   const base = useCutBase();
   const client = useQueryClient();
   const [prompt, setPrompt] = useState("");
   const [aspect, setAspect] = useState<VideoAspect>("16:9");
-  const [refMode, setRefMode] = useState<VideoRefMode>("frames");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [startFile, setStartFile] = useState<File | null>(null);
   const [endFile, setEndFile] = useState<File | null>(null);
-  const [ingredientFiles, setIngredientFiles] = useState<File[]>([]);
   // Shares the editor Video tab's own localStorage keys, so a pick made here
   // is still the pick showing there (and back) — one set of "last used"
   // knobs for both composers.
@@ -77,9 +86,8 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
     (v) => v === 1 || v === 2 || v === 3 || v === 4
   );
   const [busy, setBusy] = useState(false);
-  // Every knob past the prompt lives behind one toggle, collapsed by default
-  // — the composer reads as a plain "describe it and go" box until someone
-  // wants to dig into the details.
+  // The aspect/duration/takes knobs live behind one toggle — model and
+  // resolution get their own always-visible quick pickers below.
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Clamped to the picked model's own set, same as the editor's Video tab —
@@ -95,20 +103,13 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
   const effDurationSeconds = durationOptions.some((o) => o.value === durationSeconds)
     ? durationSeconds
     : durationOptions[durationOptions.length - 1].value;
-  // Ingredient slots are capped the same way the editor caps identity
-  // anchors — the registry's per-model reference-image limit.
-  const ingredientFilesCapped = ingredientFiles.slice(0, model.maxReferenceImages);
-  // What the collapsed settings toggle reads while closed, so the current
-  // picks stay visible without opening the panel.
-  const settingsSummary = [
-    model.model,
-    VIDEO_ASPECT_LABEL[effAspect].split(" ")[0],
-    effResolution,
-    `${effDurationSeconds}s`,
-    count > 1 ? `x${count}` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const aspectOptions = model.aspects.map((a) => ({
+    value: a,
+    label: VIDEO_ASPECT_LABEL[a].split(" ")[0],
+  }));
+
+  const hasImage = imageFile !== null;
+  const hasFrames = startFile !== null || endFile !== null;
 
   const go = async () => {
     const text = prompt.trim();
@@ -132,17 +133,16 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
       // Staged files only import into the project once, here — the count
       // loop below reuses the same landed refs for every take rather than
       // re-uploading per take.
-      const asIngredients = refMode === "ingredients" && ingredientFilesCapped.length > 0;
-      const [startRef, endRef, referenceImages] = await Promise.all([
-        !asIngredients && startFile
+      const [imageRef, startRef, endRef] = await Promise.all([
+        hasImage && imageFile
+          ? refsFromDroppedFiles(project.id, [imageFile]).then((rs) => rs[0])
+          : Promise.resolve(undefined),
+        !hasImage && startFile
           ? refsFromDroppedFiles(project.id, [startFile]).then((rs) => rs[0])
           : Promise.resolve(undefined),
-        !asIngredients && endFile
+        !hasImage && endFile
           ? refsFromDroppedFiles(project.id, [endFile]).then((rs) => rs[0])
           : Promise.resolve(undefined),
-        asIngredients
-          ? refsFromDroppedFiles(project.id, ingredientFilesCapped)
-          : Promise.resolve([]),
       ]);
 
       for (let i = 0; i < count; i++) {
@@ -151,9 +151,9 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
           aspect: effAspect,
           resolution: effResolution,
           durationSeconds: effDurationSeconds,
-          ...(asIngredients
-            ? // Identity anchors: the prompt rides as written, no compose rewrite.
-              { referenceImages, composeRefs: false }
+          ...(imageRef
+            ? // Identity anchor: the prompt rides as written, no compose rewrite.
+              { referenceImages: [imageRef], composeRefs: false }
             : {
                 ...(startRef ? { refs: [startRef] } : {}),
                 ...(endRef ? { endFrame: endRef } : {}),
@@ -174,6 +174,24 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
         className
       )}
     >
+      <div className="flex items-center gap-1.5 px-3 pt-3">
+        <FileSlot label="Image" file={imageFile} onChange={setImageFile} disabled={hasFrames} />
+        <FileSlot label="Start frame" file={startFile} onChange={setStartFile} disabled={hasImage} />
+        <button
+          type="button"
+          title="Swap start and end"
+          aria-label="Swap start and end"
+          disabled={hasImage}
+          onClick={() => {
+            setStartFile(endFile);
+            setEndFile(startFile);
+          }}
+          className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+        >
+          <ArrowLeftRight className="size-3.5" />
+        </button>
+        <FileSlot label="End frame" file={endFile} onChange={setEndFile} disabled={hasImage} />
+      </div>
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
@@ -185,88 +203,74 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
         }}
         placeholder="Describe your video…"
         disabled={busy}
-        className="min-h-[72px] w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
+        className="min-h-[64px] w-full resize-none bg-transparent px-4 pt-2.5 pb-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
       />
       <div className="flex flex-col gap-2 px-3 pb-3">
         {settingsOpen && (
-          <>
-            <SegRow
-              title="How references are used"
-              value={refMode}
-              onChange={setRefMode}
-              options={REF_MODE_OPTIONS}
-            />
-            {refMode === "frames" ? (
-              <div className="flex items-center gap-1.5 px-0.5">
-                <FileSlot label="Start" file={startFile} onChange={setStartFile} />
-                <span className="text-muted-foreground">⇄</span>
-                <FileSlot label="End" file={endFile} onChange={setEndFile} />
-              </div>
-            ) : (
-              <IngredientRow
-                files={ingredientFilesCapped}
-                onChange={setIngredientFiles}
-                max={model.maxReferenceImages}
-              />
-            )}
-            <div className="flex items-center gap-1.5">
-              <PillSelect
-                title="Model"
-                value={tier}
-                display={model.model}
-                options={VIDEO_MODELS.map((m) => ({ value: m.tier, label: m.model }))}
-                onChange={setTier}
-                className="py-1 pr-2 pl-3 text-[12px]"
-              />
-              <PillSelect
-                title="Aspect ratio"
-                value={effAspect}
-                display={VIDEO_ASPECT_LABEL[effAspect].split(" ")[0]}
-                options={model.aspects.map((a) => ({
-                  value: a,
-                  label: VIDEO_ASPECT_LABEL[a],
-                }))}
-                onChange={setAspect}
-                className="py-1 pr-2 pl-3 text-[12px]"
-              />
-            </div>
-            <SegRow
-              title="Resolution"
-              value={effResolution}
-              onChange={setResolution}
-              options={resolutionOptions}
-            />
+          <div className="flex flex-col gap-2">
+            <SegRow title="Aspect ratio" value={effAspect} onChange={setAspect} options={aspectOptions} />
             <SegRow
               title="Duration"
               value={effDurationSeconds}
               onChange={setDurationSeconds}
               options={durationOptions}
             />
-            <SegRow
-              title="Number of takes"
-              value={count}
-              onChange={setCount}
-              options={COUNT_OPTIONS}
-            />
-          </>
+            <SegRow title="Number of takes" value={count} onChange={setCount} options={COUNT_OPTIONS} />
+          </div>
         )}
-        <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            title="Generation settings"
-            aria-label="Generation settings"
-            aria-pressed={settingsOpen}
-            onClick={() => setSettingsOpen((v) => !v)}
-            className={cn(
-              "flex min-w-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] transition-colors",
-              settingsOpen
-                ? "border-ring bg-muted text-foreground"
-                : "border-input text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <SlidersHorizontal className="size-3.5 shrink-0" />
-            <span className="min-w-0 truncate">{settingsSummary}</span>
-          </button>
+        <div className="flex items-center justify-between gap-1">
+          <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
+            <button
+              type="button"
+              title="More settings"
+              aria-label="More settings"
+              aria-pressed={settingsOpen}
+              onClick={() => setSettingsOpen((v) => !v)}
+              className={cn(
+                "grid size-7 shrink-0 place-items-center rounded-full transition-colors",
+                settingsOpen
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <SlidersHorizontal className="size-4" />
+            </button>
+            <div className="mx-0.5 h-4 w-px shrink-0 bg-border" />
+            <IconSelect
+              icon={Film}
+              title="Model"
+              value={tier}
+              display={model.model}
+              options={VIDEO_MODELS.map((m) => ({ value: m.tier, label: m.model }))}
+              onChange={setTier}
+            />
+            <IconSelect
+              icon={Sparkles}
+              title="Resolution"
+              value={effResolution}
+              display={effResolution}
+              options={resolutionOptions}
+              onChange={setResolution}
+            />
+            <IconBadge
+              icon={Layers}
+              label="Number of takes"
+              value={String(count)}
+              onClick={() => setSettingsOpen(true)}
+            />
+            <IconBadge
+              icon={Clock}
+              label="Duration"
+              value={`${effDurationSeconds}s`}
+              onClick={() => setSettingsOpen(true)}
+            />
+            <IconBadge
+              icon={Scaling}
+              label="Aspect ratio"
+              value={effAspect}
+              onClick={() => setSettingsOpen(true)}
+            />
+          </div>
           <button
             type="button"
             title="Generate video"
@@ -305,17 +309,19 @@ function FilePreview({ file, url }: { file: File; url: string }) {
   );
 }
 
-/** The Start/End slot in Frames mode — a single staged file, pick or drop to
- * fill it, a small "x" to clear it. No Media/Library here (see the
- * component doc comment): a plain file picker plus a drop zone. */
+/** A single staged reference — pick or drop to fill it, an "x" to clear it.
+ * No Media/Library here (see the component doc comment): a plain file
+ * picker plus a drop zone. */
 function FileSlot({
   label,
   file,
   onChange,
+  disabled,
 }: {
   label: string;
   file: File | null;
   onChange: (file: File | null) => void;
+  disabled?: boolean;
 }) {
   const url = useFilePreview(file);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -335,7 +341,7 @@ function FileSlot({
         ref={attachTarget}
         {...targetProps}
         className={cn(
-          "relative size-14 shrink-0 overflow-hidden rounded-xl border",
+          "relative size-8 shrink-0 overflow-hidden rounded-full border",
           active ? "border-[#0a84ff] ring-2 ring-[#0a84ff]/30" : "border-border"
         )}
       >
@@ -343,7 +349,7 @@ function FileSlot({
         <button
           type="button"
           title={`Remove ${label.toLowerCase()}`}
-          className="absolute top-0.5 right-0.5 grid size-4.5 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
+          className="absolute -top-1 -right-1 grid size-4 place-items-center rounded-full bg-black/70 text-white hover:bg-black/90"
           onClick={() => onChange(null)}
         >
           <X className="size-2.5" />
@@ -358,14 +364,16 @@ function FileSlot({
         ref={attachTarget}
         {...targetProps}
         type="button"
+        disabled={disabled}
         onClick={() => inputRef.current?.click()}
         className={cn(
-          "flex h-14 shrink-0 items-center justify-center rounded-xl border px-4 text-[13px] font-medium transition-colors",
+          "flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-40",
           active
             ? "border-[#0a84ff] bg-[#0a84ff]/10 text-[#0a84ff]"
-            : "border-border text-foreground hover:bg-muted"
+            : "border-input text-foreground hover:bg-muted"
         )}
       >
+        <Plus className="size-3.5" />
         {label}
       </button>
       <input
@@ -383,68 +391,70 @@ function FileSlot({
   );
 }
 
-/** Ingredients mode's attachments: up to the model's reference-image limit,
- * each a staged file with its own remove button, plus an add tile. */
-function IngredientRow({
-  files,
+/** A compact icon + text + chevron quick picker for the bottom toolbar — a
+ * borderless twin of PillSelect's hidden-native-select technique, sized to
+ * sit inline among plain icon buttons instead of standing out as a pill. */
+function IconSelect<T extends string>({
+  icon: Icon,
+  title,
+  value,
+  display,
+  options,
   onChange,
-  max,
 }: {
-  files: File[];
-  onChange: (files: File[]) => void;
-  max: number;
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  value: T;
+  display: string;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {files.map((file, i) => (
-        <IngredientThumb
-          key={i}
-          file={file}
-          onRemove={() => onChange(files.filter((_, j) => j !== i))}
-        />
-      ))}
-      {files.length < max && (
-        <>
-          <button
-            type="button"
-            title="Add ingredient"
-            onClick={() => inputRef.current?.click()}
-            className="grid size-14 shrink-0 place-items-center rounded-xl border border-dashed border-border text-muted-foreground hover:bg-muted"
-          >
-            <Plus className="size-4" />
-          </button>
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*,video/*"
-            multiple
-            hidden
-            onChange={(e) => {
-              const picked = Array.from(e.target.files ?? []);
-              e.target.value = "";
-              if (picked.length > 0) onChange([...files, ...picked].slice(0, max));
-            }}
-          />
-        </>
-      )}
-    </div>
+    <label
+      className="relative flex shrink-0 items-center gap-1 rounded-full px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      title={title}
+    >
+      <Icon className="size-4 shrink-0" />
+      <span className="max-w-16 truncate text-[11px] font-medium">{display}</span>
+      <ChevronDown className="size-3 shrink-0" />
+      <select
+        className="absolute inset-0 w-full cursor-pointer appearance-none opacity-0"
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
-function IngredientThumb({ file, onRemove }: { file: File; onRemove: () => void }) {
-  const url = useFilePreview(file);
+/** A read-only icon + value chip for a knob that lives in the settings
+ * panel — clicking it opens that panel rather than editing the value
+ * inline. */
+function IconBadge({
+  icon: Icon,
+  label,
+  value,
+  onClick,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  onClick: () => void;
+}) {
   return (
-    <div className="relative size-14 shrink-0 overflow-hidden rounded-xl border border-border">
-      {url && <FilePreview file={file} url={url} />}
-      <button
-        type="button"
-        title="Remove"
-        className="absolute top-0.5 right-0.5 grid size-4.5 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
-        onClick={onRemove}
-      >
-        <X className="size-2.5" />
-      </button>
-    </div>
+    <button
+      type="button"
+      title={label}
+      onClick={onClick}
+      className="flex shrink-0 items-center gap-1 rounded-full px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+    >
+      <Icon className="size-4 shrink-0" />
+      <span className="text-[11px] font-medium">{value}</span>
+    </button>
   );
 }
