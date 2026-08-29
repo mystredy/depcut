@@ -112,6 +112,9 @@ export function createGeminiVeoVideoAssetProvider(
     const negative = stringValue(parameters.negativePrompt)?.trim();
     const prompt = [basePrompt, negative ? `Avoid: ${negative}.` : ""].filter(Boolean).join(" ");
     const aspectRatio = stringValue(parameters.aspectRatio);
+    const resolution = stringValue(parameters.resolution);
+    const durationSeconds =
+      typeof parameters.durationSeconds === "number" ? parameters.durationSeconds : undefined;
 
     const client = clientFactory(clientConfig.options);
     let operation: GenerateVideosOperation;
@@ -123,6 +126,11 @@ export function createGeminiVeoVideoAssetProvider(
         config: {
           generateAudio: true,
           ...(aspectRatio === "16:9" || aspectRatio === "9:16" ? { aspectRatio } : {}),
+          ...(resolution === "720p" || resolution === "1080p" ? { resolution } : {}),
+          // Veo 3.1 only takes 4, 6, or 8 for 720p/1080p — an out-of-range
+          // value rides through unclamped, so the caller (the generate panel's
+          // duration control) is what keeps it honest.
+          ...(durationSeconds ? { durationSeconds } : {}),
           ...(references.length > 0
             ? {
                 referenceImages: references.map((r) => ({

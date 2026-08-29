@@ -1,7 +1,20 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { Copy, Film, Loader2, Maximize2, Plus, RotateCw, Sparkles, X } from "lucide-react";
+import { useEffect, useRef, type ComponentType } from "react";
+import {
+  Copy,
+  Film,
+  Frame,
+  Loader2,
+  Maximize2,
+  Plus,
+  Puzzle,
+  RectangleHorizontal,
+  RotateCw,
+  Smartphone,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { MEDIA_CORS } from "@/cut/lib/mediaCors";
@@ -24,13 +37,8 @@ import { characterPrompt, stockTitle } from "@/cut/lib/stock";
 import { useEditor } from "@/cut/lib/store";
 import { nearestAspect } from "@/cut/lib/types";
 import { useLocalPref } from "@/cut/lib/uiState";
-import { useVideoGen } from "@/cut/lib/videoGen";
-import {
-  VIDEO_ASPECT_LABEL,
-  VIDEO_MODELS,
-  type VideoAspect,
-  type VideoModelOption,
-} from "@/cut/lib/videoModels";
+import { useVideoGen, type VideoRefMode } from "@/cut/lib/videoGen";
+import { VIDEO_MODELS, type VideoAspect, type VideoModelOption } from "@/cut/lib/videoModels";
 import { cn } from "@/lib/utils";
 import { AddRefButton, CopyHandlePill, MentionTextarea, RefChips } from "./AssetRefs";
 import { DictationControl } from "./MicDictation";
@@ -45,14 +53,83 @@ import { StockVideosPanel } from "./StockVideosPanel";
 // then (in the same scroll) the stock-clip browser below it. Clicking a stock
 // tile loads its saved prompt into the form above.
 //
-// A visual reference (dragged in or @name-mentioned) seeds the render: the model
-// takes one input image, so the first reference's picture becomes the start
-// frame.
+// A visual reference (dragged in or @name-mentioned) conditions the render two
+// ways (the Frames/Ingredients row below the composer): "Frames" plays the
+// kept picture as the literal first frame; "Ingredients" keeps up to the
+// model's reference-image limit as identity anchors instead — the prompt
+// rides as written, no compose rewrite.
 
-const ASPECT_WORD: Record<VideoAspect, string> = {
-  "16:9": "Landscape",
-  "9:16": "Portrait",
-};
+const REF_MODE_OPTIONS: { value: VideoRefMode; label: string; icon: ComponentType<{ className?: string }> }[] = [
+  { value: "frames", label: "Frames", icon: Frame },
+  { value: "ingredients", label: "Ingredients", icon: Puzzle },
+];
+
+const ASPECT_OPTIONS: { value: VideoAspect; label: string; icon: ComponentType<{ className?: string }> }[] = [
+  { value: "9:16", label: "9:16", icon: Smartphone },
+  { value: "16:9", label: "16:9", icon: RectangleHorizontal },
+];
+
+const RESOLUTION_OPTIONS: { value: "720p" | "1080p"; label: string }[] = [
+  { value: "720p", label: "720p" },
+  { value: "1080p", label: "1080p" },
+];
+
+const DURATION_OPTIONS: { value: 4 | 6 | 8; label: string }[] = [
+  { value: 4, label: "4s" },
+  { value: 6, label: "6s" },
+  { value: 8, label: "8s" },
+];
+
+const COUNT_OPTIONS: { value: 1 | 2 | 3 | 4; label: string }[] = [
+  { value: 1, label: "x1" },
+  { value: 2, label: "x2" },
+  { value: 3, label: "x3" },
+  { value: 4, label: "x4" },
+];
+
+/** A row of equal-width segments — the aspect/resolution/duration/count knobs
+ * below the composer. One selected value, click to switch; an icon is
+ * optional per option. */
+function SegRow<T extends string | number>({
+  title,
+  value,
+  onChange,
+  options,
+  disabled,
+}: {
+  title: string;
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string; icon?: ComponentType<{ className?: string }> }[];
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex shrink-0 gap-1 rounded-lg bg-muted p-1",
+        disabled && "pointer-events-none opacity-50"
+      )}
+      title={title}
+    >
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-[12px] font-medium transition-colors",
+            value === o.value
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {o.icon && <o.icon className="size-3.5" />}
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function GenerateVideoPanel({ projectId }: { projectId: string }) {
   const readOnly = useEditor((s) => s.readOnly);
@@ -63,7 +140,7 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
   const allJobs = useGenerate((s) => s.jobs);
   // Panel renders only — a chat- or scene-owned job lives on its chat card.
   const jobs = allJobs.filter((j) => j.projectId === projectId && j.kind === "video" && !j.chatId);
-  const { prompt, refs, character, aspect } = useVideoGen();
+  const { prompt, refs, refMode, character, aspect } = useVideoGen();
   const candidates = useRefCandidates();
   // OS files handed to the panel — dropped on it or pasted into the prompt —
   // attach as references (media files import into the project on the way;
@@ -81,11 +158,32 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
     "omni",
     (v) => VIDEO_MODELS.some((m) => m.tier === v)
   );
+  // Resolution and duration are Veo-only knobs — Omni's API has neither, so
+  // these prefs simply go unread when Omni is the selected tier.
+  const [resolution, setResolution] = useLocalPref<"720p" | "1080p">(
+    "cut-gen-veo-resolution",
+    "720p",
+    (v) => v === "720p" || v === "1080p"
+  );
+  const [durationSeconds, setDurationSeconds] = useLocalPref<4 | 6 | 8>(
+    "cut-gen-veo-duration",
+    8,
+    (v) => v === 4 || v === 6 || v === 8
+  );
+  // How many independent takes one click renders — plain repeated submits
+  // (no provider batch parameter), so it works the same for every tier and
+  // each take lands as its own job in the list below.
+  const [count, setCount] = useLocalPref<1 | 2 | 3 | 4>(
+    "cut-gen-video-count",
+    1,
+    (v) => v === 1 || v === 2 || v === 3 || v === 4
+  );
 
   // Every knob renders from — and is clamped to — what the selected model
   // supports, so a stored pick from another model can never reach the API.
   const model = VIDEO_MODELS.find((m) => m.tier === tier) ?? VIDEO_MODELS[0];
   const effAspect = nearestAspect(aspect, model.aspects);
+  const isVeo = model.provider === "gemini-veo";
 
   // Default the shape to the project's own orientation when the panel opens,
   // same as the image panel (the user can still pick the other one). A custom
@@ -102,17 +200,28 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
     if (!text) return;
     // Character mode: the text is the spoken line — compose it with the
     // persona, and seed the render with the character's poster frame so the
-    // same person delivers it.
+    // same person delivers it. Character mode always plays as a frame (its
+    // poster is the point), so Ingredients mode only applies free-form.
     const composed = character?.persona ? characterPrompt(character.persona, text) : text;
     const seedRefs = character ? [refFromStockVideo(character)] : all;
-    void useGenerate.getState().generateVideo(projectId, composed, {
-      tier,
-      aspect: effAspect,
-      refs: seedRefs,
-      // The character's poster seed is the point — the same person must
-      // deliver the line — so free-form prompts alone get the ref rewrite.
-      composeRefs: !character,
-    }).settled;
+    const asIngredients = !character && refMode === "ingredients" && seedRefs.length > 0;
+    for (let i = 0; i < count; i++) {
+      void useGenerate.getState().generateVideo(projectId, composed, {
+        tier,
+        aspect: effAspect,
+        ...(isVeo ? { resolution, durationSeconds } : {}),
+        ...(asIngredients
+          ? // Identity anchors: the prompt rides as written, no compose rewrite.
+            { referenceImages: seedRefs, composeRefs: false }
+          : {
+              refs: seedRefs,
+              // The character's poster seed is the point — the same person
+              // must deliver the line — so free-form prompts alone get the
+              // ref rewrite.
+              composeRefs: !character,
+            }),
+      }).settled;
+    }
     useVideoGen.getState().openWith("");
   };
 
@@ -200,9 +309,27 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
           </div>
         </div>
 
-        {/* Which model renders the clip — a dropdown, since the catalog grows.
-            The model renders the whole clip with audio in one pass and picks
-            its own length, so aspect below is the only other knob. */}
+        {/* How the attached refs above condition the render: as literal
+            frames, or as identity ingredients (character mode is always a
+            frame — its poster is the point). */}
+        <SegRow
+          title="How references are used"
+          value={character ? "frames" : refMode}
+          onChange={(v) => useVideoGen.getState().setRefMode(v)}
+          options={REF_MODE_OPTIONS}
+          disabled={!!character}
+        />
+
+        {/* Shape, as a segmented toggle instead of a dropdown — only two
+            options, so both read at a glance. */}
+        <SegRow
+          title="Aspect ratio"
+          value={effAspect}
+          onChange={(v) => useVideoGen.getState().setAspect(v)}
+          options={ASPECT_OPTIONS.filter((o) => model.aspects.includes(o.value))}
+        />
+
+        {/* Which model renders the clip — a dropdown, since the catalog grows. */}
         <PillSelect
           className="h-7 shrink-0"
           title="Model"
@@ -217,18 +344,27 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
           onChange={setTier}
         />
 
-        {/* Shape, the same pill family as the image panel. */}
-        <PillSelect
-          className="h-7 shrink-0"
-          title="Aspect ratio"
-          value={effAspect}
-          display={ASPECT_WORD[effAspect]}
-          options={model.aspects.map((a) => ({
-            value: a,
-            label: VIDEO_ASPECT_LABEL[a],
-          }))}
-          onChange={(v) => useVideoGen.getState().setAspect(v)}
-        />
+        {/* Resolution and duration are Veo-only: Omni's API has neither
+            knob, so these only show once a Veo tier is picked. */}
+        {isVeo && (
+          <SegRow
+            title="Resolution"
+            value={resolution}
+            onChange={setResolution}
+            options={RESOLUTION_OPTIONS}
+          />
+        )}
+        {isVeo && (
+          <SegRow
+            title="Duration"
+            value={durationSeconds}
+            onChange={setDurationSeconds}
+            options={DURATION_OPTIONS}
+          />
+        )}
+
+        {/* How many independent takes to render at once. */}
+        <SegRow title="Number of takes" value={count} onChange={setCount} options={COUNT_OPTIONS} />
 
         <Button
           className="gen-go w-full shrink-0"
@@ -236,7 +372,7 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
           onClick={go}
         >
           <Sparkles data-icon="inline-start" />
-          Generate video
+          {count > 1 ? `Generate ${count} videos` : "Generate video"}
         </Button>
 
         {signedIn === false ? (

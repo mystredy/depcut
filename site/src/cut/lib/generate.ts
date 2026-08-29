@@ -161,6 +161,11 @@ export interface VideoGenOptions {
   tier?: VideoTier;
   /** Composition shape; defaults to the project's orientation. */
   aspect?: "16:9" | "9:16";
+  /** Veo tiers only — Omni has no resolution knob, so this is ignored there. */
+  resolution?: "720p" | "1080p";
+  /** Veo tiers only (4, 6, or 8) — Omni's clip length is fixed, so this is
+   * ignored there. */
+  durationSeconds?: number;
   /** What the render must avoid — the wrong medium's tells, letterbox bars,
    * on-screen text. The model has no negative-prompt parameter, so the
    * adapter folds this into the prompt as an avoid clause. */
@@ -659,6 +664,8 @@ export const useGenerate = create<GenerateState>((set, get) => {
         parameters: {
           aspectRatio,
           ...(opts?.negativePrompt ? { negativePrompt: opts.negativePrompt } : {}),
+          ...(opts?.resolution ? { resolution: opts.resolution } : {}),
+          ...(opts?.durationSeconds ? { durationSeconds: opts.durationSeconds } : {}),
         },
       });
       if (!res.ok) throw new Error(await readError(res, "Video generation failed."));
