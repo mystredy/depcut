@@ -10,7 +10,13 @@ import { projectHref, useCutBase } from "@/cut/lib/nav";
 import { patchProjects } from "@/cut/lib/queries";
 import { activeResidency, backendFor } from "@/cut/lib/residency";
 import type { ProjectSummary } from "@/cut/lib/types";
-import { VIDEO_ASPECT_LABEL, type VideoAspect } from "@/cut/lib/videoModels";
+import { nearestAspect } from "@/cut/lib/types";
+import {
+  VIDEO_ASPECT_LABEL,
+  VIDEO_MODELS,
+  type VideoAspect,
+  type VideoModelOption,
+} from "@/cut/lib/videoModels";
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 import { PillSelect } from "./PillSelect";
@@ -25,7 +31,14 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
   const client = useQueryClient();
   const [prompt, setPrompt] = useState("");
   const [aspect, setAspect] = useState<VideoAspect>("16:9");
+  const [tier, setTier] = useState<VideoModelOption["tier"]>("omni");
   const [busy, setBusy] = useState(false);
+
+  // Clamped to the picked model's own aspects, same as the editor's Video tab
+  // — every current tier renders both shapes, but this keeps a stored pick
+  // honest if that ever changes.
+  const model = VIDEO_MODELS.find((m) => m.tier === tier) ?? VIDEO_MODELS[0];
+  const effAspect = nearestAspect(aspect, model.aspects);
 
   const go = async () => {
     const text = prompt.trim();
@@ -45,7 +58,9 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
       }));
       seedNewProjectDoc(project.id, project.name, residency);
       track("project_created", { source: "dashboard_video_gen" });
-      useGenerate.getState().generateVideo(project.id, text, { aspect, composeRefs: true });
+      useGenerate
+        .getState()
+        .generateVideo(project.id, text, { tier, aspect: effAspect, composeRefs: true });
       router.push(projectHref(base, project.id, "dashboard", null));
     } finally {
       setBusy(false);
@@ -74,14 +89,19 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
       />
       <div className="flex items-center justify-between gap-2 px-3 pb-3">
         <div className="flex items-center gap-1.5">
-          <span className="rounded-full border border-input px-2.5 py-1 text-[12px] font-medium text-muted-foreground">
-            Omni Flash
-          </span>
+          <PillSelect
+            title="Model"
+            value={tier}
+            display={model.model}
+            options={VIDEO_MODELS.map((m) => ({ value: m.tier, label: m.model }))}
+            onChange={setTier}
+            className="py-1 pr-2 pl-3 text-[12px]"
+          />
           <PillSelect
             title="Aspect ratio"
-            value={aspect}
-            display={VIDEO_ASPECT_LABEL[aspect].split(" ")[0]}
-            options={(["16:9", "9:16"] as VideoAspect[]).map((a) => ({
+            value={effAspect}
+            display={VIDEO_ASPECT_LABEL[effAspect].split(" ")[0]}
+            options={model.aspects.map((a) => ({
               value: a,
               label: VIDEO_ASPECT_LABEL[a],
             }))}
