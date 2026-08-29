@@ -742,18 +742,32 @@ export const useGenerate = create<GenerateState>((set, get) => {
 
     probeNow: () => {
       probing ??= fetch("/api/auth/get-session", { cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : null))
+        .then((r) => {
+          // A non-ok response (a DB hiccup, a 500) means the check failed —
+          // not that it succeeded and found no user. Route it through the
+          // same "transient failure" handling as a thrown network error,
+          // instead of reading it as a confirmed sign-out.
+          if (!r.ok) throw new Error(`get-session responded ${r.status}`);
+          return r.json();
+        })
         .then((s) => {
           const signedIn = Boolean((s as { user?: unknown } | null)?.user);
           set({ signedIn });
           return signedIn;
         })
-        // A transient failure shouldn't knock a known session back to signed-out;
-        // only fall to false when we never learned otherwise.
+        // A transient failure shouldn't knock a known session back to signed-out.
         .catch(() => {
-          const signedIn = get().signedIn ?? false;
-          set({ signedIn });
-          return signedIn;
+          const known = get().signedIn;
+          if (known === null) {
+            // Never learned a real answer yet — this was the first probe,
+            // and it failed. Leave the state unknown rather than flashing a
+            // false "sign in" prompt for someone who actually has a valid
+            // session, and retry shortly so a passing hiccup self-heals.
+            setTimeout(() => void get().probeNow(), 3000);
+            return false;
+          }
+          set({ signedIn: known });
+          return known;
         })
         .finally(() => {
           probing = null;
