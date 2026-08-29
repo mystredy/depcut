@@ -99,7 +99,10 @@ export function NavUser() {
 
   if (!session) return null;
 
-  const cached = isPending ? readCachedNavProfile(session.user.id) : null;
+  // The fallback applies whenever there's no resolved name yet — not just
+  // while the fetch is still in flight, but also once it's settled with an
+  // error (isPending goes false with no data then too).
+  const cached = resolvedName ? null : readCachedNavProfile(session.user.id);
   if (isPending && !cached) {
     return (
       <div className="flex items-center gap-2.5 px-2 py-1.5">
@@ -110,8 +113,10 @@ export function NavUser() {
   }
 
   // The name the user chose wins over the one the provider gave us; the
-  // cache only ever fills in for a fetch still in flight.
-  const name = resolvedName ?? cached!.name;
+  // cache fills in for a fetch still in flight or one that failed. If
+  // neither is available (a first visit whose fetch also failed), fall back
+  // to a plain label rather than showing nothing.
+  const name = resolvedName ?? cached?.name ?? "Account";
   const image = resolvedImage ?? cached?.image ?? null;
 
   const signOut = () => {
