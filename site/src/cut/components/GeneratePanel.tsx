@@ -384,6 +384,7 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
               const last = refs[refs.length - 1];
               if (last) useVideoGen.getState().removeRef(last);
             }}
+            uploadFile={(file) => refsFromDroppedFiles(projectId, [file]).then((rs) => rs[0])}
           />
           <div className="absolute right-2 bottom-2 flex items-center gap-0.5">
             <AddRefButton

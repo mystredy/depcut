@@ -137,6 +137,7 @@ export function ImageGenPanel({ projectId }: { projectId: string }) {
             onSubmit={go}
             attachedRefs={refs}
             onUpsertRef={(r) => useImageGen.getState().updateRef(r)}
+            uploadFile={(file) => refsFromDroppedFiles(projectId, [file]).then((rs) => rs[0])}
           />
           <DictationControl
             text={prompt}

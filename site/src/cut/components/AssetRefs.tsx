@@ -8,6 +8,7 @@ import {
   refToken,
   sameRef,
   type AssetRef,
+  type AssetRefScope,
 } from "@/cut/lib/assetRef";
 import { MEDIA_CORS } from "@/cut/lib/mediaCors";
 import { useRefFor, useRefCandidates, useAssetDrop } from "@/cut/lib/assetRef";
@@ -952,7 +953,8 @@ function mentionAtCaret(value: string, caret: number): { start: number; query: s
  * Textarea with `@` autocomplete over the given candidates — matches short
  * handles (`@v2`) and names, and inserts the handle token when there is one.
  * Submit behavior is the caller's: `submitKey` picks plain Enter (chat) or
- * ⌘/Ctrl+Enter (creators).
+ * ⌘/Ctrl+Enter (creators). A bare "@" with nothing typed browses everything
+ * grouped by source instead of searching (see `browsing` inside).
  */
 export function MentionTextarea({
   value,
@@ -968,6 +970,7 @@ export function MentionTextarea({
   inputRef,
   attachedRefs,
   onUpsertRef,
+  uploadFile,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -992,10 +995,15 @@ export function MentionTextarea({
    * makes video/audio mention pills clickable: the pill opens the moment
    * picker in place, and the pinned ref lands here so it rides at send. */
   onUpsertRef?: (ref: AssetRef) => void;
+  /** Import a file picked from the bare-"@" browse menu's "Upload file" row
+   * into the project and hand back its ref, so it inserts as a mention the
+   * same way picking an existing candidate does. Omit to hide that row. */
+  uploadFile?: (file: File) => Promise<AssetRef | undefined>;
 }) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const [caret, setCaret] = useState(0);
   const [dismissed, setDismissed] = useState<number | null>(null);
   /** The open pill picker: the ref it edits and where it anchors, in the
@@ -1056,13 +1064,42 @@ export function MentionTextarea({
       .slice(0, 8)
       .map((x) => x.c);
   }, [mention, dismissed, candidates]);
-  const open = matches.length > 0;
+  // A bare "@" with nothing typed yet browses everything instead of
+  // searching: grouped by source (Clips, Media, Library, Stock) so it reads
+  // like AddRefButton's picker, plus an Upload row when the caller wants one.
+  // Once a query narrows it, search takes over and ranks across every source.
+  // A single flat list of header/item rows (rather than nested groups) keeps
+  // the popup one level of .map() either way it renders.
+  const browsing = !!mention && dismissed !== mention.start && mention.query.trim() === "";
+  type BrowseRow = { kind: "header"; label: string } | { kind: "item"; asset: AssetRef };
+  const browseRows = useMemo((): BrowseRow[] => {
+    if (!browsing) return [];
+    const order: AssetRefScope[] = ["clip", "project", "library", "stock"];
+    const label: Partial<Record<AssetRefScope, string>> = {
+      clip: "Clips",
+      project: "Media",
+      library: "Library",
+      stock: "Stock",
+    };
+    const rows: BrowseRow[] = [];
+    for (const scope of order) {
+      const group = candidates.filter((c) => c.scope === scope);
+      if (group.length === 0) continue;
+      rows.push({ kind: "header", label: label[scope]! });
+      for (const asset of group) rows.push({ kind: "item", asset });
+    }
+    return rows;
+  }, [browsing, candidates]);
+  const items = browsing
+    ? browseRows.filter((r) => r.kind === "item").map((r) => r.asset)
+    : matches;
+  const open = browsing ? items.length > 0 || !!uploadFile : items.length > 0;
   // Each keystroke re-ranks the list, so a highlight chosen under a previous
   // query derives back to the best (first) match instead of holding a stale
   // arrow/hover position.
   const sel = selState.q === mention?.query ? selState.i : 0;
   const setSel = (i: number) => setSelState({ q: mention?.query, i });
-  const selIndex = Math.min(sel, matches.length - 1);
+  const selIndex = Math.min(sel, Math.max(items.length - 1, 0));
 
   const syncCaret = () => {
     const el = taRef.current;
@@ -1122,27 +1159,91 @@ export function MentionTextarea({
             menuSide === "top" ? "bottom-full mb-1" : "top-full mt-1"
           )}
         >
-          {matches.map((c, i) => (
+          {browsing && uploadFile && (
             <button
-              key={`${c.scope}:${c.id}`}
               type="button"
-              className={cn(
-                "flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left",
-                i === selIndex ? "bg-muted" : "hover:bg-muted/60"
-              )}
-              onMouseEnter={() => setSel(i)}
-              // mousedown, not click: keep focus (and the mention state) in the textarea.
+              className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-[11.5px] hover:bg-muted/60"
               onMouseDown={(e) => {
                 e.preventDefault();
-                pick(c);
+                uploadInputRef.current?.click();
               }}
             >
-              <RefThumb item={c} className="size-8" />
-              {c.handle && <RefHandleBadge handle={c.handle} className="shrink-0" />}
-              <span className="min-w-0 flex-1 truncate text-[11.5px]">{c.name}</span>
+              <span className="grid size-8 shrink-0 place-items-center rounded-md border border-dashed border-border text-muted-foreground">
+                <Upload className="size-3.5" />
+              </span>
+              Upload file
             </button>
-          ))}
+          )}
+          {browsing
+            ? browseRows.map((row, ri) =>
+                row.kind === "header" ? (
+                  <div
+                    key={`h:${ri}`}
+                    className="mt-1 px-1.5 py-1 text-[10.5px] font-medium text-muted-foreground first:mt-0"
+                  >
+                    {row.label}
+                  </div>
+                ) : (
+                  <button
+                    key={`${row.asset.scope}:${row.asset.id}`}
+                    type="button"
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left",
+                      items[selIndex] === row.asset ? "bg-muted" : "hover:bg-muted/60"
+                    )}
+                    onMouseEnter={() => setSel(items.indexOf(row.asset))}
+                    // pick() only reads taRef.current from within this handler,
+                    // the same safe pattern the search-list branch below uses —
+                    // the rule's static analysis just doesn't see through this
+                    // ternary-branched JSX the way it does a plain .map().
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      // eslint-disable-next-line react-hooks/refs
+                      pick(row.asset);
+                    }}
+                  >
+                    <RefThumb item={row.asset} className="size-8" />
+                    {row.asset.handle && (
+                      <RefHandleBadge handle={row.asset.handle} className="shrink-0" />
+                    )}
+                    <span className="min-w-0 flex-1 truncate text-[11.5px]">{row.asset.name}</span>
+                  </button>
+                )
+              )
+            : matches.map((c, i) => (
+                <button
+                  key={`${c.scope}:${c.id}`}
+                  type="button"
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left",
+                    i === selIndex ? "bg-muted" : "hover:bg-muted/60"
+                  )}
+                  onMouseEnter={() => setSel(i)}
+                  // mousedown, not click: keep focus (and the mention state) in the textarea.
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    pick(c);
+                  }}
+                >
+                  <RefThumb item={c} className="size-8" />
+                  {c.handle && <RefHandleBadge handle={c.handle} className="shrink-0" />}
+                  <span className="min-w-0 flex-1 truncate text-[11.5px]">{c.name}</span>
+                </button>
+              ))}
         </div>
+      )}
+      {uploadFile && (
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="image/*,video/*"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void uploadFile(file).then((ref) => ref && pick(ref));
+          }}
+        />
       )}
       <textarea
         ref={(el) => {
@@ -1169,16 +1270,14 @@ export function MentionTextarea({
         onKeyDown={(e) => {
           e.stopPropagation();
           if (open) {
-            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            if (items.length > 0 && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
               e.preventDefault();
-              setSel(
-                (selIndex + (e.key === "ArrowDown" ? 1 : matches.length - 1)) % matches.length
-              );
+              setSel((selIndex + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length);
               return;
             }
-            if (e.key === "Enter" || e.key === "Tab") {
+            if (items.length > 0 && (e.key === "Enter" || e.key === "Tab")) {
               e.preventDefault();
-              pick(matches[selIndex]);
+              pick(items[selIndex]);
               return;
             }
             if (e.key === "Escape") {
