@@ -5,11 +5,9 @@ import {
   ArrowLeftRight,
   Copy,
   Film,
-  Frame,
   Loader2,
   Maximize2,
   Plus,
-  Puzzle,
   RectangleHorizontal,
   RotateCw,
   Smartphone,
@@ -38,7 +36,7 @@ import { characterPrompt, stockTitle } from "@/cut/lib/stock";
 import { useEditor } from "@/cut/lib/store";
 import { nearestAspect } from "@/cut/lib/types";
 import { useLocalPref } from "@/cut/lib/uiState";
-import { useVideoGen, type VideoRefMode } from "@/cut/lib/videoGen";
+import { useVideoGen } from "@/cut/lib/videoGen";
 import {
   VIDEO_MODELS,
   type VideoAspect,
@@ -60,7 +58,13 @@ import { cardIconButton } from "./iconButton";
 import { PillSelect } from "./PillSelect";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { StockVideosPanel } from "./StockVideosPanel";
-import { COUNT_OPTIONS, DURATION_OPTIONS, RESOLUTION_OPTIONS, SegRow } from "./VideoGenControls";
+import {
+  COUNT_OPTIONS,
+  DURATION_OPTIONS,
+  REF_MODE_OPTIONS,
+  RESOLUTION_OPTIONS,
+  SegRow,
+} from "./VideoGenControls";
 
 // The generate-video panel: the Video tab's whole column — the generate form,
 // then (in the same scroll) the stock-clip browser below it. Clicking a stock
@@ -71,11 +75,6 @@ import { COUNT_OPTIONS, DURATION_OPTIONS, RESOLUTION_OPTIONS, SegRow } from "./V
 // kept picture as the literal first frame; "Ingredients" keeps up to the
 // model's reference-image limit as identity anchors instead — the prompt
 // rides as written, no compose rewrite.
-
-const REF_MODE_OPTIONS: { value: VideoRefMode; label: string; icon: ComponentType<{ className?: string }> }[] = [
-  { value: "frames", label: "Frames", icon: Frame },
-  { value: "ingredients", label: "Ingredients", icon: Puzzle },
-];
 
 const ASPECT_OPTIONS: { value: VideoAspect; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { value: "9:16", label: "9:16", icon: Smartphone },

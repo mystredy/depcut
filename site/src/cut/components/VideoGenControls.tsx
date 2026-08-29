@@ -1,12 +1,23 @@
 "use client";
 
 import { type ComponentType } from "react";
+import { Frame, Puzzle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { VideoModelOption, VideoResolution } from "@/cut/lib/videoModels";
+import type { VideoRefMode } from "@/cut/lib/videoGen";
 
 // Shared knobs the video composers offer beyond model/aspect — the editor's
 // Video tab and the dashboard's one-shot composer both render these from the
 // same option sets and the same SegRow, so the two never drift apart.
+
+export const REF_MODE_OPTIONS: {
+  value: VideoRefMode;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+}[] = [
+  { value: "frames", label: "Frames", icon: Frame },
+  { value: "ingredients", label: "Ingredients", icon: Puzzle },
+];
 
 // Veo's set is confirmed against its published API (720p/1080p; 4, 6, or 8
 // second clips). Omni's has no documented resolution or duration parameter
