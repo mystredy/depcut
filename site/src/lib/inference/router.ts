@@ -3,6 +3,7 @@ import { createGeminiImageAssetProvider } from "@/lib/inference/adapters/gemini-
 import { createGeminiMusicAssetProvider } from "@/lib/inference/adapters/gemini-music";
 import { createGeminiSpeechAssetProvider } from "@/lib/inference/adapters/gemini-speech";
 import { createGeminiOmniVideoAssetProvider } from "@/lib/inference/adapters/gemini-omni-video";
+import { createGeminiVeoVideoAssetProvider } from "@/lib/inference/adapters/gemini-veo-video";
 import { createHostedResponsesProvider } from "@/lib/inference/adapters/hosted-responses";
 import {
   InferenceProviderError,
@@ -223,6 +224,12 @@ export function createProviderRegistry() {
     // keeps async refresh routing from colliding with the synchronous image
     // adapter.
     createGeminiOmniVideoAssetProvider(),
+    // Veo 3.1 (Lite/Fast/Quality) also serves kind="video", on the
+    // long-running generateVideos API instead of Omni's Interactions API. Its
+    // own provider id keeps refresh routing and pricing separate from Omni;
+    // the video panel always names a provider explicitly (see videoModels.ts),
+    // so capability-based fallback never has to pick between the two.
+    createGeminiVeoVideoAssetProvider(),
     // Gemini TTS serves kind="speech" (voiceovers, subtitle read-alouds).
     createGeminiSpeechAssetProvider(),
     // Gemini/Lyria is the sole kind="music" provider — the Audio-tab generator,

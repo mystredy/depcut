@@ -2,7 +2,11 @@
 // Pure data + lookups (no store, no browser), so the genvideo self-test can
 // exercise everything that reads constraints from here.
 
-import { geminiOmniMaxReferenceImages } from "@/lib/inference/gemini-models";
+import {
+  geminiOmniMaxReferenceImages,
+  geminiOmniModels,
+  geminiVeoModels,
+} from "@/lib/inference/gemini-models";
 
 /** The shape the next generated clip is composed in — landscape or portrait. */
 export type VideoAspect = "16:9" | "9:16";
@@ -12,12 +16,14 @@ export const VIDEO_ASPECT_LABEL: Record<VideoAspect, string> = {
   "9:16": "Portrait (9:16)",
 };
 
-/** A selectable video model. Every render runs on the unified Omni renderer:
- * one pass takes text plus optional seed/reference images and returns the
- * whole clip with audio — the model picks the length (up to ~10s of 720p), so
- * there is no duration or resolution knob. Adding a model here is the whole
- * client-side change. */
-export type VideoTier = "omni";
+/** A selectable video model. Every tier takes text plus an optional seed or
+ * reference images and returns the whole clip with audio in one pass — the
+ * model picks the length, so there is no duration or resolution knob. Omni
+ * runs on its own Interactions-API provider; the three Veo 3.1 tiers share
+ * the generateVideos provider and trade render time for quality at different
+ * price points. Adding a tier here plus its price (provider-pricing.ts) is
+ * the whole client-side change. */
+export type VideoTier = "omni" | "veo-lite" | "veo-fast" | "veo-quality";
 
 export interface VideoModelOption {
   tier: VideoTier;
@@ -25,6 +31,10 @@ export interface VideoModelOption {
    * single-model entry). */
   word: string;
   model: string;
+  /** Which asset-generation provider renders this tier (router.ts). */
+  provider: string;
+  /** The provider's own model id, sent with the generate request. */
+  modelId: string;
   /** Identity reference images a render accepts alongside the prompt. */
   maxReferenceImages: number;
   aspects: VideoAspect[];
@@ -33,9 +43,38 @@ export interface VideoModelOption {
 export const VIDEO_MODELS: VideoModelOption[] = [
   {
     tier: "omni",
-    word: "Omni Flash",
-    model: "Omni Flash",
+    word: "Omni 1.1 Flash",
+    model: "Omni 1.1 Flash",
+    provider: "gemini-omni",
+    modelId: geminiOmniModels.flashVideo,
     maxReferenceImages: geminiOmniMaxReferenceImages,
+    aspects: ["16:9", "9:16"],
+  },
+  {
+    tier: "veo-lite",
+    word: "Veo 3.1 - Lite",
+    model: "Veo 3.1 - Lite",
+    provider: "gemini-veo",
+    modelId: geminiVeoModels.lite,
+    maxReferenceImages: 3,
+    aspects: ["16:9", "9:16"],
+  },
+  {
+    tier: "veo-fast",
+    word: "Veo 3.1 - Fast",
+    model: "Veo 3.1 - Fast",
+    provider: "gemini-veo",
+    modelId: geminiVeoModels.fast,
+    maxReferenceImages: 3,
+    aspects: ["16:9", "9:16"],
+  },
+  {
+    tier: "veo-quality",
+    word: "Veo 3.1 - Quality",
+    model: "Veo 3.1 - Quality",
+    provider: "gemini-veo",
+    modelId: geminiVeoModels.quality,
+    maxReferenceImages: 3,
     aspects: ["16:9", "9:16"],
   },
 ];

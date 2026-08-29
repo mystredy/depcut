@@ -37,6 +37,19 @@ export type GeminiOmniModel = (typeof geminiOmniModels)[keyof typeof geminiOmniM
 // client registry (videoModels.ts) reads the same number.
 export const geminiOmniMaxReferenceImages = 3;
 
+// Veo 3.1, over the models.generateVideos long-running-operation API (distinct
+// from Omni's Interactions API): text or a single seed image in, an 8s 720p/1080p
+// clip with native audio out, polled via operations.getVideosOperation. Three
+// tiers trade render time for quality at different price points. Bump here when
+// these preview ids promote to GA (veo-3.1-generate-001 / -fast-generate-001).
+export const geminiVeoModels = {
+  lite: "veo-3.1-lite-generate-preview",
+  fast: "veo-3.1-fast-generate-preview",
+  quality: "veo-3.1-generate-preview",
+} as const;
+
+export type GeminiVeoModel = (typeof geminiVeoModels)[keyof typeof geminiVeoModels];
+
 // Generative speech (Gemini TTS): text in, spoken audio out, with prompt-driven
 // style direction and inline audio tags. Bump here when adopting a newer TTS model.
 export const geminiTtsModels = {

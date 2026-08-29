@@ -23,7 +23,7 @@ import { useGenNotify } from "./genNotify";
 import { IMAGE_ASPECTS, useImageGen } from "./imageGen";
 import { useEditor } from "./store";
 import { mediaSlug, nearestAspect, type MediaAsset, type RenderRecord } from "./types";
-import { aspectFramingNote, defaultVideoAspects, videoModel } from "./videoModels";
+import { aspectFramingNote, videoModel, type VideoTier } from "./videoModels";
 import { walkLadder, type VideoAttempt } from "./videoLadder";
 
 // AI generation jobs, held outside the panels so a tab switch (which unmounts
@@ -157,6 +157,8 @@ interface GenerateState {
 }
 
 export interface VideoGenOptions {
+  /** Which model renders the clip; defaults to Omni. */
+  tier?: VideoTier;
   /** Composition shape; defaults to the project's orientation. */
   aspect?: "16:9" | "9:16";
   /** What the render must avoid — the wrong medium's tells, letterbox bars,
@@ -618,6 +620,7 @@ export const useGenerate = create<GenerateState>((set, get) => {
     /** Compose and submit one rung's render request; resolves the provider's
      * first response (usually in_progress) or throws the readable error. */
     const submitRung = async ({ prompt, opts }: VideoAttempt): Promise<GenerationResponse> => {
+      const selected = videoModel(opts?.tier ?? "omni");
       // The model seeds from a single first-frame image, so at most one kept
       // picture rides along. Identity anchors travel separately: with
       // referenceImages set, the prompt stands as written and no seed image
@@ -629,7 +632,7 @@ export const useGenerate = create<GenerateState>((set, get) => {
         ? await Promise.all(
             (
               await refsToInlineImages(
-                visualRefs(opts.referenceImages).slice(0, videoModel("omni").maxReferenceImages)
+                visualRefs(opts.referenceImages).slice(0, selected.maxReferenceImages)
               )
             ).map(videoSafeInline)
           )
@@ -639,14 +642,15 @@ export const useGenerate = create<GenerateState>((set, get) => {
         : await promptAndImages("video", prompt, opts?.refs ?? [], opts?.composeRefs !== false, 1);
       const images = await Promise.all(rawImages.map(videoSafeInline));
       const projectAspect = useEditor.getState().aspect;
-      const aspectRatio = opts?.aspect ?? nearestAspect(projectAspect, defaultVideoAspects());
+      const aspectRatio = opts?.aspect ?? nearestAspect(projectAspect, selected.aspects);
       // A project on a shape the model can't render gets its clip cropped, so
       // the prompt carries the frame the take is really for.
       const framing = aspectFramingNote(projectAspect, aspectRatio);
       const res = await hostedPost("/api/inference/assets", {
         kind: "video",
         prompt: framing ? `${sent}\n\n${framing}` : sent,
-        provider: "gemini-omni",
+        provider: selected.provider,
+        model: selected.modelId,
         ...(anchors.length > 0
           ? { inputs: { referenceImages: anchors } }
           : images.length > 0

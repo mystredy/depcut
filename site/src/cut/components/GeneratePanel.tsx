@@ -106,6 +106,7 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
     const composed = character?.persona ? characterPrompt(character.persona, text) : text;
     const seedRefs = character ? [refFromStockVideo(character)] : all;
     void useGenerate.getState().generateVideo(projectId, composed, {
+      tier,
       aspect: effAspect,
       refs: seedRefs,
       // The character's poster seed is the point — the same person must

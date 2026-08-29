@@ -11,10 +11,12 @@ import {
   geminiMusicModels,
   geminiOmniModels,
   geminiTtsModels,
+  geminiVeoModels,
   type GeminiModel,
   type GeminiMusicModel,
   type GeminiOmniModel,
   type GeminiTtsModel,
+  type GeminiVeoModel,
 } from "@/lib/inference/gemini-models";
 import { openaiModels, type OpenAIRunModel } from "@/lib/inference/openai-models";
 import { browserUsePerStepUsd } from "@/lib/browser/pricing";
@@ -58,6 +60,11 @@ export function providerCreditPricing(
   // Omni video ids are hardcoded (gemini-models.ts); a clip bills flat at submit.
   if (normalizedProvider === "gemini-omni") {
     return geminiOmniCreditPricing(normalizedModel);
+  }
+  // Veo 3.1 ids are hardcoded (gemini-models.ts); a clip bills flat at submit,
+  // same reasoning as Omni.
+  if (normalizedProvider === "gemini-veo") {
+    return geminiVeoCreditPricing(normalizedModel);
   }
   // Lyria music ids are hardcoded (gemini-models.ts); a clip bills flat per render.
   if (normalizedProvider === "gemini-music") {
@@ -324,6 +331,25 @@ const geminiOmniModelPricing: Record<GeminiOmniModel, ProviderCreditPricing> = {
 
 function geminiOmniCreditPricing(model: string): ProviderCreditPricing | undefined {
   return geminiOmniModelPricing[model as GeminiOmniModel];
+}
+
+// Veo 3.1 bills per second of rendered video (with audio), fixed at Google's
+// published per-tier rate — Quality $0.40/s, Fast $0.15/s, Lite <50% of Fast's
+// rate. A render is 8s, and (like Omni) the submit carries no usable usage
+// count, so a clip charges FLAT at submit: 8s x rate. usdWithMargin adds the
+// 1.3x. TODO: confirm these against the live Vertex AI billing console before
+// this ships to real spend — the per-tier rate (Lite especially) is sourced
+// from Google's public pricing, not read back from a billing API here. The
+// Record is keyed by GeminiVeoModel, so adding a Veo id without a price fails
+// the build.
+const geminiVeoModelPricing: Record<GeminiVeoModel, ProviderCreditPricing> = {
+  [geminiVeoModels.quality]: { generationCostMicros: usdWithMargin("3.20") },
+  [geminiVeoModels.fast]: { generationCostMicros: usdWithMargin("1.20") },
+  [geminiVeoModels.lite]: { generationCostMicros: usdWithMargin("0.40") },
+};
+
+function geminiVeoCreditPricing(model: string): ProviderCreditPricing | undefined {
+  return geminiVeoModelPricing[model as GeminiVeoModel];
 }
 
 // Generative music (Gemini/Lyria) bills flat per rendered clip: the render is a
