@@ -16,28 +16,34 @@ type TelegramUpdate = {
 // same row, once, within 15 minutes of issue.
 const LINK_TOKEN_TTL_MS = 15 * 60 * 1000;
 
+type RedeemResult = "linked" | "expired" | "already-taken";
+
 async function tryRedeemLinkToken(
   where: { token: string } | { pin: string },
   chatId: number | string,
   username: string | undefined
-): Promise<boolean> {
+): Promise<RedeemResult> {
   const link = await prisma.telegramLinkToken.findUnique({ where });
-  if (!link) return false;
+  if (!link) return "expired";
 
   await prisma.telegramLinkToken.delete({ where: { token: link.token } }).catch(() => {});
-  if (Date.now() - link.createdAt.getTime() > LINK_TOKEN_TTL_MS) return false;
+  if (Date.now() - link.createdAt.getTime() > LINK_TOKEN_TTL_MS) return "expired";
 
-  // Only one account may hold a given chat — clear any previous owner
-  // before assigning it here, so the unique constraint never trips.
-  await prisma.user.updateMany({
-    data: { telegramChatId: null, telegramUsername: null },
+  // One Telegram identity may never sit on two Depcut accounts — a chat
+  // already linked elsewhere is rejected outright, not silently
+  // reassigned, so the original account never loses its link without
+  // deciding to.
+  const existingOwner = await prisma.user.findUnique({
+    select: { id: true },
     where: { telegramChatId: String(chatId) },
   });
+  if (existingOwner && existingOwner.id !== link.userId) return "already-taken";
+
   await prisma.user.update({
     data: { telegramChatId: String(chatId), telegramUsername: username ?? null },
     where: { id: link.userId },
   });
-  return true;
+  return "linked";
 }
 
 // The real bot behavior: an incoming message's first word (its command,
@@ -74,19 +80,20 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
     const isBarePin = /^\d{6}$/.test(text);
 
     if ((trigger === "/start" && payload) || isBarePin) {
-      const linked = await tryRedeemLinkToken(
+      const result = await tryRedeemLinkToken(
         isBarePin ? { pin: text } : { token: payload },
         chatId,
         from?.username
       );
       if (botToken) {
+        const replies: Record<RedeemResult, string> = {
+          "already-taken":
+            "This Telegram account is already linked to a different Depcut account — unlink it there first, then try again.",
+          expired: "That code expired or wasn't recognized — generate a new one from Preferences and try again.",
+          linked: "✅ Your Depcut account is now linked — real-time alerts you've opted into will DM here.",
+        };
         await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: linked
-              ? "✅ Your Depcut account is now linked — real-time alerts you've opted into will DM here."
-              : "That code expired or wasn't recognized — generate a new one from Preferences and try again.",
-          }),
+          body: JSON.stringify({ chat_id: chatId, text: replies[result] }),
           headers: { "Content-Type": "application/json" },
           method: "POST",
         });
