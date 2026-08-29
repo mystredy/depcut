@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Pause, Play, Plus } from "lucide-react";
 import { PeakStrip } from "@/cut/components/AudioPanel";
+import { SectionTitle } from "@/cut/components/SectionTitle";
 import { clearRefDrag, refFromStockMusic, setRefDragData } from "@/cut/lib/assetRef";
 import { setCardDragImage } from "@/cut/lib/assetDrag";
 import { importStockMusic } from "@/cut/lib/media";
@@ -13,7 +14,6 @@ import { STOCK_MUSIC } from "@/cut/lib/stockMusicManifest";
 import { useEditor } from "@/cut/lib/store";
 import { formatTime } from "@/cut/lib/time";
 import { cn } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 /** The category header already names the genre, so drop the id's leading
  * category segment: "cinematic-rising-strings" → "Rising Strings". */
@@ -23,15 +23,16 @@ const sampleName = (id: string) => stockTitle(id.split("-").slice(1).join("-") |
 const remix = (s: StockMusic) =>
   useMusicGen.getState().load({ prompt: s.prompt, instrumental: s.category !== "Songs" });
 
-/** The bundled music sample library — the right column of the Music tab, beside
- * the generator (like the stock browser on the Image/Video tabs). Category chips
- * filter; samples are grouped into per-genre sections of playable cards. Each
- * card previews in the shared player, "+" imports it onto the soundtrack, click
+/** The bundled music sample library — sits under "Generated music" on the
+ * Music tab, below the generator (like the stock browser on the Image/Video
+ * tabs, but inline instead of its own column). Category chips filter;
+ * samples are grouped into per-genre sections of playable cards. Each card
+ * previews in the shared player, "+" imports it onto the soundtrack, click
  * loads its prompt into the generator, and it drags onto the timeline or the
  * prompt box. */
 export function SampleLibrary({ projectId }: { projectId: string }) {
   // Its own handle on the app-wide preview player, so a sample and a generated
-  // row never play at once; leaving the tab silences this column's preview.
+  // row never play at once; leaving the tab silences this section's preview.
   const playingUrl = usePreviewAudio((s) => s.url);
   const ownedUrl = useRef<string | null>(null);
   const togglePlay = (url: string) => {
@@ -51,23 +52,19 @@ export function SampleLibrary({ projectId }: { projectId: string }) {
     .filter((s) => s.items.length > 0);
 
   return (
-    <>
-      {/* Chips sit at the same top inset as the left column's Voice/Music tabs.
-          The right inset keeps the first row clear of the side panel's floating
-          close button. */}
-      <div className="shrink-0 pt-4 pr-12 pb-3 pl-3.5">
-        <div className="flex flex-wrap gap-1.5">
-          <Chip active={cat === "all"} onClick={() => setCat("all")}>
-            All
+    <div className="flex flex-col gap-2">
+      <SectionTitle>Sample library</SectionTitle>
+      <div className="flex flex-wrap gap-1.5">
+        <Chip active={cat === "all"} onClick={() => setCat("all")}>
+          All
+        </Chip>
+        {STOCK_MUSIC_CATEGORIES.map((c) => (
+          <Chip key={c} active={cat === c} onClick={() => setCat(c)}>
+            {c}
           </Chip>
-          {STOCK_MUSIC_CATEGORIES.map((c) => (
-            <Chip key={c} active={cat === c} onClick={() => setCat(c)}>
-              {c}
-            </Chip>
-          ))}
-        </div>
+        ))}
       </div>
-      <ScrollArea className="min-h-0 flex-1" contentClassName="flex flex-col gap-4 px-3.5 pb-4">
+      <div className="flex flex-col gap-4">
         {sections.map(({ category, items }) => (
           <div key={category} className="flex flex-col gap-2">
             <div className="text-[13px] font-semibold tracking-tight">{category}</div>
@@ -93,8 +90,8 @@ export function SampleLibrary({ projectId }: { projectId: string }) {
             </div>
           </div>
         ))}
-      </ScrollArea>
-    </>
+      </div>
+    </div>
   );
 }
 

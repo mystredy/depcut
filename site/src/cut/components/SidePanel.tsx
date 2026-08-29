@@ -403,8 +403,8 @@ export function SidePanel({
   // collapse the panel so the canvas gets the room.
   usePanelRequestEffect(setTab);
 
-  // The Audio tab's second column; when it's absent the audio generator is the
-  // outermost column and takes the floating close button on its own corner.
+  // Whether the sample library has anything to show under "Generated music"
+  // on the Music tab.
   const musicLibrary = !sharedFeatures && audioSub === "music" && STOCK_MUSIC.length > 0;
 
   return (
@@ -603,36 +603,26 @@ export function SidePanel({
           )}
         </div>
       ) : tab === "audio" ? (
-        // Music is two columns like the generate tabs — the generator on the
-        // left, the sample library on the right; Voice is a single column.
-        <>
-          <div
-            className={cn(
-              "relative flex w-[264px] min-h-0 shrink-0 flex-col",
-              musicLibrary && "border-r border-border"
-            )}
-          >
-            <ClosePanelButton onClose={() => setTab(null)} />
-            <GenTabSwitcher
-              tab={tab}
-              onSelect={(id) => {
-                lastGenTab.current = id;
-                setTab(id);
-              }}
-            />
-            <AudioPanel
-              projectId={projectId}
-              importing={importing}
-              sub={audioSub}
-              onSub={setAudioSub}
-            />
-          </div>
-          {musicLibrary && (
-            <div className="flex w-[340px] min-h-0 shrink-0 flex-col">
-              <SampleLibrary projectId={projectId} />
-            </div>
-          )}
-        </>
+        // A single column, like the other generate tabs: the generator, then
+        // (on Music, in the same scroll) the generated tracks and the sample
+        // library beneath.
+        <div className="relative flex w-[300px] min-h-0 shrink-0 flex-col">
+          <ClosePanelButton onClose={() => setTab(null)} />
+          <GenTabSwitcher
+            tab={tab}
+            onSelect={(id) => {
+              lastGenTab.current = id;
+              setTab(id);
+            }}
+          />
+          <AudioPanel
+            projectId={projectId}
+            importing={importing}
+            sub={audioSub}
+            onSub={setAudioSub}
+            sampleLibrary={musicLibrary ? <SampleLibrary projectId={projectId} /> : undefined}
+          />
+        </div>
       ) : (
         <div className="relative flex w-[264px] min-h-0 shrink-0 flex-col">
           <ClosePanelButton

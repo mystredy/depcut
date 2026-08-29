@@ -81,13 +81,18 @@ export function AudioPanel({
   importing,
   sub,
   onSub,
+  sampleLibrary,
 }: {
   projectId: string;
   importing: boolean;
-  /** The active sub-tab, lifted to SidePanel so it can lay out the Music tab as
-   * two columns (this panel + the sample library) like the Image/Video tabs. */
+  /** The active sub-tab. */
   sub: "voice" | "music";
   onSub: (v: "voice" | "music") => void;
+  /** The bundled sample browser, rendered under "Generated music" on the
+   * Music tab — owned by SidePanel so this panel doesn't need to know where
+   * `SampleLibrary` lives. Absent on the Voice tab, or when there's nothing
+   * to browse. */
+  sampleLibrary?: ReactNode;
 }) {
   const readOnly = useEditor((s) => s.readOnly);
   // The app-wide preview player: starting a clip stops the last one, here or
@@ -137,6 +142,7 @@ export function AudioPanel({
           <>
             {!readOnly && <MusicGenerator projectId={projectId} />}
             <ProjectMusic projectId={projectId} onTogglePlay={togglePlay} playingUrl={playingUrl} />
+            {sampleLibrary}
           </>
         )}
       </ScrollArea>
