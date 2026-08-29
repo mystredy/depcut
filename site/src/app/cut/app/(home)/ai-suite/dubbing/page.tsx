@@ -12,11 +12,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SectionTitle } from "@/cut/components/SectionTitle";
+import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { useSpeakerVoice, VoicePicker } from "@/cut/components/VoicePicker";
 import { creditsUrl, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { cloudTranscribeRecording } from "@/cut/lib/cloudTranscribe";
 import { NoCreditsError, renderSpeechClip, SPEECH_LANGUAGES } from "@/cut/lib/tts";
 import { cn } from "@/lib/utils";
+import { useToolHistory } from "@/lib/toolHistory";
+import { useBlobUrl } from "@/lib/useBlobUrl";
 
 // Every language but "auto" — dubbing always needs an explicit target.
 const DUB_LANGUAGES = SPEECH_LANGUAGES.filter((l) => l.id !== "auto");
@@ -42,6 +45,7 @@ export default function DubbingPage() {
   const [result, setResult] = useState<{ url: string } | null>(null);
   const [error, setError] = useState<{ text: string; credits?: boolean } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const history = useToolHistory("dubbing");
 
   useEffect(() => {
     return () => {
@@ -85,6 +89,11 @@ export default function DubbingPage() {
         language: target.id,
       });
       setResult({ url: URL.createObjectURL(blob) });
+      history.save({
+        inputs: { style, targetLanguage },
+        result: { blob, data: { transcript: text }, filename: "dubbed-audio.wav", kind: "blob", mimeType: blob.type || "audio/wav" },
+        summary: `${file.name} → ${target.label}`,
+      });
     } catch (e) {
       setError(
         e instanceof Error
@@ -94,6 +103,11 @@ export default function DubbingPage() {
     } finally {
       setStage("idle");
     }
+  };
+
+  const reuse = (inputs: Record<string, unknown>) => {
+    if (typeof inputs.targetLanguage === "string") setTargetLanguage(inputs.targetLanguage);
+    if (typeof inputs.style === "string") setStyle(inputs.style);
   };
 
   const busy = stage !== "idle";
@@ -249,6 +263,35 @@ export default function DubbingPage() {
           </div>
         )}
       </div>
+
+      <ToolHistoryList
+        tool="dubbing"
+        onReuse={reuse}
+        renderPreview={(entry) =>
+          entry.result.kind === "blob" ? <DubHistoryPreview result={entry.result} /> : null
+        }
+      />
+    </div>
+  );
+}
+
+function DubHistoryPreview({
+  result,
+}: {
+  result: { blob: Blob; data?: unknown };
+}) {
+  const url = useBlobUrl(result.blob);
+  const transcript =
+    result.data && typeof result.data === "object" && "transcript" in result.data
+      ? (result.data as { transcript: string }).transcript
+      : null;
+  return (
+    <div className="space-y-2">
+      {transcript && <p className="text-[12.5px] leading-relaxed text-muted-foreground">{transcript}</p>}
+      {url && (
+        // eslint-disable-next-line jsx-a11y/media-has-caption -- generated speech has no separate caption track
+        <audio controls src={url} className="w-full" />
+      )}
     </div>
   );
 }

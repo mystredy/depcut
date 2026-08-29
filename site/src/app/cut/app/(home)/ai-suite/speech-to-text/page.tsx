@@ -5,10 +5,12 @@ import { Clipboard, Download, FileText, Loader2, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { SectionTitle } from "@/cut/components/SectionTitle";
+import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { transcribeSamples } from "@/cut/lib/cloudTranscribe";
 import type { SubtitleCue } from "@/cut/lib/types";
 import { cn } from "@/lib/utils";
+import { useToolHistory } from "@/lib/toolHistory";
 
 // The wire format the hosted transcriber expects (mirrors cloudTranscribe.ts,
 // whose own constant isn't exported).
@@ -85,6 +87,7 @@ export default function SpeechToTextPage() {
   const [cues, setCues] = useState<SubtitleCue[] | null>(null);
   const [copied, setCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const history = useToolHistory("speech-to-text");
 
   const pickFile = (f: File) => {
     setFile(f);
@@ -98,7 +101,17 @@ export default function SpeechToTextPage() {
     setError(null);
     setCues(null);
     try {
-      setCues(await transcribeFile(file));
+      const result = await transcribeFile(file);
+      setCues(result);
+      history.save({
+        inputs: {},
+        result: {
+          data: { cues: result },
+          kind: "text",
+          text: result.map((c) => c.text).join(" "),
+        },
+        summary: file.name,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Transcription failed.");
     } finally {
@@ -231,6 +244,36 @@ export default function SpeechToTextPage() {
           </div>
         )}
       </div>
+
+      <ToolHistoryList
+        tool="speech-to-text"
+        onReuse={() => {
+          // No source file is kept, so there's nothing to refill — the row
+          // still exists to read or re-download a past transcript.
+        }}
+        renderPreview={(entry) => {
+          const entryCues =
+            entry.result.kind === "text" &&
+            entry.result.data &&
+            typeof entry.result.data === "object" &&
+            "cues" in entry.result.data
+              ? (entry.result.data as { cues: SubtitleCue[] }).cues
+              : null;
+          if (!entryCues) return null;
+          return (
+            <div className="max-h-60 space-y-2 overflow-y-auto pr-1">
+              {entryCues.map((c) => (
+                <div key={c.id} className="flex gap-2.5 text-[12.5px] leading-relaxed">
+                  <span className="mt-0.5 shrink-0 font-mono text-[10px] text-muted-foreground">
+                    {mmss(c.start)}
+                  </span>
+                  <span>{c.text}</span>
+                </div>
+              ))}
+            </div>
+          );
+        }}
+      />
     </div>
   );
 }

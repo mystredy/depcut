@@ -12,10 +12,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SectionTitle } from "@/cut/components/SectionTitle";
+import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { useSpeakerVoice, useSpeechLanguage, VoicePicker } from "@/cut/components/VoicePicker";
 import { creditsUrl, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { uploadToLibrary } from "@/cut/lib/library";
 import { NoCreditsError, renderSpeechClip } from "@/cut/lib/tts";
+import { useToolHistory } from "@/lib/toolHistory";
+import { useBlobUrl } from "@/lib/useBlobUrl";
 
 // Starting points for the direction prompt — same set the Audio panel's voice
 // generator offers, picking one fills the input so it can be tweaked.
@@ -47,6 +50,7 @@ export default function TextToSpeechPage() {
   const [result, setResult] = useState<Result | null>(null);
   const [libraryState, setLibraryState] = useState<"idle" | "adding" | "added">("idle");
   const directionInput = useRef<HTMLTextAreaElement>(null);
+  const history = useToolHistory("text-to-speech");
 
   // The object URL only makes sense for the clip that made it — release it
   // once replaced or the page unmounts.
@@ -72,6 +76,11 @@ export default function TextToSpeechPage() {
         return { url: URL.createObjectURL(blob), blob, language: spoken };
       });
       setLibraryState("idle");
+      history.save({
+        inputs: { direction, script: text },
+        result: { blob, filename: "text-to-speech.wav", kind: "blob", mimeType: blob.type || "audio/wav" },
+        summary: text.slice(0, 80),
+      });
     } catch (e) {
       setError(
         e instanceof Error
@@ -101,6 +110,11 @@ export default function TextToSpeechPage() {
       setLibraryState("idle");
       setError(e instanceof Error ? { text: e.message } : { text: "Could not add to library." });
     }
+  };
+
+  const reuse = (inputs: Record<string, unknown>) => {
+    if (typeof inputs.script === "string") setScript(inputs.script);
+    if (typeof inputs.direction === "string") setDirection(inputs.direction);
   };
 
   return (
@@ -258,6 +272,21 @@ export default function TextToSpeechPage() {
           </div>
         )}
       </div>
+
+      <ToolHistoryList
+        tool="text-to-speech"
+        onReuse={reuse}
+        renderPreview={(entry) =>
+          entry.result.kind === "blob" ? <AudioHistoryPreview blob={entry.result.blob} /> : null
+        }
+      />
     </div>
   );
+}
+
+function AudioHistoryPreview({ blob }: { blob: Blob }) {
+  const url = useBlobUrl(blob);
+  if (!url) return null;
+  // eslint-disable-next-line jsx-a11y/media-has-caption -- generated speech has no separate caption track
+  return <audio controls src={url} className="w-full" />;
 }
