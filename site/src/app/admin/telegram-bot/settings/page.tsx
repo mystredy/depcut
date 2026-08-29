@@ -219,6 +219,7 @@ function NotificationRoutingForm({ adminId }: { adminId: string | null }) {
   const [notifyWithdrawals, setNotifyWithdrawals] = useState(false);
   const [notifySupportTickets, setNotifySupportTickets] = useState(false);
   const [notifySignups, setNotifySignups] = useState(false);
+  const [notifySystemErrors, setNotifySystemErrors] = useState(false);
 
   useEffect(() => {
     const s = settings.data?.settings;
@@ -227,6 +228,7 @@ function NotificationRoutingForm({ adminId }: { adminId: string | null }) {
     setNotifyWithdrawals(s.notifyWithdrawals);
     setNotifySupportTickets(s.notifySupportTickets);
     setNotifySignups(s.notifySignups);
+    setNotifySystemErrors(s.notifySystemErrors);
   }, [settings.data]);
 
   const s = settings.data?.settings;
@@ -235,10 +237,17 @@ function NotificationRoutingForm({ adminId }: { adminId: string | null }) {
     (notifySubmissions !== s!.notifySubmissions ||
       notifyWithdrawals !== s!.notifyWithdrawals ||
       notifySupportTickets !== s!.notifySupportTickets ||
-      notifySignups !== s!.notifySignups);
+      notifySignups !== s!.notifySignups ||
+      notifySystemErrors !== s!.notifySystemErrors);
 
   const save = () => {
-    update.mutate({ notifySignups, notifySubmissions, notifySupportTickets, notifyWithdrawals });
+    update.mutate({
+      notifySignups,
+      notifySubmissions,
+      notifySupportTickets,
+      notifySystemErrors,
+      notifyWithdrawals,
+    });
   };
 
   return (
@@ -275,6 +284,7 @@ function NotificationRoutingForm({ adminId }: { adminId: string | null }) {
               { label: "Withdrawal request", value: notifyWithdrawals, set: setNotifyWithdrawals },
               { label: "Support ticket", value: notifySupportTickets, set: setNotifySupportTickets },
               { label: "New signup", value: notifySignups, set: setNotifySignups },
+              { label: "System error", value: notifySystemErrors, set: setNotifySystemErrors },
             ].map((row) => (
               <div key={row.label} className="flex items-center justify-between rounded-xl border p-3">
                 <span className="text-sm font-medium">{row.label}</span>

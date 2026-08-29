@@ -109,6 +109,7 @@ model TelegramNotificationSettings {
   notifyWithdrawals    Boolean  @default(false)
   notifySupportTickets Boolean  @default(false)
   notifySignups        Boolean  @default(false)
+  notifySystemErrors   Boolean  @default(false)
   updatedAt            DateTime @updatedAt
 
   @@map("telegram_notification_settings")

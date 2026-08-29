@@ -10,16 +10,18 @@ export type TelegramNotificationEvent =
 const EVENT_FLAG: Partial<
   Record<
     TelegramNotificationEvent,
-    "notifySubmissions" | "notifyWithdrawals" | "notifySupportTickets" | "notifySignups"
+    | "notifySubmissions"
+    | "notifyWithdrawals"
+    | "notifySupportTickets"
+    | "notifySignups"
+    | "notifySystemErrors"
   >
 > = {
   signup: "notifySignups",
   submission: "notifySubmissions",
   supportTicket: "notifySupportTickets",
+  systemError: "notifySystemErrors",
   withdrawal: "notifyWithdrawals",
-  // "systemError" has no settings row of its own (would need a schema change/
-  // migration this codebase's rules keep out of an agent's hands) — it rides
-  // the bot's plain Enable toggle instead of a per-category one.
 };
 
 // Shared gate for both send paths below: which destinations get this event,

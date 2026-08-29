@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { notifyTelegram } from "@/lib/telegram/notify";
 
 export type DonkeyAuthContext = {
   platform: "api";
@@ -206,7 +207,22 @@ export function withDonkeyAuth<
       donkey: authContext,
     }) as TReq;
 
-    return handler(authenticatedRequest, ...args);
+    try {
+      return await handler(authenticatedRequest, ...args);
+    } catch (error) {
+      // A deliberate NextResponse.json(..., {status: 4xx}) return never
+      // reaches here — only a genuine thrown exception does, so this alerts
+      // on real bugs, not routine validation rejections. Fire-and-forget so
+      // a Telegram hiccup never adds latency to an already-failing request;
+      // the error is re-thrown unchanged so the framework's own handling
+      // (and the client's response) stays exactly as it was before this.
+      const message = error instanceof Error ? error.message : String(error);
+      void notifyTelegram(
+        "systemError",
+        `🚨 ${request.method} ${request.nextUrl.pathname}\nuser: ${authContext.userId}\n${message}`,
+      );
+      throw error;
+    }
   };
 }
 
