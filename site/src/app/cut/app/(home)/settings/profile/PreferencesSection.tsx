@@ -60,7 +60,7 @@ function TelegramRow() {
   const [codeSent, setCodeSent] = useState(false);
   const [codeInput, setCodeInput] = useState("");
 
-  const link = useTelegramLinkStatus();
+  const link = useTelegramLinkStatus(expanded);
   const createLink = useCreateTelegramLink();
   const sendUnlinkCode = useSendUnlinkCode();
   const unlink = useUnlinkTelegram();

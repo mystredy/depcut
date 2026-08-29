@@ -11,10 +11,15 @@ export type TelegramLinkStatus = {
   telegramUsername: string | null;
 };
 
-export function useTelegramLinkStatus() {
+// The link completes on Telegram's side (the deep link or a manually typed
+// pin, redeemed by the webhook) — nothing pushes that back to this tab, so
+// while `poll` is on (the row's expanded, credential shown, not linked yet)
+// this refetches every few seconds until `linked` flips true, then stops.
+export function useTelegramLinkStatus(poll = false) {
   return useQuery({
     queryFn: () => apiFetch<TelegramLinkStatus>("/api/account/telegram-link"),
     queryKey: telegramLinkQueryKey,
+    refetchInterval: (query) => (poll && !query.state.data?.linked ? 3000 : false),
   });
 }
 
