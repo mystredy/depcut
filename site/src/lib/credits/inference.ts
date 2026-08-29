@@ -33,6 +33,15 @@ export const inferenceUsageRoutes = {
 
 type CreditsDatabase = PrismaClient | Prisma.TransactionClient;
 
+// Prisma's interactive-transaction defaults (2s to acquire a transaction,
+// 5s to run it) are sized for a handful of round trips on a nearby DB. These
+// transactions chain up to ~10 sequential awaited queries (grant-expiry
+// scan, rate lookup, usage-event insert, grant-debit scan, balance update,
+// ledger insert, overdraft check) against a pooled remote Postgres — routine
+// latency there, not just an outage, was enough to blow the 5s default.
+const CREDIT_TRANSACTION_MAX_WAIT_MS = 10_000;
+const CREDIT_TRANSACTION_TIMEOUT_MS = 20_000;
+
 type CreditRateSnapshot = {
   id: string | null;
   version: number | null;
@@ -238,6 +247,8 @@ export async function grantCredits(input: {
       },
       {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: CREDIT_TRANSACTION_MAX_WAIT_MS,
+        timeout: CREDIT_TRANSACTION_TIMEOUT_MS,
       },
     );
   } catch (error) {
@@ -271,6 +282,8 @@ export async function expireCredits(userId: string, now = new Date()) {
     },
     {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: CREDIT_TRANSACTION_MAX_WAIT_MS,
+      timeout: CREDIT_TRANSACTION_TIMEOUT_MS,
     },
   );
 }
@@ -466,6 +479,8 @@ export async function recordInferenceUsage(input: InferenceUsageInput) {
     },
     {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      maxWait: CREDIT_TRANSACTION_MAX_WAIT_MS,
+      timeout: CREDIT_TRANSACTION_TIMEOUT_MS,
     },
   ));
 
@@ -901,6 +916,8 @@ export async function refundInferenceCharge(usageEventId: string) {
       },
       {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        maxWait: CREDIT_TRANSACTION_MAX_WAIT_MS,
+        timeout: CREDIT_TRANSACTION_TIMEOUT_MS,
       },
     ),
   );
