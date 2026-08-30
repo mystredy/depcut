@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Captions, Download, Film, Languages, Loader2 } from "lucide-react";
+import { Captions, Download, FileText, Film, Languages, Loader2, Pause, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -13,10 +14,12 @@ import {
 } from "@/components/ui/select";
 import { AudioPlayer } from "@/cut/components/AudioPlayer";
 import { SectionTitle } from "@/cut/components/SectionTitle";
+import { SubTabs } from "@/cut/components/SubTabs";
 import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { useSpeakerVoice, VoicePicker } from "@/cut/components/VoicePicker";
+import { formatBytes } from "@/cut/components/desktopFolders";
 import { creditsUrl, signInUrl, useSignedIn } from "@/cut/lib/generate";
-import { cloudTranscribeRecording } from "@/cut/lib/cloudTranscribe";
+import { cloudTranscribeRecording, transcribeSourceUrl } from "@/cut/lib/cloudTranscribe";
 import { NoCreditsError, renderSpeechClip, SPEECH_LANGUAGES } from "@/cut/lib/tts";
 import { cn } from "@/lib/utils";
 import { useToolHistory } from "@/lib/toolHistory";
@@ -25,27 +28,48 @@ import { useBlobUrl } from "@/lib/useBlobUrl";
 // Every language but "auto" — dubbing always needs an explicit target.
 const DUB_LANGUAGES = SPEECH_LANGUAGES.filter((l) => l.id !== "auto");
 
+type Tab = "upload" | "social" | "source";
+const TABS: { id: Tab; label: string }[] = [
+  { id: "upload", label: "Upload File" },
+  { id: "social", label: "Social Link" },
+  { id: "source", label: "Source URL" },
+];
+
 type Stage = "idle" | "transcribing" | "dubbing";
 
+function mmss(t: number): string {
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 // Real transcribe-then-voice pipeline, both hops already used elsewhere in Cut:
-// cloudTranscribeRecording (the mic-dictation transcriber) turns the upload
-// into text, then renderSpeechClip's own "say it in X" direction handling
-// (planVoiceover, in tts.ts) translates that text and speaks it in one hosted
-// call. There's no project to land the result on outside the editor, so it
-// comes back as a playable, downloadable WAV instead.
+// an upload goes through cloudTranscribeRecording (the mic-dictation
+// transcriber), a social/source link through transcribeSourceUrl (the hosted
+// transcriber fetching the link itself) — either way the result is plain
+// text, which renderSpeechClip's own "say it in X" direction handling
+// (planVoiceover, in tts.ts) translates and speaks in one hosted call.
+// There's no project to land the result on outside the editor, so it comes
+// back as a playable, downloadable WAV instead.
 export default function DubbingPage() {
   const voice = useSpeakerVoice();
   const signedOut = useSignedIn() === false;
 
+  const [tab, setTab] = useState<Tab>("upload");
   const [file, setFile] = useState<File | null>(null);
+  const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [fileDuration, setFileDuration] = useState<number | null>(null);
+  const [filePlaying, setFilePlaying] = useState(false);
+  const filePreviewRef = useRef<HTMLAudioElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [socialUrl, setSocialUrl] = useState("");
+  const [sourceUrlInput, setSourceUrlInput] = useState("");
   const [targetLanguage, setTargetLanguage] = useState("");
   const [style, setStyle] = useState("");
   const [stage, setStage] = useState<Stage>("idle");
   const [transcript, setTranscript] = useState<string | null>(null);
   const [result, setResult] = useState<{ url: string } | null>(null);
   const [error, setError] = useState<{ text: string; credits?: boolean } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const history = useToolHistory("dubbing");
 
   useEffect(() => {
@@ -54,8 +78,20 @@ export default function DubbingPage() {
     };
   }, [result]);
 
+  useEffect(() => {
+    return () => {
+      if (fileUrl) URL.revokeObjectURL(fileUrl);
+    };
+  }, [fileUrl]);
+
   const pickFile = (f: File) => {
     setFile(f);
+    setFileDuration(null);
+    setFilePlaying(false);
+    setFileUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(f);
+    });
     setTranscript(null);
     setResult((prev) => {
       if (prev) URL.revokeObjectURL(prev.url);
@@ -64,10 +100,33 @@ export default function DubbingPage() {
     setError(null);
   };
 
+  const clearFile = () => {
+    setFile(null);
+    setFileDuration(null);
+    setFilePlaying(false);
+    setFileUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  };
+
+  const toggleFilePlay = () => {
+    const el = filePreviewRef.current;
+    if (!el) return;
+    if (filePlaying) el.pause();
+    else void el.play();
+  };
+
+  const missingInput =
+    (tab === "upload" && !file) ||
+    (tab === "social" && !socialUrl.trim()) ||
+    (tab === "source" && !sourceUrlInput.trim());
+
   const runDub = async () => {
-    if (!file || !targetLanguage) return;
+    if (missingInput || !targetLanguage) return;
     const target = DUB_LANGUAGES.find((l) => l.id === targetLanguage);
     if (!target) return;
+    const sourceLabel = tab === "upload" ? file!.name : tab === "social" ? socialUrl.trim() : sourceUrlInput.trim();
 
     setError(null);
     setTranscript(null);
@@ -78,8 +137,14 @@ export default function DubbingPage() {
 
     try {
       setStage("transcribing");
-      const text = (await cloudTranscribeRecording(file, undefined, true)).trim();
-      if (!text) throw new Error("Couldn't find any speech in that file.");
+      const text =
+        tab === "upload"
+          ? (await cloudTranscribeRecording(file!, undefined, true)).trim()
+          : (await transcribeSourceUrl(tab === "social" ? socialUrl.trim() : sourceUrlInput.trim(), undefined))
+              .map((c) => c.text)
+              .join(" ")
+              .trim();
+      if (!text) throw new Error("Couldn't find any speech there.");
       setTranscript(text);
 
       setStage("dubbing");
@@ -94,7 +159,7 @@ export default function DubbingPage() {
         inputs: { style, targetLanguage },
         result: { blob, data: { transcript: text }, filename: "dubbed-audio.wav", kind: "blob", mimeType: blob.type || "audio/wav" },
         status: "succeeded",
-        summary: `${file.name} → ${target.label}`,
+        summary: `${sourceLabel} → ${target.label}`,
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : "Dubbing failed.";
@@ -103,7 +168,7 @@ export default function DubbingPage() {
         errorMessage: message,
         inputs: { style, targetLanguage },
         status: "failed",
-        summary: `${file.name} → ${target.label}`,
+        summary: `${sourceLabel} → ${target.label}`,
       });
     } finally {
       setStage("idle");
@@ -124,51 +189,121 @@ export default function DubbingPage() {
       <div>
         <h1 className="text-lg font-semibold">Dubbing</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Upload a clip, and Depcut will transcribe it, translate the lines, and voice them in a
-          new language.
+          Upload a clip, or paste a link, and Depcut will transcribe it, translate the lines, and
+          voice them in a new language.
         </p>
       </div>
 
       <div className="space-y-5">
-        <div className="space-y-2">
-          <Label>
-            Source audio or video <span className="text-destructive">*</span>
-          </Label>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragging(false);
-              const f = e.dataTransfer.files[0];
-              if (f?.type.startsWith("audio/") || f?.type.startsWith("video/")) pickFile(f);
-            }}
-            className={cn(
-              "flex w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed p-6 text-center transition-colors",
-              dragging ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
+        <SubTabs tabs={TABS} value={tab} onChange={setTab} />
+
+        {tab === "upload" && (
+          <div className="space-y-2">
+            <Label>
+              Source audio or video <span className="text-destructive">*</span>
+            </Label>
+            {file ? (
+              <div className="flex w-full items-center gap-3 rounded-2xl border border-border p-3">
+                <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted">
+                  <FileText className="size-5 text-muted-foreground" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs font-medium">{file.name}</p>
+                  <p className="text-[10.5px] text-muted-foreground">
+                    {fileDuration != null ? `${mmss(fileDuration)} · ` : ""}
+                    {formatBytes(file.size)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleFilePlay}
+                  disabled={fileDuration == null}
+                  title={filePlaying ? "Pause" : "Play"}
+                  className="grid size-8 shrink-0 place-items-center rounded-full border border-input text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                >
+                  {filePlaying ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={clearFile}
+                  title="Remove"
+                  className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+                {/* eslint-disable-next-line jsx-a11y/media-has-caption -- a picked file's own preview, not authored content */}
+                <audio
+                  ref={filePreviewRef}
+                  src={fileUrl ?? undefined}
+                  className="hidden"
+                  onLoadedMetadata={(e) => setFileDuration(e.currentTarget.duration)}
+                  onPlay={() => setFilePlaying(true)}
+                  onPause={() => setFilePlaying(false)}
+                  onEnded={() => setFilePlaying(false)}
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => document.getElementById("dub-file-picker")?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  const f = e.dataTransfer.files[0];
+                  if (f?.type.startsWith("audio/") || f?.type.startsWith("video/")) pickFile(f);
+                }}
+                className={cn(
+                  "flex w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed p-6 text-center transition-colors",
+                  dragging ? "border-primary bg-primary/5" : "border-border hover:bg-muted"
+                )}
+              >
+                <Film className="size-6 text-muted-foreground" />
+                <span className="text-xs font-medium">Drop an audio or video file, or click to browse</span>
+              </button>
             )}
-          >
-            <Film className="size-6 text-muted-foreground" />
-            <span className="text-xs font-medium">
-              {file ? file.name : "Drop an audio or video file, or click to browse"}
-            </span>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="audio/*,video/*"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) pickFile(f);
-            }}
-          />
-        </div>
+            <input
+              id="dub-file-picker"
+              type="file"
+              accept="audio/*,video/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) pickFile(f);
+              }}
+            />
+          </div>
+        )}
+
+        {tab === "social" && (
+          <div className="space-y-2">
+            <Label>
+              Social video or audio link <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              value={socialUrl}
+              onChange={(e) => setSocialUrl(e.target.value)}
+              placeholder="Paste a YouTube, TikTok, or other social link"
+            />
+          </div>
+        )}
+
+        {tab === "source" && (
+          <div className="space-y-2">
+            <Label>
+              Direct audio or video URL <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              value={sourceUrlInput}
+              onChange={(e) => setSourceUrlInput(e.target.value)}
+              placeholder="https://example.com/clip.mp3"
+            />
+          </div>
+        )}
 
         <VoicePicker />
 
@@ -206,8 +341,8 @@ export default function DubbingPage() {
 
         <Button
           className="w-full"
-          disabled={!file || !targetLanguage || signedOut || busy}
-          title={!file ? "Add a file above first" : !targetLanguage ? "Choose a target language" : undefined}
+          disabled={missingInput || !targetLanguage || signedOut || busy}
+          title={missingInput ? "Add a source above first" : !targetLanguage ? "Choose a target language" : undefined}
           onClick={() => void runDub()}
         >
           {busy ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Captions data-icon="inline-start" />}
