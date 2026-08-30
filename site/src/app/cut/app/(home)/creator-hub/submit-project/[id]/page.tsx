@@ -1593,7 +1593,10 @@ export default function SubmitProjectEditorPage() {
           )}
         </form>
 
-        {/* Collaboration Hub */}
+        {/* Collaboration Hub — same internal-source exemption as the Linked
+            Collaboration Pipeline gate above: nothing to link for a project
+            submitted from the editor itself. */}
+        {!isInternalSource && (
         <div className="space-y-4 rounded-3xl border bg-card p-6">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold">Collaboration Hub</p>
@@ -1656,6 +1659,7 @@ export default function SubmitProjectEditorPage() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       <Dialog
