@@ -192,7 +192,7 @@ const SECTIONS: NavSection[] = [
     children: [
       { label: "General Settings", href: "/admin/settings/general", icon: SettingsIcon, color: "text-gray-400" },
       { label: "Maintenance", href: "/admin/settings/maintenance", icon: SettingsIcon, color: "text-gray-400" },
-      { label: "AI Models", href: soon("Settings — AI Models"), icon: SettingsIcon, color: "text-gray-400" },
+      { label: "AI Models", href: "/admin/settings/ai-models", icon: SettingsIcon, color: "text-gray-400" },
       { label: "OAuth App", href: "/admin/settings/oauth-app", icon: SettingsIcon, color: "text-gray-400" },
       { label: "Categories & Niches", href: "/admin/settings/categories", icon: SettingsIcon, color: "text-primary" },
     ],
