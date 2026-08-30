@@ -640,6 +640,23 @@ export function useUpdateAiModel() {
   });
 }
 
+export function useCreateAiModel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      modality: AdminAiModel["modality"];
+      tier: string;
+      label: string;
+      modelId: string;
+    }) =>
+      apiFetch<{ model: AdminAiModel }>("/api/admin/ai-models", {
+        body: JSON.stringify(input),
+        method: "POST",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminAiModelsQueryKey }),
+  });
+}
+
 export function useAdminSettings() {
   return useQuery({
     queryFn: () => apiFetch<{ settings: AdminSettings }>("/api/admin/settings"),
