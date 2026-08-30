@@ -356,7 +356,7 @@ export function LibraryView() {
         <input
           ref={inputRef}
           type="file"
-          accept="video/*,audio/*"
+          accept="video/*,audio/*,image/*"
           multiple
           hidden
           onChange={(e) => {
