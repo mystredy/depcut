@@ -400,6 +400,26 @@ export const libraryCloud = {
     }
   },
 
+  async rename(userId: string, id: string, req: Request) {
+    try {
+      const { name } = (await req.json()) as { name?: string };
+      const trimmed = (name ?? "").trim();
+      if (!trimmed) throw new Error("Name required.");
+      const row = await prisma.cutLibraryAsset.findFirst({ where: { id, userId } });
+      if (!row) throw new Error("Library asset not found.");
+      const obj = await prisma.cutMediaObject.findUnique({ where: { id: row.mediaObjectId } });
+      if (!obj) throw new Error("Library asset not found.");
+      const meta = { ...(row.meta as AssetMeta), name: trimmed.slice(0, 80) };
+      const updated = await prisma.cutLibraryAsset.update({
+        where: { id },
+        data: { meta: meta as unknown as Prisma.InputJsonValue },
+      });
+      return Response.json(assetView(updated, obj));
+    } catch (e) {
+      return caught(e, "Could not rename.");
+    }
+  },
+
   async serveMedia(userId: string, file: string) {
     try {
       return redirect(mediaObjectUrl(libraryKey(userId, decodeFileParam(file))));

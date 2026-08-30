@@ -77,6 +77,7 @@ const CUT_CLOUD_ROUTES: CloudRoute[] = [
   { method: "PUT", path: "/api/cut-cloud/library/folders/:id", handler: (r, u, p) => libraryCloud.renameFolder(u, p.id, r) },
   { method: "DELETE", path: "/api/cut-cloud/library/folders/:id", handler: (_r, u, p) => libraryCloud.deleteFolder(u, p.id) },
   { method: "GET", path: "/api/cut-cloud/library/media/:file", handler: (_r, u, p) => libraryCloud.serveMedia(u, p.file) },
+  { method: "PUT", path: "/api/cut-cloud/library/:id", handler: (r, u, p) => libraryCloud.rename(u, p.id, r) },
   { method: "DELETE", path: "/api/cut-cloud/library/:id", handler: (_r, u, p) => libraryCloud.remove(u, p.id) },
 
   { method: "GET", path: "/api/cut-cloud/export-jobs", handler: (_r, u) => jobsCloud.exportFeed(u) },

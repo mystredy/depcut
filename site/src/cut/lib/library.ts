@@ -219,6 +219,19 @@ export async function deleteFromLibrary(residency: Residency, id: string) {
   if (!res.ok) throw new Error("Could not delete.");
 }
 
+export async function renameLibraryAsset(
+  residency: Residency,
+  id: string,
+  name: string
+): Promise<void> {
+  const res = await backendFor(residency).fetch(`/api/cut/library/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error("Could not rename.");
+}
+
 /** Land one library file in the open project and return its stored name.
  *
  * On the project's own shelf the server does the copy without the bytes ever

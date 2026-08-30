@@ -11,6 +11,7 @@ import {
   listTemplates,
   moveItem,
   removeAsset,
+  renameAsset,
   renameFolder,
   renameTemplate,
   saveTemplate,
@@ -155,6 +156,15 @@ export const libraryApi = {
       return Response.json({ ok: true });
     } catch (e) {
       return caught(e, "Could not delete.");
+    }
+  },
+
+  async rename(req: Request, { id }: { id: string }) {
+    try {
+      const { name } = (await req.json()) as { name?: string };
+      return Response.json(await renameAsset(id, name ?? ""));
+    } catch (e) {
+      return caught(e, "Could not rename.");
     }
   },
 

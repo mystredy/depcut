@@ -301,6 +301,17 @@ export function getAsset(id: string) {
   return readIndex().then((idx) => idx.assets.find((a) => a.id === id));
 }
 
+export async function renameAsset(id: string, name: string): Promise<LibraryAsset> {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Name required.");
+  return mutateIndex((idx) => {
+    const asset = idx.assets.find((a) => a.id === id);
+    if (!asset) throw new Error("Library asset not found.");
+    asset.name = trimmed.slice(0, 80);
+    return asset;
+  });
+}
+
 // --- Folders: a flat set of named groups; assets carry a folderId. ---
 
 export async function listFolders(): Promise<LibraryFolder[]> {

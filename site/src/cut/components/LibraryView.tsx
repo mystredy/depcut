@@ -14,6 +14,7 @@ import {
   Link as LinkIcon,
   Loader2,
   Music,
+  Pencil,
   Plus,
   Trash2,
   Upload,
@@ -24,6 +25,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -56,6 +58,7 @@ import {
   importUrlToLibrary,
   libraryMediaUrl,
   moveLibraryItem,
+  renameLibraryAsset,
   renameLibraryFolder,
   renameTemplate,
   uploadToLibrary,
@@ -169,6 +172,12 @@ export function LibraryView() {
     if (!live(r)) return;
     patch((d) => ({ ...d, templates: d.templates.map((t) => (t.id === id ? { ...t, name } : t)) }));
     await renameTemplate(r, id, name).catch(() => void reload());
+  };
+
+  const renameAsset = async (r: Residency, id: string, name: string) => {
+    if (!live(r)) return;
+    patch((d) => ({ ...d, assets: d.assets.map((a) => (a.id === id ? { ...a, name } : a)) }));
+    await renameLibraryAsset(r, id, name).catch(() => void reload());
   };
 
   const removeTpl = async (r: Residency, id: string) => {
@@ -479,6 +488,9 @@ export function LibraryView() {
               // banner — and the way out of it — comes up.
               onClick={live(a.residency) ? undefined : () => setNeedsApp(true)}
               onDelete={live(a.residency) ? () => setDeleting(a) : undefined}
+              onRename={
+                live(a.residency) ? (name) => void renameAsset(a.residency, a.id, name) : undefined
+              }
               onDragStartExtra={(e) => onCardDragExtra(e, a)}
             />
           ))}
@@ -573,6 +585,7 @@ export function LibraryCard({
   offline = false,
   onClick,
   onDelete,
+  onRename,
   onUse,
   onDragStartExtra,
 }: {
@@ -583,11 +596,14 @@ export function LibraryCard({
   offline?: boolean;
   onClick?: () => void;
   onDelete?: () => void;
+  onRename?: (name: string) => void;
   onUse?: () => void;
   onDragStartExtra?: (e: React.DragEvent) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const { flash, attachReveal } = useRevealFlash("library", a.id);
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState("");
   // With one shelf listed, every card is on it — the badge would say nothing.
   const bothShelves = availableResidencies().length > 1 || offline;
   // Each card is a real media element, so the source waits until the tile has
@@ -712,7 +728,7 @@ export function LibraryCard({
             <Plus className="size-3.5" />
           </button>
         )}
-        {(bothShelves || onDelete) && (
+        {(bothShelves || onRename || onDelete) && (
           <div className="absolute top-1.5 right-1.5">
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -729,20 +745,50 @@ export function LibraryCard({
                     {offline ? "On this Mac — open the Depcut app to use it" : RESIDENCY_LABEL[a.residency]}
                   </div>
                 )}
-                {onDelete && (
-                  <DropdownMenuItem variant="destructive" onClick={() => onDelete()}>
-                    <Trash2 /> Remove from library
+                {onRename && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setDraft(a.name);
+                      setRenaming(true);
+                    }}
+                  >
+                    <Pencil /> Rename
                   </DropdownMenuItem>
+                )}
+                {onDelete && (
+                  <>
+                    {onRename && <DropdownMenuSeparator />}
+                    <DropdownMenuItem variant="destructive" onClick={() => onDelete()}>
+                      <Trash2 /> Remove from library
+                    </DropdownMenuItem>
+                  </>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         )}
       </div>
-      <CopyNameLabel
-        name={a.name}
-        className="mt-1 px-0.5 text-[10px] font-medium text-muted-foreground"
-      />
+      {renaming ? (
+        <Input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onClick={(e) => e.stopPropagation()}
+          onBlur={() => setRenaming(false)}
+          className="mt-1 h-6 px-1 text-[10px]"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && draft.trim()) {
+              onRename?.(draft.trim());
+              setRenaming(false);
+            } else if (e.key === "Escape") setRenaming(false);
+          }}
+        />
+      ) : (
+        <CopyNameLabel
+          name={a.name}
+          className="mt-1 px-0.5 text-[10px] font-medium text-muted-foreground"
+        />
+      )}
     </div>
   );
 }
