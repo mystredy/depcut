@@ -28,15 +28,17 @@ const MODALITY_LABEL: Record<AdminAiModel["modality"], string> = {
   chat: "Chat",
   image: "Image",
   video: "Video",
+  audio: "Audio",
 };
 
 const MODALITY_HINT: Record<AdminAiModel["modality"], string> = {
   chat: "The assistant's own model — no per-request picker exists yet, so this is visibility only.",
   image: "Shown in the model picker on the Image tab and Text to Image.",
   video: "Shown in the model picker on the Video tab and the dashboard composer.",
+  audio: "Voice and music generation — no per-request picker exists yet, so this is visibility only.",
 };
 
-const MODALITY_ORDER: AdminAiModel["modality"][] = ["chat", "image", "video"];
+const MODALITY_ORDER: AdminAiModel["modality"][] = ["chat", "image", "video", "audio"];
 
 // Which Gemini models are on offer, grouped by what they generate. Disabling
 // one here removes it from the matching model picker for every user — the
@@ -65,7 +67,7 @@ export default function AdminAiModelsPage() {
       <div>
         <h1 className="text-lg font-semibold tracking-tight">AI Models</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Which chat, image, and video models are active and available to users.
+          Which chat, image, video, and audio models are active and available to users.
         </p>
       </div>
 

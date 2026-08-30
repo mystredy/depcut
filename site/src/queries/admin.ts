@@ -396,7 +396,7 @@ export type AdminPaymentMethod = {
 
 export type AdminAiModel = {
   id: string;
-  modality: "chat" | "image" | "video";
+  modality: "chat" | "image" | "video" | "audio";
   tier: string;
   label: string;
   modelId: string;
