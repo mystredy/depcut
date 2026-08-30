@@ -7,8 +7,6 @@ import {
   Activity,
   Bot,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Clapperboard,
   Coins,
   CreditCard,
@@ -40,7 +38,7 @@ import {
 
 import { cn } from "@/lib/utils";
 
-type LeafItem = { label: string; href: string; icon: LucideIcon; color: string };
+export type LeafItem = { label: string; href: string; icon: LucideIcon; color: string };
 type NavSection =
   | { kind: "leaf"; id: string; label: string; icon: LucideIcon; color: string; href: string }
   | { kind: "group"; id: string; label: string; icon: LucideIcon; color: string; children: LeafItem[] };
@@ -199,45 +197,35 @@ const SECTIONS: NavSection[] = [
   },
 ];
 
+/** The current route's own nav entry — its icon, label, and accent color —
+ * for the header bar's `[toggle][icon][title]` strip above every page, so
+ * that strip never needs a page to declare its own heading twice. Only
+ * matches a route SECTIONS actually names (a "coming soon" placeholder's
+ * query string means it never matches, so it falls back to no icon). */
+export function findAdminNavItem(pathname: string): LeafItem | null {
+  for (const section of SECTIONS) {
+    if (section.kind === "leaf" && section.href === pathname) {
+      return { color: section.color, href: section.href, icon: section.icon, label: section.label };
+    }
+    if (section.kind === "group") {
+      const child = section.children.find((c) => c.href === pathname);
+      if (child) return child;
+    }
+  }
+  return null;
+}
+
 export function AdminNav() {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [collapsed, setCollapsed] = useState(false);
 
   const toggle = (id: string) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
-  if (collapsed) {
-    return (
-      <div className="flex w-10 shrink-0 flex-col items-center border-r bg-card py-4">
-        <button
-          type="button"
-          onClick={() => setCollapsed(false)}
-          aria-label="Show sidebar"
-          title="Show sidebar"
-          className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <ChevronRight className="size-4" />
-        </button>
-      </div>
-    );
-  }
-
   return (
     <nav className="flex w-64 shrink-0 flex-col border-r bg-card">
-      <div className="flex items-center justify-between gap-2 px-4 py-4">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold">Depcut Admin</p>
-          <p className="text-xs text-muted-foreground">Site management</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setCollapsed(true)}
-          aria-label="Hide sidebar"
-          title="Hide sidebar"
-          className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <ChevronLeft className="size-4" />
-        </button>
+      <div className="px-4 py-4">
+        <p className="text-sm font-semibold">Depcut Admin</p>
+        <p className="text-xs text-muted-foreground">Site management</p>
       </div>
       <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 pb-3">
         {SECTIONS.map((section) => {
