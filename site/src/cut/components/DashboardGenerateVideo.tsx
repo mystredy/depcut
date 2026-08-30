@@ -17,6 +17,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { useSelectableModels } from "@/cut/lib/aiModelAvailability";
 import { useAssetDrop } from "@/cut/lib/assetRef";
 import { seedNewProjectDoc } from "@/cut/lib/docCache";
 import { useGenerate } from "@/cut/lib/generate";
@@ -90,10 +91,15 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
   // resolution get their own always-visible quick pickers below.
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Narrowed to whatever an admin has actually left enabled
+  // (/admin/settings/ai-models); falls back to the full list while that
+  // loads or if nothing's enabled, so the picker is never empty.
+  const selectableModels = useSelectableModels("video", VIDEO_MODELS);
+
   // Clamped to the picked model's own set, same as the editor's Video tab —
   // a Veo-only pick (say, 1080p) never leaks into an Omni request or vice
   // versa when switching models here.
-  const model = VIDEO_MODELS.find((m) => m.tier === tier) ?? VIDEO_MODELS[0];
+  const model = selectableModels.find((m) => m.tier === tier) ?? selectableModels[0];
   const effAspect = nearestAspect(aspect, model.aspects);
   const resolutionOptions = RESOLUTION_OPTIONS[model.provider] ?? RESOLUTION_OPTIONS["gemini-omni"];
   const durationOptions = DURATION_OPTIONS[model.provider] ?? DURATION_OPTIONS["gemini-omni"];
@@ -241,7 +247,7 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
               title="Model"
               value={tier}
               display={model.model}
-              options={VIDEO_MODELS.map((m) => ({ value: m.tier, label: m.model }))}
+              options={selectableModels.map((m) => ({ value: m.tier, label: m.model }))}
               onChange={setTier}
             />
             <IconSelect

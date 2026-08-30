@@ -5,12 +5,13 @@ import { ArrowRight, ChevronDown, Download, ImagePlus, Loader2 } from "lucide-re
 import { SectionTitle } from "@/cut/components/SectionTitle";
 import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { AddRefButton, MentionTextarea, RefChips } from "@/cut/components/AssetRefs";
+import { useSelectableModels } from "@/cut/lib/aiModelAvailability";
 import { addRefOnce, type AssetRef, collectRefs, useRefCandidates } from "@/cut/lib/assetRef";
 import { bytesFromBase64 } from "@/cut/lib/bytes";
 import { promptAndImages } from "@/cut/lib/generate";
 import { creditsUrl, NO_CREDITS_MESSAGE, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { hostedPost } from "@/cut/lib/hosted";
-import { imageModel, IMAGE_MODELS, type ImageTier } from "@/cut/lib/imageModels";
+import { IMAGE_MODELS, type ImageModelOption, type ImageTier } from "@/cut/lib/imageModels";
 import type { InlineImage } from "@/cut/lib/refMedia";
 import { useToolHistory } from "@/lib/toolHistory";
 import { useBlobUrl } from "@/lib/useBlobUrl";
@@ -120,7 +121,11 @@ export default function TextToImagePage() {
     };
   }, [results]);
 
-  const model = imageModel(tier);
+  // Narrowed to whatever an admin has actually left enabled
+  // (/admin/settings/ai-models); falls back to the full list while that
+  // loads or if nothing's enabled, so the picker is never empty.
+  const selectableModels = useSelectableModels("image", IMAGE_MODELS);
+  const model = selectableModels.find((m) => m.tier === tier) ?? selectableModels[0];
 
   const generateOne = async (
     text: string,
@@ -265,7 +270,7 @@ export default function TextToImagePage() {
               <div className="flex flex-col gap-3 rounded-xl border border-input bg-muted/30 p-3">
                 <AspectRow value={aspect} onChange={setAspect} />
                 <div className="h-px shrink-0 bg-border" />
-                <ModelRow value={tier} onChange={setTier} />
+                <ModelRow value={tier} onChange={setTier} models={selectableModels} />
                 <CountRow value={count} onChange={setCount} />
               </div>
             )}
@@ -436,8 +441,16 @@ function AspectRow({ value, onChange }: { value: Aspect; onChange: (v: Aspect) =
   );
 }
 
-function ModelRow({ value, onChange }: { value: ImageTier; onChange: (v: ImageTier) => void }) {
-  const current = imageModel(value);
+function ModelRow({
+  value,
+  onChange,
+  models,
+}: {
+  value: ImageTier;
+  onChange: (v: ImageTier) => void;
+  models: ImageModelOption[];
+}) {
+  const current = models.find((m) => m.tier === value) ?? models[0];
   return (
     <label className="relative flex items-center gap-2 rounded-lg px-1 py-1 text-[13px] font-medium">
       <span className="min-w-0 flex-1 truncate">🍌 {current.label}</span>
@@ -447,7 +460,7 @@ function ModelRow({ value, onChange }: { value: ImageTier; onChange: (v: ImageTi
         value={value}
         onChange={(e) => onChange(e.target.value as ImageTier)}
       >
-        {IMAGE_MODELS.map((m) => (
+        {models.map((m) => (
           <option key={m.tier} value={m.tier}>
             {m.label}
           </option>

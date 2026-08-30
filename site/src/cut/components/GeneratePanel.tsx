@@ -28,6 +28,7 @@ import {
 } from "@/cut/lib/assetRef";
 import { useElapsed } from "@/cut/hooks/useElapsed";
 import { useInView } from "@/cut/hooks/useInView";
+import { useSelectableModels } from "@/cut/lib/aiModelAvailability";
 import { genPulseOverlay, useGenPulse } from "@/cut/lib/genNotify";
 import { signInUrl, useGenerate, useSignedIn, type GenerateJob } from "@/cut/lib/generate";
 import { useLightbox } from "@/cut/lib/lightbox";
@@ -141,10 +142,15 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
     (v) => v === 1 || v === 2 || v === 3 || v === 4
   );
 
+  // Narrowed to whatever an admin has actually left enabled
+  // (/admin/settings/ai-models); falls back to the full list while that
+  // loads or if nothing's enabled, so the picker is never empty.
+  const selectableModels = useSelectableModels("video", VIDEO_MODELS);
+
   // Every knob renders from — and is clamped to — what the selected model
   // supports, so a stored pick from another model (or tier) can never reach
   // the API with a value it doesn't offer.
-  const model = VIDEO_MODELS.find((m) => m.tier === tier) ?? VIDEO_MODELS[0];
+  const model = selectableModels.find((m) => m.tier === tier) ?? selectableModels[0];
   const effAspect = nearestAspect(aspect, model.aspects);
   const resolutionOptions = RESOLUTION_OPTIONS[model.provider] ?? RESOLUTION_OPTIONS["gemini-omni"];
   const durationOptions = DURATION_OPTIONS[model.provider] ?? DURATION_OPTIONS["gemini-omni"];
@@ -346,7 +352,7 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
           title="Model"
           value={tier}
           display={model.model}
-          options={VIDEO_MODELS.map((m) => ({
+          options={selectableModels.map((m) => ({
             value: m.tier,
             // A tiered family reads "Fast · Model Fast"; a single-model
             // entry is just its name.
