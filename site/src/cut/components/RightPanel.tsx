@@ -341,8 +341,12 @@ export function RightPanel() {
       {/* Edit itself carries no content once a clip, audio, or text clip is
           selected — Split/Delete/its property tabs already show in the rail
           regardless of whether Edit is the active tab, so Edit is then a
-          pure toggle with nothing of its own to open. */}
-      {tab !== null && dockInline && !(tab === "edit" && (clip || audio || textOverlay)) && (
+          pure toggle with nothing of its own to open. Nor with nothing
+          selected at all: the playhead-fallback effect above already tries
+          to pick something up, so reaching here with no selection means
+          there's truly nothing on the timeline to edit — stay closed rather
+          than show a "select something" placeholder. */}
+      {tab !== null && dockInline && !(tab === "edit" && (clip || audio || textOverlay || !hasEditContent)) && (
         <div className="flex w-[264px] min-h-0 shrink-0 flex-col border-r border-border">
           {/* Inspector's own sub-panel headers (PanelTitle, ...) run flush to
               the edge with no room reserved for an overlay button, so the
@@ -357,13 +361,10 @@ export function RightPanel() {
               direct grid item. */}
           <div className="grid min-h-0 flex-1">
             {tab === "edit" ? (
-              hasEditContent ? (
-                <Inspector />
-              ) : (
-                <p className="px-4 py-8 text-center text-xs leading-relaxed text-balance text-muted-foreground">
-                  Select a clip, overlay, or audio clip to edit it here.
-                </p>
-              )
+              // Reaching here at all means hasEditContent is true (see the
+              // gate above), so there's always a real selection for the
+              // Inspector to show.
+              <Inspector />
             ) : clip ? (
               <ScrollArea className="flex min-h-0 flex-col">
                 {tab === "trim" && <ClipTrimSection clip={clip} />}
@@ -426,7 +427,7 @@ export function RightPanel() {
         <RailButton
           label="Edit"
           icon={SlidersHorizontal}
-          active={tab === "edit"}
+          active={tab === "edit" && hasEditContent}
           onClick={() => {
             // A clip, audio, or text clip's own tabs are already the way to
             // edit it — Edit carries nothing of its own for them (see the
