@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, ChevronDown, Download, Loader2 } from "lucide-react";
+import { ArrowRight, ChevronDown, Download, ImagePlus, Loader2 } from "lucide-react";
 import { SectionTitle } from "@/cut/components/SectionTitle";
 import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { AddRefButton, MentionTextarea, RefChips } from "@/cut/components/AssetRefs";
@@ -41,6 +41,17 @@ async function readError(res: Response, fallback: string): Promise<string> {
 
 type GenerationResponse = { outputs: { dataBase64?: string; contentType?: string }[] };
 
+/** What "Use again" needs to fully replay a past generation — every knob
+ * plus the exact reference pictures sent, frozen as blobs so they survive
+ * the originals changing or disappearing. */
+type ImageGenInputs = {
+  prompt: string;
+  aspect: Aspect;
+  tier: ImageTier;
+  count: number;
+  referenceImages: { name: string; blob: Blob }[];
+};
+
 /** A local file, or a picked Library/stock asset, staged as a reference —
  * never imported into a project (this page has none): an image rides to the
  * model as inline bytes fetched straight from its ref url. */
@@ -52,6 +63,29 @@ function refFromLocalFile(file: File): AssetRef {
     kind: file.type.startsWith("video") ? "video" : "image",
     url: URL.createObjectURL(file),
   };
+}
+
+/** A blob staged as a reference — how a generated image (fresh off the
+ * composer, or pulled back out of history) becomes an attachment for the
+ * next generation. */
+function refFromBlob(blob: Blob, name: string): AssetRef {
+  return {
+    scope: "file",
+    id: crypto.randomUUID().slice(0, 8),
+    name,
+    kind: "image",
+    url: URL.createObjectURL(blob),
+  };
+}
+
+/** The inline images actually sent for a generation, frozen as blobs for
+ * history — generically labelled since a compose pass may reshape or merge
+ * the original refs into a different set of images than were attached. */
+function referenceImagesForHistory(images: InlineImage[]): { name: string; blob: Blob }[] {
+  return images.map((img, i) => ({
+    name: `Reference ${i + 1}`,
+    blob: new Blob([bytesFromBase64(img.data)], { type: img.mimeType }),
+  }));
 }
 
 // Standalone version of the Image tab's generate panel: the same hosted image
@@ -72,7 +106,7 @@ export default function TextToImagePage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; credits?: boolean } | null>(null);
-  const [results, setResults] = useState<{ url: string }[]>([]);
+  const [results, setResults] = useState<{ url: string; blob: Blob }[]>([]);
   const history = useToolHistory("text-to-image");
 
   // No project here, so only the account-wide Library and the bundled stock
@@ -114,8 +148,13 @@ export default function TextToImagePage() {
     if (!text || busy) return;
     setBusy(true);
     setError(null);
+    // Frozen once the refs resolve, reused for every history row this run
+    // writes — the exact pictures sent, not just their live source.
+    let referenceImages: { name: string; blob: Blob }[] = [];
+    const baseInputs = (): ImageGenInputs => ({ prompt: text, aspect, tier, count, referenceImages });
     try {
       const { prompt: sent, images } = await promptAndImages("image", text, allRefs, true, Infinity);
+      referenceImages = referenceImagesForHistory(images);
       const settled = await Promise.allSettled(
         Array.from({ length: count }, () => generateOne(sent, images))
       );
@@ -123,10 +162,10 @@ export default function TextToImagePage() {
         (s): s is PromiseFulfilledResult<{ url: string; blob: Blob }> => s.status === "fulfilled"
       );
       const failed = settled.filter((s): s is PromiseRejectedResult => s.status === "rejected");
-      if (ok.length > 0) setResults(ok.map((s) => ({ url: s.value.url })));
+      if (ok.length > 0) setResults(ok.map((s) => s.value));
       for (const s of ok) {
         history.save({
-          inputs: { aspect, prompt: text, tier },
+          inputs: baseInputs(),
           result: {
             blob: s.value.blob,
             filename: "text-to-image.png",
@@ -146,7 +185,7 @@ export default function TextToImagePage() {
         });
         history.save({
           errorMessage: message,
-          inputs: { aspect, prompt: text, tier },
+          inputs: baseInputs(),
           status: "failed",
           summary: text.slice(0, 80),
         });
@@ -156,7 +195,7 @@ export default function TextToImagePage() {
       setError({ text: message, credits: message === NO_CREDITS_MESSAGE });
       history.save({
         errorMessage: message,
-        inputs: { aspect, prompt: text, tier },
+        inputs: baseInputs(),
         status: "failed",
         summary: text.slice(0, 80),
       });
@@ -173,7 +212,23 @@ export default function TextToImagePage() {
     if (typeof inputs.tier === "string" && IMAGE_MODELS.some((m) => m.tier === inputs.tier)) {
       setTier(inputs.tier as ImageTier);
     }
+    if (typeof inputs.count === "number" && (COUNTS as readonly number[]).includes(inputs.count)) {
+      setCount(inputs.count as (typeof COUNTS)[number]);
+    }
+    // Older rows saved before references were tracked have no this field —
+    // leave whatever's currently attached alone rather than clearing it.
+    if (Array.isArray(inputs.referenceImages)) {
+      setRefs(
+        (inputs.referenceImages as { name: string; blob: Blob }[])
+          .filter((r) => r?.blob instanceof Blob)
+          .map((r) => refFromBlob(r.blob, r.name))
+      );
+    }
   };
+
+  /** Attach a generated image (just made, or pulled back out of history) as
+   * a reference for the next generation. */
+  const attachAsReference = (blob: Blob, name: string) => addRef(refFromBlob(blob, name));
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-6">
@@ -295,14 +350,24 @@ export default function TextToImagePage() {
                 <div key={r.url} className="group relative overflow-hidden rounded-lg">
                   {/* eslint-disable-next-line @next/next/no-img-element -- generated image held only as an in-memory blob URL */}
                   <img src={r.url} alt={prompt} className="w-full rounded-lg" />
-                  <a
-                    href={r.url}
-                    download={`text-to-image-${i + 1}.png`}
-                    title="Download"
-                    className="absolute top-1.5 right-1.5 flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 text-[10px] font-medium text-white opacity-0 transition-opacity group-hover:opacity-100"
-                  >
-                    <Download className="size-3" />
-                  </a>
+                  <div className="absolute top-1.5 right-1.5 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                    <button
+                      type="button"
+                      title="Use as reference"
+                      onClick={() => attachAsReference(r.blob, prompt.slice(0, 60) || `text-to-image-${i + 1}`)}
+                      className="grid size-6 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                    >
+                      <ImagePlus className="size-3" />
+                    </button>
+                    <a
+                      href={r.url}
+                      download={`text-to-image-${i + 1}.png`}
+                      title="Download"
+                      className="grid size-6 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
+                    >
+                      <Download className="size-3" />
+                    </a>
+                  </div>
                 </div>
               ))}
             </div>
@@ -317,6 +382,9 @@ export default function TextToImagePage() {
           entry.result.kind === "blob" ? (
             <ImageHistoryPreview blob={entry.result.blob} alt={entry.summary} />
           ) : null
+        }
+        onUseAsReference={(entry) =>
+          entry.result.kind === "blob" && attachAsReference(entry.result.blob, entry.summary)
         }
       />
     </div>

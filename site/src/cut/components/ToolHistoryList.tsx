@@ -5,6 +5,7 @@ import {
   Clipboard,
   Download,
   EllipsisVertical,
+  ImagePlus,
   Loader2,
   PencilLine,
   RotateCcw,
@@ -105,14 +106,23 @@ function HistoryRow({
   onReuse,
   onRemove,
   onRename,
+  onUseAsReference,
 }: {
   entry: ToolHistoryEntry;
   onOpen: () => void;
   onReuse: (inputs: Record<string, unknown>) => void;
   onRemove: (id: string) => void;
   onRename: (entry: ToolHistoryEntry) => void;
+  onUseAsReference?: (entry: Extract<ToolHistoryEntry, { status: "succeeded" }>) => void;
 }) {
   const name = safeExportName(entry.summary);
+  const referenceableImage =
+    onUseAsReference &&
+    entry.status === "succeeded" &&
+    entry.result.kind === "blob" &&
+    entry.result.mimeType.startsWith("image/")
+      ? entry
+      : null;
 
   return (
     <TableRow className="cursor-pointer" onClick={onOpen}>
@@ -160,6 +170,11 @@ function HistoryRow({
               <DropdownMenuItem onClick={() => onReuse(entry.inputs)}>
                 <RotateCcw /> Use again
               </DropdownMenuItem>
+              {referenceableImage && (
+                <DropdownMenuItem onClick={() => onUseAsReference?.(referenceableImage)}>
+                  <ImagePlus /> Use as reference
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem variant="destructive" onClick={() => onRemove(entry.id)}>
                 <Trash2 /> Delete
               </DropdownMenuItem>
@@ -177,12 +192,14 @@ function HistoryTable({
   onReuse,
   onRemove,
   onRename,
+  onUseAsReference,
 }: {
   entries: ToolHistoryEntry[];
   onOpen: (entry: ToolHistoryEntry) => void;
   onReuse: (inputs: Record<string, unknown>) => void;
   onRemove: (id: string) => void;
   onRename: (entry: ToolHistoryEntry) => void;
+  onUseAsReference?: (entry: Extract<ToolHistoryEntry, { status: "succeeded" }>) => void;
 }) {
   return (
     <Table className="table-fixed">
@@ -201,6 +218,7 @@ function HistoryTable({
             onReuse={onReuse}
             onRemove={onRemove}
             onRename={onRename}
+            onUseAsReference={onUseAsReference}
           />
         ))}
       </TableBody>
@@ -219,12 +237,16 @@ export function ToolHistoryList({
   tool,
   onReuse,
   renderPreview,
+  onUseAsReference,
 }: {
   tool: ToolHistoryTool;
   onReuse: (inputs: Record<string, unknown>) => void;
   // Only ever called for a succeeded entry — a failed one has no result to
   // preview, so its detail dialog shows the error message instead.
   renderPreview: (entry: Extract<ToolHistoryEntry, { status: "succeeded" }>) => ReactNode;
+  // Offer "Use as reference" on a succeeded image row — omit for tools with
+  // no notion of a visual reference (scripting, speech, dubbing).
+  onUseAsReference?: (entry: Extract<ToolHistoryEntry, { status: "succeeded" }>) => void;
 }) {
   const { entries, remove, rename } = useToolHistory(tool);
   const [viewAllOpen, setViewAllOpen] = useState(false);
@@ -270,6 +292,7 @@ export function ToolHistoryList({
           onReuse={onReuse}
           onRemove={remove}
           onRename={startRename}
+          onUseAsReference={onUseAsReference}
         />
       )}
 
@@ -285,6 +308,7 @@ export function ToolHistoryList({
               onReuse={onReuse}
               onRemove={remove}
               onRename={startRename}
+              onUseAsReference={onUseAsReference}
             />
           </div>
         </DialogContent>
