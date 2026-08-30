@@ -662,17 +662,17 @@ export function ProjectsHome() {
             )}
           >
             <CardPreview project={p} residency={r} offline={!live(r)} />
-            <span className="absolute top-1 left-1 max-w-[70%] truncate rounded-sm bg-black/55 px-1 py-0.5 text-[8px] font-medium text-white backdrop-blur-sm">
+            <span className="absolute top-1 left-1 max-w-[70%] truncate px-1 py-0.5 text-[8px] font-medium text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]">
               {p.name}
             </span>
             {dual && (
               <ResidencyBadge
                 residency={r}
                 offline={!live(r)}
-                className="absolute bottom-1 left-1 z-10 grid size-3.5 place-items-center rounded-sm bg-black/65 text-white"
+                className="absolute bottom-1 left-1 z-10 grid size-3.5 place-items-center text-white [filter:drop-shadow(0_1px_3px_rgba(0,0,0,0.85))]"
               />
             )}
-            <span className="absolute right-1 bottom-1 rounded-sm bg-black/65 px-1 py-0.5 font-mono text-[8px] text-white tabular-nums">
+            <span className="absolute right-1 bottom-1 px-1 py-0.5 font-mono text-[8px] text-white tabular-nums [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]">
               {formatTime(p.duration)}
             </span>
             {live(r) && (
@@ -1202,7 +1202,10 @@ function ProjectMenu({
             variant="ghost"
             size="icon-xs"
             aria-label="Project actions"
-            className={cn("bg-black/40 text-white hover:bg-black/60 hover:text-white", className)}
+            className={cn(
+              "text-white transition-transform hover:text-white hover:scale-110 [&_svg]:drop-shadow-[0_1px_3px_rgba(0,0,0,0.85)]",
+              className
+            )}
             onClick={(e) => e.stopPropagation()}
           />
         }
