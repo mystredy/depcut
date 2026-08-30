@@ -114,10 +114,17 @@ export function canShareEntry(entry: SucceededEntry, name: string): boolean {
 }
 
 export async function shareEntry(entry: SucceededEntry, title: string, name: string): Promise<void> {
-  if (entry.result.kind === "text") {
-    await navigator.share({ text: entry.result.text, title });
-    return;
+  try {
+    if (entry.result.kind === "text") {
+      await navigator.share({ text: entry.result.text, title });
+      return;
+    }
+    const file = entryAsFile(entry, name);
+    await navigator.share(file ? { files: [file], title } : { title });
+  } catch (e) {
+    // The user dismissed the OS share sheet without picking a target — normal,
+    // not a failure worth surfacing or reporting.
+    if (e instanceof DOMException && e.name === "AbortError") return;
+    throw e;
   }
-  const file = entryAsFile(entry, name);
-  await navigator.share(file ? { files: [file], title } : { title });
 }

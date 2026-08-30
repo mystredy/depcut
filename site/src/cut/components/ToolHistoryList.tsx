@@ -157,7 +157,9 @@ function HistoryRow({
                     </DropdownMenuItem>
                   )}
                   {canShareEntry(entry, name) && (
-                    <DropdownMenuItem onClick={() => void shareEntry(entry, entry.summary, name)}>
+                    <DropdownMenuItem
+                      onClick={() => void shareEntry(entry, entry.summary, name).catch(() => {})}
+                    >
                       <Share2 /> Share
                     </DropdownMenuItem>
                   )}
