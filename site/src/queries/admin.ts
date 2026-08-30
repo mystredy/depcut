@@ -657,6 +657,22 @@ export function useCreateAiModel() {
   });
 }
 
+export type ProviderCatalogModel = { id: string; name: string };
+
+// Live discovery for the Add-model dialog's provider step — null while no
+// provider is picked yet, so the query stays disabled instead of firing on
+// mount.
+export function useProviderModels(provider: string | null) {
+  return useQuery({
+    enabled: provider !== null,
+    queryFn: () =>
+      apiFetch<{ models: ProviderCatalogModel[] }>(
+        `/api/admin/ai-models/provider-models?provider=${encodeURIComponent(provider ?? "")}`
+      ),
+    queryKey: ["admin", "ai-models", "provider-models", provider] as const,
+  });
+}
+
 export function useAdminSettings() {
   return useQuery({
     queryFn: () => apiFetch<{ settings: AdminSettings }>("/api/admin/settings"),

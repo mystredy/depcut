@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Pencil, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,10 +17,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { API_INTEGRATION_LABELS, type ApiIntegrationProvider } from "@/lib/marketplace/api-integrations-seed";
 import {
   type AdminAiModel,
+  type ProviderCatalogModel,
   useAdminAiModels,
+  useAdminApiIntegrations,
   useCreateAiModel,
+  useProviderModels,
   useUpdateAiModel,
 } from "@/queries/admin";
 
@@ -126,6 +130,23 @@ export default function AdminAiModelsPage() {
   );
 }
 
+/** A slug tier id guessed from a model id ("gpt-4o-mini" → "gpt-4o-mini",
+ * "models/gemini-4-flash" → "gemini-4-flash") — a starting point the admin
+ * can still edit, not a requirement. */
+function slugifyTier(modelId: string): string {
+  return modelId
+    .replace(/^models\//, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+// Picking a model happens in up to three steps: which active API
+// integration to pull from, which of its live models, then confirming the
+// tier id (a local app concept the provider can't supply). "Enter manually"
+// skips straight to the same three fields the dialog used to be, for a
+// provider with nothing wired for discovery (Fal.ai) or when the live call
+// fails.
 function AddModelDialog({
   modality,
   onOpenChange,
@@ -134,16 +155,43 @@ function AddModelDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const create = useCreateAiModel();
+  const integrations = useAdminApiIntegrations();
+  const [provider, setProvider] = useState<ApiIntegrationProvider | null>(null);
+  const [manual, setManual] = useState(false);
+  const [selected, setSelected] = useState<ProviderCatalogModel | null>(null);
+  const [search, setSearch] = useState("");
   const [tier, setTier] = useState("");
   const [label, setLabel] = useState("");
   const [modelId, setModelId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const catalog = useProviderModels(provider);
+
   const reset = () => {
+    setProvider(null);
+    setManual(false);
+    setSelected(null);
+    setSearch("");
     setTier("");
     setLabel("");
     setModelId("");
     setError(null);
+  };
+
+  const pick = (model: ProviderCatalogModel) => {
+    setSelected(model);
+    setLabel(model.name);
+    setModelId(model.id);
+    setTier(slugifyTier(model.id));
+  };
+
+  const enterManually = () => {
+    setManual(true);
+    setProvider(null);
+    setSelected(null);
+    setLabel("");
+    setModelId("");
+    setTier("");
   };
 
   const submit = () => {
@@ -161,6 +209,14 @@ function AddModelDialog({
     );
   };
 
+  const active = integrations.data?.integrations.filter((i) => i.status === "Active") ?? [];
+  const filteredCatalog = (catalog.data?.models ?? []).filter(
+    (m) =>
+      !search.trim() ||
+      m.name.toLowerCase().includes(search.trim().toLowerCase()) ||
+      m.id.toLowerCase().includes(search.trim().toLowerCase())
+  );
+
   return (
     <Dialog
       open={modality !== null}
@@ -173,56 +229,210 @@ function AddModelDialog({
         <DialogHeader>
           <DialogTitle>Add {modality ? MODALITY_LABEL[modality] : ""} model</DialogTitle>
         </DialogHeader>
-        <p className="text-xs text-muted-foreground">
-          This adds the row and lets you toggle it — it won&apos;t show up in a user&apos;s model
-          picker or be usable until it&apos;s also added to the matching registry in code and priced.
-        </p>
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="ai-model-label">Name</Label>
-            <Input
-              id="ai-model-label"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="e.g. Gemini 4 Flash"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="ai-model-id">Model ID</Label>
-            <Input
-              id="ai-model-id"
-              value={modelId}
-              onChange={(e) => setModelId(e.target.value)}
-              placeholder="e.g. gemini-4-flash-preview"
-              className="font-mono text-xs"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="ai-model-tier">Tier ID</Label>
-            <Input
-              id="ai-model-tier"
-              value={tier}
-              onChange={(e) => setTier(e.target.value.toLowerCase())}
-              placeholder="e.g. flash-4"
-              className="font-mono text-xs"
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Lowercase letters, numbers, and hyphens — must match the tier id a code change gives
-              it to actually appear in a picker.
+
+        {manual ? (
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => {
+                setManual(false);
+                setLabel("");
+                setModelId("");
+                setTier("");
+              }}
+              className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <ChevronLeft className="size-3.5" /> Choose from a provider instead
+            </button>
+            <p className="text-xs text-muted-foreground">
+              This adds the row and lets you toggle it — it won&apos;t show up in a user&apos;s model
+              picker or be usable until it&apos;s also added to the matching registry in code and
+              priced.
             </p>
+            <ManualFields
+              label={label}
+              modelId={modelId}
+              tier={tier}
+              onLabelChange={setLabel}
+              onModelIdChange={setModelId}
+              onTierChange={setTier}
+            />
           </div>
-        </div>
+        ) : provider === null ? (
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Pick an active API integration to pull its real, current model list from.
+            </p>
+            {integrations.isLoading ? (
+              <Skeleton className="h-24 w-full" />
+            ) : active.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No active API integrations yet — configure one under API Integration first.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {active.map((i) => (
+                  <button
+                    key={i.id}
+                    type="button"
+                    onClick={() => setProvider(i.provider as ApiIntegrationProvider)}
+                    className="flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-[13px] font-medium transition-colors hover:bg-muted"
+                  >
+                    {API_INTEGRATION_LABELS[i.provider as ApiIntegrationProvider] ?? i.provider}
+                    <ChevronRight className="size-3.5 text-muted-foreground" />
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={enterManually}
+              className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <Pencil className="size-3" /> Enter manually instead
+            </button>
+          </div>
+        ) : selected === null ? (
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setProvider(null)}
+              className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <ChevronLeft className="size-3.5" /> {API_INTEGRATION_LABELS[provider]}
+            </button>
+            {catalog.isLoading ? (
+              <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
+                <Loader2 className="size-3.5 animate-spin" /> Fetching {API_INTEGRATION_LABELS[provider]}
+                &apos;s models…
+              </div>
+            ) : catalog.isError ? (
+              <div className="space-y-2">
+                <p className="text-xs text-destructive">
+                  {catalog.error instanceof Error ? catalog.error.message : "Couldn't fetch that provider's models."}
+                </p>
+                <button
+                  type="button"
+                  onClick={enterManually}
+                  className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                >
+                  <Pencil className="size-3" /> Enter manually instead
+                </button>
+              </div>
+            ) : (
+              <>
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Filter models…"
+                />
+                <div className="max-h-64 space-y-1 overflow-y-auto">
+                  {filteredCatalog.length === 0 ? (
+                    <p className="py-2 text-xs text-muted-foreground">No matching models.</p>
+                  ) : (
+                    filteredCatalog.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => pick(m)}
+                        className="flex w-full flex-col items-start rounded-lg border px-3 py-2 text-left transition-colors hover:bg-muted"
+                      >
+                        <span className="text-[13px] font-medium">{m.name}</span>
+                        <span className="font-mono text-[11px] text-muted-foreground">{m.id}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setSelected(null)}
+              className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <ChevronLeft className="size-3.5" /> {API_INTEGRATION_LABELS[provider]} models
+            </button>
+            <ManualFields
+              label={label}
+              modelId={modelId}
+              tier={tier}
+              onLabelChange={setLabel}
+              onModelIdChange={setModelId}
+              onTierChange={setTier}
+            />
+          </div>
+        )}
+
         {error && <p className="text-xs text-destructive">{error}</p>}
-        <DialogFooter>
-          <Button
-            disabled={!tier.trim() || !label.trim() || !modelId.trim() || create.isPending}
-            onClick={submit}
-          >
-            {create.isPending ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            Add model
-          </Button>
-        </DialogFooter>
+        {(manual || selected !== null) && (
+          <DialogFooter>
+            <Button
+              disabled={!tier.trim() || !label.trim() || !modelId.trim() || create.isPending}
+              onClick={submit}
+            >
+              {create.isPending ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              Add model
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ManualFields({
+  label,
+  modelId,
+  tier,
+  onLabelChange,
+  onModelIdChange,
+  onTierChange,
+}: {
+  label: string;
+  modelId: string;
+  tier: string;
+  onLabelChange: (v: string) => void;
+  onModelIdChange: (v: string) => void;
+  onTierChange: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Label htmlFor="ai-model-label">Name</Label>
+        <Input
+          id="ai-model-label"
+          value={label}
+          onChange={(e) => onLabelChange(e.target.value)}
+          placeholder="e.g. Gemini 4 Flash"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="ai-model-id">Model ID</Label>
+        <Input
+          id="ai-model-id"
+          value={modelId}
+          onChange={(e) => onModelIdChange(e.target.value)}
+          placeholder="e.g. gemini-4-flash-preview"
+          className="font-mono text-xs"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="ai-model-tier">Tier ID</Label>
+        <Input
+          id="ai-model-tier"
+          value={tier}
+          onChange={(e) => onTierChange(e.target.value.toLowerCase())}
+          placeholder="e.g. flash-4"
+          className="font-mono text-xs"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Lowercase letters, numbers, and hyphens — must match the tier id a code change gives it
+          to actually appear in a picker.
+        </p>
+      </div>
+    </div>
   );
 }
