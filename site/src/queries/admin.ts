@@ -9,6 +9,7 @@ export const adminUsersQueryKey = (q?: string) => ["admin", "users", q ?? ""] as
 export const adminUsageQueryKey = ["admin", "usage"] as const;
 export const adminUploadsQueryKey = ["admin", "uploads"] as const;
 export const adminPaymentMethodsQueryKey = ["admin", "payment-methods"] as const;
+export const adminAiModelsQueryKey = ["admin", "ai-models"] as const;
 export const adminSettingsQueryKey = ["admin", "settings"] as const;
 export const adminSocialAppsQueryKey = ["admin", "social-apps"] as const;
 export const adminChatSettingsQueryKey = ["admin", "chat-settings"] as const;
@@ -393,6 +394,16 @@ export type AdminPaymentMethod = {
   updatedAt: string;
 };
 
+export type AdminAiModel = {
+  id: string;
+  modality: "chat" | "image" | "video";
+  tier: string;
+  label: string;
+  modelId: string;
+  enabled: boolean;
+  updatedAt: string;
+};
+
 export type AdminPlatform =
   | "tiktok"
   | "youtube"
@@ -607,6 +618,25 @@ export function useUpdatePaymentMethod() {
         method: "PATCH",
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminPaymentMethodsQueryKey }),
+  });
+}
+
+export function useAdminAiModels() {
+  return useQuery({
+    queryFn: () => apiFetch<{ models: AdminAiModel[] }>("/api/admin/ai-models"),
+    queryKey: adminAiModelsQueryKey,
+  });
+}
+
+export function useUpdateAiModel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      apiFetch<{ model: AdminAiModel }>(`/api/admin/ai-models/${id}`, {
+        body: JSON.stringify({ enabled }),
+        method: "PATCH",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminAiModelsQueryKey }),
   });
 }
 

@@ -1,0 +1,24 @@
+// Which Gemini models are on offer for chat, image, and video generation —
+// admin-toggled at /admin/settings/ai-models. Self-seeds from
+// src/lib/ai-models-seed.ts (derived from the same registries the client
+// composers already read: videoModels.ts, imageModels.ts) on first read.
+// Image and video generation actually enforce this — see
+// src/cut/lib/aiModelAvailability.ts; chat has no per-request model choice
+// yet, so its rows are admin-visible only for now.
+model AiModel {
+  id        String   @id @default(cuid())
+  // `${modality}:${tier}` — globally unique, but modality+tier is what
+  // callers actually match on.
+  key       String   @unique
+  modality  String
+  // Matches the client registry's own tier id (VideoTier / ImageTier / a
+  // chat tier) so a picker can filter its own list by simple membership.
+  tier      String
+  label     String
+  // The provider's own model id, sent with the generate request.
+  modelId   String
+  enabled   Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  @@map("ai_model")
+}
