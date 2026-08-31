@@ -34,7 +34,7 @@ export const GET = withDonkeyAuth(async (request) => {
 
 const createModelSchema = z
   .object({
-    modality: z.enum(["chat", "image", "video"]),
+    modality: z.enum(["chat", "image", "video", "audio"]),
     // Matches a real picker's own tier id (VideoTier/ImageTier) when this is
     // meant to actually appear there — see the route's own comment below.
     tier: z

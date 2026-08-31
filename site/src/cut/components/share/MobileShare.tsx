@@ -99,7 +99,13 @@ export function MobileShare({
       again();
     };
     const again = () => {
-      if (attempt >= MAX_STREAM_POLLS) return;
+      if (attempt >= MAX_STREAM_POLLS) {
+        // Nothing ever showed up to play — a spinner with no ceiling reads as
+        // hung, not as "still working on it", so say plainly it isn't coming
+        // rather than polling forever. A working proxy is left alone.
+        setStream((prev) => (prev.state === "preparing" ? { state: "failed" } : prev));
+        return;
+      }
       const delay = Math.min(
         MAX_STREAM_POLL_MS,
         STREAM_POLL_MS * Math.pow(2, Math.max(0, attempt - 1))
@@ -148,6 +154,23 @@ export function MobileShare({
       alive = false;
     };
   }, [api, projectId]);
+
+  // The proxy <video>'s own onError below already recovers from an
+  // unplayable source (falls back to "preparing"). Tapping native controls'
+  // play on that same source separately rejects play()'s promise with the
+  // browser's own NotSupportedError — a call we never made and can't attach
+  // a .catch() to — which would otherwise page the admin a second time for
+  // a failure the UI already handled.
+  useEffect(() => {
+    if (stream.state !== "proxy") return;
+    const onRejection = (event: PromiseRejectionEvent) => {
+      if (event.reason instanceof DOMException && event.reason.name === "NotSupportedError") {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => window.removeEventListener("unhandledrejection", onRejection);
+  }, [stream.state]);
 
   const sheets = useMemo(() => {
     const out: { id: SheetId; label: string; icon: React.ReactNode }[] = [];

@@ -110,6 +110,12 @@ export function Preview() {
   const pannable = useEditor((s) => pannableSpan(s) !== null);
   const aspect = useEditor((s) => s.aspect);
   const frame = frameOf(aspect);
+  // Nothing on the timeline paints as a plain black frame (see usePlayback's
+  // MISSING_FRAME fallback) — a hint keeps that from reading as broken,
+  // since a freshly imported asset sits in the Media panel until dragged in.
+  const timelineEmpty = useEditor(
+    (s) => s.clips.length === 0 && s.overlays.length === 0 && s.audioClips.length === 0
+  );
   const mobileShuttleTab = useEditor((s) => s.mobileShuttleTab);
   const mobileClipTab = useEditor((s) => s.mobileClipTab);
   const mobileClipTabClip = useEditor((s) =>
@@ -260,6 +266,11 @@ export function Preview() {
             }}
             onDragEnd={clearAssetDrag}
           />
+          {timelineEmpty && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6 text-center">
+              <p className="text-sm text-white/60">Drag a clip from Media onto the timeline to preview it here</p>
+            </div>
+          )}
           <OverlayPipHandle stage={stage} />
           {slices.map((slice) =>
             slice.kind === "elements" ? (

@@ -396,7 +396,7 @@ export type AdminPaymentMethod = {
 
 export type AdminAiModel = {
   id: string;
-  modality: "chat" | "image" | "video";
+  modality: "chat" | "image" | "video" | "audio";
   tier: string;
   label: string;
   modelId: string;
@@ -654,6 +654,22 @@ export function useCreateAiModel() {
         method: "POST",
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminAiModelsQueryKey }),
+  });
+}
+
+export type ProviderCatalogModel = { id: string; name: string };
+
+// Live discovery for the Add-model dialog's provider step — null while no
+// provider is picked yet, so the query stays disabled instead of firing on
+// mount.
+export function useProviderModels(provider: string | null) {
+  return useQuery({
+    enabled: provider !== null,
+    queryFn: () =>
+      apiFetch<{ models: ProviderCatalogModel[] }>(
+        `/api/admin/ai-models/provider-models?provider=${encodeURIComponent(provider ?? "")}`
+      ),
+    queryKey: ["admin", "ai-models", "provider-models", provider] as const,
   });
 }
 
