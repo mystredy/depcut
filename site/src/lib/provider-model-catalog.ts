@@ -1,7 +1,10 @@
+import type { AiModality } from "@/lib/ai-models-seed";
 import { prisma } from "@/lib/prisma";
 import {
   API_INTEGRATION_DEFAULT_BASE_URLS,
   API_INTEGRATION_ENV_VARS,
+  API_INTEGRATION_LABELS,
+  API_INTEGRATION_MODALITIES,
   type ApiIntegrationProvider,
 } from "@/lib/marketplace/api-integrations-seed";
 
@@ -35,7 +38,50 @@ async function resolveApiKey(provider: ApiIntegrationProvider): Promise<string |
   return row?.apiKey?.trim() || null;
 }
 
-export async function listProviderModels(provider: ApiIntegrationProvider): Promise<ProviderModel[]> {
+// Sorts a provider's raw catalog entry into one of our four admin modality
+// buckets, or null to leave it out entirely (embeddings, moderation, and
+// anything else that isn't a chat/image/video/audio model). Id-pattern based
+// since none of these providers' models.list responses carry a modality
+// field we can just read — patterns mirror the real ids this codebase's own
+// adapters use (see gemini-models.ts, openai-models.ts).
+function classifyProviderModel(provider: ApiIntegrationProvider, id: string): AiModality | null {
+  switch (provider) {
+    case "gemini": {
+      if (/embedding|aqa/i.test(id)) return null;
+      if (id.includes("omni") || id.includes("veo")) return "video";
+      if (id.includes("-image") || id.startsWith("imagen")) return "image";
+      if (id.includes("-tts") || id.startsWith("lyria")) return "audio";
+      return id.startsWith("gemini") ? "chat" : null;
+    }
+    case "openai": {
+      if (/embedding|moderation/i.test(id)) return null;
+      if (id.startsWith("sora")) return "video";
+      if (id.startsWith("dall-e") || id.startsWith("gpt-image")) return "image";
+      if (id.startsWith("whisper") || id.startsWith("tts-") || /transcribe|-tts/.test(id)) {
+        return "audio";
+      }
+      return id.startsWith("gpt-") || id.startsWith("chatgpt") || /^o[0-9]/.test(id) ? "chat" : null;
+    }
+    // These providers each do exactly one thing this app cares about — every
+    // model in their catalog counts, no id pattern needed.
+    case "anthropic":
+      return "chat";
+    case "elevenlabs":
+      return "audio";
+    case "open_router":
+      return "chat";
+    default:
+      return null;
+  }
+}
+
+export async function listProviderModels(
+  provider: ApiIntegrationProvider,
+  modality: AiModality,
+): Promise<ProviderModel[]> {
+  if (!API_INTEGRATION_MODALITIES[provider].includes(modality)) {
+    throw new Error(`${API_INTEGRATION_LABELS[provider]} doesn't offer ${modality} models.`);
+  }
   if (provider === "fal_ai") {
     throw new Error("Fal.ai doesn't publish a model-discovery endpoint — add its models manually.");
   }
@@ -46,7 +92,15 @@ export async function listProviderModels(provider: ApiIntegrationProvider): Prom
   }
 
   const signal = AbortSignal.timeout(TIMEOUT_MS);
+  const models = await fetchCatalog(provider, apiKey, signal);
+  return models.filter((m) => classifyProviderModel(provider, m.id) === modality);
+}
 
+async function fetchCatalog(
+  provider: ApiIntegrationProvider,
+  apiKey: string,
+  signal: AbortSignal,
+): Promise<ProviderModel[]> {
   switch (provider) {
     case "openai": {
       const res = await fetch(`${API_INTEGRATION_DEFAULT_BASE_URLS.openai}/models`, {

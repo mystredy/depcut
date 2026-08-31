@@ -1,3 +1,5 @@
+import type { AiModality } from "@/lib/ai-models-seed";
+
 // External AI provider credentials. The ApiIntegration table self-seeds one
 // disabled row per provider from this list on first read — see
 // /api/admin/api-integrations. Storage only: the real inference adapters
@@ -45,6 +47,23 @@ export const API_INTEGRATION_ENV_VARS: Record<ApiIntegrationProvider, string[]> 
   gemini: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
   open_router: ["OPENROUTER_API_KEY"],
   openai: ["OPENAI_API_KEY"],
+};
+
+// What kind of model this provider could plausibly offer — used to narrow
+// the AI Models admin page's Add-model dialog to integrations relevant to
+// the modality being added (no point offering Anthropic for a Video model,
+// it's a text-only provider) and to filter a fetched catalog down to that
+// modality's models (see provider-model-catalog.ts's classifyProviderModel).
+// A provider not wired for a modality yet (API_INTEGRATION_WIRED above) can
+// still be listed here — this is "could this provider have one", not
+// "has this app hooked one up".
+export const API_INTEGRATION_MODALITIES: Record<ApiIntegrationProvider, readonly AiModality[]> = {
+  anthropic: ["chat"],
+  elevenlabs: ["audio"],
+  fal_ai: ["image", "video"],
+  gemini: ["chat", "image", "video", "audio"],
+  open_router: ["chat"],
+  openai: ["chat", "image", "audio"],
 };
 
 // Whether any adapter in this codebase actually calls the provider yet.

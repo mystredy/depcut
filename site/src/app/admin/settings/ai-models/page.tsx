@@ -17,7 +17,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { API_INTEGRATION_LABELS, type ApiIntegrationProvider } from "@/lib/marketplace/api-integrations-seed";
+import {
+  API_INTEGRATION_LABELS,
+  API_INTEGRATION_MODALITIES,
+  type ApiIntegrationProvider,
+} from "@/lib/marketplace/api-integrations-seed";
 import {
   type AdminAiModel,
   type ProviderCatalogModel,
@@ -130,7 +134,13 @@ export default function AdminAiModelsPage() {
         </div>
       )}
 
-      <AddModelDialog modality={addModality} onOpenChange={(open) => !open && setAddModality(null)} />
+      <AddModelDialog
+        modality={addModality}
+        existingModelIds={
+          new Set((models.data?.models ?? []).filter((m) => m.modality === addModality).map((m) => m.modelId))
+        }
+        onOpenChange={(open) => !open && setAddModality(null)}
+      />
     </div>
   );
 }
@@ -231,9 +241,13 @@ function slugifyTier(modelId: string): string {
 // fails.
 function AddModelDialog({
   modality,
+  existingModelIds,
   onOpenChange,
 }: {
   modality: AdminAiModel["modality"] | null;
+  /** Model ids this modality already has a row for — a provider's catalog
+   * hides these rather than offer a pick that just 400s as a duplicate. */
+  existingModelIds: Set<string>;
   onOpenChange: (open: boolean) => void;
 }) {
   const create = useCreateAiModel();
@@ -247,7 +261,7 @@ function AddModelDialog({
   const [modelId, setModelId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const catalog = useProviderModels(provider);
+  const catalog = useProviderModels(provider, modality ?? "chat");
 
   const reset = () => {
     setProvider(null);
@@ -291,12 +305,15 @@ function AddModelDialog({
     );
   };
 
-  const active = integrations.data?.integrations.filter((i) => i.status === "Active") ?? [];
+  const active = (integrations.data?.integrations.filter((i) => i.status === "Active") ?? []).filter(
+    (i) => modality !== null && API_INTEGRATION_MODALITIES[i.provider as ApiIntegrationProvider]?.includes(modality)
+  );
   const filteredCatalog = (catalog.data?.models ?? []).filter(
     (m) =>
-      !search.trim() ||
-      m.name.toLowerCase().includes(search.trim().toLowerCase()) ||
-      m.id.toLowerCase().includes(search.trim().toLowerCase())
+      !existingModelIds.has(m.id) &&
+      (!search.trim() ||
+        m.name.toLowerCase().includes(search.trim().toLowerCase()) ||
+        m.id.toLowerCase().includes(search.trim().toLowerCase()))
   );
 
   return (
