@@ -131,6 +131,7 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
     value: a,
     label: VIDEO_ASPECT_LABEL[a].split(" ")[0],
   }));
+  const refModeOption = REF_MODE_OPTIONS.find((o) => o.value === refMode) ?? REF_MODE_OPTIONS[0];
 
   const hasImage = imageFile !== null;
   const acceptsReferences = model.maxReferenceImages > 0;
@@ -310,6 +311,16 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
               options={resolutionOptions}
               onChange={setResolution}
             />
+            {acceptsReferences && (
+              <IconSelect
+                icon={refModeOption.icon}
+                title="How references are used"
+                value={refMode}
+                display={refModeOption.label}
+                options={REF_MODE_OPTIONS}
+                onChange={setRefMode}
+              />
+            )}
             <IconSelect
               icon={Layers}
               title="Number of takes"

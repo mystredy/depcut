@@ -131,6 +131,7 @@ export function IconSelect<T extends string | number>({
   display,
   options,
   onChange,
+  disabled,
 }: {
   icon: ComponentType<{ className?: string }>;
   title: string;
@@ -138,10 +139,14 @@ export function IconSelect<T extends string | number>({
   display: string;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
+  disabled?: boolean;
 }) {
   return (
     <label
-      className="relative flex shrink-0 items-center gap-1 rounded-full px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      className={cn(
+        "relative flex shrink-0 items-center gap-1 rounded-full px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+        disabled && "pointer-events-none opacity-50"
+      )}
       title={title}
     >
       <Icon className="size-4 shrink-0" />
@@ -150,6 +155,7 @@ export function IconSelect<T extends string | number>({
       <select
         className="absolute inset-0 w-full cursor-pointer appearance-none opacity-0"
         value={String(value)}
+        disabled={disabled}
         onChange={(e) => {
           const picked = options.find((o) => String(o.value) === e.target.value);
           if (picked) onChange(picked.value);

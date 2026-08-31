@@ -161,6 +161,8 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
   // the API with a value it doesn't offer.
   const model = selectableModels.find((m) => m.tier === tier) ?? selectableModels[0];
   const effAspect = nearestAspect(aspect, model.aspects);
+  const effRefMode = character ? "frames" : refMode;
+  const refModeOption = REF_MODE_OPTIONS.find((o) => o.value === effRefMode) ?? REF_MODE_OPTIONS[0];
   const resolutionOptions = RESOLUTION_OPTIONS[model.provider] ?? RESOLUTION_OPTIONS["gemini-omni"];
   const durationOptions = DURATION_OPTIONS[model.provider] ?? DURATION_OPTIONS["gemini-omni"];
   const effResolution = resolutionOptions.some((o) => o.value === resolution)
@@ -345,7 +347,7 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
                 a frame — its poster is the point). */}
             <SegRow
               title="How references are used"
-              value={character ? "frames" : refMode}
+              value={effRefMode}
               onChange={(v) => useVideoGen.getState().setRefMode(v)}
               options={REF_MODE_OPTIONS}
               disabled={!!character}
@@ -419,6 +421,18 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
             display={effResolution}
             options={resolutionOptions}
             onChange={setResolution}
+          />
+          {/* How the attached refs condition the render — disabled in
+              character mode, which is always a frame (its poster is the
+              point), same as the settings-panel row above. */}
+          <IconSelect
+            icon={refModeOption.icon}
+            title="How references are used"
+            value={effRefMode}
+            display={refModeOption.label}
+            options={REF_MODE_OPTIONS}
+            onChange={(v) => useVideoGen.getState().setRefMode(v)}
+            disabled={!!character}
           />
           <IconSelect
             icon={Layers}
