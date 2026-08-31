@@ -399,10 +399,23 @@ export function AddRefButton({
  * AddRefButton (adds to a list) and FrameSlotButton (replaces one slot). */
 function MediaLibraryMenuItems({ onPick }: { onPick: (ref: AssetRef) => void }) {
   const candidates = useRefCandidates();
+  const clips = candidates.filter((c) => c.scope === "clip");
   const media = candidates.filter((c) => c.scope === "project");
   const library = candidates.filter((c) => c.scope === "library");
   return (
     <>
+      {clips.length > 0 && (
+        <DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>Timeline</DropdownMenuLabel>
+          {clips.map((ref) => (
+            <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => onPick(ref)}>
+              <RefThumb item={ref} className="size-6 rounded" />
+              <span className="truncate">{ref.name}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+      )}
       {media.length > 0 && (
         <DropdownMenuGroup>
           <DropdownMenuSeparator />
