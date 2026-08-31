@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, ChevronDown, Download, ImagePlus, Loader2 } from "lucide-react";
 import { SectionTitle } from "@/cut/components/SectionTitle";
 import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
@@ -100,6 +100,9 @@ export default function TextToImagePage() {
   const signedOut = signedIn === false;
 
   const [prompt, setPrompt] = useState("");
+  // Shared with AddRefButton so a Media/Library pick lands at the live
+  // cursor instead of always the end.
+  const promptRef = useRef<HTMLTextAreaElement>(null);
   const [refs, setRefs] = useState<AssetRef[]>([]);
   const [aspect, setAspect] = useState<Aspect>("16:9");
   const [tier, setTier] = useState<ImageTier>("pro");
@@ -263,6 +266,7 @@ export default function TextToImagePage() {
             onSubmit={() => void generate()}
             attachedRefs={refs}
             uploadFile={(file) => Promise.resolve(refFromLocalFile(file))}
+            inputRef={promptRef}
           />
 
           <div className="flex flex-col gap-2 px-3 pb-3">
@@ -282,6 +286,7 @@ export default function TextToImagePage() {
                 }}
                 prompt={prompt}
                 onPromptChange={setPrompt}
+                inputRef={promptRef}
                 accept="image/*,video/*"
               />
               <div className="flex min-w-0 items-center gap-1.5">

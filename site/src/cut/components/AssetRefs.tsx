@@ -338,6 +338,7 @@ export function AddRefButton({
   onUploadFiles,
   prompt,
   onPromptChange,
+  inputRef,
   accept = "image/*,video/*",
   className,
 }: {
@@ -349,6 +350,10 @@ export function AddRefButton({
    * as an attached chip the model has to be told about separately. */
   prompt: string;
   onPromptChange: (v: string) => void;
+  /** The composer's own textarea (MentionTextarea's `inputRef`) — read live at
+   * pick time so the token lands at the cursor instead of always the end.
+   * Omit to fall back to appending. */
+  inputRef?: RefObject<HTMLTextAreaElement | null>;
   accept?: string;
   className?: string;
 }) {
@@ -357,7 +362,27 @@ export function AddRefButton({
   const pick = (ref: AssetRef) => {
     onPick(ref);
     const token = refToken(ref);
-    onPromptChange(prompt.trim() ? `${prompt.trimEnd()} ${token} ` : `${token} `);
+    const el = inputRef?.current;
+    if (!el) {
+      onPromptChange(prompt.trim() ? `${prompt.trimEnd()} ${token} ` : `${token} `);
+      return;
+    }
+    // Insert at the live cursor rather than always the end — a space before
+    // the token unless it already sits at the start of the text or right
+    // after whitespace, and one after so typing continues past it cleanly.
+    const start = el.selectionStart ?? prompt.length;
+    const end = el.selectionEnd ?? start;
+    const before = prompt.slice(0, start);
+    const after = prompt.slice(end);
+    const insert = `${before && !/\s$/.test(before) ? " " : ""}${token} `;
+    onPromptChange(before + insert + after);
+    const caret = (before + insert).length;
+    // The textarea's value updates on the next render — move the caret only
+    // once that's landed, or setSelectionRange lands on the old value.
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(caret, caret);
+    });
   };
 
   return (

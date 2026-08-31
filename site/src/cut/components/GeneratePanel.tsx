@@ -99,6 +99,9 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
   const jobs = allJobs.filter((j) => j.projectId === projectId && j.kind === "video" && !j.chatId);
   const { prompt, refs, refMode, endFrame, character, aspect } = useVideoGen();
   const candidates = useRefCandidates();
+  // Shared with AddRefButton so a Media/Library pick lands at the live
+  // cursor instead of always the end.
+  const promptRef = useRef<HTMLTextAreaElement>(null);
   // OS files handed to the panel — dropped on it or pasted into the prompt —
   // attach as references (media files import into the project on the way;
   // text files ride as-is).
@@ -320,6 +323,7 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
               if (last) useVideoGen.getState().removeRef(last);
             }}
             uploadFile={(file) => refsFromDroppedFiles(projectId, [file]).then((rs) => rs[0])}
+            inputRef={promptRef}
           />
           <div className="absolute right-2 bottom-2 flex items-center gap-0.5">
             <AddRefButton
@@ -327,6 +331,7 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
               onUploadFiles={attachFiles}
               prompt={prompt}
               onPromptChange={(v) => useVideoGen.getState().setPrompt(v)}
+              inputRef={promptRef}
               className="bg-background/70 backdrop-blur-sm"
             />
             <DictationControl
