@@ -48,7 +48,7 @@ import {
 } from "@/cut/lib/videoModels";
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
-import { RefThumb } from "./AssetRefs";
+import { MentionTextarea, RefThumb } from "./AssetRefs";
 import {
   COUNT_OPTIONS,
   DURATION_OPTIONS,
@@ -149,6 +149,10 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
 
   const hasImage = imageFile !== null;
   const acceptsReferences = model.maxReferenceImages > 0;
+  // Shared with the prompt's @-mention picker and every FileSlot's Library
+  // group, so one fetch backs both — the Library, not Media/Timeline, since
+  // no project exists yet here (see the component doc comment).
+  const libraryRefs = useLibraryRefs();
 
   // A model switch that drops reference support (rare today — every current
   // tier accepts at least one — but the picker is admin-extensible) leaves
@@ -232,7 +236,7 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
         <div className="flex items-center gap-1.5 px-3 pt-3">
           {refMode === "frames" ? (
             <>
-              <FileSlot label="Start frame" file={startFile} onChange={setStartFile} />
+              <FileSlot label="Start frame" file={startFile} onChange={setStartFile} libraryRefs={libraryRefs} />
               <button
                 type="button"
                 title="Swap start and end"
@@ -245,25 +249,24 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
               >
                 <ArrowLeftRight className="size-3.5" />
               </button>
-              <FileSlot label="End frame" file={endFile} onChange={setEndFile} />
+              <FileSlot label="End frame" file={endFile} onChange={setEndFile} libraryRefs={libraryRefs} />
             </>
           ) : (
-            <FileSlot label="Image" file={imageFile} onChange={setImageFile} />
+            <FileSlot label="Image" file={imageFile} onChange={setImageFile} libraryRefs={libraryRefs} />
           )}
         </div>
       )}
-      <textarea
+      <MentionTextarea
         value={prompt}
-        onChange={(e) => setPrompt(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            void go();
-          }
-        }}
+        onChange={setPrompt}
+        candidates={libraryRefs}
+        onSubmit={() => void go()}
+        submitKey="enter"
         placeholder="Describe your video…"
-        disabled={busy}
-        className="min-h-[64px] w-full resize-none bg-transparent px-4 pt-2.5 pb-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
+        className={cn(
+          "min-h-[64px] w-full resize-none bg-transparent px-4 pt-2.5 pb-2 text-sm outline-none placeholder:text-muted-foreground",
+          busy && "pointer-events-none opacity-60"
+        )}
       />
       <div className="flex flex-col gap-2 px-3 pb-3">
         {settingsOpen && (
@@ -437,16 +440,17 @@ function FileSlot({
   label,
   file,
   onChange,
+  libraryRefs,
   disabled,
 }: {
   label: string;
   file: File | null;
   onChange: (file: File | null) => void;
+  libraryRefs: AssetRef[];
   disabled?: boolean;
 }) {
   const url = useFilePreview(file);
   const inputRef = useRef<HTMLInputElement>(null);
-  const libraryRefs = useLibraryRefs();
   const [pickingRef, setPickingRef] = useState<AssetRef | null>(null);
   const { active, attachTarget, targetProps } = useAssetDrop(
     // Nothing else on this page carries a draggable app ref to drop here —
@@ -498,11 +502,13 @@ function FileSlot({
         ref={attachTarget}
         {...targetProps}
         disabled={disabled}
+        title={`Add ${label.toLowerCase()}`}
+        aria-label={`Add ${label.toLowerCase()}`}
         className={cn(
-          "flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-40",
+          "grid size-7 shrink-0 place-items-center rounded-md outline-none transition-colors disabled:pointer-events-none disabled:opacity-40",
           active
-            ? "border-[#0a84ff] bg-[#0a84ff]/10 text-[#0a84ff]"
-            : "border-input text-foreground hover:bg-muted"
+            ? "bg-[#0a84ff]/10 text-[#0a84ff]"
+            : "text-muted-foreground/70 hover:bg-muted hover:text-foreground"
         )}
       >
         {pickingRef ? (
@@ -510,7 +516,6 @@ function FileSlot({
         ) : (
           <Plus className="size-3.5" />
         )}
-        {label}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
         <DropdownMenuItem onClick={() => inputRef.current?.click()}>
