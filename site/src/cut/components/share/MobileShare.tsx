@@ -99,7 +99,13 @@ export function MobileShare({
       again();
     };
     const again = () => {
-      if (attempt >= MAX_STREAM_POLLS) return;
+      if (attempt >= MAX_STREAM_POLLS) {
+        // Nothing ever showed up to play — a spinner with no ceiling reads as
+        // hung, not as "still working on it", so say plainly it isn't coming
+        // rather than polling forever. A working proxy is left alone.
+        setStream((prev) => (prev.state === "preparing" ? { state: "failed" } : prev));
+        return;
+      }
       const delay = Math.min(
         MAX_STREAM_POLL_MS,
         STREAM_POLL_MS * Math.pow(2, Math.max(0, attempt - 1))
