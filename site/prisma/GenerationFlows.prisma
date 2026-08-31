@@ -1,0 +1,79 @@
+// The unified Image & Video feature: a "Flow" is a chronological creative
+// thread of image/video generations — see docs/guides (Image & Video) for the
+// product shape. Kept entirely separate from CutProject (Cut.prisma), the
+// video editor's own project concept; a Flow never touches a cut project's
+// doc, timeline, or media. Media bytes live in R2 under keys recorded on each
+// FlowGeneration row (see cut/server/cloud/r2.ts's flowMediaKey), same split
+// as CutProject/CutMediaObject. Rows carry a plain userId (better-auth id)
+// with no FK so the tables stay self-contained.
+
+model GenerationFlow {
+  id     String @id @default(cuid())
+  userId String
+  name   String
+
+  // The gallery thumbnail. Defaults to the first completed generation's
+  // output (coverIsAuto stays true, coverKey tracks it as new generations
+  // land) until the user explicitly sets one, which flips coverIsAuto off so
+  // a later generation never silently replaces their pick.
+  coverKey    String?
+  coverIsAuto Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  generations FlowGeneration[]
+
+  @@index([userId, updatedAt])
+}
+
+// One generated image or video. A composer submission that asks for N takes
+// creates N of these — independent status, so 3 of 4 succeeding is 3 rows
+// completed and 1 failed, not one row half-done — matching how the
+// standalone Text to Image/Video pages already split a multi-take submit
+// (Promise.allSettled) before this feature existed.
+model FlowGeneration {
+  id     String         @id @default(cuid())
+  flowId String
+  flow   GenerationFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  userId String
+
+  kind     String // image | video
+  prompt   String
+  provider String
+  model    String
+
+  // Request-shape knobs a "regenerate" or the info panel reads back — aspect
+  // ratio, resolution, duration, image size, etc.; whatever that kind's
+  // composer sent as `parameters`.
+  parameters Json @default("{}")
+  // Video only: how the attached reference(s) conditioned the render.
+  refMode String?
+  // R2 keys of the reference images actually sent, for the info panel —
+  // never re-derived from the live ref, which may since have changed.
+  referenceKeys Json @default("[]")
+
+  status       String  @default("in_progress") // in_progress | completed | failed
+  errorMessage String?
+
+  // Set once status is "completed".
+  outputKey       String?
+  outputMime      String?
+  posterKey       String? // video's poster frame, captured on completion
+  width           Int?
+  height          Int?
+  durationSeconds Float?
+
+  // The inference gateway's own poll payload (see storedGenerationForProviderSchema)
+  // — carried so a page reload or a later poll can resume an in-progress row.
+  providerJobId        String?
+  providerGenerationId String?
+  providerPollingUrl   String?
+  providerPayload      Json    @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([flowId, createdAt])
+  @@index([status, updatedAt])
+}
