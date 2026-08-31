@@ -37,6 +37,7 @@ export const GROUPS: NavGroup[] = [
       { slug: "text-to-speech", label: "Text to Speech", icon: Volume2 },
       { slug: "dubbing", label: "Dubbing", icon: Languages },
       { slug: "text-to-image", label: "Text to Image", icon: Image },
+      { slug: "text-to-video", label: "Text to Video", icon: Video },
       { slug: "ai-chatbot", label: "AI Chatbot", icon: MessageSquare },
     ],
   },

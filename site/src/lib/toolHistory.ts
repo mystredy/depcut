@@ -13,7 +13,8 @@ export type ToolHistoryTool =
   | "speech-to-text"
   | "text-to-speech"
   | "dubbing"
-  | "text-to-image";
+  | "text-to-image"
+  | "text-to-video";
 
 export type ToolHistoryResult =
   | { kind: "text"; text: string; data?: unknown }
