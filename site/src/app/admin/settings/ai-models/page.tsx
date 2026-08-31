@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Pencil, Plus } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, ChevronLeft, ChevronRight, Loader2, Pencil, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -104,7 +104,12 @@ export default function AdminAiModelsPage() {
                   <TableBody>
                     {rows.map((m) => (
                       <TableRow key={m.id}>
-                        <TableCell className="font-medium">{m.label}</TableCell>
+                        <TableCell className="font-medium">
+                          <EditableLabel
+                            value={m.label}
+                            onSave={(label) => update.mutate({ id: m.id, label })}
+                          />
+                        </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">
                           {m.modelId}
                         </TableCell>
@@ -126,6 +131,83 @@ export default function AdminAiModelsPage() {
       )}
 
       <AddModelDialog modality={addModality} onOpenChange={(open) => !open && setAddModality(null)} />
+    </div>
+  );
+}
+
+/** The Model cell — the label as plain text with a pencil to rename it, or
+ * (while editing) a text field with Enter/blur to save and Escape to cancel.
+ * A no-op save (unchanged or blank) just closes back to display mode. */
+function EditableLabel({ value, onSave }: { value: string; onSave: (label: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.select();
+  }, [editing]);
+
+  const commit = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== value) onSave(trimmed);
+    setEditing(false);
+  };
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setDraft(value);
+          setEditing(true);
+        }}
+        className="group/rename flex items-center gap-1.5 text-left"
+      >
+        {value}
+        <Pencil className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/rename:opacity-100" />
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <Input
+        ref={inputRef}
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          else if (e.key === "Escape") setEditing(false);
+        }}
+        onBlur={commit}
+        className="h-7 max-w-48 text-sm"
+      />
+      {/* onMouseDown (not onClick) fires before the input's onBlur, so
+          pressing this button commits via the button itself rather than
+          racing blur into a cancel. */}
+      <button
+        type="button"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          commit();
+        }}
+        title="Save"
+        className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+      >
+        <Check className="size-3.5" />
+      </button>
+      <button
+        type="button"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          setEditing(false);
+        }}
+        title="Cancel"
+        className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+      >
+        <X className="size-3.5" />
+      </button>
     </div>
   );
 }

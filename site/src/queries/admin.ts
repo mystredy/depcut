@@ -631,9 +631,9 @@ export function useAdminAiModels() {
 export function useUpdateAiModel() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+    mutationFn: ({ id, ...patch }: { id: string; enabled?: boolean; label?: string }) =>
       apiFetch<{ model: AdminAiModel }>(`/api/admin/ai-models/${id}`, {
-        body: JSON.stringify({ enabled }),
+        body: JSON.stringify(patch),
         method: "PATCH",
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminAiModelsQueryKey }),
