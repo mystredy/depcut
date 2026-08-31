@@ -134,7 +134,22 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
   }));
 
   const hasImage = imageFile !== null;
-  const hasFrames = startFile !== null || endFile !== null;
+  const acceptsReferences = model.maxReferenceImages > 0;
+
+  // A model switch that drops reference support (rare today — every current
+  // tier accepts at least one — but the picker is admin-extensible) leaves
+  // no staged file behind for a request that would just ignore it. Adjusted
+  // during render rather than an effect, per React's own guidance for state
+  // that tracks a prop/derived value: https://react.dev/learn/you-might-not-need-an-effect
+  const [prevAcceptsReferences, setPrevAcceptsReferences] = useState(acceptsReferences);
+  if (prevAcceptsReferences !== acceptsReferences) {
+    setPrevAcceptsReferences(acceptsReferences);
+    if (!acceptsReferences) {
+      setImageFile(null);
+      setStartFile(null);
+      setEndFile(null);
+    }
+  }
 
   const go = async () => {
     const text = prompt.trim();
@@ -199,28 +214,30 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
         className
       )}
     >
-      <div className="flex items-center gap-1.5 px-3 pt-3">
-        {refMode === "frames" ? (
-          <>
-            <FileSlot label="Start frame" file={startFile} onChange={setStartFile} />
-            <button
-              type="button"
-              title="Swap start and end"
-              aria-label="Swap start and end"
-              onClick={() => {
-                setStartFile(endFile);
-                setEndFile(startFile);
-              }}
-              className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-            >
-              <ArrowLeftRight className="size-3.5" />
-            </button>
-            <FileSlot label="End frame" file={endFile} onChange={setEndFile} />
-          </>
-        ) : (
-          <FileSlot label="Image" file={imageFile} onChange={setImageFile} />
-        )}
-      </div>
+      {acceptsReferences && (
+        <div className="flex items-center gap-1.5 px-3 pt-3">
+          {refMode === "frames" ? (
+            <>
+              <FileSlot label="Start frame" file={startFile} onChange={setStartFile} />
+              <button
+                type="button"
+                title="Swap start and end"
+                aria-label="Swap start and end"
+                onClick={() => {
+                  setStartFile(endFile);
+                  setEndFile(startFile);
+                }}
+                className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+              >
+                <ArrowLeftRight className="size-3.5" />
+              </button>
+              <FileSlot label="End frame" file={endFile} onChange={setEndFile} />
+            </>
+          ) : (
+            <FileSlot label="Image" file={imageFile} onChange={setImageFile} />
+          )}
+        </div>
+      )}
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
@@ -237,12 +254,14 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
       <div className="flex flex-col gap-2 px-3 pb-3">
         {settingsOpen && (
           <div className="flex flex-col gap-2">
-            <SegRow
-              title="How references are used"
-              value={refMode}
-              onChange={setRefMode}
-              options={REF_MODE_OPTIONS}
-            />
+            {acceptsReferences && (
+              <SegRow
+                title="How references are used"
+                value={refMode}
+                onChange={setRefMode}
+                options={REF_MODE_OPTIONS}
+              />
+            )}
             <SegRow title="Aspect ratio" value={effAspect} onChange={setAspect} options={aspectOptions} />
             <SegRow
               title="Duration"
