@@ -92,6 +92,15 @@ export const submissionVideoKey = (userId: string, submissionId: string, fileNam
 export const submissionVerificationKey = (userId: string, submissionId: string, fileName: string) =>
   `${MARKETPLACE_PREFIX}${userId}/submissions/${submissionId}/verification/${fileName}`;
 
+/** The unified Image & Video feature's own top-level prefix — a Flow's
+ * generated media, kept out of a user's project media (`cut/${userId}/...`)
+ * the same way marketplace submissions are (see MARKETPLACE_PREFIX above).
+ * `fileName` already carries the generation id and extension (flowStorage.ts),
+ * so a file is content-addressed by its own name rather than reused. */
+export const FLOW_PREFIX = "flows/";
+export const flowMediaKey = (userId: string, flowId: string, fileName: string) =>
+  `${FLOW_PREFIX}${userId}/${flowId}/${fileName}`;
+
 export function presignPut(key: string, mime: string): Promise<string> {
   return getSignedUrl(
     r2(),

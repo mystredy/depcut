@@ -1,0 +1,178 @@
+// Query helpers for the Flow gallery/thread — thin wrappers around Prisma so
+// the API routes stay short. See prisma/GenerationFlows.prisma for the
+// tables; every read here is scoped to a userId, checked at the call site.
+import { prisma } from "@/lib/prisma";
+import { flowMediaUrl } from "@/lib/flows/media";
+
+export type FlowSummary = {
+  id: string;
+  name: string;
+  coverUrl: string | null;
+  hasImage: boolean;
+  hasVideo: boolean;
+  processing: boolean;
+  updatedAt: Date;
+};
+
+/** The gallery list — most recently updated first. One query for the cover
+ * candidate (auto or pinned) plus a cheap aggregate for what kinds/status
+ * each flow holds, rather than pulling every generation row per flow. */
+export async function listFlows(userId: string): Promise<FlowSummary[]> {
+  const flows = await prisma.generationFlow.findMany({
+    where: { userId },
+    orderBy: { updatedAt: "desc" },
+  });
+  if (flows.length === 0) return [];
+
+  const flowIds = flows.map((f) => f.id);
+  const generations = await prisma.flowGeneration.findMany({
+    where: { flowId: { in: flowIds } },
+    orderBy: { createdAt: "asc" },
+    select: { flowId: true, kind: true, status: true, outputKey: true },
+  });
+  const byFlow = new Map<string, typeof generations>();
+  for (const g of generations) {
+    const list = byFlow.get(g.flowId) ?? [];
+    list.push(g);
+    byFlow.set(g.flowId, list);
+  }
+
+  return Promise.all(
+    flows.map(async (f) => {
+      const rows = byFlow.get(f.id) ?? [];
+      const coverKey = f.coverKey ?? rows.find((r) => r.status === "completed" && r.outputKey)?.outputKey ?? null;
+      return {
+        id: f.id,
+        name: f.name,
+        coverUrl: coverKey ? await flowMediaUrl(coverKey) : null,
+        hasImage: rows.some((r) => r.kind === "image"),
+        hasVideo: rows.some((r) => r.kind === "video"),
+        processing: rows.some((r) => r.status === "in_progress"),
+        updatedAt: f.updatedAt,
+      };
+    })
+  );
+}
+
+export async function ownedFlow(userId: string, flowId: string) {
+  return prisma.generationFlow.findFirst({ where: { id: flowId, userId } });
+}
+
+export async function createFlow(userId: string, name: string) {
+  return prisma.generationFlow.create({ data: { userId, name } });
+}
+
+export async function renameFlow(flowId: string, name: string) {
+  return prisma.generationFlow.update({ where: { id: flowId }, data: { name } });
+}
+
+/** Pin an explicit cover — flips coverIsAuto off so a later generation never
+ * silently replaces the user's pick (see GenerationFlow.coverIsAuto). */
+export async function setFlowCover(flowId: string, coverKey: string) {
+  return prisma.generationFlow.update({ where: { id: flowId }, data: { coverKey, coverIsAuto: false } });
+}
+
+/** Called after a generation lands successfully — advances the auto cover to
+ * the flow's first completed output, once, the same way a chat thread's
+ * title locks to its first message. A no-op once coverIsAuto is false or a
+ * cover is already set. */
+export async function maybeSetAutoCover(flowId: string, outputKey: string) {
+  await prisma.generationFlow.updateMany({
+    where: { id: flowId, coverIsAuto: true, coverKey: null },
+    data: { coverKey: outputKey },
+  });
+}
+
+export async function deleteFlow(flowId: string) {
+  // FlowGeneration rows cascade (onDelete: Cascade); R2 objects are swept
+  // best-effort by the caller before this, since del() never throws.
+  await prisma.generationFlow.delete({ where: { id: flowId } });
+}
+
+export async function flowGenerationKeys(flowId: string): Promise<string[]> {
+  const rows = await prisma.flowGeneration.findMany({
+    where: { flowId },
+    select: { outputKey: true, posterKey: true },
+  });
+  return rows.flatMap((r) => [r.outputKey, r.posterKey].filter((k): k is string => !!k));
+}
+
+export type FlowGenerationView = {
+  id: string;
+  kind: string;
+  prompt: string;
+  provider: string;
+  model: string;
+  parameters: unknown;
+  refMode: string | null;
+  status: string;
+  errorMessage: string | null;
+  outputUrl: string | null;
+  outputMime: string | null;
+  width: number | null;
+  height: number | null;
+  durationSeconds: number | null;
+  createdAt: Date;
+};
+
+export async function listFlowGenerations(flowId: string): Promise<FlowGenerationView[]> {
+  const rows = await prisma.flowGeneration.findMany({
+    where: { flowId },
+    orderBy: { createdAt: "asc" },
+  });
+  return Promise.all(
+    rows.map(async (r) => ({
+      id: r.id,
+      kind: r.kind,
+      prompt: r.prompt,
+      provider: r.provider,
+      model: r.model,
+      parameters: r.parameters,
+      refMode: r.refMode,
+      status: r.status,
+      errorMessage: r.errorMessage,
+      outputUrl: r.outputKey ? await flowMediaUrl(r.outputKey) : null,
+      outputMime: r.outputMime,
+      width: r.width,
+      height: r.height,
+      durationSeconds: r.durationSeconds,
+      createdAt: r.createdAt,
+    }))
+  );
+}
+
+/** Duplicate a flow's rows onto a new flow id — R2 objects are immutable
+ * once written, so the copy just points at the same keys rather than
+ * actually re-uploading bytes. */
+export async function duplicateFlow(userId: string, source: { id: string; name: string; coverKey: string | null; coverIsAuto: boolean }) {
+  const rows = await prisma.flowGeneration.findMany({ where: { flowId: source.id }, orderBy: { createdAt: "asc" } });
+  return prisma.$transaction(async (tx) => {
+    const copy = await tx.generationFlow.create({
+      data: { userId, name: `${source.name} copy`, coverKey: source.coverKey, coverIsAuto: source.coverIsAuto },
+    });
+    if (rows.length > 0) {
+      await tx.flowGeneration.createMany({
+        data: rows.map((r) => ({
+          flowId: copy.id,
+          userId,
+          kind: r.kind,
+          prompt: r.prompt,
+          provider: r.provider,
+          model: r.model,
+          parameters: r.parameters as never,
+          refMode: r.refMode,
+          referenceKeys: r.referenceKeys as never,
+          status: r.status,
+          errorMessage: r.errorMessage,
+          outputKey: r.outputKey,
+          outputMime: r.outputMime,
+          posterKey: r.posterKey,
+          width: r.width,
+          height: r.height,
+          durationSeconds: r.durationSeconds,
+        })),
+      });
+    }
+    return copy;
+  });
+}
