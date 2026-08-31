@@ -62,6 +62,7 @@ import { StockVideosPanel } from "./StockVideosPanel";
 import {
   COUNT_OPTIONS,
   DURATION_OPTIONS,
+  OMNI_BEST_EFFORT_NOTE,
   REF_MODE_OPTIONS,
   RESOLUTION_OPTIONS,
   SegRow,
@@ -376,6 +377,11 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
           onChange={setDurationSeconds}
           options={durationOptions}
         />
+        {model.provider === "gemini-omni" && (
+          <p className="px-0.5 text-[10.5px] leading-relaxed text-muted-foreground">
+            {OMNI_BEST_EFFORT_NOTE}
+          </p>
+        )}
 
         {/* How many independent takes to render at once. */}
         <SegRow title="Number of takes" value={count} onChange={setCount} options={COUNT_OPTIONS} />
