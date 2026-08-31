@@ -1,15 +1,19 @@
 "use client";
 
-import { useEffect, useRef, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import {
   ArrowLeftRight,
+  Clock,
   Copy,
   Film,
+  Layers,
   Loader2,
   Maximize2,
   Plus,
   RectangleHorizontal,
   RotateCw,
+  Scaling,
+  SlidersHorizontal,
   Smartphone,
   Sparkles,
   X,
@@ -56,12 +60,13 @@ import { DictationControl } from "./MicDictation";
 import { GeneratedAssetMenu } from "./GeneratedAssetMenu";
 import { HostedErrorText } from "./hostedError";
 import { cardIconButton } from "./iconButton";
-import { PillSelect } from "./PillSelect";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { StockVideosPanel } from "./StockVideosPanel";
 import {
   COUNT_OPTIONS,
   DURATION_OPTIONS,
+  IconBadge,
+  IconSelect,
   OMNI_BEST_EFFORT_NOTE,
   REF_MODE_OPTIONS,
   RESOLUTION_OPTIONS,
@@ -142,6 +147,10 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
     1,
     (v) => v === 1 || v === 2 || v === 3 || v === 4
   );
+  // References, aspect, duration, and takes live behind one toggle — model
+  // and resolution get their own always-visible quick pickers below, same
+  // split as the dashboard's one-shot composer.
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Narrowed to whatever an admin has actually left enabled
   // (/admin/settings/ai-models); falls back to the full list while that
@@ -327,64 +336,110 @@ export function GenerateVideoPanel({ projectId }: { projectId: string }) {
           </div>
         </div>
 
-        {/* How the attached refs above condition the render: as literal
-            frames, or as identity ingredients (character mode is always a
-            frame — its poster is the point). */}
-        <SegRow
-          title="How references are used"
-          value={character ? "frames" : refMode}
-          onChange={(v) => useVideoGen.getState().setRefMode(v)}
-          options={REF_MODE_OPTIONS}
-          disabled={!!character}
-        />
+        {/* References, aspect, duration, and takes behind one toggle —
+            model and resolution stay always visible below (same split as
+            the dashboard composer). */}
+        {settingsOpen && (
+          <div className="flex flex-col gap-2">
+            {/* How the attached refs above condition the render: as literal
+                frames, or as identity ingredients (character mode is always
+                a frame — its poster is the point). */}
+            <SegRow
+              title="How references are used"
+              value={character ? "frames" : refMode}
+              onChange={(v) => useVideoGen.getState().setRefMode(v)}
+              options={REF_MODE_OPTIONS}
+              disabled={!!character}
+            />
 
-        {/* Shape, as a segmented toggle instead of a dropdown — only two
-            options, so both read at a glance. */}
-        <SegRow
-          title="Aspect ratio"
-          value={effAspect}
-          onChange={(v) => useVideoGen.getState().setAspect(v)}
-          options={ASPECT_OPTIONS.filter((o) => model.aspects.includes(o.value))}
-        />
+            {/* Shape, as a segmented toggle instead of a dropdown — only two
+                options, so both read at a glance. */}
+            <SegRow
+              title="Aspect ratio"
+              value={effAspect}
+              onChange={(v) => useVideoGen.getState().setAspect(v)}
+              options={ASPECT_OPTIONS.filter((o) => model.aspects.includes(o.value))}
+            />
 
-        {/* Which model renders the clip — a dropdown, since the catalog grows. */}
-        <PillSelect
-          className="h-7 shrink-0"
-          title="Model"
-          value={tier}
-          display={model.model}
-          options={selectableModels.map((m) => ({
-            value: m.tier,
-            // A tiered family reads "Fast · Model Fast"; a single-model
-            // entry is just its name.
-            label: m.word === m.model ? m.model : `${m.word} · ${m.model}`,
-          }))}
-          onChange={setTier}
-        />
+            {/* The option set (and whether the provider actually honors the
+                pick) follows the selected model; see DURATION_OPTIONS above. */}
+            <SegRow
+              title="Duration"
+              value={effDurationSeconds}
+              onChange={setDurationSeconds}
+              options={durationOptions}
+            />
+            {model.provider === "gemini-omni" && (
+              <p className="px-0.5 text-[10.5px] leading-relaxed text-muted-foreground">
+                {OMNI_BEST_EFFORT_NOTE}
+              </p>
+            )}
 
-        {/* Resolution and duration — the option set (and whether the
-            provider actually honors the pick) follows the selected model;
-            see RESOLUTION_OPTIONS/DURATION_OPTIONS above. */}
-        <SegRow
-          title="Resolution"
-          value={effResolution}
-          onChange={setResolution}
-          options={resolutionOptions}
-        />
-        <SegRow
-          title="Duration"
-          value={effDurationSeconds}
-          onChange={setDurationSeconds}
-          options={durationOptions}
-        />
-        {model.provider === "gemini-omni" && (
-          <p className="px-0.5 text-[10.5px] leading-relaxed text-muted-foreground">
-            {OMNI_BEST_EFFORT_NOTE}
-          </p>
+            {/* How many independent takes to render at once. */}
+            <SegRow title="Number of takes" value={count} onChange={setCount} options={COUNT_OPTIONS} />
+          </div>
         )}
 
-        {/* How many independent takes to render at once. */}
-        <SegRow title="Number of takes" value={count} onChange={setCount} options={COUNT_OPTIONS} />
+        <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
+          <button
+            type="button"
+            title="More settings"
+            aria-label="More settings"
+            aria-pressed={settingsOpen}
+            onClick={() => setSettingsOpen((v) => !v)}
+            className={cn(
+              "grid size-7 shrink-0 place-items-center rounded-full transition-colors",
+              settingsOpen
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <SlidersHorizontal className="size-4" />
+          </button>
+          <div className="mx-0.5 h-4 w-px shrink-0 bg-border" />
+          {/* Which model renders the clip. */}
+          <IconSelect
+            icon={Film}
+            title="Model"
+            value={tier}
+            display={model.model}
+            options={selectableModels.map((m) => ({
+              value: m.tier,
+              // A tiered family reads "Fast · Model Fast"; a single-model
+              // entry is just its name.
+              label: m.word === m.model ? m.model : `${m.word} · ${m.model}`,
+            }))}
+            onChange={setTier}
+          />
+          {/* The option set (and whether the provider actually honors the
+              pick) follows the selected model; see RESOLUTION_OPTIONS above. */}
+          <IconSelect
+            icon={Sparkles}
+            title="Resolution"
+            value={effResolution}
+            display={effResolution}
+            options={resolutionOptions}
+            onChange={setResolution}
+          />
+          <IconBadge
+            icon={Layers}
+            label="Number of takes"
+            value={String(count)}
+            onClick={() => setSettingsOpen(true)}
+          />
+          <IconBadge
+            icon={Clock}
+            label="Duration"
+            value={`${effDurationSeconds}s`}
+            onClick={() => setSettingsOpen(true)}
+          />
+          <IconBadge
+            icon={Scaling}
+            label="Aspect ratio"
+            value={effAspect}
+            onClick={() => setSettingsOpen(true)}
+          />
+        </div>
 
         <Button
           className="gen-go w-full shrink-0"

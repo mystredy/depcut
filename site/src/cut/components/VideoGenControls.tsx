@@ -1,7 +1,7 @@
 "use client";
 
 import { type ComponentType } from "react";
-import { Frame, Puzzle } from "lucide-react";
+import { ChevronDown, Frame, Puzzle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { VideoModelOption, VideoResolution } from "@/cut/lib/videoModels";
 import type { VideoRefMode } from "@/cut/lib/videoGen";
@@ -114,5 +114,74 @@ export function SegRow<T extends string | number>({
         </button>
       ))}
     </div>
+  );
+}
+
+/** A compact icon + text + chevron quick picker for a composer's bottom
+ * toolbar — a borderless twin of PillSelect's hidden-native-select
+ * technique, sized to sit inline among plain icon buttons instead of
+ * standing out as a pill. */
+export function IconSelect<T extends string>({
+  icon: Icon,
+  title,
+  value,
+  display,
+  options,
+  onChange,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  value: T;
+  display: string;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <label
+      className="relative flex shrink-0 items-center gap-1 rounded-full px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      title={title}
+    >
+      <Icon className="size-4 shrink-0" />
+      <span className="max-w-16 truncate text-[11px] font-medium">{display}</span>
+      <ChevronDown className="size-3 shrink-0" />
+      <select
+        className="absolute inset-0 w-full cursor-pointer appearance-none opacity-0"
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** A read-only icon + value chip for a knob that lives behind a composer's
+ * "More settings" toggle — clicking it opens that panel rather than editing
+ * the value inline. */
+export function IconBadge({
+  icon: Icon,
+  label,
+  value,
+  onClick,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      onClick={onClick}
+      className="flex shrink-0 items-center gap-1 rounded-full px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+    >
+      <Icon className="size-4 shrink-0" />
+      <span className="text-[11px] font-medium">{value}</span>
+    </button>
   );
 }
