@@ -18,11 +18,11 @@ import { formatTime } from "@/cut/lib/time";
 import { clipLen, getClipSpans, useEditor } from "@/cut/lib/store";
 import { AudioPillSurface } from "@/cut/components/AudioPanel";
 import { ScrubValue, parseTimeInput } from "@/cut/components/ScrubValue";
+import { SubTabs } from "@/cut/components/SubTabs";
 import { Slider } from "@/components/ui/slider";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -396,50 +396,37 @@ export function AddRefButton({
 }
 
 /** The Media/Library picks inside a reference dropdown — shared by
- * AddRefButton (adds to a list) and FrameSlotButton (replaces one slot). */
+ * AddRefButton (adds to a list) and FrameSlotButton (replaces one slot).
+ * Sources with at least one candidate become a tab (in resolution order —
+ * timeline clips, then project media, then the library — same order
+ * `useRefCandidates` itself resolves a bare mention in), so switching
+ * between them doesn't cost a scroll through every other source's items. */
 function MediaLibraryMenuItems({ onPick }: { onPick: (ref: AssetRef) => void }) {
   const candidates = useRefCandidates();
-  const clips = candidates.filter((c) => c.scope === "clip");
-  const media = candidates.filter((c) => c.scope === "project");
-  const library = candidates.filter((c) => c.scope === "library");
+  const allGroups: { id: AssetRefScope; label: string; items: AssetRef[] }[] = [
+    { id: "clip", label: "Timeline", items: candidates.filter((c) => c.scope === "clip") },
+    { id: "project", label: "Media", items: candidates.filter((c) => c.scope === "project") },
+    { id: "library", label: "Library", items: candidates.filter((c) => c.scope === "library") },
+  ];
+  const groups = allGroups.filter((g) => g.items.length > 0);
+  const [tab, setTab] = useState<AssetRefScope | null>(null);
+  const active = groups.find((g) => g.id === tab) ?? groups[0];
+  if (!active) return null;
+
   return (
     <>
-      {clips.length > 0 && (
-        <DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel>Timeline</DropdownMenuLabel>
-          {clips.map((ref) => (
-            <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => onPick(ref)}>
-              <RefThumb item={ref} className="size-6 rounded" />
-              <span className="truncate">{ref.name}</span>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
+      <DropdownMenuSeparator />
+      {groups.length > 1 ? (
+        <SubTabs tabs={groups} value={active.id} onChange={setTab} />
+      ) : (
+        <DropdownMenuLabel>{active.label}</DropdownMenuLabel>
       )}
-      {media.length > 0 && (
-        <DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel>Media</DropdownMenuLabel>
-          {media.map((ref) => (
-            <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => onPick(ref)}>
-              <RefThumb item={ref} className="size-6 rounded" />
-              <span className="truncate">{ref.name}</span>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
-      )}
-      {library.length > 0 && (
-        <DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuLabel>Library</DropdownMenuLabel>
-          {library.map((ref) => (
-            <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => onPick(ref)}>
-              <RefThumb item={ref} className="size-6 rounded" />
-              <span className="truncate">{ref.name}</span>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuGroup>
-      )}
+      {active.items.map((ref) => (
+        <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => onPick(ref)}>
+          <RefThumb item={ref} className="size-6 rounded" />
+          <span className="truncate">{ref.name}</span>
+        </DropdownMenuItem>
+      ))}
     </>
   );
 }
