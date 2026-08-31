@@ -74,8 +74,12 @@ export async function notifyTelegram(event: TelegramNotificationEvent, text: str
         })
       )
     );
-  } catch {
+  } catch (error) {
     // Best-effort — never let a notification failure break the real action.
+    // Logged so a missed alert has a trace somewhere (a dropped DB connection
+    // reading settings, or Telegram's API rejecting the send, otherwise fail
+    // exactly as silently to every observer as they do to the caller).
+    console.error(`[telegram] notify(${event}) failed:`, error);
   }
 }
 
@@ -106,8 +110,10 @@ export async function notifyTelegramWithMedia(
           : sendMediaGroup(targets.botToken, chatId, media, caption)
       )
     );
-  } catch {
+  } catch (error) {
     // Best-effort — never let a notification failure break the real action.
+    // Logged for the same reason as notifyTelegram's catch above.
+    console.error(`[telegram] notifyWithMedia(${event}) failed:`, error);
   }
 }
 
