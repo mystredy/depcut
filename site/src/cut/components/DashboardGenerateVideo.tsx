@@ -14,12 +14,23 @@ import {
   Scaling,
   SlidersHorizontal,
   Sparkles,
+  Upload,
   X,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useSelectableModels } from "@/cut/lib/aiModelAvailability";
-import { useAssetDrop } from "@/cut/lib/assetRef";
+import { refFromLibrary, useAssetDrop, type AssetRef } from "@/cut/lib/assetRef";
 import { seedNewProjectDoc } from "@/cut/lib/docCache";
 import { useGenerate } from "@/cut/lib/generate";
+import { fetchLibrary, type LibraryAsset } from "@/cut/lib/library";
 import { projectHref, useCutBase } from "@/cut/lib/nav";
 import { patchProjects } from "@/cut/lib/queries";
 import { refsFromDroppedFiles } from "@/cut/lib/refMedia";
@@ -37,6 +48,7 @@ import {
 } from "@/cut/lib/videoModels";
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
+import { RefThumb } from "./AssetRefs";
 import {
   COUNT_OPTIONS,
   DURATION_OPTIONS,
@@ -53,11 +65,13 @@ import {
  * before a project exists yet instead of inside one.
  *
  * References work differently here than in the editor: no project exists
- * yet to hold Media, and the account's Library isn't wired into this
- * composer, so the Image/Start/End slots only take raw file uploads (picked
- * or dropped) — staged as plain Files and imported into the brand-new
- * project at generate time, right before the render request.
+ * yet to hold Media or a timeline to hold clips, so the Image/Start/End
+ * slots don't offer those two sources the editor's own reference picker
+ * does. The account-wide Library isn't project-scoped, so it's still
+ * offered — a pick downloads the asset's bytes into a plain File, the same
+ * shape a direct upload takes, so it stages and imports exactly the same way.
  *
+
  * Image and the Start/End pair are mutually exclusive, mirroring the
  * backend's own constraint: a render takes a seed frame (Start/End) or
  * identity reference images (Image), never both — the same "How references
@@ -362,6 +376,36 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
   );
 }
 
+/** The account's Library, as image/video refs a slot can offer alongside
+ * Upload — fetched independent of any project (Library is account-wide),
+ * unlike Media and Timeline in the editor's own picker, which read the open
+ * project and so have nothing to show here. */
+function useLibraryRefs(): AssetRef[] {
+  const [assets, setAssets] = useState<LibraryAsset[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void fetchLibrary()
+      .then((d) => alive && setAssets(d.assets))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return useMemo(
+    () => assets.filter((a) => a.type === "video" || a.type === "image").map(refFromLibrary),
+    [assets]
+  );
+}
+
+/** A Library pick's bytes as a plain File — the same shape a direct upload
+ * takes, so it stages and imports through the exact same path. */
+async function fileFromRef(ref: AssetRef): Promise<File> {
+  const res = await fetch(ref.url);
+  if (!res.ok) throw new Error(`Could not load "${ref.name}".`);
+  const blob = await res.blob();
+  return new File([blob], ref.name, { type: blob.type || (ref.kind === "video" ? "video/mp4" : "image/png") });
+}
+
 /** A picked file's object URL, revoked on change/unmount. */
 function useFilePreview(file: File | null): string | null {
   const url = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
@@ -384,9 +428,11 @@ function FilePreview({ file, url }: { file: File; url: string }) {
   );
 }
 
-/** A single staged reference — pick or drop to fill it, an "x" to clear it.
- * No Media/Library here (see the component doc comment): a plain file
- * picker plus a drop zone. */
+/** A single staged reference — pick (upload or Library), drop, or clear.
+ * Empty, it's a menu offering a direct upload or an account Library pick
+ * (see fileFromRef — a Library pick lands here the same shape an upload
+ * does); filled, a small thumbnail with a remove button, same as the
+ * editor's own frame slots. */
 function FileSlot({
   label,
   file,
@@ -400,6 +446,8 @@ function FileSlot({
 }) {
   const url = useFilePreview(file);
   const inputRef = useRef<HTMLInputElement>(null);
+  const libraryRefs = useLibraryRefs();
+  const [pickingRef, setPickingRef] = useState<AssetRef | null>(null);
   const { active, attachTarget, targetProps } = useAssetDrop(
     // Nothing else on this page carries a draggable app ref to drop here —
     // only OS files matter.
@@ -409,6 +457,17 @@ function FileSlot({
       if (picked) onChange(picked);
     }
   );
+
+  const pickLibrary = async (ref: AssetRef) => {
+    setPickingRef(ref);
+    try {
+      onChange(await fileFromRef(ref));
+    } catch (e) {
+      console.error(`Could not stage "${ref.name}":`, e);
+    } finally {
+      setPickingRef(null);
+    }
+  };
 
   if (file && url) {
     return (
@@ -434,13 +493,11 @@ function FileSlot({
   }
 
   return (
-    <>
-      <button
+    <DropdownMenu>
+      <DropdownMenuTrigger
         ref={attachTarget}
         {...targetProps}
-        type="button"
         disabled={disabled}
-        onClick={() => inputRef.current?.click()}
         className={cn(
           "flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-40",
           active
@@ -448,9 +505,30 @@ function FileSlot({
             : "border-input text-foreground hover:bg-muted"
         )}
       >
-        <Plus className="size-3.5" />
+        {pickingRef ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : (
+          <Plus className="size-3.5" />
+        )}
         {label}
-      </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-56">
+        <DropdownMenuItem onClick={() => inputRef.current?.click()}>
+          <Upload /> Upload file
+        </DropdownMenuItem>
+        {libraryRefs.length > 0 && (
+          <DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Library</DropdownMenuLabel>
+            {libraryRefs.map((ref) => (
+              <DropdownMenuItem key={ref.id} onClick={() => void pickLibrary(ref)}>
+                <RefThumb item={ref} className="size-6 rounded" />
+                <span className="truncate">{ref.name}</span>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuGroup>
+        )}
+      </DropdownMenuContent>
       <input
         ref={inputRef}
         type="file"
@@ -462,7 +540,7 @@ function FileSlot({
           if (picked) onChange(picked);
         }}
       />
-    </>
+    </DropdownMenu>
   );
 }
 
