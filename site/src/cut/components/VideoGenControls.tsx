@@ -120,8 +120,11 @@ export function SegRow<T extends string | number>({
 /** A compact icon + text + chevron quick picker for a composer's bottom
  * toolbar — a borderless twin of PillSelect's hidden-native-select
  * technique, sized to sit inline among plain icon buttons instead of
- * standing out as a pill. */
-export function IconSelect<T extends string>({
+ * standing out as a pill. Values compare by their string form (a native
+ * `<select>` only ever hands back strings), then resolve back to the
+ * matching option's real value — so a numeric option set (duration, count)
+ * round-trips correctly instead of onChange firing with a stringified number. */
+export function IconSelect<T extends string | number>({
   icon: Icon,
   title,
   value,
@@ -146,42 +149,18 @@ export function IconSelect<T extends string>({
       <ChevronDown className="size-3 shrink-0" />
       <select
         className="absolute inset-0 w-full cursor-pointer appearance-none opacity-0"
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
+        value={String(value)}
+        onChange={(e) => {
+          const picked = options.find((o) => String(o.value) === e.target.value);
+          if (picked) onChange(picked.value);
+        }}
       >
         {options.map((o) => (
-          <option key={o.value} value={o.value}>
+          <option key={o.value} value={String(o.value)}>
             {o.label}
           </option>
         ))}
       </select>
     </label>
-  );
-}
-
-/** A read-only icon + value chip for a knob that lives behind a composer's
- * "More settings" toggle — clicking it opens that panel rather than editing
- * the value inline. */
-export function IconBadge({
-  icon: Icon,
-  label,
-  value,
-  onClick,
-}: {
-  icon: ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      title={label}
-      onClick={onClick}
-      className="flex shrink-0 items-center gap-1 rounded-full px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-    >
-      <Icon className="size-4 shrink-0" />
-      <span className="text-[11px] font-medium">{value}</span>
-    </button>
   );
 }

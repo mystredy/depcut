@@ -40,7 +40,6 @@ import { cn } from "@/lib/utils";
 import {
   COUNT_OPTIONS,
   DURATION_OPTIONS,
-  IconBadge,
   IconSelect,
   OMNI_BEST_EFFORT_NOTE,
   REF_MODE_OPTIONS,
@@ -311,23 +310,29 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
               options={resolutionOptions}
               onChange={setResolution}
             />
-            <IconBadge
+            <IconSelect
               icon={Layers}
-              label="Number of takes"
-              value={String(count)}
-              onClick={() => setSettingsOpen(true)}
+              title="Number of takes"
+              value={count}
+              display={`x${count}`}
+              options={COUNT_OPTIONS}
+              onChange={setCount}
             />
-            <IconBadge
+            <IconSelect
               icon={Clock}
-              label="Duration"
-              value={`${effDurationSeconds}s`}
-              onClick={() => setSettingsOpen(true)}
+              title="Duration"
+              value={effDurationSeconds}
+              display={`${effDurationSeconds}s`}
+              options={durationOptions}
+              onChange={setDurationSeconds}
             />
-            <IconBadge
+            <IconSelect
               icon={Scaling}
-              label="Aspect ratio"
+              title="Aspect ratio"
               value={effAspect}
-              onClick={() => setSettingsOpen(true)}
+              display={effAspect}
+              options={aspectOptions}
+              onChange={setAspect}
             />
           </div>
           <button
