@@ -57,7 +57,14 @@ function classifyProviderModel(provider: ApiIntegrationProvider, id: string): Ai
       if (/embedding|moderation/i.test(id)) return null;
       if (id.startsWith("sora")) return "video";
       if (id.startsWith("dall-e") || id.startsWith("gpt-image")) return "image";
-      if (id.startsWith("whisper") || id.startsWith("tts-") || /transcribe|-tts/.test(id)) {
+      // Realtime/audio-preview ids are still "gpt-*" — the Realtime API is
+      // speech-to-speech, not text chat, so this has to run before the
+      // chat catch-all below or every one of these reads as a chat model.
+      if (
+        id.startsWith("whisper") ||
+        id.startsWith("tts-") ||
+        /transcribe|-tts|realtime|-audio/.test(id)
+      ) {
         return "audio";
       }
       return id.startsWith("gpt-") || id.startsWith("chatgpt") || /^o[0-9]/.test(id) ? "chat" : null;
