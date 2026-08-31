@@ -631,9 +631,9 @@ export function useAdminAiModels() {
 export function useUpdateAiModel() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+    mutationFn: ({ id, ...patch }: { id: string; enabled?: boolean; label?: string }) =>
       apiFetch<{ model: AdminAiModel }>(`/api/admin/ai-models/${id}`, {
-        body: JSON.stringify({ enabled }),
+        body: JSON.stringify(patch),
         method: "PATCH",
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminAiModelsQueryKey }),
@@ -659,17 +659,17 @@ export function useCreateAiModel() {
 
 export type ProviderCatalogModel = { id: string; name: string };
 
-// Live discovery for the Add-model dialog's provider step — null while no
-// provider is picked yet, so the query stays disabled instead of firing on
-// mount.
-export function useProviderModels(provider: string | null) {
+// Live discovery for the Add-model dialog's provider step, narrowed server-side
+// to the modality being added — null while no provider is picked yet, so the
+// query stays disabled instead of firing on mount.
+export function useProviderModels(provider: string | null, modality: AdminAiModel["modality"]) {
   return useQuery({
     enabled: provider !== null,
     queryFn: () =>
       apiFetch<{ models: ProviderCatalogModel[] }>(
-        `/api/admin/ai-models/provider-models?provider=${encodeURIComponent(provider ?? "")}`
+        `/api/admin/ai-models/provider-models?provider=${encodeURIComponent(provider ?? "")}&modality=${modality}`
       ),
-    queryKey: ["admin", "ai-models", "provider-models", provider] as const,
+    queryKey: ["admin", "ai-models", "provider-models", provider, modality] as const,
   });
 }
 

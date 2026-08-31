@@ -30,9 +30,10 @@ import {
 // one call takes text plus optional seed/reference images and renders a clip
 // with audio in a single pass. It submits a background interaction and the
 // caller polls refresh until it lands; the provider id keeps that refresh
-// routing separate from the synchronous image adapter. By default the model
-// decides the clip length (up to ~10s of 720p) — resolution and duration ride
-// as best-effort, undocumented fields (see generateAsset) and may go ignored.
+// routing separate from the synchronous image adapter. The model picks its
+// own clip length and resolution (up to ~10s of 720p) — neither is a
+// parameter this endpoint accepts (see generateAsset), so a caller's
+// resolution/duration pick never reaches the request.
 const providerID = "gemini-omni";
 
 // Verified live against Vertex: `response_modalities` is rejected outright
@@ -153,12 +154,14 @@ export function createGeminiOmniVideoAssetProvider(
         ? "reference_to_video"
         : "text_to_video";
     const aspectRatio = stringValue(parameters.aspectRatio);
-    // Neither field is documented for this preview endpoint — video_config's
-    // only published member is `task` — so these ride best-effort alongside
-    // it and may simply be ignored by the API rather than change the render.
-    const resolution = stringValue(parameters.resolution);
-    const durationSeconds =
-      typeof parameters.durationSeconds === "number" ? parameters.durationSeconds : undefined;
+    // video_config's only published member is `task` — resolution and
+    // duration aren't documented for this preview endpoint, and the API
+    // turns out to enforce that strictly rather than ignore what it doesn't
+    // recognize: sending `resolution` 400s outright ("Unknown parameter
+    // 'resolution' at 'generation_config.video_config'"). duration_seconds
+    // is exactly as undocumented and untested, so it's left out too rather
+    // than wait for the same failure under a different field name. The
+    // model picks both on its own (see the file header comment).
 
     const client = clientFactory(clientConfig.options);
     let interaction: Interaction;
@@ -169,11 +172,7 @@ export function createGeminiOmniVideoAssetProvider(
         // How the pictures condition the render: a seed becomes the opening
         // frame, references anchor identity/style across the clip.
         generation_config: {
-          video_config: {
-            task,
-            ...(resolution ? { resolution } : {}),
-            ...(durationSeconds ? { duration_seconds: durationSeconds } : {}),
-          },
+          video_config: { task },
         } as never,
         response_format: {
           type: "video",

@@ -56,10 +56,11 @@ export const DURATION_OPTIONS: Record<
 
 // Omni has no documented resolution or duration parameter (see
 // RESOLUTION_OPTIONS/DURATION_OPTIONS above and gemini-omni-video.ts) — the
-// picks above ride along as a best-effort, undocumented field the model may
-// simply ignore. Shown under those two rows whenever the picked model is Omni.
+// API rejects both outright, so neither pick above ever reaches the request;
+// the model decides both on its own. Shown under those two rows whenever the
+// picked model is Omni.
 export const OMNI_BEST_EFFORT_NOTE =
-  "Omni decides resolution and clip length on its own — these are sent as a best-effort request, not a guarantee.";
+  "Omni decides resolution and clip length on its own — picking either here has no effect on this model.";
 
 export const COUNT_OPTIONS: { value: 1 | 2 | 3 | 4; label: string }[] = [
   { value: 1, label: "x1" },

@@ -8,9 +8,18 @@ export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-const updateSchema = z.object({ enabled: z.boolean() }).strict();
+const updateSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    label: z.string().trim().min(1).max(100).optional(),
+  })
+  .strict()
+  .refine((v) => v.enabled !== undefined || v.label !== undefined, {
+    message: "Nothing to update.",
+  });
 
-// Super-user only. Toggles whether this model is offered to users.
+// Super-user only. Toggles whether this model is offered to users, renames
+// it, or both in one call.
 export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
   if (!(await isDonkeySuperUser(request.donkey.userId))) {
     return NextResponse.json(
@@ -40,7 +49,10 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
   }
 
   const updated = await prisma.aiModel.update({
-    data: { enabled: parsed.data.enabled },
+    data: {
+      ...(parsed.data.enabled !== undefined ? { enabled: parsed.data.enabled } : {}),
+      ...(parsed.data.label !== undefined ? { label: parsed.data.label } : {}),
+    },
     where: { id },
   });
 

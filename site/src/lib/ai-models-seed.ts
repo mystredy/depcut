@@ -9,7 +9,9 @@ import { geminiModels, geminiMusicModels, geminiTtsModels } from "@/lib/inferenc
 import { IMAGE_MODELS } from "@/cut/lib/imageModels";
 import { VIDEO_MODELS } from "@/cut/lib/videoModels";
 
-export type AiModality = "chat" | "image" | "video" | "audio";
+export const AI_MODALITIES = ["chat", "image", "video", "audio"] as const;
+
+export type AiModality = (typeof AI_MODALITIES)[number];
 
 export type AiModelSeedEntry = {
   modality: AiModality;
