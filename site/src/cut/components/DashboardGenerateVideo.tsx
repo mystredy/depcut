@@ -28,6 +28,7 @@ import { activeResidency, backendFor } from "@/cut/lib/residency";
 import type { ProjectSummary } from "@/cut/lib/types";
 import { nearestAspect } from "@/cut/lib/types";
 import { useLocalPref } from "@/cut/lib/uiState";
+import type { VideoRefMode } from "@/cut/lib/videoGen";
 import {
   VIDEO_ASPECT_LABEL,
   VIDEO_MODELS,
@@ -37,7 +38,14 @@ import {
 } from "@/cut/lib/videoModels";
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
-import { COUNT_OPTIONS, DURATION_OPTIONS, RESOLUTION_OPTIONS, SegRow } from "./VideoGenControls";
+import {
+  COUNT_OPTIONS,
+  DURATION_OPTIONS,
+  OMNI_BEST_EFFORT_NOTE,
+  REF_MODE_OPTIONS,
+  RESOLUTION_OPTIONS,
+  SegRow,
+} from "./VideoGenControls";
 
 /** A one-shot text-to-video composer for the dashboard: describe a clip, hit
  * go, and land in a brand-new project with the render already under way —
@@ -52,17 +60,27 @@ import { COUNT_OPTIONS, DURATION_OPTIONS, RESOLUTION_OPTIONS, SegRow } from "./V
  *
  * Image and the Start/End pair are mutually exclusive, mirroring the
  * backend's own constraint: a render takes a seed frame (Start/End) or
- * identity reference images (Image), never both. Filling one disables the
- * other rather than silently overriding it. */
+ * identity reference images (Image), never both — the same "How references
+ * are used" choice the editor's Video tab offers, just driving which slot(s)
+ * show instead of conditioning a shared attachment. Switching modes clears
+ * whatever was staged in the other one rather than leaving it attached but
+ * hidden. */
 export function DashboardGenerateVideo({ className }: { className?: string }) {
   const router = useRouter();
   const base = useCutBase();
   const client = useQueryClient();
   const [prompt, setPrompt] = useState("");
   const [aspect, setAspect] = useState<VideoAspect>("16:9");
+  const [refMode, setRefModeState] = useState<VideoRefMode>("frames");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [startFile, setStartFile] = useState<File | null>(null);
   const [endFile, setEndFile] = useState<File | null>(null);
+  const setRefMode = (mode: VideoRefMode) => {
+    setRefModeState(mode);
+    setImageFile(null);
+    setStartFile(null);
+    setEndFile(null);
+  };
   // Shares the editor Video tab's own localStorage keys, so a pick made here
   // is still the pick showing there (and back) — one set of "last used"
   // knobs for both composers.
@@ -196,26 +214,28 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
         className
       )}
     >
-      {acceptsReferences && (
-        <div className="flex items-center gap-1.5 px-3 pt-3">
-          <FileSlot label="Image" file={imageFile} onChange={setImageFile} disabled={hasFrames} />
-          <FileSlot label="Start frame" file={startFile} onChange={setStartFile} disabled={hasImage} />
-          <button
-            type="button"
-            title="Swap start and end"
-            aria-label="Swap start and end"
-            disabled={hasImage}
-            onClick={() => {
-              setStartFile(endFile);
-              setEndFile(startFile);
-            }}
-            className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-          >
-            <ArrowLeftRight className="size-3.5" />
-          </button>
-          <FileSlot label="End frame" file={endFile} onChange={setEndFile} disabled={hasImage} />
-        </div>
-      )}
+      <div className="flex items-center gap-1.5 px-3 pt-3">
+        {refMode === "frames" ? (
+          <>
+            <FileSlot label="Start frame" file={startFile} onChange={setStartFile} />
+            <button
+              type="button"
+              title="Swap start and end"
+              aria-label="Swap start and end"
+              onClick={() => {
+                setStartFile(endFile);
+                setEndFile(startFile);
+              }}
+              className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+            >
+              <ArrowLeftRight className="size-3.5" />
+            </button>
+            <FileSlot label="End frame" file={endFile} onChange={setEndFile} />
+          </>
+        ) : (
+          <FileSlot label="Image" file={imageFile} onChange={setImageFile} />
+        )}
+      </div>
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
@@ -232,6 +252,12 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
       <div className="flex flex-col gap-2 px-3 pb-3">
         {settingsOpen && (
           <div className="flex flex-col gap-2">
+            <SegRow
+              title="How references are used"
+              value={refMode}
+              onChange={setRefMode}
+              options={REF_MODE_OPTIONS}
+            />
             <SegRow title="Aspect ratio" value={effAspect} onChange={setAspect} options={aspectOptions} />
             <SegRow
               title="Duration"
@@ -239,6 +265,11 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
               onChange={setDurationSeconds}
               options={durationOptions}
             />
+            {model.provider === "gemini-omni" && (
+              <p className="px-0.5 text-[10.5px] leading-relaxed text-muted-foreground">
+                {OMNI_BEST_EFFORT_NOTE}
+              </p>
+            )}
             <SegRow title="Number of takes" value={count} onChange={setCount} options={COUNT_OPTIONS} />
           </div>
         )}
