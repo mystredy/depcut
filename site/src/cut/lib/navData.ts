@@ -1,4 +1,5 @@
 import {
+  Clapperboard,
   Compass,
   FolderKanban,
   FolderOpen,
@@ -36,6 +37,9 @@ export const GROUPS: NavGroup[] = [
       { slug: "speech-to-text", label: "Speech to Text", icon: MessageSquare },
       { slug: "text-to-speech", label: "Text to Speech", icon: Volume2 },
       { slug: "dubbing", label: "Dubbing", icon: Languages },
+      { slug: "image-video", label: "Image & Video", icon: Clapperboard },
+      // Superseded by Image & Video above (unified Flow threads) — kept
+      // reachable until that page is fully verified, then redirected here.
       { slug: "text-to-image", label: "Text to Image", icon: Image },
       { slug: "text-to-video", label: "Text to Video", icon: Video },
       { slug: "ai-chatbot", label: "AI Chatbot", icon: MessageSquare },
