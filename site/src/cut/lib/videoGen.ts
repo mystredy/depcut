@@ -62,11 +62,13 @@ export const useVideoGen = create<VideoGenState>((set) => ({
   prompt: "",
   aspect: "16:9",
   refs: [],
-  refMode: "frames",
+  refMode: "ingredients",
   endFrame: null,
   character: null,
   openWith: (prompt) =>
-    set({ prompt, refs: [], refMode: "frames", endFrame: null, character: null }),
+    set({ prompt, refs: [], refMode: "ingredients", endFrame: null, character: null }),
+  // Character mode is always a frame — its poster is the point — so this one
+  // stays "frames" regardless of the general default above.
   openCharacter: (character) =>
     set({ character, prompt: "", refs: [], refMode: "frames", endFrame: null }),
   clearCharacter: () => set({ character: null }),

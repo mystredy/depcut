@@ -85,7 +85,7 @@ export function DashboardGenerateVideo({ className }: { className?: string }) {
   const client = useQueryClient();
   const [prompt, setPrompt] = useState("");
   const [aspect, setAspect] = useState<VideoAspect>("16:9");
-  const [refMode, setRefModeState] = useState<VideoRefMode>("frames");
+  const [refMode, setRefModeState] = useState<VideoRefMode>("ingredients");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [startFile, setStartFile] = useState<File | null>(null);
   const [endFile, setEndFile] = useState<File | null>(null);
