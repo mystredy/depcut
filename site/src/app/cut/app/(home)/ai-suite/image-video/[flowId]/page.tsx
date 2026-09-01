@@ -11,12 +11,15 @@ import {
   ChevronDown,
   Clapperboard,
   Download,
+  Flag,
   Image as ImageIcon,
   ImagePlus,
   Info,
   Loader2,
   MoreVertical,
+  Pencil,
   RotateCcw,
+  Star,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -58,7 +61,10 @@ import {
   useCreateGeneration,
   useDeleteGeneration,
   useFlow,
+  useReportGeneration,
   useSetFlowCover,
+  useUpdateGeneration,
+  type ReportReason,
 } from "@/queries/flows";
 import { cn } from "@/lib/utils";
 
@@ -109,7 +115,11 @@ export default function FlowThreadPage() {
   const createGeneration = useCreateGeneration(flowId);
   const deleteGeneration = useDeleteGeneration(flowId);
   const setCover = useSetFlowCover();
+  const updateGeneration = useUpdateGeneration(flowId);
+  const reportGeneration = useReportGeneration(flowId);
   const generations = flow.data?.generations ?? [];
+  const [renamingGen, setRenamingGen] = useState<FlowGeneration | null>(null);
+  const [reportingGenId, setReportingGenId] = useState<string | null>(null);
 
   const [mode, setMode] = useState<Mode>("image");
   const [prompt, setPrompt] = useState("");
@@ -407,6 +417,10 @@ export default function FlowThreadPage() {
               onSetCover={() => setCover.mutate({ id: flowId, generationId: g.id })}
               settingCover={setCover.isPending && setCover.variables?.generationId === g.id}
               coverFailed={setCover.isError && setCover.variables?.generationId === g.id}
+              onToggleFavorite={() => updateGeneration.mutate({ genId: g.id, favorite: !g.favorite })}
+              favoritePending={updateGeneration.isPending && updateGeneration.variables?.genId === g.id}
+              onRename={() => setRenamingGen(g)}
+              onReport={() => setReportingGenId(g.id)}
               onDelete={() => deleteGeneration.mutate(g.id)}
               deleteFailed={deleteGeneration.isError && deleteGeneration.variables === g.id}
               onRetry={() => void retryGeneration(g)}
@@ -639,6 +653,34 @@ export default function FlowThreadPage() {
           )
         )}
       </div>
+
+      {renamingGen && (
+        <RenameAssetDialog
+          generation={renamingGen}
+          onClose={() => setRenamingGen(null)}
+          onSave={(name) =>
+            updateGeneration.mutate(
+              { genId: renamingGen.id, name },
+              { onSuccess: () => setRenamingGen(null) }
+            )
+          }
+          saving={updateGeneration.isPending}
+          saveError={updateGeneration.isError}
+        />
+      )}
+      {reportingGenId && (
+        <ReportDialog
+          onClose={() => setReportingGenId(null)}
+          onSubmit={(reason, details) =>
+            reportGeneration.mutate(
+              { genId: reportingGenId, reason, details },
+              { onSuccess: () => setReportingGenId(null) }
+            )
+          }
+          submitting={reportGeneration.isPending}
+          submitError={reportGeneration.isError}
+        />
+      )}
     </div>
   );
 }
@@ -674,6 +716,10 @@ function GenerationCard({
   onSetCover,
   settingCover,
   coverFailed,
+  onToggleFavorite,
+  favoritePending,
+  onRename,
+  onReport,
   onDelete,
   deleteFailed,
   onRetry,
@@ -689,6 +735,10 @@ function GenerationCard({
   onSetCover: () => void;
   settingCover: boolean;
   coverFailed: boolean;
+  onToggleFavorite: () => void;
+  favoritePending: boolean;
+  onRename: () => void;
+  onReport: () => void;
   onDelete: () => void;
   deleteFailed: boolean;
   onRetry: () => void;
@@ -718,6 +768,10 @@ function GenerationCard({
             onReusePrompt={onReusePrompt}
             onSetCover={onSetCover}
             settingCover={settingCover}
+            onToggleFavorite={onToggleFavorite}
+            favoritePending={favoritePending}
+            onRename={onRename}
+            onReport={onReport}
             onDelete={onDelete}
           >
             {g.kind === "video" ? (
@@ -741,7 +795,11 @@ function GenerationCard({
           onClick={onToggleInfo}
           className="flex items-center gap-1 text-[10.5px] text-muted-foreground hover:text-foreground"
         >
-          <Info className="size-3" /> {g.prompt.length > 80 ? `${g.prompt.slice(0, 80)}…` : g.prompt}
+          <Info className="size-3 shrink-0" />
+          {g.favorite && <Star className="size-3 shrink-0 fill-current text-amber-500" />}
+          <span className="truncate">
+            {g.name || (g.prompt.length > 80 ? `${g.prompt.slice(0, 80)}…` : g.prompt)}
+          </span>
         </button>
         {deleteFailed && <p className="mt-1 text-[10.5px] text-destructive">Couldn&apos;t delete this — try again.</p>}
         {coverFailed && (
@@ -790,6 +848,10 @@ function GeneratedMediaMenu({
   onReusePrompt,
   onSetCover,
   settingCover,
+  onToggleFavorite,
+  favoritePending,
+  onRename,
+  onReport,
   onDelete,
   children,
 }: {
@@ -800,6 +862,10 @@ function GeneratedMediaMenu({
   onReusePrompt: () => void;
   onSetCover: () => void;
   settingCover: boolean;
+  onToggleFavorite: () => void;
+  favoritePending: boolean;
+  onRename: () => void;
+  onReport: () => void;
   onDelete: () => void;
   children: ReactNode;
 }) {
@@ -880,6 +946,13 @@ function GeneratedMediaMenu({
           <DropdownMenuItem onClick={onReusePrompt}>
             <RotateCcw /> Reuse prompt
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={onToggleFavorite} disabled={favoritePending}>
+            <Star className={g.favorite ? "fill-current text-amber-500" : undefined} />
+            {g.favorite ? "Unfavorite" : "Favorite"}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onRename}>
+            <Pencil /> Rename Asset
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={onSetCover} disabled={settingCover}>
             <ImageIcon /> Set Flow cover
           </DropdownMenuItem>
@@ -887,11 +960,137 @@ function GeneratedMediaMenu({
             <Download /> Download
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onReport}>
+            <Flag /> Report output
+          </DropdownMenuItem>
           <DropdownMenuItem variant="destructive" onClick={onDelete}>
             <Trash2 /> Delete
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+    </div>
+  );
+}
+
+function RenameAssetDialog({
+  generation,
+  onClose,
+  onSave,
+  saving,
+  saveError,
+}: {
+  generation: FlowGeneration;
+  onClose: () => void;
+  onSave: (name: string) => void;
+  saving: boolean;
+  saveError: boolean;
+}) {
+  const [name, setName] = useState(generation.name ?? "");
+
+  const submit = () => {
+    const trimmed = name.trim();
+    if (trimmed === (generation.name ?? "")) {
+      onClose();
+      return;
+    }
+    onSave(trimmed);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-xs space-y-3 rounded-xl border bg-card p-4 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-sm font-medium">Rename Asset</p>
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={generation.prompt.slice(0, 60)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit();
+            else if (e.key === "Escape") onClose();
+          }}
+          className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring"
+        />
+        <p className="text-[10.5px] text-muted-foreground">Leave blank to show the prompt instead.</p>
+        {saveError && <p className="text-[11px] text-destructive">Couldn&apos;t rename this asset. Try again.</p>}
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={submit} disabled={saving}>
+            {saving ? <Loader2 className="size-3.5 animate-spin" /> : "Save"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const REPORT_REASONS: { value: ReportReason; label: string }[] = [
+  { value: "inaccurate", label: "Inaccurate or low quality" },
+  { value: "inappropriate", label: "Inappropriate content" },
+  { value: "copyright", label: "Copyright concern" },
+  { value: "harmful", label: "Harmful or unsafe" },
+  { value: "other", label: "Other" },
+];
+
+function ReportDialog({
+  onClose,
+  onSubmit,
+  submitting,
+  submitError,
+}: {
+  onClose: () => void;
+  onSubmit: (reason: ReportReason, details?: string) => void;
+  submitting: boolean;
+  submitError: boolean;
+}) {
+  const [reason, setReason] = useState<ReportReason>("inaccurate");
+  const [details, setDetails] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-sm space-y-3 rounded-xl border bg-card p-4 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onClose();
+        }}
+      >
+        <p className="text-sm font-medium">Report output</p>
+        <div className="space-y-1.5">
+          {REPORT_REASONS.map((r) => (
+            <label key={r.value} className="flex items-center gap-2 text-[12.5px]">
+              <input
+                type="radio"
+                name="report-reason"
+                checked={reason === r.value}
+                onChange={() => setReason(r.value)}
+              />
+              {r.label}
+            </label>
+          ))}
+        </div>
+        <textarea
+          value={details}
+          onChange={(e) => setDetails(e.target.value)}
+          placeholder="Additional details (optional)"
+          rows={3}
+          className="w-full resize-none rounded-lg border border-input bg-transparent px-2.5 py-2 text-[12.5px] outline-none focus-visible:border-ring"
+        />
+        {submitError && <p className="text-[11px] text-destructive">Couldn&apos;t send this report. Try again.</p>}
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={() => onSubmit(reason, details.trim() || undefined)} disabled={submitting}>
+            {submitting ? <Loader2 className="size-3.5 animate-spin" /> : "Submit report"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -180,6 +180,32 @@ export function useDeleteGeneration(flowId: string) {
   });
 }
 
+/** Favorite/Unfavorite and Rename Asset — one PATCH, since both are small
+ * per-generation field updates with the same ownership check. */
+export function useUpdateGeneration(flowId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ genId, ...patch }: { genId: string; name?: string; favorite?: boolean }) =>
+      apiFetch(`/api/flows/${flowId}/generations/${genId}`, { body: JSON.stringify(patch), method: "PATCH" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: flowQueryKey(flowId) });
+      queryClient.invalidateQueries({ queryKey: flowsQueryKey });
+    },
+  });
+}
+
+export type ReportReason = "inaccurate" | "inappropriate" | "copyright" | "harmful" | "other";
+
+export function useReportGeneration(flowId: string) {
+  return useMutation({
+    mutationFn: ({ genId, reason, details }: { genId: string; reason: ReportReason; details?: string }) =>
+      apiFetch(`/api/flows/${flowId}/generations/${genId}/report`, {
+        body: JSON.stringify({ reason, ...(details ? { details } : {}) }),
+        method: "POST",
+      }),
+  });
+}
+
 /** One poll of an in-flight generation — the thread page calls this on a
  * timer for any row still "in_progress" rather than wrapping it as a
  * mutation, since it's a background tick, not a user action. */
