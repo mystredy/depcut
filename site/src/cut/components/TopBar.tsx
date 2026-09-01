@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronLeft, CloudUpload, Loader2, Mic, MoreHorizontal, Redo2, Send, Share2, Sparkles, TriangleAlert, Undo2, Upload, Video } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, CloudUpload, Loader2, MessageCircleHeart, Mic, MoreHorizontal, Redo2, Send, Share2, Sparkles, TriangleAlert, Undo2, Upload, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -35,6 +35,7 @@ import { copyProjectAcross } from "@/cut/lib/projectCopy";
 import { useEditor } from "@/cut/lib/store";
 import { useCreateDraftSubmission } from "@/queries/submissions";
 import { cn } from "@/lib/utils";
+import { FeedbackDialog } from "@/cut/components/FeedbackDialog";
 import { RecordDialog, type RecordMode } from "./RecordDialog";
 import { ShareDialog } from "./ShareDialog";
 import { StoragePill } from "./StoragePill";
@@ -180,6 +181,7 @@ export function TopBar({
     wasUploading.current = cloudUploading;
   }, [cloudUploading, queryClient]);
   const [shareOpen, setShareOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [moving, setMoving] = useState(false);
   const [moveProgress, setMoveProgress] = useState<string | null>(null);
@@ -220,6 +222,17 @@ export function TopBar({
     if (name && name !== projectName) useEditor.getState().setProjectName(name);
   };
 
+  // A project that can't export yet (no clips, an upload still in flight, or
+  // a failed import blocking the saved document) has nothing sharable or
+  // submittable either — Share and Submit reuse Export's own gate rather
+  // than risking a share link or marketplace submission to an incomplete cut.
+  const exportBlocked = !hasClips || cloudUploading || failedImports > 0;
+  const exportBlockedTitle = failedImports > 0
+    ? "Retry the failed imports first"
+    : cloudUploading
+      ? "Finishing uploads…"
+      : null;
+
   // One set of actions rendered both ways: labelled, and icon-only when the
   // bar tightens. Chat keeps its label in both fit tiers — it is the primary
   // control — but every label still drops below the mobile breakpoint.
@@ -231,7 +244,8 @@ export function TopBar({
           size={compact ? "icon-sm" : "sm"}
           className="max-sm:size-7 max-sm:px-0"
           aria-label="Share"
-          title="Share"
+          disabled={exportBlocked}
+          title={exportBlockedTitle ?? "Share"}
           onClick={() => setShareOpen(true)}
         >
           <Share2 data-icon={compact ? undefined : "inline-start"} />
@@ -269,16 +283,8 @@ export function TopBar({
         // A render reads the saved document, which an import still uploading
         // (or one that failed) is deliberately absent from — exporting now
         // would quietly leave it out of the video.
-        disabled={!hasClips || cloudUploading || failedImports > 0}
-        title={
-          failedImports > 0
-            ? "Retry the failed imports first"
-            : cloudUploading
-              ? "Finishing uploads…"
-              : compact
-                ? "Export"
-                : undefined
-        }
+        disabled={exportBlocked}
+        title={exportBlockedTitle ?? (compact ? "Export" : undefined)}
         onClick={() => {
           const s = useEditor.getState();
           s.setPlaying(false);
@@ -294,8 +300,8 @@ export function TopBar({
           size={compact ? "icon-sm" : "sm"}
           className="max-sm:size-7 max-sm:px-0"
           aria-label="Submit"
-          disabled={createSubmission.isPending}
-          title={submitError ?? (compact ? "Submit" : undefined)}
+          disabled={createSubmission.isPending || exportBlocked}
+          title={submitError ?? exportBlockedTitle ?? (compact ? "Submit" : undefined)}
           onClick={submitProject}
         >
           {createSubmission.isPending ? (
@@ -523,7 +529,7 @@ export function TopBar({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 {cutMode === "cloud" && (
-                  <DropdownMenuItem onClick={() => setShareOpen(true)}>
+                  <DropdownMenuItem disabled={exportBlocked} onClick={() => setShareOpen(true)}>
                     <Share2 /> Share
                   </DropdownMenuItem>
                 )}
@@ -533,17 +539,20 @@ export function TopBar({
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
-                  disabled={!hasClips || cloudUploading}
+                  disabled={exportBlocked}
                   onClick={() => {
                     const s = useEditor.getState();
                     s.setPlaying(false);
                     s.setExportOpen(true);
                   }}
                 >
-                  <Upload /> {cloudUploading ? "Finishing uploads…" : "Export"}
+                  <Upload /> {exportBlockedTitle ?? "Export"}
                 </DropdownMenuItem>
                 {cutMode === "cloud" && (
-                  <DropdownMenuItem disabled={createSubmission.isPending} onClick={submitProject}>
+                  <DropdownMenuItem
+                    disabled={createSubmission.isPending || exportBlocked}
+                    onClick={submitProject}
+                  >
                     <Send /> Submit
                   </DropdownMenuItem>
                 )}
@@ -557,6 +566,9 @@ export function TopBar({
                   <span className="flex-1">Chat</span>
                   {aiOpen && <Check className="size-3.5 text-muted-foreground" />}
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setFeedbackOpen(true)}>
+                  <MessageCircleHeart /> Give feedback
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -568,6 +580,7 @@ export function TopBar({
           onClose={() => setShareOpen(false)}
         />
       )}
+      {feedbackOpen && <FeedbackDialog onClose={() => setFeedbackOpen(false)} />}
       {moveOpen && (
         <Dialog open onOpenChange={(open) => !open && !moving && setMoveOpen(false)}>
           <DialogContent className="sm:max-w-sm">
