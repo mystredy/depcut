@@ -5,7 +5,7 @@
 // called from a super-user-gated admin route.
 import { flowMediaUrl } from "@/lib/flows/media";
 import { prisma } from "@/lib/prisma";
-import { presignGet } from "@/cut/server/cloud/r2";
+import { mediaObjectUrl } from "@/cut/server/cloud/mediaCdn";
 
 const ADMIN_PAGE_SIZE = 50;
 
@@ -26,16 +26,18 @@ export async function listCutProjectsForAdmin(): Promise<AdminCutProject[]> {
     take: ADMIN_PAGE_SIZE,
     select: { id: true, userId: true, name: true, previewKey: true, createdAt: true, updatedAt: true },
   });
-  return Promise.all(
-    rows.map(async (r) => ({
-      id: r.id,
-      userId: r.userId,
-      name: r.name,
-      previewUrl: r.previewKey ? await presignGet(r.previewKey) : null,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
-    }))
-  );
+  return rows.map((r) => ({
+    id: r.id,
+    userId: r.userId,
+    name: r.name,
+    // A project's previewKey is a cut/-rooted key, served through the media
+    // Worker's own signed-token scheme (same as servePreview/sharedView.ts)
+    // — a plain R2 presigned GET (right for Flow's flows/-rooted media,
+    // wrong here) would 403 or 404 against this bucket path.
+    previewUrl: r.previewKey ? mediaObjectUrl(r.previewKey, { version: String(r.updatedAt.getTime()) }) : null,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  }));
 }
 
 export type AdminFlowGeneration = {
