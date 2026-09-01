@@ -289,3 +289,60 @@ export async function duplicateFlow(
     return flow;
   });
 }
+
+// --- Collections — user-defined groupings of generations within one Flow. ---
+
+export type FlowCollectionView = {
+  id: string;
+  name: string;
+  generationIds: string[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export async function listCollections(flowId: string): Promise<FlowCollectionView[]> {
+  const collections = await prisma.flowCollection.findMany({
+    where: { flowId },
+    orderBy: { updatedAt: "desc" },
+    include: { items: { select: { generationId: true } } },
+  });
+  return collections.map((c) => ({
+    id: c.id,
+    name: c.name,
+    generationIds: c.items.map((i) => i.generationId),
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt,
+  }));
+}
+
+export async function createCollection(flowId: string, userId: string, name: string) {
+  return prisma.flowCollection.create({ data: { flowId, userId, name } });
+}
+
+/** A collection scoped to the flow it claims to be in — the route already
+ * checked the caller owns flowId, but a collection id from a *different*
+ * flow (even one the same caller owns) must not be reachable through it. */
+export async function ownedCollection(flowId: string, collectionId: string) {
+  return prisma.flowCollection.findFirst({ where: { id: collectionId, flowId } });
+}
+
+export async function deleteCollection(collectionId: string) {
+  await prisma.flowCollection.delete({ where: { id: collectionId } });
+}
+
+/** Add a generation to a collection — a no-op (not an error) if it's
+ * already in there, since the unique index on (collectionId, generationId)
+ * is exactly the "already added" case. */
+export async function addToCollection(collectionId: string, generationId: string) {
+  try {
+    await prisma.flowCollectionItem.create({ data: { collectionId, generationId } });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return;
+    throw error;
+  }
+  await prisma.flowCollection.update({ where: { id: collectionId }, data: { updatedAt: new Date() } });
+}
+
+export async function removeFromCollection(collectionId: string, generationId: string) {
+  await prisma.flowCollectionItem.deleteMany({ where: { collectionId, generationId } });
+}

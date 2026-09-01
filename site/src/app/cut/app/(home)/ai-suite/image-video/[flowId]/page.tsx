@@ -12,9 +12,12 @@ import {
   Clapperboard,
   Download,
   Flag,
+  FolderPlus,
+  Grid3x3,
   Image as ImageIcon,
   ImagePlus,
   Info,
+  LayoutList,
   Loader2,
   MoreVertical,
   Pencil,
@@ -60,10 +63,15 @@ import {
   refreshGeneration,
   useCreateGeneration,
   useDeleteGeneration,
+  useAddToCollection,
+  useCollections,
+  useCreateCollection,
   useFlow,
+  useRemoveFromCollection,
   useReportGeneration,
   useSetFlowCover,
   useUpdateGeneration,
+  type FlowCollection,
   type ReportReason,
 } from "@/queries/flows";
 import { cn } from "@/lib/utils";
@@ -117,9 +125,16 @@ export default function FlowThreadPage() {
   const setCover = useSetFlowCover();
   const updateGeneration = useUpdateGeneration(flowId);
   const reportGeneration = useReportGeneration(flowId);
+  const collections = useCollections(flowId);
+  const createCollection = useCreateCollection(flowId);
+  const addToCollection = useAddToCollection(flowId);
+  const removeFromCollection = useRemoveFromCollection(flowId);
   const generations = flow.data?.generations ?? [];
   const [renamingGen, setRenamingGen] = useState<FlowGeneration | null>(null);
   const [reportingGenId, setReportingGenId] = useState<string | null>(null);
+  const [collectingGenId, setCollectingGenId] = useState<string | null>(null);
+  const [view, setView] = useState<"thread" | "grid">("thread");
+  const [gridCollectionId, setGridCollectionId] = useState<string | null>(null);
 
   const [mode, setMode] = useState<Mode>("image");
   const [prompt, setPrompt] = useState("");
@@ -396,10 +411,49 @@ export default function FlowThreadPage() {
           <ArrowLeft className="size-4" />
         </Button>
         <h1 className="min-w-0 flex-1 truncate text-sm font-medium">{flow.data.flow.name}</h1>
+        <div className="flex shrink-0 gap-1 rounded-lg bg-muted p-1">
+          <button
+            type="button"
+            title="Creation Thread"
+            aria-label="Creation Thread"
+            aria-pressed={view === "thread"}
+            onClick={() => setView("thread")}
+            className={cn(
+              "grid size-7 place-items-center rounded-md transition-colors",
+              view === "thread" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <LayoutList className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            title="Assets Grid"
+            aria-label="Assets Grid"
+            aria-pressed={view === "grid"}
+            onClick={() => setView("grid")}
+            className={cn(
+              "grid size-7 place-items-center rounded-md transition-colors",
+              view === "grid" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Grid3x3 className="size-3.5" />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {generations.length === 0 ? (
+        {view === "grid" ? (
+          <AssetsGrid
+            generations={generations}
+            collections={collections.data?.collections ?? []}
+            gridCollectionId={gridCollectionId}
+            onFilterCollection={setGridCollectionId}
+            onOpenInThread={(g) => {
+              setView("thread");
+              setInfoOpenId(g.id);
+            }}
+          />
+        ) : generations.length === 0 ? (
           <p className="py-16 text-center text-sm text-muted-foreground">
             Describe an image or video below to start this Flow.
           </p>
@@ -420,6 +474,7 @@ export default function FlowThreadPage() {
               onToggleFavorite={() => updateGeneration.mutate({ genId: g.id, favorite: !g.favorite })}
               favoritePending={updateGeneration.isPending && updateGeneration.variables?.genId === g.id}
               onRename={() => setRenamingGen(g)}
+              onAddToCollection={() => setCollectingGenId(g.id)}
               onReport={() => setReportingGenId(g.id)}
               onDelete={() => deleteGeneration.mutate(g.id)}
               deleteFailed={deleteGeneration.isError && deleteGeneration.variables === g.id}
@@ -681,6 +736,26 @@ export default function FlowThreadPage() {
           submitError={reportGeneration.isError}
         />
       )}
+      {collectingGenId && (
+        <AddToCollectionDialog
+          generationId={collectingGenId}
+          collections={collections.data?.collections ?? []}
+          loading={collections.isLoading}
+          onClose={() => setCollectingGenId(null)}
+          onToggle={(collectionId, inCollection) =>
+            inCollection
+              ? removeFromCollection.mutate({ collectionId, generationId: collectingGenId })
+              : addToCollection.mutate({ collectionId, generationId: collectingGenId })
+          }
+          onCreateAndAdd={(name) =>
+            createCollection.mutate(name, {
+              onSuccess: ({ collection }) =>
+                addToCollection.mutate({ collectionId: collection.id, generationId: collectingGenId }),
+            })
+          }
+          creating={createCollection.isPending}
+        />
+      )}
     </div>
   );
 }
@@ -719,6 +794,7 @@ function GenerationCard({
   onToggleFavorite,
   favoritePending,
   onRename,
+  onAddToCollection,
   onReport,
   onDelete,
   deleteFailed,
@@ -738,6 +814,7 @@ function GenerationCard({
   onToggleFavorite: () => void;
   favoritePending: boolean;
   onRename: () => void;
+  onAddToCollection: () => void;
   onReport: () => void;
   onDelete: () => void;
   deleteFailed: boolean;
@@ -771,6 +848,7 @@ function GenerationCard({
             onToggleFavorite={onToggleFavorite}
             favoritePending={favoritePending}
             onRename={onRename}
+            onAddToCollection={onAddToCollection}
             onReport={onReport}
             onDelete={onDelete}
           >
@@ -851,6 +929,7 @@ function GeneratedMediaMenu({
   onToggleFavorite,
   favoritePending,
   onRename,
+  onAddToCollection,
   onReport,
   onDelete,
   children,
@@ -865,6 +944,7 @@ function GeneratedMediaMenu({
   onToggleFavorite: () => void;
   favoritePending: boolean;
   onRename: () => void;
+  onAddToCollection: () => void;
   onReport: () => void;
   onDelete: () => void;
   children: ReactNode;
@@ -952,6 +1032,9 @@ function GeneratedMediaMenu({
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onRename}>
             <Pencil /> Rename Asset
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onAddToCollection}>
+            <FolderPlus /> Add to Collection
           </DropdownMenuItem>
           <DropdownMenuItem onClick={onSetCover} disabled={settingCover}>
             <ImageIcon /> Set Flow cover
@@ -1088,6 +1171,183 @@ function ReportDialog({
           </Button>
           <Button size="sm" onClick={() => onSubmit(reason, details.trim() || undefined)} disabled={submitting}>
             {submitting ? <Loader2 className="size-3.5 animate-spin" /> : "Submit report"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Every completed generation in this Flow as a compact thumbnail grid — the
+ * chronological thread stays the primary view; this is an alternate way to
+ * scan and filter the same underlying rows, not a second copy of them.
+ * Filtering by collection is client-side (a Flow's whole generation list is
+ * already in hand from the thread view; no separate fetch).
+ */
+function AssetsGrid({
+  generations,
+  collections,
+  gridCollectionId,
+  onFilterCollection,
+  onOpenInThread,
+}: {
+  generations: FlowGeneration[];
+  collections: FlowCollection[];
+  gridCollectionId: string | null;
+  onFilterCollection: (id: string | null) => void;
+  onOpenInThread: (g: FlowGeneration) => void;
+}) {
+  const activeCollection = gridCollectionId ? collections.find((c) => c.id === gridCollectionId) : null;
+  const assets = generations.filter((g) => {
+    if (g.status !== "completed" || !g.outputUrl) return false;
+    if (activeCollection && !activeCollection.generationIds.includes(g.id)) return false;
+    return true;
+  });
+
+  return (
+    <div className="space-y-3">
+      {collections.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          <button
+            type="button"
+            onClick={() => onFilterCollection(null)}
+            className={cn(
+              "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+              !gridCollectionId
+                ? "border-foreground bg-foreground text-background"
+                : "border-input text-muted-foreground hover:text-foreground"
+            )}
+          >
+            All
+          </button>
+          {collections.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => onFilterCollection(c.id)}
+              className={cn(
+                "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                gridCollectionId === c.id
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-input text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {c.name} ({c.generationIds.length})
+            </button>
+          ))}
+        </div>
+      )}
+      {assets.length === 0 ? (
+        <p className="py-16 text-center text-sm text-muted-foreground">
+          {activeCollection ? "This collection is empty." : "No completed assets yet."}
+        </p>
+      ) : (
+        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+          {assets.map((g) => (
+            <button
+              key={g.id}
+              type="button"
+              onClick={() => onOpenInThread(g)}
+              className="group relative aspect-square overflow-hidden rounded-lg bg-muted"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element -- a presigned R2 URL, not a Next-optimizable asset */}
+              <img
+                src={g.kind === "video" ? (g.posterUrl ?? g.outputUrl!) : g.outputUrl!}
+                alt={g.name || g.prompt}
+                className="size-full object-cover transition-transform group-hover:scale-105"
+              />
+              {g.kind === "video" && (
+                <span className="absolute right-1 bottom-1 rounded bg-black/60 px-1 py-0.5 text-[9px] font-medium text-white">
+                  Video
+                </span>
+              )}
+              {g.favorite && (
+                <Star className="absolute top-1 left-1 size-3.5 fill-current text-amber-400 drop-shadow" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddToCollectionDialog({
+  generationId,
+  collections,
+  loading,
+  onClose,
+  onToggle,
+  onCreateAndAdd,
+  creating,
+}: {
+  generationId: string;
+  collections: FlowCollection[];
+  loading: boolean;
+  onClose: () => void;
+  onToggle: (collectionId: string, inCollection: boolean) => void;
+  onCreateAndAdd: (name: string) => void;
+  creating: boolean;
+}) {
+  const [newName, setNewName] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-xs space-y-3 rounded-xl border bg-card p-4 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onClose();
+        }}
+      >
+        <p className="text-sm font-medium">Add to Collection</p>
+        {loading ? (
+          <div className="grid place-items-center py-4">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          </div>
+        ) : collections.length === 0 ? (
+          <p className="text-[11.5px] text-muted-foreground">No collections yet — create one below.</p>
+        ) : (
+          <div className="max-h-40 space-y-1 overflow-y-auto">
+            {collections.map((c) => {
+              const inCollection = c.generationIds.includes(generationId);
+              return (
+                <label key={c.id} className="flex items-center gap-2 text-[12.5px]">
+                  <input type="checkbox" checked={inCollection} onChange={() => onToggle(c.id, inCollection)} />
+                  {c.name}
+                </label>
+              );
+            })}
+          </div>
+        )}
+        <div className="flex gap-1.5">
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="New collection name"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newName.trim()) {
+                onCreateAndAdd(newName.trim());
+                setNewName("");
+              }
+            }}
+            className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-[12.5px] outline-none focus-visible:border-ring"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!newName.trim() || creating}
+            onClick={() => {
+              onCreateAndAdd(newName.trim());
+              setNewName("");
+            }}
+          >
+            {creating ? <Loader2 className="size-3.5 animate-spin" /> : "Create"}
+          </Button>
+        </div>
+        <div className="flex justify-end">
+          <Button size="sm" onClick={onClose}>
+            Done
           </Button>
         </div>
       </div>

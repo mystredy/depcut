@@ -206,6 +206,65 @@ export function useReportGeneration(flowId: string) {
   });
 }
 
+export type FlowCollection = {
+  id: string;
+  name: string;
+  generationIds: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+const collectionsQueryKey = (flowId: string) => ["flows", flowId, "collections"] as const;
+
+export function useCollections(flowId: string) {
+  return useQuery({
+    queryFn: () => apiFetch<{ collections: FlowCollection[] }>(`/api/flows/${flowId}/collections`),
+    queryKey: collectionsQueryKey(flowId),
+  });
+}
+
+export function useCreateCollection(flowId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) =>
+      apiFetch<{ collection: { id: string } }>(`/api/flows/${flowId}/collections`, {
+        body: JSON.stringify({ name }),
+        method: "POST",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: collectionsQueryKey(flowId) }),
+  });
+}
+
+export function useDeleteCollection(flowId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (collectionId: string) =>
+      apiFetch(`/api/flows/${flowId}/collections/${collectionId}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: collectionsQueryKey(flowId) }),
+  });
+}
+
+export function useAddToCollection(flowId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ collectionId, generationId }: { collectionId: string; generationId: string }) =>
+      apiFetch(`/api/flows/${flowId}/collections/${collectionId}/items`, {
+        body: JSON.stringify({ generationId }),
+        method: "POST",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: collectionsQueryKey(flowId) }),
+  });
+}
+
+export function useRemoveFromCollection(flowId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ collectionId, generationId }: { collectionId: string; generationId: string }) =>
+      apiFetch(`/api/flows/${flowId}/collections/${collectionId}/items/${generationId}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: collectionsQueryKey(flowId) }),
+  });
+}
+
 /** One poll of an in-flight generation — the thread page calls this on a
  * timer for any row still "in_progress" rather than wrapping it as a
  * mutation, since it's a background tick, not a user action. */
