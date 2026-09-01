@@ -30,7 +30,11 @@ export const dynamic = "force-dynamic";
 // Music generation (Gemini/Lyria) polls its render to completion in-request, so
 // the handler can stay open longer than the platform default. Image, video, and
 // speech return well inside this; it is a ceiling, not a delay.
-export const maxDuration = 120;
+// A shared value with every other long-running route: Vercel bundles routes
+// with matching duration configs into one function and splits mismatched
+// ones apart, and this project is already at the Hobby plan's serverless
+// function count ceiling — a stray distinct value here is its own function.
+export const maxDuration = 300;
 
 export const POST = withDonkeyAuth(async (request) => {
   const client = requireInferenceClientId(request.donkey.clientId);

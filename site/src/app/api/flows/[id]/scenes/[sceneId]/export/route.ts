@@ -14,7 +14,11 @@ export const dynamic = "force-dynamic";
 // synchronously in-request rather than through a separate job queue — the
 // same tradeoff /api/inference/assets makes for music generation, which
 // also polls its render to completion in-request.
-export const maxDuration = 120;
+// A shared value with every other long-running route: Vercel bundles routes
+// with matching duration configs into one function and splits mismatched
+// ones apart, and this project is already at the Hobby plan's serverless
+// function count ceiling — a stray distinct value here is its own function.
+export const maxDuration = 300;
 
 type RouteContext = { params: Promise<{ id: string; sceneId: string }> };
 
