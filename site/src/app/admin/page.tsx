@@ -50,9 +50,10 @@ export default function AdminOverviewPage() {
         <p className="mt-1 text-sm text-muted-foreground">Site management for Depcut.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 rounded-2xl border bg-card p-6 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 rounded-2xl border bg-card p-6 sm:grid-cols-5">
         {usage.isLoading ? (
           <>
+            <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-12 w-full" />
@@ -61,6 +62,10 @@ export default function AdminOverviewPage() {
         ) : (
           <>
             <Stat label="Users" value={String(usage.data?.totals.userCount ?? 0)} />
+            <Stat
+              label="Active (24h)"
+              value={String(usage.data?.totals.activeUserCount ?? 0)}
+            />
             <Stat label="Balance across accounts" value={formatUsd(usage.data?.totals.balance)} />
             <Stat
               label="Charged, last 30 days"

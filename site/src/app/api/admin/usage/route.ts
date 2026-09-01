@@ -19,9 +19,19 @@ export const GET = withDonkeyAuth(async (request) => {
 
   const now = new Date();
   const recentSince = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  // "Active" reads from Session.updatedAt, which better-auth touches at most
+  // once per its updateAge (one day here, see auth.ts) — so this counts
+  // accounts seen at some point in the last day, not who's online this
+  // instant.
+  const activeSince = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  const [userCount, balanceTotals, recentEvents, lifetimeCharged] = await Promise.all([
+  const [userCount, activeUserCount, balanceTotals, recentEvents, lifetimeCharged] = await Promise.all([
     prisma.user.count(),
+    prisma.session.findMany({
+      distinct: ["userId"],
+      select: { userId: true },
+      where: { updatedAt: { gte: activeSince } },
+    }).then((rows) => rows.length),
     prisma.userCreditAccount.aggregate({
       _sum: { balanceMicros: true, lifetimeChargedMicros: true, lifetimeGrantedMicros: true },
     }),
@@ -60,6 +70,7 @@ export const GET = withDonkeyAuth(async (request) => {
       totalCharged: creditMicrosToString(lifetimeCharged._sum.creditCostMicros ?? zeroCreditMicros),
     },
     totals: {
+      activeUserCount,
       balance: creditMicrosToString(balanceTotals._sum.balanceMicros ?? zeroCreditMicros),
       lifetimeCharged: creditMicrosToString(
         balanceTotals._sum.lifetimeChargedMicros ?? zeroCreditMicros,

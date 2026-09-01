@@ -28,6 +28,18 @@ import { creditTopUpPresetsDollars, maxCreditGrantDollars } from "@/lib/credits/
 import { type AdminUser, useAdminUsers } from "@/queries/admin";
 import { useGrantCredits } from "@/queries/credits";
 
+function timeAgo(iso: string) {
+  const ms = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
 export default function AdminUsersPage() {
   const [query, setQuery] = useState("");
   const users = useAdminUsers(query);
@@ -69,6 +81,8 @@ export default function AdminUsersPage() {
                 <TableHead>Balance</TableHead>
                 <TableHead>Lifetime granted</TableHead>
                 <TableHead>Lifetime charged</TableHead>
+                <TableHead>Signed up</TableHead>
+                <TableHead>Last active</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -88,6 +102,12 @@ export default function AdminUsersPage() {
                   <TableCell className="font-mono text-sm text-muted-foreground">
                     {formatUsd(u.lifetimeCharged)}
                   </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {new Date(u.createdAt).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {u.lastActiveAt ? timeAgo(u.lastActiveAt) : "Never"}
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button size="sm" variant="outline" onClick={() => setGrantTarget(u)}>
                       Grant credits
@@ -97,7 +117,7 @@ export default function AdminUsersPage() {
               ))}
               {users.data?.users.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                     No users match &quot;{query}&quot;.
                   </TableCell>
                 </TableRow>

@@ -450,11 +450,17 @@ export type AdminUser = {
   lifetimeGranted: string;
   lifetimeCharged: string;
   createdAt: string;
+  /** Most recent session's own updatedAt — null if the account never signed
+   * in (a super user created directly, or a signup that never completed). */
+  lastActiveAt: string | null;
 };
 
 export type AdminUsage = {
   totals: {
     userCount: number;
+    /** Distinct users with a session touched in the last 24h — see the
+     * route's own comment on how coarse that signal is. */
+    activeUserCount: number;
     balance: string;
     lifetimeGranted: string;
     lifetimeCharged: string;

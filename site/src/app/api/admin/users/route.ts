@@ -46,6 +46,17 @@ export const GET = withDonkeyAuth(async (request) => {
       : undefined,
   });
 
+  // "Last active" — the session's own updatedAt, which better-auth touches
+  // on validation at most once per its updateAge (one day here, see
+  // auth.ts), so this is accurate to within roughly a day, not live. A
+  // groupBy scoped to just this page's users, not a per-row relation load.
+  const lastActive = await prisma.session.groupBy({
+    _max: { updatedAt: true },
+    by: ["userId"],
+    where: { userId: { in: users.map((u) => u.id) } },
+  });
+  const lastActiveByUserId = new Map(lastActive.map((s) => [s.userId, s._max.updatedAt]));
+
   return NextResponse.json({
     users: users.map((u) => ({
       balance: creditMicrosToString(u.creditAccount?.balanceMicros ?? BigInt(0)),
@@ -54,6 +65,7 @@ export const GET = withDonkeyAuth(async (request) => {
       email: u.email,
       id: u.id,
       image: u.image,
+      lastActiveAt: lastActiveByUserId.get(u.id)?.toISOString() ?? null,
       lifetimeCharged: creditMicrosToString(u.creditAccount?.lifetimeChargedMicros ?? BigInt(0)),
       lifetimeGranted: creditMicrosToString(u.creditAccount?.lifetimeGrantedMicros ?? BigInt(0)),
       name: u.name,
