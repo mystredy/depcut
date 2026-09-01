@@ -77,13 +77,13 @@ export default function AdminUsersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Balance</TableHead>
-                <TableHead>Lifetime granted</TableHead>
-                <TableHead>Lifetime charged</TableHead>
-                <TableHead>Signed up</TableHead>
-                <TableHead>Last active</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="w-[28%]">User</TableHead>
+                <TableHead className="w-[11%]">Balance</TableHead>
+                <TableHead className="w-[13%]">Lifetime granted</TableHead>
+                <TableHead className="w-[13%]">Lifetime charged</TableHead>
+                <TableHead className="w-[12%]">Signed up</TableHead>
+                <TableHead className="w-[13%]">Last active</TableHead>
+                <TableHead className="w-[10%] text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
