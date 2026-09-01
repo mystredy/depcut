@@ -197,7 +197,6 @@ export type SubmitFlowGenerationInput = {
    * alone, same as the standalone Text to Image page's own request. */
   provider?: string;
   model: string;
-  tier: string;
   refMode?: string;
   inputs?: Record<string, unknown>;
   parameters?: Record<string, unknown>;

@@ -25,7 +25,6 @@ const createSchema = z
     // Text to Image page's own request. Video always sends it (Omni vs Veo).
     provider: z.string().min(1).max(100).optional(),
     model: z.string().min(1).max(256),
-    tier: z.string().min(1).max(100),
     refMode: z.string().min(1).max(50).optional(),
     inputs: z.record(z.string(), z.unknown()).optional(),
     parameters: z.record(z.string(), z.unknown()).optional(),
@@ -97,7 +96,6 @@ export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
       prompt: body.prompt,
       provider: body.provider,
       model: body.model,
-      tier: body.tier,
       idempotencyKey: body.idempotencyKey,
       ...(body.refMode ? { refMode: body.refMode } : {}),
       ...(body.inputs ? { inputs: body.inputs } : {}),

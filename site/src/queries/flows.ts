@@ -143,7 +143,6 @@ export type CreateGenerationInput = {
   /** Optional — image resolves its provider from the model id alone. */
   provider?: string;
   model: string;
-  tier: string;
   refMode?: string;
   inputs?: Record<string, unknown>;
   parameters?: Record<string, unknown>;

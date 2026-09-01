@@ -253,7 +253,6 @@ export default function FlowThreadPage() {
       kind: "image",
       prompt: sent,
       model: imageModel.modelId,
-      tier: imageTier,
       ...(inputs ? { inputs } : {}),
       ...(pendingParentId ? { parentGenerationId: pendingParentId } : {}),
       parameters: { aspectRatio: imageAspect, imageSize: "2K" },
@@ -305,7 +304,6 @@ export default function FlowThreadPage() {
       prompt: sentPrompt,
       provider: videoModel.provider,
       model: videoModel.modelId,
-      tier: videoTier,
       refMode,
       ...(inputs ? { inputs } : {}),
       ...(pendingParentId ? { parentGenerationId: pendingParentId } : {}),
@@ -421,10 +419,14 @@ export default function FlowThreadPage() {
       await createGeneration.mutateAsync({
         kind: g.kind,
         prompt: g.prompt,
-        provider: g.provider,
         model: g.model,
-        tier: "",
         idempotencyKey: crypto.randomUUID(),
+        // A failed image generation's row never got its real provider
+        // written back (see submit.ts) — it's still the empty placeholder,
+        // which the schema rejects as a present-but-blank string. Image
+        // resolves its own provider from the model id regardless, same as
+        // a fresh submission, so this is safe to omit rather than forward.
+        ...(g.provider ? { provider: g.provider } : {}),
         ...(g.refMode ? { refMode: g.refMode } : {}),
         ...(inputs ? { inputs } : {}),
         parameters: g.parameters,
