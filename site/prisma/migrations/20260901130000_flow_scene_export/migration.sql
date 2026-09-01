@@ -1,3 +1,3 @@
 -- AlterTable
-ALTER TABLE "FlowScene" ADD COLUMN "exportKey" TEXT;
-ALTER TABLE "FlowScene" ADD COLUMN "exportedAt" TIMESTAMP(3);
+ALTER TABLE "FlowScene" ADD COLUMN IF NOT EXISTS "exportKey" TEXT;
+ALTER TABLE "FlowScene" ADD COLUMN IF NOT EXISTS "exportedAt" TIMESTAMP(3);
