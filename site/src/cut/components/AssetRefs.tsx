@@ -23,6 +23,7 @@ import { Slider } from "@/components/ui/slider";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -444,7 +445,13 @@ function MediaLibraryMenuItems({ onPick }: { onPick: (ref: AssetRef) => void }) 
       {groups.length > 1 ? (
         <SubTabs tabs={groups} value={active.id} onChange={setTab} />
       ) : (
-        <DropdownMenuLabel>{active.label}</DropdownMenuLabel>
+        // Base UI's GroupLabel throws outside a Group (error #31) — a lone
+        // group has no tabs to pick it, but the label still needs the
+        // wrapper. Only hit when exactly one source has candidates, which a
+        // project-less page (no Timeline/Media) reaches easily.
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{active.label}</DropdownMenuLabel>
+        </DropdownMenuGroup>
       )}
       {active.items.map((ref) => (
         <DropdownMenuItem key={`${ref.scope}:${ref.id}`} onClick={() => onPick(ref)}>
