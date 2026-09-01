@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, 
 import { Check, Copy, FileText, Plus, Upload, X } from "lucide-react";
 import {
   highlightMentions,
+  insertRefToken,
   mentionToken,
   refToken,
   sameRef,
@@ -362,27 +363,14 @@ export function AddRefButton({
 
   const pick = (ref: AssetRef) => {
     onPick(ref);
-    const token = refToken(ref);
-    const el = inputRef?.current;
-    if (!el) {
-      onPromptChange(prompt.trim() ? `${prompt.trimEnd()} ${token} ` : `${token} `);
-      return;
-    }
-    // Insert at the live cursor rather than always the end — a space before
-    // the token unless it already sits at the start of the text or right
-    // after whitespace, and one after so typing continues past it cleanly.
-    const start = el.selectionStart ?? prompt.length;
-    const end = el.selectionEnd ?? start;
-    const before = prompt.slice(0, start);
-    const after = prompt.slice(end);
-    const insert = `${before && !/\s$/.test(before) ? " " : ""}${token} `;
-    onPromptChange(before + insert + after);
-    const caret = (before + insert).length;
+    const el = inputRef?.current ?? null;
+    const { text, caret } = insertRefToken(prompt, ref, el);
+    onPromptChange(text);
     // The textarea's value updates on the next render — move the caret only
     // once that's landed, or setSelectionRange lands on the old value.
     requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(caret, caret);
+      el?.focus();
+      el?.setSelectionRange(caret, caret);
     });
   };
 

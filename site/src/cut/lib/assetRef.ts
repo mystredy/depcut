@@ -491,6 +491,31 @@ export const mentionToken = (name: string) =>
 export const refToken = (ref: AssetRef) =>
   ref.handle ? `@${ref.handle}` : mentionToken(ref.name);
 
+/** Insert a ref's mention token into `text` at the textarea's live cursor —
+ * a space before it unless already at the start or after whitespace, one
+ * after so typing continues past it cleanly. Falls back to appending when
+ * there's no live textarea to read a cursor from. Shared by AddRefButton's
+ * own pick and any other "add this to the prompt" action (a generated
+ * card's menu, say) so the same insert behavior doesn't drift in two
+ * places. Returns the new text and where the caret should land next. */
+export function insertRefToken(
+  text: string,
+  ref: AssetRef,
+  el: HTMLTextAreaElement | null
+): { text: string; caret: number } {
+  const token = refToken(ref);
+  if (!el) {
+    const next = text.trim() ? `${text.trimEnd()} ${token} ` : `${token} `;
+    return { text: next, caret: next.length };
+  }
+  const start = el.selectionStart ?? text.length;
+  const end = el.selectionEnd ?? start;
+  const before = text.slice(0, start);
+  const after = text.slice(end);
+  const insert = `${before && !/\s$/.test(before) ? " " : ""}${token} `;
+  return { text: before + insert + after, caret: (before + insert).length };
+}
+
 const MENTION_RE = /@(?:"([^"\n]+)"|([^\s"@]+))/g;
 
 /** Resolve one mention body against the candidates: short handle first
