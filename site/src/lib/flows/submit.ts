@@ -17,7 +17,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { maybeSetAutoCover } from "@/lib/flows/db";
 import { flowMediaKey, getObject, putObject } from "@/cut/server/cloud/r2";
-import { extractPosterFrame } from "@/cut/server/frames";
+import { extractPosterFrame, probeDurationFromBytes } from "@/cut/server/frames";
 
 /** True for a Prisma unique-constraint violation — same pattern
  * lib/credits/inference.ts uses for its own idempotent grant inserts. */
@@ -164,10 +164,22 @@ async function land(
   // leaves this generation without one to show as a cover or preview until
   // a later generation (with its own poster) takes the cover instead.
   const posterKey = kind === "video" ? await makePosterKey(userId, flowId, generationId, bytes) : null;
+  // The row's own duration, not the request's — Veo's durationSeconds param
+  // is a hint and Omni's isn't even sent (see gemini-omni-video.ts), so
+  // either can render a different length than asked. Extend and Continue
+  // Scene need the real value to seek to the last frame; 0 (probe failure)
+  // is left unset rather than stored as a false "duration".
+  const durationSeconds = kind === "video" ? await probeDurationFromBytes(bytes) : 0;
 
   await prisma.flowGeneration.update({
     where: { id: generationId },
-    data: { status: "completed", outputKey: key, outputMime: mime, ...(posterKey ? { posterKey } : {}) },
+    data: {
+      status: "completed",
+      outputKey: key,
+      outputMime: mime,
+      ...(posterKey ? { posterKey } : {}),
+      ...(durationSeconds > 0 ? { durationSeconds } : {}),
+    },
   });
   const coverCandidate = kind === "video" ? posterKey : key;
   if (coverCandidate) await maybeSetAutoCover(flowId, coverCandidate);

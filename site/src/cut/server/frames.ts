@@ -233,6 +233,22 @@ export async function concatVideoClips(
   }
 }
 
+/** Media duration in seconds from raw video bytes — same "not a project
+ * media file on disk" case as extractPosterFrame above, and used for the
+ * same Flow video generations, which need their real rendered length (Veo's
+ * request duration and Omni's undocumented one are both, at best, hints —
+ * see gemini-omni-video.ts) rather than whatever was asked for. */
+export async function probeDurationFromBytes(bytes: Buffer): Promise<number> {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), "duration-"));
+  try {
+    const src = path.join(tmp, "source");
+    await writeFile(src, bytes);
+    return await probeDuration(src);
+  } finally {
+    void rm(tmp, { recursive: true, force: true });
+  }
+}
+
 /** Media duration in seconds via ffprobe (0 when unknown). */
 export function probeDuration(file: string): Promise<number> {
   return new Promise((resolve) => {
