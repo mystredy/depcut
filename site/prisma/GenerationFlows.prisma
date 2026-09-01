@@ -157,13 +157,19 @@ model FlowGenerationReport {
 // A saved Scene Builder sequence — an ordered cut of completed video
 // generations from one Flow. Reuses FlowGeneration rows as its clips rather
 // than duplicating media; trimming only records in/out points, it never
-// re-encodes.
+// re-encodes until Export concatenates the trimmed clips into one file.
 model FlowScene {
   id     String         @id @default(cuid())
   flowId String
   flow   GenerationFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
   userId String
   name   String @default("Untitled scene")
+
+  // Set once Export has rendered this scene's current clip order/trims to a
+  // single file. Cleared (both null) the next time the sequence changes, so
+  // a stale export is never served as if it still matched the scene.
+  exportKey String?
+  exportedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
