@@ -523,6 +523,8 @@ export type AdminContentProject = {
   userId: string;
   name: string;
   previewUrl: string | null;
+  previewIsImage: boolean;
+  previewStart: number;
   createdAt: string;
   updatedAt: string;
   owner: AdminContentOwner | null;

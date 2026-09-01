@@ -23,9 +23,9 @@ export default function AdminContentProjectsPage() {
       </div>
 
       {projects.isLoading ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-video w-full rounded-xl" />
+        <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-6">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <Skeleton key={i} className="aspect-[9/16] w-full rounded-xl" />
           ))}
         </div>
       ) : projects.isError ? (
@@ -33,17 +33,27 @@ export default function AdminContentProjectsPage() {
       ) : projects.data?.items.length === 0 ? (
         <p className="py-16 text-center text-sm text-muted-foreground">No projects yet.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-6">
           {projects.data?.items.map((p) => (
             <div key={p.id} className="space-y-1.5">
-              <div className="relative aspect-video overflow-hidden rounded-xl border bg-muted/30">
-                {p.previewUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- an ever-changing presigned R2 URL, not a static asset
-                  <img src={p.previewUrl} alt="" className="h-full w-full object-cover" />
-                ) : (
+              <div className="relative aspect-[9/16] overflow-hidden rounded-xl border bg-muted/30">
+                {!p.previewUrl ? (
                   <div className="grid h-full w-full place-items-center">
                     <Clapperboard className="size-6 text-muted-foreground" />
                   </div>
+                ) : p.previewIsImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- a signed media-worker URL, not a static asset
+                  <img src={p.previewUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  // eslint-disable-next-line jsx-a11y/media-has-caption -- a silent hover-preview thumbnail, not authored media
+                  <video
+                    src={`${p.previewUrl}#t=${p.previewStart}`}
+                    muted
+                    loop
+                    playsInline
+                    preload="metadata"
+                    className="h-full w-full object-cover"
+                  />
                 )}
               </div>
               <div className="min-w-0">
