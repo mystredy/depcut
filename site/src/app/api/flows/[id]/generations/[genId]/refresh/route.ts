@@ -16,7 +16,7 @@ export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
   if (!flow) return notFoundResponse();
 
   try {
-    const outcome = await refreshFlowGeneration(request.headers, genId, request.donkey.userId);
+    const outcome = await refreshFlowGeneration(request.headers, id, genId, request.donkey.userId);
     return NextResponse.json(outcome);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Couldn't check on that generation.";

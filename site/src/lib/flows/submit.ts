@@ -188,10 +188,14 @@ export async function submitFlowGeneration(
  * between two polls should not double-land the same row. */
 export async function refreshFlowGeneration(
   originalHeaders: Headers,
+  flowId: string,
   generationId: string,
   userId: string,
 ): Promise<{ status: "in_progress" | "completed" | "failed" }> {
-  const row = await prisma.flowGeneration.findUnique({ where: { id: generationId } });
+  // Scoped by flowId AND userId — the route already checked the caller owns
+  // flowId, but a generation id from a *different* flow (even one the same
+  // caller owns) must not be reachable through this URL.
+  const row = await prisma.flowGeneration.findFirst({ where: { id: generationId, flowId } });
   if (!row || row.userId !== userId) throw new Error("Generation not found.");
   if (row.status !== "in_progress") return { status: row.status as "completed" | "failed" };
 
