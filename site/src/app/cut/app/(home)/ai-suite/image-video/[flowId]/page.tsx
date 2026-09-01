@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -66,12 +66,14 @@ function refFromLocalFile(file: File): AssetRef {
 }
 
 /** A completed generation's own output, staged as a reference for the next
- * one — "Use as reference" and "Create video from this image" both funnel
- * through this. */
+ * one — "Use as reference," "Create video from this image," and an `@`
+ * mention of it in the composer all funnel through this. The id is the
+ * generation's own (not a fresh random one) so picking the same card twice
+ * de-dupes via `sameRef` instead of adding a second copy. */
 function refFromGeneration(g: FlowGeneration): AssetRef {
   return {
     scope: "file",
-    id: crypto.randomUUID().slice(0, 8),
+    id: g.id,
     name: g.prompt.slice(0, 60) || "Generated",
     kind: g.kind,
     url: g.outputUrl ?? "",
@@ -93,6 +95,7 @@ export default function FlowThreadPage() {
   const flow = useFlow(flowId);
   const createGeneration = useCreateGeneration(flowId);
   const deleteGeneration = useDeleteGeneration(flowId);
+  const generations = flow.data?.generations ?? [];
 
   const [mode, setMode] = useState<Mode>("image");
   const [prompt, setPrompt] = useState("");
@@ -124,7 +127,20 @@ export default function FlowThreadPage() {
     setRefs([]);
   };
 
-  const candidates = useRefCandidates().filter((c) => c.scope === "library" || c.scope === "stock");
+  // Every `@`-mentionable reference for this composer: the account's library
+  // and stock catalog, plus every completed image/video already generated in
+  // THIS thread — the thing a user most naturally wants to reference in a
+  // chat-style Flow ("make a video from @that last shot") isn't in a catalog
+  // at all, it's a card two messages up.
+  const libraryAndStockRefs = useRefCandidates().filter((c) => c.scope === "library" || c.scope === "stock");
+  const candidates = useMemo(
+    () => [
+      ...generations.filter((g) => g.status === "completed" && g.outputUrl).map(refFromGeneration),
+      ...libraryAndStockRefs,
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- libraryAndStockRefs is a fresh array each render; its own source (the library fetch, the store) is what should trigger a recompute
+    [generations, libraryAndStockRefs.length]
+  );
   const addRef = (ref: AssetRef) => setRefs((prev) => addRefOnce(prev, ref));
 
   const selectableImageModels = useSelectableModels("image", IMAGE_MODELS);
@@ -146,7 +162,6 @@ export default function FlowThreadPage() {
   // Poll every in-progress video on a timer, one flow-wide interval rather
   // than one per row — a completed poll invalidates the whole thread so the
   // finished card swaps in.
-  const generations = flow.data?.generations ?? [];
   const pendingIds = generations.filter((g) => g.status === "in_progress").map((g) => g.id);
   useEffect(() => {
     if (pendingIds.length === 0) return;
