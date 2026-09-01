@@ -571,7 +571,7 @@ export default function FlowThreadPage() {
         )}
       </div>
 
-      <div className="border-t p-3">
+      <div className="border-t p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div
           className={cn(
             "relative flex flex-col rounded-2xl border border-input bg-card focus-within:border-ring",
@@ -1143,7 +1143,8 @@ function GeneratedMediaMenu({
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger
           title="Media options"
-          className="absolute top-1.5 right-1.5 grid size-6 place-items-center rounded-full bg-black/55 text-white transition-colors hover:bg-black/75 data-[state=open]:bg-black/75"
+          aria-label="Media options"
+          className="absolute top-1.5 right-1.5 grid size-7 place-items-center rounded-full bg-black/55 text-white transition-colors hover:bg-black/75 data-[state=open]:bg-black/75"
         >
           <MoreVertical className="size-3.5" />
         </DropdownMenuTrigger>

@@ -339,6 +339,7 @@ function SceneClipRow({
         <button
           type="button"
           title="Move up"
+          aria-label="Move clip up"
           disabled={isFirst}
           onClick={onMoveUp}
           className="grid size-6 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
@@ -348,6 +349,7 @@ function SceneClipRow({
         <button
           type="button"
           title="Move down"
+          aria-label="Move clip down"
           disabled={isLast}
           onClick={onMoveDown}
           className="grid size-6 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-30"
@@ -360,6 +362,7 @@ function SceneClipRow({
           <button
             type="button"
             title="Continue Scene"
+            aria-label="Continue Scene"
             onClick={onContinue}
             className="grid size-6 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
           >
@@ -369,6 +372,7 @@ function SceneClipRow({
         <button
           type="button"
           title="Remove clip"
+          aria-label="Remove clip"
           onClick={onRemove}
           className="grid size-6 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-destructive"
         >

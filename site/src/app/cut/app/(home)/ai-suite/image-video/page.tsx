@@ -265,8 +265,9 @@ function FlowCard({
         <DropdownMenu>
           <DropdownMenuTrigger
             title="Flow options"
+            aria-label="Flow options"
             disabled={busy}
-            className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100 disabled:pointer-events-none"
+            className="grid size-7 shrink-0 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground disabled:pointer-events-none"
           >
             <MoreVertical className="size-3.5" />
           </DropdownMenuTrigger>
