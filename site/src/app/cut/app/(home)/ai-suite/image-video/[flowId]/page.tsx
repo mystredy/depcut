@@ -890,6 +890,7 @@ export default function FlowThreadPage() {
             })
           }
           creating={createScene.isPending}
+          addingSceneId={addSceneClip.isPending ? (addSceneClip.variables?.sceneId ?? null) : null}
         />
       )}
     </div>
@@ -1596,6 +1597,7 @@ function AddToSceneDialog({
   onAdd,
   onCreateAndAdd,
   creating,
+  addingSceneId,
 }: {
   scenes: FlowScene[];
   loading: boolean;
@@ -1603,6 +1605,13 @@ function AddToSceneDialog({
   onAdd: (sceneId: string) => void;
   onCreateAndAdd: (name: string) => void;
   creating: boolean;
+  /** The scene currently mid-add, if any — disables every row so a slow
+   * response can't be mistaken for a missed click and re-fired, landing the
+   * same clip in the scene twice (Add to Scene has no dedup: unlike a
+   * Collection's set semantics, a scene is an ordered sequence where the
+   * same clip appearing twice is a legitimate edit, so re-clicking has to be
+   * prevented up front rather than caught after the fact). */
+  addingSceneId: string | null;
 }) {
   const [newName, setNewName] = useState("");
   return (
@@ -1628,9 +1637,11 @@ function AddToSceneDialog({
                 key={s.id}
                 type="button"
                 onClick={() => onAdd(s.id)}
-                className="block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] hover:bg-muted"
+                disabled={!!addingSceneId}
+                className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-[12.5px] hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
               >
                 {s.name} ({s.clips.length})
+                {addingSceneId === s.id && <Loader2 className="size-3.5 animate-spin" />}
               </button>
             ))}
           </div>
