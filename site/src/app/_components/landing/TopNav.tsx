@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { PillButton } from "@/app/_components/landing/LandingPrimitives";
-import { authClient } from "@/lib/auth-client";
+import { useHydrationSafeSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
 const NAV_ICON_SIZE = 59;
@@ -37,7 +37,9 @@ export function TopNav({
   // right cluster collapses to a single white button into the product. During the
   // initial (pending) client render `session` is null, which matches the static
   // server HTML, so the signed-out cluster shows first and swaps in on resolve.
-  const { data: session } = authClient.useSession();
+  // useHydrationSafeSession is what actually guarantees that first render
+  // matches — see its own doc comment for why the raw hook alone doesn't.
+  const { data: session } = useHydrationSafeSession();
   const isSignedIn = Boolean(session);
 
   // The header is sticky and transparent over the hero; once the page scrolls a

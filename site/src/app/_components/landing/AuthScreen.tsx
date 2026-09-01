@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { TopNav } from "@/app/_components/landing/TopNav";
 import { CutFooter } from "@/app/cut/_components/landing/CutFooter";
-import { authClient } from "@/lib/auth-client";
+import { authClient, useHydrationSafeSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
 type AuthMode = "sign-in" | "sign-up";
@@ -65,7 +65,10 @@ export function AuthScreen({ mode }: Props) {
   // the full OAuth redirect round-trip for no reason, which reads as the
   // page being broken or slow. Bounce straight to the same callback target
   // the button itself would use, as soon as the session resolves.
-  const { data: session } = authClient.useSession();
+  // useHydrationSafeSession (not the raw authClient.useSession) is what
+  // keeps the form itself from being a hydration mismatch for a
+  // client-only-resolved signed-in visitor — see its own doc comment.
+  const { data: session } = useHydrationSafeSession();
   useEffect(() => {
     if (!session) return;
     const searchParams = new URLSearchParams(window.location.search);
