@@ -7,12 +7,13 @@ export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-// Duplicate Flow — a new thread with the same generations, pointing at the
-// same R2 objects (immutable once written, so nothing is re-uploaded).
+// Duplicate Flow — a new thread with the same generations, each one's media
+// copied to its own fresh R2 object (never left pointing at the source's
+// keys — see duplicateFlow) so the two Flows are independently deletable.
 export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
   const flow = await ownedFlow(request.donkey.userId, id);
   if (!flow) return notFoundResponse();
-  const copy = await duplicateFlow(request.donkey.userId, flow);
-  return NextResponse.json({ flow: copy }, { status: 201 });
+  const duplicated = await duplicateFlow(request.donkey.userId, flow);
+  return NextResponse.json({ flow: duplicated }, { status: 201 });
 });

@@ -3,6 +3,7 @@
 // tables; every read here is scoped to a userId, checked at the call site.
 import { prisma } from "@/lib/prisma";
 import { flowMediaUrl } from "@/lib/flows/media";
+import { copy as copyR2Object, flowMediaKey } from "@/cut/server/cloud/r2";
 
 export type FlowSummary = {
   id: string;
@@ -141,38 +142,89 @@ export async function listFlowGenerations(flowId: string): Promise<FlowGeneratio
   );
 }
 
-/** Duplicate a flow's rows onto a new flow id — R2 objects are immutable
- * once written, so the copy just points at the same keys rather than
- * actually re-uploading bytes. */
-export async function duplicateFlow(userId: string, source: { id: string; name: string; coverKey: string | null; coverIsAuto: boolean }) {
+const keyExt = (key: string): string => key.split(".").pop() || "bin";
+
+/** Duplicate a flow's rows onto a new flow id. Every media object a row
+ * owns — its output, poster frame, and any persisted reference images — is
+ * copied to a FRESH key under the new flow's own R2 prefix, never left
+ * pointing at the source's keys. R2 objects are immutable once written, so
+ * this is a server-side copy (no bytes pass through this process), not a
+ * re-upload — but it still has to happen: two flows sharing an object key
+ * would mean deleting either one's media could take out the other's, and a
+ * Flow's delete route trusts that its own keys are its own to remove. */
+export async function duplicateFlow(
+  userId: string,
+  source: { id: string; name: string; coverKey: string | null; coverIsAuto: boolean }
+) {
   const rows = await prisma.flowGeneration.findMany({ where: { flowId: source.id }, orderBy: { createdAt: "asc" } });
+  const newFlowId = crypto.randomUUID();
+
+  // Same source key copied twice (unlikely today, but referenceKeys could
+  // one day point at a shared upload) lands on the same new key instead of
+  // being copied — and billed in R2 operations — twice.
+  const copied = new Map<string, string>();
+  const copyKey = async (oldKey: string, genId: string, suffix: string): Promise<string> => {
+    const cached = copied.get(oldKey);
+    if (cached) return cached;
+    const newKey = flowMediaKey(userId, newFlowId, `${genId}${suffix}.${keyExt(oldKey)}`);
+    await copyR2Object(oldKey, newKey);
+    copied.set(oldKey, newKey);
+    return newKey;
+  };
+
+  const newRows = await Promise.all(
+    rows.map(async (r) => {
+      const genId = crypto.randomUUID();
+      const outputKey = r.outputKey ? await copyKey(r.outputKey, genId, "") : null;
+      const posterKey = r.posterKey ? await copyKey(r.posterKey, genId, "-poster") : null;
+      const sourceRefKeys = Array.isArray(r.referenceKeys)
+        ? (r.referenceKeys as unknown[]).filter((k): k is string => typeof k === "string")
+        : [];
+      const referenceKeys = await Promise.all(sourceRefKeys.map((k, i) => copyKey(k, genId, `-ref${i}`)));
+      return { row: r, genId, outputKey, posterKey, referenceKeys };
+    })
+  );
+
+  // The flow's own cover points at whichever generation's output it was
+  // pinned (or auto-set) to — follow it through the same key map so the
+  // duplicate's cover shows its own copy, not reach across into the
+  // source's.
+  const coverKey = source.coverKey ? (copied.get(source.coverKey) ?? null) : null;
+
   return prisma.$transaction(async (tx) => {
-    const copy = await tx.generationFlow.create({
-      data: { userId, name: `${source.name} copy`, coverKey: source.coverKey, coverIsAuto: source.coverIsAuto },
+    const flow = await tx.generationFlow.create({
+      data: { id: newFlowId, userId, name: `${source.name} copy`, coverKey, coverIsAuto: source.coverIsAuto },
     });
-    if (rows.length > 0) {
+    if (newRows.length > 0) {
       await tx.flowGeneration.createMany({
-        data: rows.map((r) => ({
-          flowId: copy.id,
+        data: newRows.map(({ row: r, genId, outputKey, posterKey, referenceKeys }) => ({
+          id: genId,
+          flowId: newFlowId,
           userId,
           kind: r.kind,
           prompt: r.prompt,
           provider: r.provider,
           model: r.model,
+          name: r.name,
+          favorite: r.favorite,
+          // Not carried: idempotencyKey (would collide on its unique index —
+          // a copy was never itself submitted) and parentGenerationId (the
+          // parent lives in the source flow; a duplicate starts its own
+          // lineage rather than pointing across flows).
           parameters: r.parameters as never,
           refMode: r.refMode,
-          referenceKeys: r.referenceKeys as never,
+          referenceKeys: referenceKeys as never,
           status: r.status,
           errorMessage: r.errorMessage,
-          outputKey: r.outputKey,
+          outputKey,
           outputMime: r.outputMime,
-          posterKey: r.posterKey,
+          posterKey,
           width: r.width,
           height: r.height,
           durationSeconds: r.durationSeconds,
         })),
       });
     }
-    return copy;
+    return flow;
   });
 }
