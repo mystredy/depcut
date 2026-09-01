@@ -1,6 +1,7 @@
 // Query helpers for the Flow gallery/thread — thin wrappers around Prisma so
 // the API routes stay short. See prisma/GenerationFlows.prisma for the
 // tables; every read here is scoped to a userId, checked at the call site.
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { flowMediaUrl } from "@/lib/flows/media";
 import { copy as copyR2Object, flowMediaKey } from "@/cut/server/cloud/r2";
@@ -11,16 +12,40 @@ export type FlowSummary = {
   coverUrl: string | null;
   hasImage: boolean;
   hasVideo: boolean;
+  hasFavorite: boolean;
   processing: boolean;
   updatedAt: Date;
 };
 
-/** The gallery list — most recently updated first. One query for the cover
- * candidate (auto or pinned) plus a cheap aggregate for what kinds/status
- * each flow holds, rather than pulling every generation row per flow. */
-export async function listFlows(userId: string): Promise<FlowSummary[]> {
+export type FlowListFilters = {
+  /** Matches against the Flow's own name OR any of its generations' prompt
+   * text — a Flow with no matching name can still turn up by what's in it. */
+  q?: string;
+  kind?: "image" | "video";
+  favoritesOnly?: boolean;
+};
+
+/** The gallery list — most recently updated first, filtered server-side so
+ * the response is already the matching set rather than a client trimming an
+ * unbounded list. One query for the cover candidate (auto or pinned) plus a
+ * cheap aggregate for what kinds/status/favorites each flow holds, rather
+ * than pulling every generation row per flow. */
+export async function listFlows(userId: string, filters?: FlowListFilters): Promise<FlowSummary[]> {
+  const conditions: Prisma.GenerationFlowWhereInput[] = [];
+  const q = filters?.q?.trim();
+  if (q) {
+    conditions.push({
+      OR: [
+        { name: { contains: q, mode: "insensitive" } },
+        { generations: { some: { prompt: { contains: q, mode: "insensitive" } } } },
+      ],
+    });
+  }
+  if (filters?.kind) conditions.push({ generations: { some: { kind: filters.kind } } });
+  if (filters?.favoritesOnly) conditions.push({ generations: { some: { favorite: true } } });
+
   const flows = await prisma.generationFlow.findMany({
-    where: { userId },
+    where: conditions.length > 0 ? { userId, AND: conditions } : { userId },
     orderBy: { updatedAt: "desc" },
   });
   if (flows.length === 0) return [];
@@ -29,7 +54,7 @@ export async function listFlows(userId: string): Promise<FlowSummary[]> {
   const generations = await prisma.flowGeneration.findMany({
     where: { flowId: { in: flowIds } },
     orderBy: { createdAt: "asc" },
-    select: { flowId: true, kind: true, status: true, outputKey: true },
+    select: { flowId: true, kind: true, status: true, outputKey: true, favorite: true },
   });
   const byFlow = new Map<string, typeof generations>();
   for (const g of generations) {
@@ -48,6 +73,7 @@ export async function listFlows(userId: string): Promise<FlowSummary[]> {
         coverUrl: coverKey ? await flowMediaUrl(coverKey) : null,
         hasImage: rows.some((r) => r.kind === "image"),
         hasVideo: rows.some((r) => r.kind === "video"),
+        hasFavorite: rows.some((r) => r.favorite),
         processing: rows.some((r) => r.status === "in_progress"),
         updatedAt: f.updatedAt,
       };
@@ -90,26 +116,45 @@ export async function deleteFlow(flowId: string) {
   await prisma.generationFlow.delete({ where: { id: flowId } });
 }
 
+/** Every R2 object one generation row owns: its output, poster frame, and
+ * any persisted reference images — the exact set a delete must remove for
+ * that row to leave nothing orphaned behind. */
+export function generationMediaKeys(row: {
+  outputKey: string | null;
+  posterKey: string | null;
+  referenceKeys: unknown;
+}): string[] {
+  const refs = Array.isArray(row.referenceKeys)
+    ? row.referenceKeys.filter((k): k is string => typeof k === "string")
+    : [];
+  return [row.outputKey, row.posterKey, ...refs].filter((k): k is string => !!k);
+}
+
 export async function flowGenerationKeys(flowId: string): Promise<string[]> {
   const rows = await prisma.flowGeneration.findMany({
     where: { flowId },
-    select: { outputKey: true, posterKey: true },
+    select: { outputKey: true, posterKey: true, referenceKeys: true },
   });
-  return rows.flatMap((r) => [r.outputKey, r.posterKey].filter((k): k is string => !!k));
+  return rows.flatMap(generationMediaKeys);
 }
 
 export type FlowGenerationView = {
   id: string;
   kind: string;
   prompt: string;
+  name: string | null;
+  favorite: boolean;
   provider: string;
   model: string;
   parameters: unknown;
   refMode: string | null;
+  parentGenerationId: string | null;
   status: string;
   errorMessage: string | null;
   outputUrl: string | null;
   outputMime: string | null;
+  posterUrl: string | null;
+  referenceUrls: string[];
   width: number | null;
   height: number | null;
   durationSeconds: number | null;
@@ -122,23 +167,33 @@ export async function listFlowGenerations(flowId: string): Promise<FlowGeneratio
     orderBy: { createdAt: "asc" },
   });
   return Promise.all(
-    rows.map(async (r) => ({
-      id: r.id,
-      kind: r.kind,
-      prompt: r.prompt,
-      provider: r.provider,
-      model: r.model,
-      parameters: r.parameters,
-      refMode: r.refMode,
-      status: r.status,
-      errorMessage: r.errorMessage,
-      outputUrl: r.outputKey ? await flowMediaUrl(r.outputKey) : null,
-      outputMime: r.outputMime,
-      width: r.width,
-      height: r.height,
-      durationSeconds: r.durationSeconds,
-      createdAt: r.createdAt,
-    }))
+    rows.map(async (r) => {
+      const refKeys = Array.isArray(r.referenceKeys)
+        ? r.referenceKeys.filter((k): k is string => typeof k === "string")
+        : [];
+      return {
+        id: r.id,
+        kind: r.kind,
+        prompt: r.prompt,
+        name: r.name,
+        favorite: r.favorite,
+        provider: r.provider,
+        model: r.model,
+        parameters: r.parameters,
+        refMode: r.refMode,
+        parentGenerationId: r.parentGenerationId,
+        status: r.status,
+        errorMessage: r.errorMessage,
+        outputUrl: r.outputKey ? await flowMediaUrl(r.outputKey) : null,
+        outputMime: r.outputMime,
+        posterUrl: r.posterKey ? await flowMediaUrl(r.posterKey) : null,
+        referenceUrls: await Promise.all(refKeys.map((k) => flowMediaUrl(k))),
+        width: r.width,
+        height: r.height,
+        durationSeconds: r.durationSeconds,
+        createdAt: r.createdAt,
+      };
+    })
   );
 }
 

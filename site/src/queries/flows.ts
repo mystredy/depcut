@@ -14,22 +14,38 @@ export type FlowSummary = {
   coverUrl: string | null;
   hasImage: boolean;
   hasVideo: boolean;
+  hasFavorite: boolean;
   processing: boolean;
   updatedAt: string;
+};
+
+export type FlowGalleryFilters = {
+  q?: string;
+  kind?: "image" | "video";
+  favoritesOnly?: boolean;
 };
 
 export type FlowGeneration = {
   id: string;
   kind: "image" | "video";
   prompt: string;
+  name: string | null;
+  favorite: boolean;
   provider: string;
   model: string;
   parameters: Record<string, unknown>;
   refMode: string | null;
+  parentGenerationId: string | null;
   status: "in_progress" | "completed" | "failed";
   errorMessage: string | null;
   outputUrl: string | null;
   outputMime: string | null;
+  posterUrl: string | null;
+  /** The reference images actually sent with this submission, persisted to
+   * R2 at submit time — never re-derived from the live ref, which may since
+   * have changed or been deleted. Empty for a generation with no references
+   * or one submitted before persistence existed. */
+  referenceUrls: string[];
   width: number | null;
   height: number | null;
   durationSeconds: number | null;
@@ -41,10 +57,22 @@ export type FlowDetail = { flow: { id: string; name: string }; generations: Flow
 export const flowsQueryKey = ["flows"] as const;
 export const flowQueryKey = (id: string) => ["flows", id] as const;
 
-export function useFlows() {
+function flowsQueryUrl(filters: FlowGalleryFilters): string {
+  const params = new URLSearchParams();
+  if (filters.q?.trim()) params.set("q", filters.q.trim());
+  if (filters.kind) params.set("kind", filters.kind);
+  if (filters.favoritesOnly) params.set("favorite", "1");
+  const qs = params.toString();
+  return qs ? `/api/flows?${qs}` : "/api/flows";
+}
+
+export function useFlows(filters: FlowGalleryFilters = {}) {
   return useQuery({
-    queryFn: () => apiFetch<{ flows: FlowSummary[] }>("/api/flows"),
-    queryKey: flowsQueryKey,
+    queryFn: () => apiFetch<{ flows: FlowSummary[] }>(flowsQueryUrl(filters)),
+    // Filters are server-side, so each combination is its own cache entry —
+    // switching a filter chip shows that filter's own loading state instead
+    // of a stale list from a different one.
+    queryKey: [...flowsQueryKey, filters.q?.trim() || null, filters.kind ?? null, !!filters.favoritesOnly] as const,
     // A processing generation needs the gallery to notice it landed even
     // when the user isn't inside that thread — cheap enough at gallery scale.
     refetchInterval: (query) => (query.state.data?.flows.some((f) => f.processing) ? 5000 : false),

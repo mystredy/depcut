@@ -66,6 +66,48 @@ function extFor(mime: string | undefined, kind: "image" | "video"): string {
   return kind === "video" ? "mp4" : "png";
 }
 
+type InlineImage = { data: string; mimeType: string };
+
+function isInlineImage(v: unknown): v is InlineImage {
+  return (
+    !!v &&
+    typeof v === "object" &&
+    typeof (v as InlineImage).data === "string" &&
+    typeof (v as InlineImage).mimeType === "string"
+  );
+}
+
+/** Upload the reference images actually sent with a submission to R2 under
+ * this flow's prefix, and return their keys. Best-effort: a reference is
+ * already resolved and riding in the (already billed) provider call by the
+ * time this runs, so a storage hiccup here shouldn't fail a generation that
+ * otherwise succeeded — it just means this one row's info panel and a later
+ * retry won't have the reference to show or reuse. */
+async function persistReferences(
+  userId: string,
+  flowId: string,
+  generationId: string,
+  inputs: Record<string, unknown> | undefined,
+): Promise<string[]> {
+  if (!inputs) return [];
+  const images = [
+    ...(Array.isArray(inputs.images) ? inputs.images : []),
+    ...(Array.isArray(inputs.referenceImages) ? inputs.referenceImages : []),
+  ].filter(isInlineImage);
+  if (images.length === 0) return [];
+  try {
+    return await Promise.all(
+      images.map(async (img, i) => {
+        const key = flowMediaKey(userId, flowId, `${generationId}-ref${i}.${extFor(img.mimeType, "image")}`);
+        await putObject(key, Buffer.from(img.data, "base64"), img.mimeType);
+        return key;
+      }),
+    );
+  } catch {
+    return [];
+  }
+}
+
 async function outputBytes(out: GenerationOutput): Promise<Buffer> {
   if (out.dataBase64) return Buffer.from(out.dataBase64, "base64");
   if (out.url) {
@@ -240,6 +282,11 @@ export async function submitFlowGeneration(
         },
         select: { id: true },
       });
+
+  const referenceKeys = await persistReferences(input.userId, input.flowId, row.id, input.inputs);
+  if (referenceKeys.length > 0) {
+    await prisma.flowGeneration.update({ where: { id: row.id }, data: { referenceKeys: referenceKeys as never } });
+  }
 
   if (gen.status === "in_progress") {
     return { id: row.id, status: "in_progress" };

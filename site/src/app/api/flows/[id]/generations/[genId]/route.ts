@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
-import { ownedFlow } from "@/lib/flows/db";
+import { generationMediaKeys, ownedFlow } from "@/lib/flows/db";
 import { prisma } from "@/lib/prisma";
 import { delStrict } from "@/cut/server/cloud/r2";
 
@@ -23,7 +23,7 @@ export const DELETE = withDonkeyAuth(async (request, context: RouteContext) => {
   const generation = await prisma.flowGeneration.findFirst({ where: { id: genId, flowId: id } });
   if (!generation) return notFoundResponse();
 
-  const keys = [generation.outputKey, generation.posterKey].filter((k): k is string => !!k);
+  const keys = generationMediaKeys(generation);
   try {
     const { failed } = await delStrict(keys);
     if (failed.length > 0) {

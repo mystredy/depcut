@@ -40,7 +40,7 @@ import { addRefOnce, insertRefToken, type AssetRef, collectRefs, useRefCandidate
 import { creditsUrl, NO_CREDITS_MESSAGE, promptAndImages, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { IMAGE_MODELS, type ImageTier } from "@/cut/lib/imageModels";
 import { useCutBase } from "@/cut/lib/nav";
-import { refsToInlineImages, videoSafeInline, visualRefs, type InlineImage } from "@/cut/lib/refMedia";
+import { blobToInline, refsToInlineImages, videoSafeInline, visualRefs, type InlineImage } from "@/cut/lib/refMedia";
 import type { VideoRefMode } from "@/cut/lib/videoGen";
 import {
   VIDEO_ASPECT_LABEL,
@@ -288,14 +288,21 @@ export default function FlowThreadPage() {
   const [retryingId, setRetryingId] = useState<string | null>(null);
   // Resubmits a failed row's own prompt/model/parameters as a fresh
   // generation — a real, separately billed attempt, not a reopened one.
-  // The original reference image(s), if any, were only ever used transiently
-  // for that one submission (not persisted — see FlowGeneration.referenceKeys,
-  // currently unpopulated), so a retry that needed one re-runs text-only;
-  // reattach it via "Use as reference" first if the render needs it back.
+  // Its reference images (if any) are persisted (see submit.ts's
+  // persistReferences), so this re-fetches and re-attaches them rather than
+  // silently falling back to a text-only retry of what was a
+  // reference-conditioned request.
   const retryGeneration = async (g: FlowGeneration) => {
     if (retryingId) return;
     setRetryingId(g.id);
     try {
+      let inputs: Record<string, unknown> | undefined;
+      if (g.referenceUrls.length > 0) {
+        const images = await Promise.all(
+          g.referenceUrls.map((url) => fetch(url).then((res) => res.blob()).then(blobToInline))
+        );
+        inputs = g.kind === "video" && g.refMode === "ingredients" ? { referenceImages: images } : { images };
+      }
       await createGeneration.mutateAsync({
         kind: g.kind,
         prompt: g.prompt,
@@ -304,6 +311,7 @@ export default function FlowThreadPage() {
         tier: "",
         idempotencyKey: crypto.randomUUID(),
         ...(g.refMode ? { refMode: g.refMode } : {}),
+        ...(inputs ? { inputs } : {}),
         parameters: g.parameters,
       });
     } catch {
@@ -648,12 +656,23 @@ function GenerationCard({
           <p className="mt-1 text-[10.5px] text-destructive">Couldn&apos;t set this as the Flow cover — try again.</p>
         )}
         {infoOpen && (
-          <div className="mt-1 space-y-0.5 rounded-lg bg-muted/50 p-2 text-[10.5px] text-muted-foreground">
+          <div className="mt-1 space-y-1.5 rounded-lg bg-muted/50 p-2 text-[10.5px] text-muted-foreground">
             <p className="whitespace-pre-wrap text-foreground">{g.prompt}</p>
             <p>
               {g.model} · {g.kind}
               {g.refMode ? ` · ${g.refMode}` : ""}
             </p>
+            {g.referenceUrls.length > 0 && (
+              <div>
+                <p className="mb-1">Reference{g.referenceUrls.length > 1 ? "s" : ""} used</p>
+                <div className="flex flex-wrap gap-1">
+                  {g.referenceUrls.map((url, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element -- a presigned R2 URL, not a Next-optimizable asset
+                    <img key={i} src={url} alt="" className="size-10 rounded-md border object-cover" />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
