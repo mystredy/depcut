@@ -16,7 +16,7 @@ import { POST as refreshAsset } from "@/app/api/inference/assets/refresh/route";
 import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { maybeSetAutoCover } from "@/lib/flows/db";
-import { flowMediaKey, putObject } from "@/cut/server/cloud/r2";
+import { flowMediaKey, getObject, putObject } from "@/cut/server/cloud/r2";
 import { extractPosterFrame } from "@/cut/server/frames";
 
 /** True for a Prisma unique-constraint violation — same pattern
@@ -208,6 +208,10 @@ export type SubmitFlowGenerationInput = {
    * new billed call. Optional only for the duplicate-flow path, which
    * writes rows directly and never submits through here. */
   idempotencyKey?: string;
+  /** Extend and Continue Scene set this to the source video's own id — real
+   * lineage for the info panel and Scene Builder, not re-derived from
+   * matching prompts. */
+  parentGenerationId?: string;
 };
 
 /** Creates the row and makes the real (billed) provider call. Returns the
@@ -248,6 +252,7 @@ export async function submitFlowGeneration(
           status: "in_progress",
           idempotencyKey: input.idempotencyKey,
           ...(input.refMode ? { refMode: input.refMode } : {}),
+          ...(input.parentGenerationId ? { parentGenerationId: input.parentGenerationId } : {}),
           parameters: (input.parameters ?? {}) as never,
         },
         select: { id: true },
@@ -302,6 +307,7 @@ export async function submitFlowGeneration(
           prompt: input.prompt,
           status: "in_progress",
           ...(input.refMode ? { refMode: input.refMode } : {}),
+          ...(input.parentGenerationId ? { parentGenerationId: input.parentGenerationId } : {}),
           parameters: (input.parameters ?? {}) as never,
           ...settledData,
         },
@@ -362,4 +368,54 @@ export async function refreshFlowGeneration(
   await land(row.id, userId, row.flowId, row.kind as "image" | "video", gen);
   const settled = await prisma.flowGeneration.findUnique({ where: { id: row.id }, select: { status: true } });
   return { status: (settled?.status as "completed" | "failed") ?? "failed" };
+}
+
+/**
+ * Save Frame — capture one frame from a completed video and land it as a
+ * new, already-completed image FlowGeneration, linked to the source via
+ * parentGenerationId. Never billed: this doesn't touch submitAsset or any
+ * inference route, it's a pure capture from bytes this Flow already owns
+ * (the same extractPosterFrame ffmpeg call the poster pipeline uses, just
+ * at a caller-chosen timestamp instead of the fixed poster spot).
+ */
+export async function saveFrameAsAsset(
+  userId: string,
+  flowId: string,
+  sourceGenerationId: string,
+  atSeconds: number,
+): Promise<{ id: string }> {
+  const source = await prisma.flowGeneration.findFirst({
+    where: { id: sourceGenerationId, flowId, kind: "video", status: "completed" },
+    select: { outputKey: true, prompt: true },
+  });
+  if (!source?.outputKey) throw new Error("That video isn't ready to save a frame from.");
+
+  const object = await getObject(source.outputKey);
+  if (!object) throw new Error("Couldn't reach that video's storage.");
+  const jpeg = await extractPosterFrame(object.bytes, atSeconds);
+
+  const generationId = crypto.randomUUID();
+  const key = flowMediaKey(userId, flowId, `${generationId}.jpg`);
+  await putObject(key, jpeg, "image/jpeg");
+
+  const row = await prisma.flowGeneration.create({
+    data: {
+      id: generationId,
+      flowId,
+      userId,
+      kind: "image",
+      // "capture"/"frame-capture" mark this row as never billed — it never
+      // reaches submitAsset, so no provider/model from the registry applies.
+      provider: "capture",
+      model: "frame-capture",
+      prompt: `Frame from "${source.prompt.slice(0, 60)}"`,
+      parentGenerationId: sourceGenerationId,
+      status: "completed",
+      outputKey: key,
+      outputMime: "image/jpeg",
+    },
+    select: { id: true },
+  });
+  await maybeSetAutoCover(flowId, key);
+  return { id: row.id };
 }

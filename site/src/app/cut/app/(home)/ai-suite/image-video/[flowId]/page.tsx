@@ -8,9 +8,11 @@ import {
   ArrowLeftRight,
   ArrowRight,
   AtSign,
+  Camera,
   ChevronDown,
   Clapperboard,
   Download,
+  Film,
   Flag,
   FolderPlus,
   Grid3x3,
@@ -22,6 +24,7 @@ import {
   MoreVertical,
   Pencil,
   RotateCcw,
+  Sparkles,
   Star,
   Trash2,
 } from "lucide-react";
@@ -34,6 +37,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AddRefButton, FrameSlotButton, MentionTextarea, RefChips } from "@/cut/components/AssetRefs";
+import { Slider } from "@/components/ui/slider";
+import { formatTime } from "@/cut/lib/time";
+import { SceneBuilder } from "./SceneBuilder";
 import {
   COUNT_OPTIONS,
   DURATION_OPTIONS,
@@ -63,15 +69,20 @@ import {
   refreshGeneration,
   useCreateGeneration,
   useDeleteGeneration,
+  useAddSceneClip,
   useAddToCollection,
   useCollections,
   useCreateCollection,
+  useCreateScene,
   useFlow,
   useRemoveFromCollection,
   useReportGeneration,
+  useSaveFrame,
+  useScenes,
   useSetFlowCover,
   useUpdateGeneration,
   type FlowCollection,
+  type FlowScene,
   type ReportReason,
 } from "@/queries/flows";
 import { cn } from "@/lib/utils";
@@ -129,12 +140,22 @@ export default function FlowThreadPage() {
   const createCollection = useCreateCollection(flowId);
   const addToCollection = useAddToCollection(flowId);
   const removeFromCollection = useRemoveFromCollection(flowId);
+  const scenes = useScenes(flowId);
+  const createScene = useCreateScene(flowId);
+  const addSceneClip = useAddSceneClip(flowId);
+  const saveFrame = useSaveFrame(flowId);
   const generations = flow.data?.generations ?? [];
   const [renamingGen, setRenamingGen] = useState<FlowGeneration | null>(null);
   const [reportingGenId, setReportingGenId] = useState<string | null>(null);
   const [collectingGenId, setCollectingGenId] = useState<string | null>(null);
-  const [view, setView] = useState<"thread" | "grid">("thread");
+  const [savingFrameGen, setSavingFrameGen] = useState<FlowGeneration | null>(null);
+  const [addToSceneGen, setAddToSceneGen] = useState<FlowGeneration | null>(null);
+  const [view, setView] = useState<"thread" | "grid" | "scene">("thread");
   const [gridCollectionId, setGridCollectionId] = useState<string | null>(null);
+  // Extend / Continue Scene: which generation the next submission continues
+  // from, and (Continue Scene only) which scene to append the result to.
+  const [pendingParentId, setPendingParentId] = useState<string | null>(null);
+  const [pendingSceneId, setPendingSceneId] = useState<string | null>(null);
 
   const [mode, setMode] = useState<Mode>("image");
   const [prompt, setPrompt] = useState("");
@@ -225,7 +246,7 @@ export default function FlowThreadPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-arms whenever the pending set changes, not on every render
   }, [flowId, pendingIds.join(",")]);
 
-  const generateImage = async (text: string, allRefs: AssetRef[]) => {
+  const generateImage = async (text: string, allRefs: AssetRef[]): Promise<string[]> => {
     const { prompt: sent, images } = await promptAndImages("image", text, allRefs, true, Infinity);
     const inputs = images.length > 0 ? { images } : undefined;
     const base: Omit<CreateGenerationInput, "idempotencyKey"> = {
@@ -234,17 +255,21 @@ export default function FlowThreadPage() {
       model: imageModel.modelId,
       tier: imageTier,
       ...(inputs ? { inputs } : {}),
+      ...(pendingParentId ? { parentGenerationId: pendingParentId } : {}),
       parameters: { aspectRatio: imageAspect, imageSize: "2K" },
     };
     // Each take is its own billed generation, so each gets its own key — one
     // key shared across the loop would make takes 2..N look like retries of
     // take 1 and be silently deduped away instead of actually rendered.
+    const ids: string[] = [];
     for (let i = 0; i < count; i++) {
-      await createGeneration.mutateAsync({ ...base, idempotencyKey: crypto.randomUUID() });
+      const outcome = await createGeneration.mutateAsync({ ...base, idempotencyKey: crypto.randomUUID() });
+      ids.push(outcome.id);
     }
+    return ids;
   };
 
-  const generateVideo = async (text: string, allRefs: AssetRef[]) => {
+  const generateVideo = async (text: string, allRefs: AssetRef[]): Promise<string[]> => {
     let sentPrompt = text;
     let inputs: { images?: InlineImage[]; referenceImages?: InlineImage[]; lastFrame?: InlineImage[] } | undefined;
     if (refMode === "ingredients") {
@@ -283,11 +308,15 @@ export default function FlowThreadPage() {
       tier: videoTier,
       refMode,
       ...(inputs ? { inputs } : {}),
+      ...(pendingParentId ? { parentGenerationId: pendingParentId } : {}),
       parameters: { aspectRatio: effVideoAspect, resolution: effResolution, durationSeconds: effDurationSeconds },
     };
+    const ids: string[] = [];
     for (let i = 0; i < count; i++) {
-      await createGeneration.mutateAsync({ ...base, idempotencyKey: crypto.randomUUID() });
+      const outcome = await createGeneration.mutateAsync({ ...base, idempotencyKey: crypto.randomUUID() });
+      ids.push(outcome.id);
     }
+    return ids;
   };
 
   const generate = async () => {
@@ -298,11 +327,15 @@ export default function FlowThreadPage() {
     setBusy(true);
     setError(null);
     try {
-      if (mode === "image") await generateImage(text, allRefs);
-      else await generateVideo(text, allRefs);
+      const ids = mode === "image" ? await generateImage(text, allRefs) : await generateVideo(text, allRefs);
+      if (pendingSceneId) {
+        for (const genId of ids) addSceneClip.mutate({ sceneId: pendingSceneId, generationId: genId });
+      }
       setPrompt("");
       setRefs([]);
       setEndFrame(null);
+      setPendingParentId(null);
+      setPendingSceneId(null);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Generation failed.";
       setError({ text: message, credits: message === NO_CREDITS_MESSAGE });
@@ -316,6 +349,34 @@ export default function FlowThreadPage() {
     setMode("video");
     setRefModeState("ingredients");
     addRef(refFromGeneration(g));
+    promptRef.current?.focus();
+  };
+
+  // Extend / Continue Scene — seeds the composer's Frames-mode Start slot
+  // with the source video's own last frame (captureFrame, via the shared
+  // AssetRef.t pin, already does the actual frame read — no new capture
+  // code needed) and remembers the source so the next submission links back
+  // to it. Reusing "generate a video from a frame" rather than a bespoke
+  // continuation pipeline, since that's genuinely the same operation.
+  const extendFrom = (g: FlowGeneration, intoSceneId?: string) => {
+    if (!g.outputUrl || !g.durationSeconds) return;
+    setMode("video");
+    setRefModeState("frames");
+    setRefs([
+      {
+        scope: "file",
+        id: `${g.id}-last`,
+        name: `Last frame of "${g.name || g.prompt.slice(0, 40)}"`,
+        kind: "video",
+        url: g.outputUrl,
+        duration: g.durationSeconds,
+        t: Math.max(0, g.durationSeconds - 0.1),
+      },
+    ]);
+    setEndFrame(null);
+    setPrompt("");
+    setPendingParentId(g.id);
+    setPendingSceneId(intoSceneId ?? null);
     promptRef.current?.focus();
   };
 
@@ -438,11 +499,33 @@ export default function FlowThreadPage() {
           >
             <Grid3x3 className="size-3.5" />
           </button>
+          <button
+            type="button"
+            title="Scene Builder"
+            aria-label="Scene Builder"
+            aria-pressed={view === "scene"}
+            onClick={() => setView("scene")}
+            className={cn(
+              "grid size-7 place-items-center rounded-md transition-colors",
+              view === "scene" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Film className="size-3.5" />
+          </button>
         </div>
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {view === "grid" ? (
+        {view === "scene" ? (
+          <SceneBuilder
+            flowId={flowId}
+            onContinueScene={(clip, sceneId) => {
+              const source = generations.find((g) => g.id === clip.generationId);
+              if (source) extendFrom(source, sceneId);
+              setView("thread");
+            }}
+          />
+        ) : view === "grid" ? (
           <AssetsGrid
             generations={generations}
             collections={collections.data?.collections ?? []}
@@ -466,6 +549,9 @@ export default function FlowThreadPage() {
               onToggleInfo={() => setInfoOpenId((id) => (id === g.id ? null : g.id))}
               onUseAsReference={() => addRef(refFromGeneration(g))}
               onCreateVideo={g.kind === "image" ? () => createVideoFrom(g) : undefined}
+              onExtend={g.kind === "video" && g.status === "completed" ? () => extendFrom(g) : undefined}
+              onSaveFrame={g.kind === "video" && g.status === "completed" ? () => setSavingFrameGen(g) : undefined}
+              onAddToSceneList={g.kind === "video" && g.status === "completed" ? () => setAddToSceneGen(g) : undefined}
               onAddToPrompt={() => addToPrompt(g)}
               onReusePrompt={() => reusePrompt(g)}
               onSetCover={() => setCover.mutate({ id: flowId, generationId: g.id })}
@@ -756,6 +842,43 @@ export default function FlowThreadPage() {
           creating={createCollection.isPending}
         />
       )}
+      {savingFrameGen && (
+        <SaveFrameDialog
+          generation={savingFrameGen}
+          onClose={() => setSavingFrameGen(null)}
+          onSave={(atSeconds) =>
+            saveFrame.mutate(
+              { genId: savingFrameGen.id, atSeconds },
+              { onSuccess: () => setSavingFrameGen(null) }
+            )
+          }
+          saving={saveFrame.isPending}
+          saveError={saveFrame.isError}
+        />
+      )}
+      {addToSceneGen && (
+        <AddToSceneDialog
+          scenes={scenes.data?.scenes ?? []}
+          loading={scenes.isLoading}
+          onClose={() => setAddToSceneGen(null)}
+          onAdd={(sceneId) => {
+            addSceneClip.mutate(
+              { sceneId, generationId: addToSceneGen.id },
+              { onSuccess: () => setAddToSceneGen(null) }
+            );
+          }}
+          onCreateAndAdd={(name) =>
+            createScene.mutate(name, {
+              onSuccess: ({ scene }) =>
+                addSceneClip.mutate(
+                  { sceneId: scene.id, generationId: addToSceneGen.id },
+                  { onSuccess: () => setAddToSceneGen(null) }
+                ),
+            })
+          }
+          creating={createScene.isPending}
+        />
+      )}
     </div>
   );
 }
@@ -786,6 +909,9 @@ function GenerationCard({
   onToggleInfo,
   onUseAsReference,
   onCreateVideo,
+  onExtend,
+  onSaveFrame,
+  onAddToSceneList,
   onAddToPrompt,
   onReusePrompt,
   onSetCover,
@@ -806,6 +932,9 @@ function GenerationCard({
   onToggleInfo: () => void;
   onUseAsReference: () => void;
   onCreateVideo?: () => void;
+  onExtend?: () => void;
+  onSaveFrame?: () => void;
+  onAddToSceneList?: () => void;
   onAddToPrompt: () => void;
   onReusePrompt: () => void;
   onSetCover: () => void;
@@ -840,6 +969,9 @@ function GenerationCard({
           <GeneratedMediaMenu
             generation={g}
             onCreateVideo={onCreateVideo}
+            onExtend={onExtend}
+            onSaveFrame={onSaveFrame}
+            onAddToSceneList={onAddToSceneList}
             onUseAsReference={onUseAsReference}
             onAddToPrompt={onAddToPrompt}
             onReusePrompt={onReusePrompt}
@@ -921,6 +1053,9 @@ function GenerationCard({
 function GeneratedMediaMenu({
   generation: g,
   onCreateVideo,
+  onExtend,
+  onSaveFrame,
+  onAddToSceneList,
   onUseAsReference,
   onAddToPrompt,
   onReusePrompt,
@@ -936,6 +1071,9 @@ function GeneratedMediaMenu({
 }: {
   generation: FlowGeneration;
   onCreateVideo?: () => void;
+  onExtend?: () => void;
+  onSaveFrame?: () => void;
+  onAddToSceneList?: () => void;
   onUseAsReference: () => void;
   onAddToPrompt: () => void;
   onReusePrompt: () => void;
@@ -1015,6 +1153,11 @@ function GeneratedMediaMenu({
               <Clapperboard /> Animate
             </DropdownMenuItem>
           )}
+          {onExtend && (
+            <DropdownMenuItem onClick={onExtend}>
+              <Sparkles /> Extend
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={onAddToPrompt}>
             <AtSign /> Add to prompt
           </DropdownMenuItem>
@@ -1039,6 +1182,16 @@ function GeneratedMediaMenu({
           <DropdownMenuItem onClick={onSetCover} disabled={settingCover}>
             <ImageIcon /> Set Flow cover
           </DropdownMenuItem>
+          {onSaveFrame && (
+            <DropdownMenuItem onClick={onSaveFrame}>
+              <Camera /> Save Frame
+            </DropdownMenuItem>
+          )}
+          {onAddToSceneList && (
+            <DropdownMenuItem onClick={onAddToSceneList}>
+              <Film /> Add to Scene
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={download}>
             <Download /> Download
           </DropdownMenuItem>
@@ -1348,6 +1501,154 @@ function AddToCollectionDialog({
         <div className="flex justify-end">
           <Button size="sm" onClick={onClose}>
             Done
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SaveFrameDialog({
+  generation,
+  onClose,
+  onSave,
+  saving,
+  saveError,
+}: {
+  generation: FlowGeneration;
+  onClose: () => void;
+  onSave: (atSeconds: number) => void;
+  saving: boolean;
+  saveError: boolean;
+}) {
+  const dur = generation.durationSeconds ?? 0;
+  const [atSeconds, setAtSeconds] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-sm space-y-3 rounded-xl border bg-card p-4 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onClose();
+        }}
+      >
+        <p className="text-sm font-medium">Save Frame</p>
+        <video
+          ref={videoRef}
+          src={generation.outputUrl ?? undefined}
+          playsInline
+          muted
+          className="w-full rounded-lg bg-black"
+        />
+        {dur > 0 && (
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <Slider
+                min={0}
+                max={dur}
+                step={0.1}
+                value={atSeconds}
+                aria-label="Frame timestamp"
+                onValueChange={(v) => {
+                  const next = Array.isArray(v) ? v[0] : v;
+                  setAtSeconds(next);
+                  if (videoRef.current) videoRef.current.currentTime = next;
+                }}
+              />
+            </div>
+            <span className="shrink-0 text-[10.5px] text-muted-foreground">{formatTime(atSeconds)}</span>
+          </div>
+        )}
+        {saveError && <p className="text-[11px] text-destructive">Couldn&apos;t save that frame. Try again.</p>}
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={() => onSave(atSeconds)} disabled={saving}>
+            {saving ? <Loader2 className="size-3.5 animate-spin" /> : "Save as image"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddToSceneDialog({
+  scenes,
+  loading,
+  onClose,
+  onAdd,
+  onCreateAndAdd,
+  creating,
+}: {
+  scenes: FlowScene[];
+  loading: boolean;
+  onClose: () => void;
+  onAdd: (sceneId: string) => void;
+  onCreateAndAdd: (name: string) => void;
+  creating: boolean;
+}) {
+  const [newName, setNewName] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-xs space-y-3 rounded-xl border bg-card p-4 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onClose();
+        }}
+      >
+        <p className="text-sm font-medium">Add to Scene</p>
+        {loading ? (
+          <div className="grid place-items-center py-4">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          </div>
+        ) : scenes.length === 0 ? (
+          <p className="text-[11.5px] text-muted-foreground">No scenes yet — create one below.</p>
+        ) : (
+          <div className="max-h-40 space-y-1 overflow-y-auto">
+            {scenes.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => onAdd(s.id)}
+                className="block w-full rounded-md px-2 py-1.5 text-left text-[12.5px] hover:bg-muted"
+              >
+                {s.name} ({s.clips.length})
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-1.5">
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="New scene name"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newName.trim()) {
+                onCreateAndAdd(newName.trim());
+                setNewName("");
+              }
+            }}
+            className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-transparent px-2.5 text-[12.5px] outline-none focus-visible:border-ring"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!newName.trim() || creating}
+            onClick={() => {
+              onCreateAndAdd(newName.trim());
+              setNewName("");
+            }}
+          >
+            {creating ? <Loader2 className="size-3.5 animate-spin" /> : "Create"}
+          </Button>
+        </div>
+        <div className="flex justify-end">
+          <Button size="sm" onClick={onClose}>
+            Cancel
           </Button>
         </div>
       </div>

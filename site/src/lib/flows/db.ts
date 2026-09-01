@@ -346,3 +346,126 @@ export async function addToCollection(collectionId: string, generationId: string
 export async function removeFromCollection(collectionId: string, generationId: string) {
   await prisma.flowCollectionItem.deleteMany({ where: { collectionId, generationId } });
 }
+
+// --- Scene Builder — an ordered cut of completed video generations. ---
+
+export type FlowSceneClipView = {
+  id: string;
+  generationId: string;
+  position: number;
+  trimInSeconds: number | null;
+  trimOutSeconds: number | null;
+  outputUrl: string | null;
+  outputKey: string | null;
+  posterUrl: string | null;
+  durationSeconds: number | null;
+  prompt: string;
+};
+
+export type FlowSceneView = {
+  id: string;
+  name: string;
+  exportUrl: string | null;
+  clips: FlowSceneClipView[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export async function listScenes(flowId: string): Promise<FlowSceneView[]> {
+  const scenes = await prisma.flowScene.findMany({
+    where: { flowId },
+    orderBy: { updatedAt: "desc" },
+    include: { clips: { orderBy: { position: "asc" }, include: { generation: true } } },
+  });
+  return Promise.all(
+    scenes.map(async (s) => ({
+      id: s.id,
+      name: s.name,
+      exportUrl: s.exportKey ? await flowMediaUrl(s.exportKey) : null,
+      clips: await Promise.all(
+        s.clips.map(async (c) => ({
+          id: c.id,
+          generationId: c.generationId,
+          position: c.position,
+          trimInSeconds: c.trimInSeconds,
+          trimOutSeconds: c.trimOutSeconds,
+          outputUrl: c.generation.outputKey ? await flowMediaUrl(c.generation.outputKey) : null,
+          outputKey: c.generation.outputKey,
+          posterUrl: c.generation.posterKey ? await flowMediaUrl(c.generation.posterKey) : null,
+          durationSeconds: c.generation.durationSeconds,
+          prompt: c.generation.prompt,
+        })),
+      ),
+      createdAt: s.createdAt,
+      updatedAt: s.updatedAt,
+    })),
+  );
+}
+
+export async function createScene(flowId: string, userId: string, name: string) {
+  return prisma.flowScene.create({ data: { flowId, userId, name } });
+}
+
+/** A scene scoped to the flow it claims to be in — same reachability rule
+ * as ownedCollection. */
+export async function ownedScene(flowId: string, sceneId: string) {
+  return prisma.flowScene.findFirst({ where: { id: sceneId, flowId } });
+}
+
+export async function renameScene(sceneId: string, name: string) {
+  await prisma.flowScene.update({ where: { id: sceneId }, data: { name } });
+}
+
+export async function deleteScene(sceneId: string) {
+  await prisma.flowScene.delete({ where: { id: sceneId } });
+}
+
+/** Any clip/trim change invalidates a scene's export — the render on disk no
+ * longer matches the sequence it was rendered from. The R2 object itself is
+ * left alone (best-effort orphan, same tradeoff del() makes elsewhere);
+ * Export overwrites it with a fresh key on the next run. */
+async function invalidateExport(sceneId: string) {
+  await prisma.flowScene.update({ where: { id: sceneId }, data: { exportKey: null, exportedAt: null } });
+}
+
+export async function addSceneClip(sceneId: string, generationId: string) {
+  const last = await prisma.flowSceneClip.findFirst({ where: { sceneId }, orderBy: { position: "desc" } });
+  await prisma.flowSceneClip.create({ data: { sceneId, generationId, position: (last?.position ?? -1) + 1 } });
+  await invalidateExport(sceneId);
+}
+
+export async function updateSceneClipTrim(
+  clipId: string,
+  sceneId: string,
+  trim: { trimInSeconds: number | null; trimOutSeconds: number | null },
+) {
+  await prisma.flowSceneClip.update({ where: { id: clipId }, data: trim });
+  await invalidateExport(sceneId);
+}
+
+export async function removeSceneClip(clipId: string, sceneId: string) {
+  await prisma.flowSceneClip.delete({ where: { id: clipId } });
+  await invalidateExport(sceneId);
+}
+
+/** Renumber every clip in a scene to a caller-given order — the whole
+ * sequence at once (drag-to-reorder), not one position swap at a time, so a
+ * reorder can never leave two clips sharing a position mid-update. */
+export async function reorderSceneClips(sceneId: string, orderedClipIds: string[]) {
+  await prisma.$transaction([
+    // Positions move to a disjoint negative range first — the unique index
+    // on (sceneId, position) would otherwise reject an in-place swap
+    // (two clips briefly wanting each other's position) partway through.
+    ...orderedClipIds.map((clipId, i) =>
+      prisma.flowSceneClip.updateMany({ where: { id: clipId, sceneId }, data: { position: -(i + 1) } }),
+    ),
+    ...orderedClipIds.map((clipId, i) =>
+      prisma.flowSceneClip.updateMany({ where: { id: clipId, sceneId }, data: { position: i } }),
+    ),
+  ]);
+  await invalidateExport(sceneId);
+}
+
+export async function setSceneExport(sceneId: string, exportKey: string) {
+  await prisma.flowScene.update({ where: { id: sceneId }, data: { exportKey, exportedAt: new Date() } });
+}

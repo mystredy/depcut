@@ -152,6 +152,8 @@ export type CreateGenerationInput = {
    * instead of billing twice. A deliberate new attempt (the user's own
    * "Retry") mints its own fresh key, since that really is a new charge. */
   idempotencyKey: string;
+  /** Extend / Continue Scene — the source video this continues from. */
+  parentGenerationId?: string;
 };
 
 export function useCreateGeneration(flowId: string) {
@@ -262,6 +264,141 @@ export function useRemoveFromCollection(flowId: string) {
     mutationFn: ({ collectionId, generationId }: { collectionId: string; generationId: string }) =>
       apiFetch(`/api/flows/${flowId}/collections/${collectionId}/items/${generationId}`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: collectionsQueryKey(flowId) }),
+  });
+}
+
+export type FlowSceneClip = {
+  id: string;
+  generationId: string;
+  position: number;
+  trimInSeconds: number | null;
+  trimOutSeconds: number | null;
+  outputUrl: string | null;
+  posterUrl: string | null;
+  durationSeconds: number | null;
+  prompt: string;
+};
+
+export type FlowScene = {
+  id: string;
+  name: string;
+  exportUrl: string | null;
+  clips: FlowSceneClip[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+const scenesQueryKey = (flowId: string) => ["flows", flowId, "scenes"] as const;
+
+export function useScenes(flowId: string) {
+  return useQuery({
+    queryFn: () => apiFetch<{ scenes: FlowScene[] }>(`/api/flows/${flowId}/scenes`),
+    queryKey: scenesQueryKey(flowId),
+    // A clip still rendering needs the scene to notice it landed — same
+    // reasoning as useFlows/useFlow's own processing-driven poll.
+    refetchInterval: (query) =>
+      query.state.data?.scenes.some((s) => s.clips.some((c) => !c.outputUrl)) ? 5000 : false,
+  });
+}
+
+export function useCreateScene(flowId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name?: string) =>
+      apiFetch<{ scene: { id: string } }>(`/api/flows/${flowId}/scenes`, {
+        body: JSON.stringify(name ? { name } : {}),
+        method: "POST",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: scenesQueryKey(flowId) }),
+  });
+}
+
+export function useRenameScene(flowId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sceneId, name }: { sceneId: string; name: string }) =>
+      apiFetch(`/api/flows/${flowId}/scenes/${sceneId}`, { body: JSON.stringify({ name }), method: "PATCH" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: scenesQueryKey(flowId) }),
+  });
+}
+
+export function useDeleteScene(flowId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sceneId: string) => apiFetch(`/api/flows/${flowId}/scenes/${sceneId}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: scenesQueryKey(flowId) }),
+  });
+}
+
+export function useAddSceneClip(flowId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sceneId, generationId }: { sceneId: string; generationId: string }) =>
+      apiFetch(`/api/flows/${flowId}/scenes/${sceneId}/clips`, {
+        body: JSON.stringify({ generationId }),
+        method: "POST",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: scenesQueryKey(flowId) }),
+  });
+}
+
+export function useUpdateSceneClip(flowId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      sceneId,
+      clipId,
+      ...trim
+    }: {
+      sceneId: string;
+      clipId: string;
+      trimInSeconds?: number | null;
+      trimOutSeconds?: number | null;
+    }) =>
+      apiFetch(`/api/flows/${flowId}/scenes/${sceneId}/clips/${clipId}`, { body: JSON.stringify(trim), method: "PATCH" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: scenesQueryKey(flowId) }),
+  });
+}
+
+export function useRemoveSceneClip(flowId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sceneId, clipId }: { sceneId: string; clipId: string }) =>
+      apiFetch(`/api/flows/${flowId}/scenes/${sceneId}/clips/${clipId}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: scenesQueryKey(flowId) }),
+  });
+}
+
+export function useReorderSceneClips(flowId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sceneId, clipIds }: { sceneId: string; clipIds: string[] }) =>
+      apiFetch(`/api/flows/${flowId}/scenes/${sceneId}/reorder`, { body: JSON.stringify({ clipIds }), method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: scenesQueryKey(flowId) }),
+  });
+}
+
+export function useExportScene(flowId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sceneId: string) =>
+      apiFetch<{ exportUrl: string }>(`/api/flows/${flowId}/scenes/${sceneId}/export`, { method: "POST" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: scenesQueryKey(flowId) }),
+  });
+}
+
+export function useSaveFrame(flowId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ genId, atSeconds }: { genId: string; atSeconds: number }) =>
+      apiFetch<{ id: string }>(`/api/flows/${flowId}/generations/${genId}/save-frame`, {
+        body: JSON.stringify({ atSeconds }),
+        method: "POST",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: flowQueryKey(flowId) });
+      queryClient.invalidateQueries({ queryKey: flowsQueryKey });
+    },
   });
 }
 

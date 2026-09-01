@@ -29,6 +29,8 @@ const createSchema = z
     // submitFlowGeneration's own doc comment for how this prevents a
     // network-level retry of this exact request from billing twice.
     idempotencyKey: z.string().min(1).max(200),
+    // Extend / Continue Scene — the source video this continues from.
+    parentGenerationId: z.string().min(1).optional(),
   })
   .strict();
 
@@ -70,6 +72,19 @@ export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
     await renameFlow(id, autoName(body.prompt));
   }
 
+  // A claimed parent must actually be this flow's own generation — never
+  // trust the id alone, the same scoping every other generation lookup here
+  // already requires.
+  if (body.parentGenerationId) {
+    const parent = await prisma.flowGeneration.findFirst({
+      where: { id: body.parentGenerationId, flowId: id },
+      select: { id: true },
+    });
+    if (!parent) {
+      return NextResponse.json({ error: "Invalid request", message: "That source generation isn't in this Flow." }, { status: 400 });
+    }
+  }
+
   try {
     const outcome = await submitFlowGeneration(request.headers, {
       flowId: id,
@@ -83,6 +98,7 @@ export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
       ...(body.refMode ? { refMode: body.refMode } : {}),
       ...(body.inputs ? { inputs: body.inputs } : {}),
       ...(body.parameters ? { parameters: body.parameters } : {}),
+      ...(body.parentGenerationId ? { parentGenerationId: body.parentGenerationId } : {}),
     });
     return NextResponse.json(outcome, { status: 201 });
   } catch (error) {

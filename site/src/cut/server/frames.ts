@@ -142,6 +142,97 @@ export async function extractPosterFrame(bytes: Buffer, atSeconds = 0.5): Promis
   }
 }
 
+/** Whether a media file has an audio stream at all — AI-generated clips
+ * don't reliably carry one, and ffmpeg's concat filter mapping an audio pad
+ * that doesn't exist fails the whole render, so Scene Builder's export
+ * checks this across every clip first (see concatVideoClips). */
+function probeHasAudio(file: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const p = spawn("ffprobe", [
+      "-v", "error",
+      "-select_streams", "a",
+      "-show_entries", "stream=index",
+      "-of", "csv=p=0",
+      file,
+    ]);
+    let out = "";
+    const timer = setTimeout(() => {
+      p.kill("SIGKILL");
+      resolve(false);
+    }, 15_000);
+    timer.unref();
+    p.stdout.on("data", (d) => (out += d));
+    p.on("close", () => {
+      clearTimeout(timer);
+      resolve(out.trim().length > 0);
+    });
+    p.on("error", () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+  });
+}
+
+/**
+ * Concatenate Scene Builder's trimmed clips into one MP4 — every clip
+ * re-encoded to a common resolution (the first clip's) and framerate before
+ * concatenation, since AI-generated clips have no guarantee of matching
+ * dimensions or codecs the way a stream-copy concat would require. Audio
+ * only rides along if every clip has a track; one silent clip drops audio
+ * from the whole export rather than failing the render.
+ */
+export async function concatVideoClips(
+  clips: { bytes: Buffer; trimInSeconds?: number | null; trimOutSeconds?: number | null }[]
+): Promise<Buffer> {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), "scene-"));
+  try {
+    const files = await Promise.all(
+      clips.map(async (c, i) => {
+        const p = path.join(tmp, `clip-${i}.mp4`);
+        await writeFile(p, c.bytes);
+        return p;
+      })
+    );
+    const dims = await probeDims(files[0]);
+    const hasAudio = await Promise.all(files.map(probeHasAudio));
+    const withAudio = hasAudio.every(Boolean);
+
+    const inputArgs: string[] = [];
+    const filterParts: string[] = [];
+    files.forEach((file, i) => {
+      const trimIn = clips[i].trimInSeconds ?? 0;
+      const trimOut = clips[i].trimOutSeconds ?? undefined;
+      if (trimIn > 0) inputArgs.push("-ss", trimIn.toFixed(3));
+      if (trimOut !== undefined) inputArgs.push("-t", Math.max(0.1, trimOut - trimIn).toFixed(3));
+      inputArgs.push("-i", file);
+      filterParts.push(
+        `[${i}:v]scale=${dims.width}:${dims.height}:force_original_aspect_ratio=decrease,pad=${dims.width}:${dims.height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=30[v${i}]`
+      );
+      if (withAudio) filterParts.push(`[${i}:a]aresample=async=1[a${i}]`);
+    });
+    const concatInputs = files.map((_, i) => (withAudio ? `[v${i}][a${i}]` : `[v${i}]`)).join("");
+    filterParts.push(
+      `${concatInputs}concat=n=${files.length}:v=1:a=${withAudio ? 1 : 0}[outv]${withAudio ? "[outa]" : ""}`
+    );
+    const out = path.join(tmp, "scene.mp4");
+    await run("ffmpeg", [
+      "-y",
+      ...inputArgs,
+      "-filter_complex", filterParts.join(";"),
+      "-map", "[outv]",
+      ...(withAudio ? ["-map", "[outa]"] : []),
+      "-c:v", "libx264",
+      "-preset", "veryfast",
+      "-pix_fmt", "yuv420p",
+      ...(withAudio ? ["-c:a", "aac"] : []),
+      out,
+    ]);
+    return await readFile(out);
+  } finally {
+    void rm(tmp, { recursive: true, force: true });
+  }
+}
+
 /** Media duration in seconds via ffprobe (0 when unknown). */
 export function probeDuration(file: string): Promise<number> {
   return new Promise((resolve) => {
