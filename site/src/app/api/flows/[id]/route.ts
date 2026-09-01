@@ -10,7 +10,7 @@ import {
   renameFlow,
   setFlowCover,
 } from "@/lib/flows/db";
-import { del } from "@/cut/server/cloud/r2";
+import { delStrict } from "@/cut/server/cloud/r2";
 
 export const dynamic = "force-dynamic";
 
@@ -49,15 +49,30 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
   return NextResponse.json({ ok: true });
 });
 
-// Delete Flow — R2 objects go first (best-effort; del() never throws), then
-// the row (FlowGeneration rows cascade with it).
+// Delete Flow — R2 objects go first, and the row (FlowGeneration rows
+// cascade with it) is only removed once every object is confirmed gone.
+// A failure here leaves the row in place, so the same DELETE is safely
+// retryable: redeleting an already-gone key is a no-op, not an error.
 export const DELETE = withDonkeyAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
   const flow = await ownedFlow(request.donkey.userId, id);
   if (!flow) return notFoundResponse();
 
   const keys = await flowGenerationKeys(id);
-  await del(keys);
+  try {
+    const { failed } = await delStrict(keys);
+    if (failed.length > 0) {
+      return NextResponse.json(
+        { error: "Delete failed", message: "Some media couldn't be deleted. Try again." },
+        { status: 502 },
+      );
+    }
+  } catch {
+    return NextResponse.json(
+      { error: "Delete failed", message: "Couldn't reach storage. Try again." },
+      { status: 502 },
+    );
+  }
   await deleteFlow(id);
   return NextResponse.json({ ok: true });
 });

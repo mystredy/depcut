@@ -267,6 +267,34 @@ export async function putObject(key: string, body: Buffer, mime: string): Promis
   );
 }
 
+/** Bulk delete that reports what didn't go, instead of swallowing it — for a
+ * caller that keeps its own row alive until the objects it names are
+ * actually gone, so a failure here is safely retryable (redeleting an
+ * already-gone key is a no-op, not an error, so calling this again with the
+ * same list is always safe). Most callers want the fire-and-forget del()
+ * below instead; use this one only where losing track of an orphan matters
+ * enough to hold the row for it (see flows' delete routes). */
+export async function delStrict(keys: string[]): Promise<{ failed: string[] }> {
+  if (keys.length === 0) return { failed: [] };
+  const s3 = r2();
+  const failed: string[] = [];
+  for (let i = 0; i < keys.length; i += 1000) {
+    const batch = keys.slice(i, i + 1000);
+    const res = await s3.send(
+      new DeleteObjectsCommand({
+        Bucket: R2_BUCKET,
+        Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
+      })
+    );
+    // Quiet suppresses the per-key success list, not per-key errors — a
+    // failed key still comes back in Errors.
+    for (const e of res.Errors ?? []) {
+      if (e.Key) failed.push(e.Key);
+    }
+  }
+  return { failed };
+}
+
 /** Best-effort bulk delete — object cleanup never fails a row delete. */
 export async function del(keys: string[]): Promise<void> {
   if (keys.length === 0) return;
