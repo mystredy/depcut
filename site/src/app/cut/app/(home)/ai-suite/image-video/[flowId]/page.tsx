@@ -536,6 +536,17 @@ export default function FlowThreadPage() {
             onOpenInThread={(g) => {
               setView("thread");
               setInfoOpenId(g.id);
+              // Thread view renders top-to-bottom in creation order, so
+              // landing here from a grid pick usually lands on an unrelated
+              // card at the scroll top — bring the one just opened into
+              // view. Double rAF: the first only guarantees this frame's
+              // paint, not that the just-mounted thread list has its cards
+              // in the DOM yet.
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() =>
+                  document.getElementById(`gen-${g.id}`)?.scrollIntoView({ block: "center" })
+                )
+              );
             }}
           />
         ) : generations.length === 0 ? (
@@ -953,7 +964,7 @@ function GenerationCard({
   retrying: boolean;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div id={`gen-${g.id}`} className="space-y-1.5">
       <div className="relative overflow-hidden rounded-xl border bg-muted/30">
         {g.status === "in_progress" ? (
           <div className="flex aspect-video flex-col items-center justify-center gap-2 text-muted-foreground">
