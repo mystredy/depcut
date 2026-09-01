@@ -86,8 +86,8 @@ export function useRenameFlow() {
 export function useSetFlowCover() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, coverKey }: { id: string; coverKey: string }) =>
-      apiFetch(`/api/flows/${id}`, { body: JSON.stringify({ coverKey }), method: "PATCH" }),
+    mutationFn: ({ id, generationId }: { id: string; generationId: string }) =>
+      apiFetch(`/api/flows/${id}`, { body: JSON.stringify({ coverGenerationId: generationId }), method: "PATCH" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: flowsQueryKey }),
   });
 }

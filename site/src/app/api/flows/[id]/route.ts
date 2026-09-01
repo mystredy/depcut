@@ -10,6 +10,7 @@ import {
   renameFlow,
   setFlowCover,
 } from "@/lib/flows/db";
+import { prisma } from "@/lib/prisma";
 import { delStrict } from "@/cut/server/cloud/r2";
 
 export const dynamic = "force-dynamic";
@@ -28,13 +29,16 @@ export const GET = withDonkeyAuth(async (request, context: RouteContext) => {
 const updateSchema = z
   .object({
     name: z.string().trim().min(1).max(100).optional(),
-    coverKey: z.string().min(1).optional(),
+    coverGenerationId: z.string().min(1).optional(),
   })
   .strict()
-  .refine((v) => v.name !== undefined || v.coverKey !== undefined, { message: "Nothing to update." });
+  .refine((v) => v.name !== undefined || v.coverGenerationId !== undefined, { message: "Nothing to update." });
 
-// Rename Flow, or pin an explicit cover (a generation's own outputKey —
-// setFlowCover flips coverIsAuto off so a later generation never replaces it).
+// Rename Flow, or pin an explicit cover — the client names a generation by
+// id (never a raw storage key) and the server resolves its outputKey here,
+// the same boundary listFlowGenerations already keeps for read (the key
+// itself never reaches the client). setFlowCover flips coverIsAuto off so a
+// later generation never silently replaces the pick.
 export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
   const flow = await ownedFlow(request.donkey.userId, id);
@@ -45,7 +49,19 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
   if (parsed.data.name !== undefined) await renameFlow(id, parsed.data.name);
-  if (parsed.data.coverKey !== undefined) await setFlowCover(id, parsed.data.coverKey);
+  if (parsed.data.coverGenerationId !== undefined) {
+    const generation = await prisma.flowGeneration.findFirst({
+      where: { id: parsed.data.coverGenerationId, flowId: id, status: "completed" },
+      select: { outputKey: true },
+    });
+    if (!generation?.outputKey) {
+      return NextResponse.json(
+        { error: "Invalid request", message: "That generation has no output to use as a cover." },
+        { status: 400 },
+      );
+    }
+    await setFlowCover(id, generation.outputKey);
+  }
   return NextResponse.json({ ok: true });
 });
 
