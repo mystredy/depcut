@@ -1,8 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Image as ImageIcon, Loader2, MoreVertical, Pencil, Plus, Trash2, Video as VideoIcon } from "lucide-react";
+import {
+  Copy,
+  Image as ImageIcon,
+  Loader2,
+  MoreVertical,
+  Pencil,
+  Plus,
+  Search,
+  Star,
+  Trash2,
+  Video as VideoIcon,
+  X,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCutBase } from "@/cut/lib/nav";
 import {
+  type FlowGalleryFilters,
   type FlowSummary,
   useCreateFlow,
   useDeleteFlow,
@@ -21,6 +34,26 @@ import {
   useRenameFlow,
 } from "@/queries/flows";
 import { cn } from "@/lib/utils";
+
+type GalleryFilter = "all" | "images" | "videos" | "favorites";
+const GALLERY_FILTERS: { value: GalleryFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "images", label: "Images" },
+  { value: "videos", label: "Videos" },
+  { value: "favorites", label: "Favorites" },
+];
+
+/** Debounce the search box so every keystroke doesn't fire its own query —
+ * the server does the actual filtering (see /api/flows's ?q=), so this is
+ * purely about not re-querying on every letter typed. */
+function useDebounced<T>(value: T, delayMs: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayMs]);
+  return debounced;
+}
 
 /** "3h ago" / "2d ago" / "just now" — the gallery's only timestamp format. */
 function relativeTime(iso: string): string {
@@ -41,7 +74,15 @@ function relativeTime(iso: string): string {
 export default function ImageVideoGalleryPage() {
   const router = useRouter();
   const base = useCutBase();
-  const flows = useFlows();
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounced(search, 300);
+  const [filter, setFilter] = useState<GalleryFilter>("all");
+  const filters: FlowGalleryFilters = {
+    q: debouncedSearch,
+    kind: filter === "images" ? "image" : filter === "videos" ? "video" : undefined,
+    favoritesOnly: filter === "favorites",
+  };
+  const flows = useFlows(filters);
   const create = useCreateFlow();
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
 
@@ -50,6 +91,8 @@ export default function ImageVideoGalleryPage() {
   const newFlow = () => {
     create.mutate(undefined, { onSuccess: ({ flow }) => openFlow(flow.id) });
   };
+
+  const isFiltering = !!debouncedSearch.trim() || filter !== "all";
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
@@ -73,6 +116,47 @@ export default function ImageVideoGalleryPage() {
         </div>
       </div>
 
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full sm:max-w-xs">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search Flows and prompts…"
+            aria-label="Search Flows and prompts"
+            className="h-8 w-full rounded-lg border border-input bg-transparent pr-7 pl-8 text-[12.5px] outline-none focus-visible:border-ring"
+          />
+          {search && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => setSearch("")}
+              className="absolute top-1/2 right-1.5 grid size-5 -translate-y-1/2 place-items-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-3" />
+            </button>
+          )}
+        </div>
+        <div className="flex gap-1 overflow-x-auto rounded-lg bg-muted p-1">
+          {GALLERY_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              onClick={() => setFilter(f.value)}
+              aria-pressed={filter === f.value}
+              className={cn(
+                "shrink-0 rounded-md px-2.5 py-1 text-[11.5px] font-medium whitespace-nowrap transition-colors",
+                filter === f.value
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {flows.isLoading ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
           {Array.from({ length: 8 }, (_, i) => (
@@ -88,10 +172,25 @@ export default function ImageVideoGalleryPage() {
         </div>
       ) : flows.data.flows.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed py-16 text-center">
-          <p className="text-sm text-muted-foreground">No Flows yet — start one to generate an image or video.</p>
-          <Button size="sm" onClick={newFlow}>
-            <Plus className="size-3.5" data-icon="inline-start" /> New Flow
-          </Button>
+          <p className="text-sm text-muted-foreground">
+            {isFiltering ? "No Flows match this search or filter." : "No Flows yet — start one to generate an image or video."}
+          </p>
+          {isFiltering ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setSearch("");
+                setFilter("all");
+              }}
+            >
+              Clear search and filters
+            </Button>
+          ) : (
+            <Button size="sm" onClick={newFlow}>
+              <Plus className="size-3.5" data-icon="inline-start" /> New Flow
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
@@ -159,6 +258,7 @@ function FlowCard({
             <span>{relativeTime(flow.updatedAt)}</span>
             {flow.hasImage && <ImageIcon className="size-3" />}
             {flow.hasVideo && <VideoIcon className="size-3" />}
+            {flow.hasFavorite && <Star className="size-3 fill-current text-amber-500" />}
           </div>
           {menuError && <p className="mt-0.5 text-[10.5px] text-destructive">{menuError}</p>}
         </div>
