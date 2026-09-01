@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 
 import { TopNav } from "@/app/_components/landing/TopNav";
 import { CutFooter } from "@/app/cut/_components/landing/CutFooter";
@@ -53,10 +54,23 @@ const copy = {
 const GOOGLE_BUTTON_HEIGHT = 56;
 
 export function AuthScreen({ mode }: Props) {
+  const router = useRouter();
   const [isPending, setIsPending] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const screenCopy = copy[mode];
   const otherMode: AuthMode = mode === "sign-in" ? "sign-up" : "sign-in";
+
+  // An already-signed-in visitor gets nothing from this form — worse,
+  // clicking "Sign in with Google" while already authenticated just re-runs
+  // the full OAuth redirect round-trip for no reason, which reads as the
+  // page being broken or slow. Bounce straight to the same callback target
+  // the button itself would use, as soon as the session resolves.
+  const { data: session } = authClient.useSession();
+  useEffect(() => {
+    if (!session) return;
+    const searchParams = new URLSearchParams(window.location.search);
+    router.replace(searchParams.get("callbackURL") ?? "/app");
+  }, [session, router]);
 
   const handleGoogleAuth = useCallback(async () => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -84,7 +98,14 @@ export function AuthScreen({ mode }: Props) {
     (screenCopy.googleWidth * GOOGLE_BUTTON_HEIGHT) / 40,
   );
 
-  const formContent = (
+  // Once the session resolves signed-in, the redirect effect above is about
+  // to navigate away — the form swaps out so there's nothing left to click
+  // through during that window, same as TopNav's own signed-in swap.
+  const formContent = session ? (
+    <p className="text-sm leading-normal text-[#555]">
+      You&apos;re already signed in — redirecting…
+    </p>
+  ) : (
     <>
       <button
         type="button"
