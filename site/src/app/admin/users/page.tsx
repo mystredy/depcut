@@ -64,7 +64,7 @@ export default function AdminUsersPage() {
         />
       </label>
 
-      <div className="rounded-2xl border bg-card">
+      <div className="@container rounded-2xl border bg-card">
         {users.isLoading ? (
           <div className="space-y-2 p-4">
             <Skeleton className="h-10 w-full" />
@@ -79,10 +79,10 @@ export default function AdminUsersPage() {
               <TableRow>
                 <TableHead className="min-w-[110px]">User</TableHead>
                 <TableHead className="w-20">Balance</TableHead>
-                <TableHead className="hidden w-28 sm:table-cell">Last active</TableHead>
-                <TableHead className="hidden w-24 md:table-cell">Signed up</TableHead>
-                <TableHead className="hidden w-28 lg:table-cell">Lifetime charged</TableHead>
-                <TableHead className="hidden w-28 xl:table-cell">Lifetime granted</TableHead>
+                <TableHead className="hidden w-28 @min-[400px]:table-cell">Last active</TableHead>
+                <TableHead className="hidden w-24 @min-[520px]:table-cell">Signed up</TableHead>
+                <TableHead className="hidden w-28 @min-[660px]:table-cell">Lifetime charged</TableHead>
+                <TableHead className="hidden w-28 @min-[800px]:table-cell">Lifetime granted</TableHead>
                 <TableHead className="w-16 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -96,16 +96,16 @@ export default function AdminUsersPage() {
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-sm">{formatUsd(u.balance)}</TableCell>
-                  <TableCell className="hidden text-sm text-muted-foreground sm:table-cell">
+                  <TableCell className="hidden text-sm text-muted-foreground @min-[400px]:table-cell">
                     {u.lastActiveAt ? timeAgo(u.lastActiveAt) : "Never"}
                   </TableCell>
-                  <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
+                  <TableCell className="hidden text-sm text-muted-foreground @min-[520px]:table-cell">
                     {new Date(u.createdAt).toLocaleDateString()}
                   </TableCell>
-                  <TableCell className="hidden font-mono text-sm text-muted-foreground lg:table-cell">
+                  <TableCell className="hidden font-mono text-sm text-muted-foreground @min-[660px]:table-cell">
                     {formatUsd(u.lifetimeCharged)}
                   </TableCell>
-                  <TableCell className="hidden font-mono text-sm text-muted-foreground xl:table-cell">
+                  <TableCell className="hidden font-mono text-sm text-muted-foreground @min-[800px]:table-cell">
                     {formatUsd(u.lifetimeGranted)}
                   </TableCell>
                   <TableCell className="text-right">
