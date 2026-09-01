@@ -23,6 +23,8 @@ model GenerationFlow {
   updatedAt DateTime @updatedAt
 
   generations FlowGeneration[]
+  collections FlowCollection[]
+  scenes      FlowScene[]
 
   @@index([userId, updatedAt])
 }
@@ -42,6 +44,25 @@ model FlowGeneration {
   prompt   String
   provider String
   model    String
+  // User-given label, distinct from the prompt — set via "Rename Asset",
+  // shown on the card in place of the truncated prompt when present.
+  name     String?
+  favorite Boolean @default(false)
+
+  // One submission (not one retry, not one poll) mints this — the server
+  // rejects a second INSERT with the same key rather than billing twice.
+  // Null on rows written before idempotency existed; every new submission
+  // sets one. See lib/flows/submit.ts.
+  idempotencyKey String? @unique
+
+  // The generation this one continued from — "Create video from this
+  // image," "Extend," and "Continue Scene" all set this so the info panel
+  // and Scene Builder can show real lineage instead of re-guessing it from
+  // matching prompts. Set null (not cascaded) if the parent is later
+  // deleted — the child generation itself is still real media.
+  parentGenerationId String?
+  parentGeneration   FlowGeneration?  @relation("GenerationLineage", fields: [parentGenerationId], references: [id], onDelete: SetNull)
+  children           FlowGeneration[] @relation("GenerationLineage")
 
   // Request-shape knobs a "regenerate" or the info panel reads back — aspect
   // ratio, resolution, duration, image size, etc.; whatever that kind's
@@ -49,8 +70,11 @@ model FlowGeneration {
   parameters Json @default("{}")
   // Video only: how the attached reference(s) conditioned the render.
   refMode String?
-  // R2 keys of the reference images actually sent, for the info panel —
-  // never re-derived from the live ref, which may since have changed.
+  // R2 keys of the reference images actually sent (uploaded under this same
+  // flow's prefix at submit time — see submit.ts's persistReferences), for
+  // the info panel and for a same-flow retry to reattach without asking the
+  // user to re-pick. Never re-derived from the live ref, which may since
+  // have changed or been deleted.
   referenceKeys Json @default("[]")
 
   status       String  @default("in_progress") // in_progress | completed | failed
@@ -74,6 +98,95 @@ model FlowGeneration {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  collectionItems FlowCollectionItem[]
+  sceneClips      FlowSceneClip[]
+  reports         FlowGenerationReport[]
+
   @@index([flowId, createdAt])
   @@index([status, updatedAt])
+}
+
+// A user-defined grouping of generations within one Flow (Assets Grid
+// filtering) — never crosses Flows, same as a Flow never crosses users.
+model FlowCollection {
+  id     String         @id @default(cuid())
+  flowId String
+  flow   GenerationFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  userId String
+  name   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items FlowCollectionItem[]
+
+  @@index([flowId, updatedAt])
+}
+
+model FlowCollectionItem {
+  id           String         @id @default(cuid())
+  collectionId String
+  collection   FlowCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  generationId String
+  generation   FlowGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([collectionId, generationId])
+  @@index([generationId])
+}
+
+// A user's abuse/quality report on one generation — never surfaced back to
+// any user, including the reporter; a moderation queue reads these directly
+// from the database. See docs/guides (Image & Video) for the review process.
+model FlowGenerationReport {
+  id           String         @id @default(cuid())
+  generationId String
+  generation   FlowGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  flowId       String
+  userId       String // the reporting user
+  reason       String
+  details      String?
+
+  createdAt DateTime @default(now())
+
+  @@index([generationId])
+  @@index([flowId])
+}
+
+// A saved Scene Builder sequence — an ordered cut of completed video
+// generations from one Flow. Reuses FlowGeneration rows as its clips rather
+// than duplicating media; trimming only records in/out points, it never
+// re-encodes.
+model FlowScene {
+  id     String         @id @default(cuid())
+  flowId String
+  flow   GenerationFlow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  userId String
+  name   String @default("Untitled scene")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clips FlowSceneClip[]
+
+  @@index([flowId, updatedAt])
+}
+
+model FlowSceneClip {
+  id           String         @id @default(cuid())
+  sceneId      String
+  scene        FlowScene      @relation(fields: [sceneId], references: [id], onDelete: Cascade)
+  generationId String
+  generation   FlowGeneration @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  // Sequence order within the scene, 0-based, renumbered on every reorder.
+  position Int
+  // Null trim bounds mean "the clip's full length."
+  trimInSeconds  Float?
+  trimOutSeconds Float?
+
+  createdAt DateTime @default(now())
+
+  @@unique([sceneId, position])
+  @@index([generationId])
 }
