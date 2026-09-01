@@ -28,6 +28,16 @@ function isUniqueConstraintError(error: unknown): boolean {
 const DONKEY_CLIENT_ID = "donkey-cut";
 
 type GenerationOutput = { dataBase64?: string; url?: string; contentType?: string };
+/** An error response's `message` is the generic, caller-facing wrapper
+ * (e.g. "Gemini image generation failed.") — the actual provider-reported
+ * reason lives at `details.message` (see geminiApiError). Both routes below
+ * prefer it so a stored/logged failure says what really happened instead of
+ * the same generic line for every cause. */
+type AssetGenerationError = { message?: string; error?: string; details?: { message?: unknown } };
+function assetErrorMessage(gen: AssetGenerationError): string {
+  const detail = gen.details?.message;
+  return (typeof detail === "string" && detail) || gen.message || gen.error || "Generation failed.";
+}
 type AssetGenerationResult = {
   id: string;
   status: "in_progress" | "completed" | "failed";
@@ -286,9 +296,9 @@ export async function submitFlowGeneration(
     parameters: input.parameters ?? {},
   });
   const res = await submitAsset(req);
-  const gen = (await res.json()) as AssetGenerationResult & { message?: string; error?: string };
+  const gen = (await res.json()) as AssetGenerationResult & AssetGenerationError;
   if (!res.ok) {
-    const message = gen.message ?? gen.error ?? "Generation failed.";
+    const message = assetErrorMessage(gen);
     if (reserved) {
       await prisma.flowGeneration.update({ where: { id: reserved.id }, data: { status: "failed", errorMessage: message } });
       return { id: reserved.id, status: "failed" };
@@ -366,11 +376,11 @@ export async function refreshFlowGeneration(
     metadata: row.providerPayload ?? {},
   });
   const res = await refreshAsset(req);
-  const gen = (await res.json()) as AssetGenerationResult & { message?: string; error?: string };
+  const gen = (await res.json()) as AssetGenerationResult & AssetGenerationError;
   if (!res.ok) {
     await prisma.flowGeneration.update({
       where: { id: row.id },
-      data: { status: "failed", errorMessage: gen.message ?? gen.error ?? "Generation failed." },
+      data: { status: "failed", errorMessage: assetErrorMessage(gen) },
     });
     return { status: "failed" };
   }
