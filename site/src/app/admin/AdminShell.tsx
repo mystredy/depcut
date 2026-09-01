@@ -40,9 +40,13 @@ export function AdminShell({ children }: { children: ReactNode }) {
           {Icon && <Icon className={cn("size-4 shrink-0", current.color)} />}
           <span className="truncate text-sm font-semibold">{current?.label ?? "Admin"}</span>
         </div>
-        <main className="min-h-0 flex-1 overflow-y-auto">
-          <div className={cn("mx-auto p-8", fullWidth ? "max-w-none" : "max-w-5xl")}>{children}</div>
-        </main>
+        {fullWidth ? (
+          <main className="min-h-0 flex-1 overflow-y-auto p-6">{children}</main>
+        ) : (
+          <main className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto max-w-5xl p-8">{children}</div>
+          </main>
+        )}
       </div>
     </>
   );

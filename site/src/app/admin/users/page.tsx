@@ -74,50 +74,55 @@ export default function AdminUsersPage() {
         ) : users.isError ? (
           <p className="p-6 text-sm text-destructive">Couldn&apos;t load users. Try again.</p>
         ) : (
-          <Table>
+          <Table className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[28%]">User</TableHead>
-                <TableHead className="w-[11%]">Balance</TableHead>
-                <TableHead className="w-[13%]">Lifetime granted</TableHead>
-                <TableHead className="w-[13%]">Lifetime charged</TableHead>
-                <TableHead className="w-[12%]">Signed up</TableHead>
-                <TableHead className="w-[13%]">Last active</TableHead>
-                <TableHead className="w-[10%] text-right">Actions</TableHead>
+                <TableHead className="min-w-[110px]">User</TableHead>
+                <TableHead className="w-20">Balance</TableHead>
+                <TableHead className="hidden w-28 sm:table-cell">Last active</TableHead>
+                <TableHead className="hidden w-24 md:table-cell">Signed up</TableHead>
+                <TableHead className="hidden w-28 lg:table-cell">Lifetime charged</TableHead>
+                <TableHead className="hidden w-28 xl:table-cell">Lifetime granted</TableHead>
+                <TableHead className="w-16 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {users.data?.users.map((u) => (
                 <TableRow key={u.id}>
-                  <TableCell>
-                    <div className="min-w-0">
+                  <TableCell className="overflow-hidden">
+                    <div className="min-w-0 overflow-hidden">
                       <p className="truncate text-sm font-medium">{u.displayName || u.name}</p>
                       <p className="truncate text-xs text-muted-foreground">{u.email}</p>
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-sm">{formatUsd(u.balance)}</TableCell>
-                  <TableCell className="font-mono text-sm text-muted-foreground">
-                    {formatUsd(u.lifetimeGranted)}
-                  </TableCell>
-                  <TableCell className="font-mono text-sm text-muted-foreground">
-                    {formatUsd(u.lifetimeCharged)}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {new Date(u.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className="hidden text-sm text-muted-foreground sm:table-cell">
                     {u.lastActiveAt ? timeAgo(u.lastActiveAt) : "Never"}
                   </TableCell>
+                  <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
+                    {new Date(u.createdAt).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell className="hidden font-mono text-sm text-muted-foreground lg:table-cell">
+                    {formatUsd(u.lifetimeCharged)}
+                  </TableCell>
+                  <TableCell className="hidden font-mono text-sm text-muted-foreground xl:table-cell">
+                    {formatUsd(u.lifetimeGranted)}
+                  </TableCell>
                   <TableCell className="text-right">
-                    <Button size="sm" variant="outline" onClick={() => setGrantTarget(u)}>
-                      Grant credits
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      title="Grant credits"
+                      onClick={() => setGrantTarget(u)}
+                    >
+                      Grant
                     </Button>
                   </TableCell>
                 </TableRow>
               ))}
               {users.data?.users.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={100} className="py-8 text-center text-sm text-muted-foreground">
                     No users match &quot;{query}&quot;.
                   </TableCell>
                 </TableRow>
