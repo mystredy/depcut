@@ -13,9 +13,16 @@ import { NextRequest } from "next/server";
 
 import { POST as submitAsset } from "@/app/api/inference/assets/route";
 import { POST as refreshAsset } from "@/app/api/inference/assets/refresh/route";
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { maybeSetAutoCover } from "@/lib/flows/db";
 import { flowMediaKey, putObject } from "@/cut/server/cloud/r2";
+
+/** True for a Prisma unique-constraint violation — same pattern
+ * lib/credits/inference.ts uses for its own idempotent grant inserts. */
+function isUniqueConstraintError(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
 
 const DONKEY_CLIENT_ID = "donkey-cut";
 
@@ -127,17 +134,66 @@ export type SubmitFlowGenerationInput = {
   refMode?: string;
   inputs?: Record<string, unknown>;
   parameters?: Record<string, unknown>;
+  /** One stable key per intended generation, minted client-side once and
+   * carried through every retry of the SAME HTTP request (never regenerated
+   * by a network-level retry). A deliberate new attempt — the user's own
+   * "Retry" on a failed row — mints a fresh key, because that really is a
+   * new billed call. Optional only for the duplicate-flow path, which
+   * writes rows directly and never submits through here. */
+  idempotencyKey?: string;
 };
 
 /** Creates the row and makes the real (billed) provider call. Returns the
- * row's id and whether it settled immediately or is still rendering. */
+ * row's id and whether it settled immediately or is still rendering.
+ *
+ * Idempotency: when `idempotencyKey` is given, a row is RESERVED for it
+ * before the billed provider call runs, using the column's unique index as
+ * the actual guard (a check-then-call race between two requests for the
+ * same key is still closed, since only one insert can win). A caller that
+ * retries the identical submission — the client never saw the first
+ * response, a proxy replays the POST — hits the reservation (or, if it
+ * raced the very first insert, the unique-constraint error) and gets the
+ * original row back instead of a second billed generation. */
 export async function submitFlowGeneration(
   originalHeaders: Headers,
   input: SubmitFlowGenerationInput,
 ): Promise<{ id: string; status: "in_progress" | "completed" | "failed" }> {
-  // The real (billed) call runs before the row exists, so the row's
-  // provider/model are always what the gateway actually resolved and used —
-  // never just echoing back an optional client-supplied hint.
+  const findByKey = (key: string) =>
+    prisma.flowGeneration.findUnique({ where: { idempotencyKey: key }, select: { id: true, status: true } });
+
+  let reserved: { id: string } | null = null;
+  if (input.idempotencyKey) {
+    const existing = await findByKey(input.idempotencyKey);
+    if (existing) return { id: existing.id, status: existing.status as "in_progress" | "completed" | "failed" };
+    try {
+      reserved = await prisma.flowGeneration.create({
+        data: {
+          flowId: input.flowId,
+          userId: input.userId,
+          kind: input.kind,
+          prompt: input.prompt,
+          // Not yet known for image (the client sends no provider hint) —
+          // overwritten below once the gateway resolves it. A transient
+          // empty string satisfies the column's NOT NULL, never read before
+          // that update lands since the row is "in_progress" throughout.
+          provider: input.provider ?? "",
+          model: input.model,
+          status: "in_progress",
+          idempotencyKey: input.idempotencyKey,
+          ...(input.refMode ? { refMode: input.refMode } : {}),
+          parameters: (input.parameters ?? {}) as never,
+        },
+        select: { id: true },
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        const existing = await findByKey(input.idempotencyKey);
+        if (existing) return { id: existing.id, status: existing.status as "in_progress" | "completed" | "failed" };
+      }
+      throw error;
+    }
+  }
+
   const req = innerRequest(originalHeaders, "/api/inference/assets", {
     kind: input.kind,
     prompt: input.prompt,
@@ -149,30 +205,41 @@ export async function submitFlowGeneration(
   const res = await submitAsset(req);
   const gen = (await res.json()) as AssetGenerationResult & { message?: string; error?: string };
   if (!res.ok) {
-    throw new Error(gen.message ?? gen.error ?? "Generation failed.");
+    const message = gen.message ?? gen.error ?? "Generation failed.";
+    if (reserved) {
+      await prisma.flowGeneration.update({ where: { id: reserved.id }, data: { status: "failed", errorMessage: message } });
+      return { id: reserved.id, status: "failed" };
+    }
+    throw new Error(message);
   }
 
-  const row = await prisma.flowGeneration.create({
-    data: {
-      flowId: input.flowId,
-      userId: input.userId,
-      kind: input.kind,
-      prompt: input.prompt,
-      provider: gen.provider,
-      model: gen.model,
-      status: "in_progress",
-      ...(input.refMode ? { refMode: input.refMode } : {}),
-      parameters: (input.parameters ?? {}) as never,
-      ...(gen.status === "in_progress"
-        ? {
-            providerJobId: gen.providerJobId,
-            providerGenerationId: gen.providerGenerationId,
-            providerPollingUrl: gen.providerPollingUrl,
-            providerPayload: (gen.metadata ?? {}) as never,
-          }
-        : {}),
-    },
-  });
+  const settledData = {
+    provider: gen.provider,
+    model: gen.model,
+    ...(gen.status === "in_progress"
+      ? {
+          providerJobId: gen.providerJobId,
+          providerGenerationId: gen.providerGenerationId,
+          providerPollingUrl: gen.providerPollingUrl,
+          providerPayload: (gen.metadata ?? {}) as never,
+        }
+      : {}),
+  };
+  const row = reserved
+    ? await prisma.flowGeneration.update({ where: { id: reserved.id }, data: settledData, select: { id: true } })
+    : await prisma.flowGeneration.create({
+        data: {
+          flowId: input.flowId,
+          userId: input.userId,
+          kind: input.kind,
+          prompt: input.prompt,
+          status: "in_progress",
+          ...(input.refMode ? { refMode: input.refMode } : {}),
+          parameters: (input.parameters ?? {}) as never,
+          ...settledData,
+        },
+        select: { id: true },
+      });
 
   if (gen.status === "in_progress") {
     return { id: row.id, status: "in_progress" };

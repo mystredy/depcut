@@ -25,6 +25,10 @@ const createSchema = z
     refMode: z.string().min(1).max(50).optional(),
     inputs: z.record(z.string(), z.unknown()).optional(),
     parameters: z.record(z.string(), z.unknown()).optional(),
+    // One key per intended generation, minted client-side once — see
+    // submitFlowGeneration's own doc comment for how this prevents a
+    // network-level retry of this exact request from billing twice.
+    idempotencyKey: z.string().min(1).max(200),
   })
   .strict();
 
@@ -75,6 +79,7 @@ export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
       provider: body.provider,
       model: body.model,
       tier: body.tier,
+      idempotencyKey: body.idempotencyKey,
       ...(body.refMode ? { refMode: body.refMode } : {}),
       ...(body.inputs ? { inputs: body.inputs } : {}),
       ...(body.parameters ? { parameters: body.parameters } : {}),

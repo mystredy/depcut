@@ -190,7 +190,7 @@ export default function FlowThreadPage() {
   const generateImage = async (text: string, allRefs: AssetRef[]) => {
     const { prompt: sent, images } = await promptAndImages("image", text, allRefs, true, Infinity);
     const inputs = images.length > 0 ? { images } : undefined;
-    const input: CreateGenerationInput = {
+    const base: Omit<CreateGenerationInput, "idempotencyKey"> = {
       kind: "image",
       prompt: sent,
       model: imageModel.modelId,
@@ -198,7 +198,12 @@ export default function FlowThreadPage() {
       ...(inputs ? { inputs } : {}),
       parameters: { aspectRatio: imageAspect, imageSize: "2K" },
     };
-    for (let i = 0; i < count; i++) await createGeneration.mutateAsync(input);
+    // Each take is its own billed generation, so each gets its own key — one
+    // key shared across the loop would make takes 2..N look like retries of
+    // take 1 and be silently deduped away instead of actually rendered.
+    for (let i = 0; i < count; i++) {
+      await createGeneration.mutateAsync({ ...base, idempotencyKey: crypto.randomUUID() });
+    }
   };
 
   const generateVideo = async (text: string, allRefs: AssetRef[]) => {
@@ -217,7 +222,7 @@ export default function FlowThreadPage() {
         if (images.length > 0) inputs = { images };
       }
     }
-    const input: CreateGenerationInput = {
+    const base: Omit<CreateGenerationInput, "idempotencyKey"> = {
       kind: "video",
       prompt: sentPrompt,
       provider: videoModel.provider,
@@ -227,7 +232,9 @@ export default function FlowThreadPage() {
       ...(inputs ? { inputs } : {}),
       parameters: { aspectRatio: effVideoAspect, resolution: effResolution, durationSeconds: effDurationSeconds },
     };
-    for (let i = 0; i < count; i++) await createGeneration.mutateAsync(input);
+    for (let i = 0; i < count; i++) {
+      await createGeneration.mutateAsync({ ...base, idempotencyKey: crypto.randomUUID() });
+    }
   };
 
   const generate = async () => {
@@ -295,6 +302,7 @@ export default function FlowThreadPage() {
         provider: g.provider,
         model: g.model,
         tier: "",
+        idempotencyKey: crypto.randomUUID(),
         ...(g.refMode ? { refMode: g.refMode } : {}),
         parameters: g.parameters,
       });

@@ -119,6 +119,11 @@ export type CreateGenerationInput = {
   refMode?: string;
   inputs?: Record<string, unknown>;
   parameters?: Record<string, unknown>;
+  /** One fresh key per intended generation (crypto.randomUUID() at the call
+   * site) — a retry of the exact same HTTP request lands on the same row
+   * instead of billing twice. A deliberate new attempt (the user's own
+   * "Retry") mints its own fresh key, since that really is a new charge. */
+  idempotencyKey: string;
 };
 
 export function useCreateGeneration(flowId: string) {
