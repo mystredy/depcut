@@ -43,8 +43,13 @@ async function notifyNewSignup(userId: string, name: string, headers: Headers | 
       "signup",
       `🆕 New user joined and requests approval.\n\n👤 Name: ${name}\ncountry: ${country}\nbalance: ${balance}`,
     );
-  } catch {
-    // Best-effort — never let a notification failure affect signup.
+  } catch (error) {
+    // Best-effort — never let a notification failure affect signup. Logged
+    // so a missed alert (e.g. the balance lookup above hitting a dropped DB
+    // connection, before notifyTelegram is even reached) leaves a trace —
+    // notifyTelegram's own errors are already logged inside notify.ts, but a
+    // failure in this function's own prep work never reached that catch.
+    console.error("[telegram] notifyNewSignup failed:", error);
   }
 }
 

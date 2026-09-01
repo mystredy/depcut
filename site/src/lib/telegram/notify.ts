@@ -55,6 +55,17 @@ async function resolveTelegramTargets(
   return { botToken, destinations };
 }
 
+// fetch only rejects on a network-level failure — a chat that blocked the
+// bot, a bad chat id, or a rate limit all come back as an ordinary resolved
+// response with a non-2xx status, which every send site below used to just
+// discard. Telegram's error body's `description` is the actual reason
+// ("Forbidden: bot was blocked by the user"), so it's worth a log line.
+async function logIfRejected(event: TelegramNotificationEvent, chatId: string, res: Response): Promise<void> {
+  if (res.ok) return;
+  const body = await res.json().catch(() => null);
+  console.error(`[telegram] ${event} -> ${chatId} rejected (${res.status}):`, body?.description ?? body);
+}
+
 // Best-effort admin alert, fanned out to every destination configured at
 // /admin/telegram-bot/settings — the admin, group, and channel, all set on
 // the bot's own credentials (SocialAppConfig) — all of them, not a choice
@@ -71,14 +82,14 @@ export async function notifyTelegram(event: TelegramNotificationEvent, text: str
           body: JSON.stringify({ chat_id: chatId, text }),
           headers: { "Content-Type": "application/json" },
           method: "POST",
-        })
+        }).then((res) => logIfRejected(event, chatId, res))
       )
     );
   } catch (error) {
     // Best-effort — never let a notification failure break the real action.
     // Logged so a missed alert has a trace somewhere (a dropped DB connection
-    // reading settings, or Telegram's API rejecting the send, otherwise fail
-    // exactly as silently to every observer as they do to the caller).
+    // reading settings is the remaining unlogged case — Telegram itself
+    // rejecting the send is now caught by logIfRejected above, not here).
     console.error(`[telegram] notify(${event}) failed:`, error);
   }
 }
@@ -105,9 +116,10 @@ export async function notifyTelegramWithMedia(
 
     await Promise.all(
       targets.destinations.map((chatId) =>
-        media.length === 1
+        (media.length === 1
           ? sendPhoto(targets.botToken, chatId, media[0], caption)
           : sendMediaGroup(targets.botToken, chatId, media, caption)
+        ).then((res) => logIfRejected(event, chatId, res))
       )
     );
   } catch (error) {
