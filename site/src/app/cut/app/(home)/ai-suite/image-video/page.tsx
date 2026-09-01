@@ -60,14 +60,17 @@ export default function ImageVideoGalleryPage() {
             Your Flows — every creative thread, images and videos together.
           </p>
         </div>
-        <Button size="sm" onClick={newFlow} disabled={create.isPending}>
-          {create.isPending ? (
-            <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" />
-          ) : (
-            <Plus className="size-3.5" data-icon="inline-start" />
-          )}
-          New Flow
-        </Button>
+        <div className="flex flex-col items-end gap-1">
+          <Button size="sm" onClick={newFlow} disabled={create.isPending}>
+            {create.isPending ? (
+              <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" />
+            ) : (
+              <Plus className="size-3.5" data-icon="inline-start" />
+            )}
+            New Flow
+          </Button>
+          {create.isError && <p className="text-[11px] text-destructive">Couldn&apos;t start a new Flow.</p>}
+        </div>
       </div>
 
       {flows.isLoading ? (
@@ -77,7 +80,12 @@ export default function ImageVideoGalleryPage() {
           ))}
         </div>
       ) : flows.isError || !flows.data ? (
-        <p className="text-sm text-destructive">Couldn&apos;t load your Flows. Try again.</p>
+        <div className="flex flex-col items-center gap-2 py-16 text-center">
+          <p className="text-sm text-destructive">Couldn&apos;t load your Flows.</p>
+          <Button size="sm" variant="outline" onClick={() => flows.refetch()}>
+            Try again
+          </Button>
+        </div>
       ) : flows.data.flows.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed py-16 text-center">
           <p className="text-sm text-muted-foreground">No Flows yet — start one to generate an image or video.</p>
@@ -114,6 +122,12 @@ function FlowCard({
 }) {
   const duplicate = useDuplicateFlow();
   const remove = useDeleteFlow();
+  const busy = duplicate.isPending || remove.isPending;
+  const menuError = duplicate.isError
+    ? "Couldn't duplicate this Flow."
+    : remove.isError
+      ? "Couldn't delete this Flow — its media may still be uploading. Try again."
+      : null;
 
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-xl border bg-card">
@@ -130,7 +144,7 @@ function FlowCard({
             {flow.hasVideo ? <VideoIcon className="size-6" /> : <ImageIcon className="size-6" />}
           </div>
         )}
-        {flow.processing && (
+        {(flow.processing || busy) && (
           <div className="absolute top-1.5 right-1.5 grid size-6 place-items-center rounded-full bg-black/60">
             <Loader2 className="size-3.5 animate-spin text-white" />
           </div>
@@ -146,11 +160,13 @@ function FlowCard({
             {flow.hasImage && <ImageIcon className="size-3" />}
             {flow.hasVideo && <VideoIcon className="size-3" />}
           </div>
+          {menuError && <p className="mt-0.5 text-[10.5px] text-destructive">{menuError}</p>}
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger
             title="Flow options"
-            className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+            disabled={busy}
+            className="grid size-6 shrink-0 place-items-center rounded text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100 disabled:pointer-events-none"
           >
             <MoreVertical className="size-3.5" />
           </DropdownMenuTrigger>
@@ -182,8 +198,11 @@ function RenameDialog({ flow, onClose }: { flow: { id: string; name: string }; o
 
   const submit = () => {
     const trimmed = name.trim();
-    if (trimmed && trimmed !== flow.name) rename.mutate({ id: flow.id, name: trimmed });
-    onClose();
+    if (!trimmed || trimmed === flow.name) {
+      onClose();
+      return;
+    }
+    rename.mutate({ id: flow.id, name: trimmed }, { onSuccess: onClose });
   };
 
   return (
@@ -205,12 +224,13 @@ function RenameDialog({ flow, onClose }: { flow: { id: string; name: string }; o
             "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring"
           )}
         />
+        {rename.isError && <p className="text-[11px] text-destructive">Couldn&apos;t rename this Flow. Try again.</p>}
         <div className="flex justify-end gap-2">
           <Button size="sm" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" onClick={submit}>
-            Save
+          <Button size="sm" onClick={submit} disabled={rename.isPending}>
+            {rename.isPending ? <Loader2 className="size-3.5 animate-spin" /> : "Save"}
           </Button>
         </div>
       </div>

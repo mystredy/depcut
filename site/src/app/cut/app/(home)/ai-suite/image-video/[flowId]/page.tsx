@@ -108,6 +108,14 @@ export default function FlowThreadPage() {
   const [count, setCount] = useState<CountValue>(1);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // A ref, not just the busy state above: a fast double-fire (Enter plus a
+  // click landing in the same tick, or a double-click) reads `busy` from the
+  // same stale closure before React commits the first setBusy(true) — each
+  // generation is a real, billed provider call, so a second submission
+  // slipping through is a real double charge, not just a UI glitch. The ref
+  // updates synchronously and closes that window; `busy` state stays purely
+  // for the disabled/spinner UI.
+  const busyRef = useRef(false);
   const [error, setError] = useState<{ text: string; credits?: boolean } | null>(null);
   const [infoOpenId, setInfoOpenId] = useState<string | null>(null);
 
@@ -195,8 +203,10 @@ export default function FlowThreadPage() {
   };
 
   const generate = async () => {
+    if (busyRef.current) return;
     const { text, refs: allRefs } = collectRefs(prompt.trim(), refs, candidates);
-    if (!text || busy) return;
+    if (!text) return;
+    busyRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -208,6 +218,7 @@ export default function FlowThreadPage() {
       const message = e instanceof Error ? e.message : "Generation failed.";
       setError({ text: message, credits: message === NO_CREDITS_MESSAGE });
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
@@ -219,6 +230,34 @@ export default function FlowThreadPage() {
     promptRef.current?.focus();
   };
 
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+  // Resubmits a failed row's own prompt/model/parameters as a fresh
+  // generation — a real, separately billed attempt, not a reopened one.
+  // The original reference image(s), if any, were only ever used transiently
+  // for that one submission (not persisted — see FlowGeneration.referenceKeys,
+  // currently unpopulated), so a retry that needed one re-runs text-only;
+  // reattach it via "Use as reference" first if the render needs it back.
+  const retryGeneration = async (g: FlowGeneration) => {
+    if (retryingId) return;
+    setRetryingId(g.id);
+    try {
+      await createGeneration.mutateAsync({
+        kind: g.kind,
+        prompt: g.prompt,
+        provider: g.provider,
+        model: g.model,
+        tier: "",
+        ...(g.refMode ? { refMode: g.refMode } : {}),
+        parameters: g.parameters,
+      });
+    } catch {
+      // The card's own status (still "failed") is the feedback; nothing else
+      // to update here.
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
   if (flow.isLoading) {
     return (
       <div className="grid h-full place-items-center text-muted-foreground">
@@ -228,11 +267,16 @@ export default function FlowThreadPage() {
   }
   if (flow.isError || !flow.data) {
     return (
-      <div className="mx-auto max-w-2xl space-y-3 p-6 text-center">
+      <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 p-6 text-center">
         <p className="text-sm text-destructive">Couldn&apos;t load this Flow.</p>
-        <Button size="sm" variant="outline" onClick={() => router.push(`${base}/ai-suite/image-video`)}>
-          Back to Flows
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => flow.refetch()}>
+            Try again
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => router.push(`${base}/ai-suite/image-video`)}>
+            Back to Flows
+          </Button>
+        </div>
       </div>
     );
   }
@@ -266,6 +310,9 @@ export default function FlowThreadPage() {
               onUseAsReference={() => addRef(refFromGeneration(g))}
               onCreateVideo={g.kind === "image" ? () => createVideoFrom(g) : undefined}
               onDelete={() => deleteGeneration.mutate(g.id)}
+              deleteFailed={deleteGeneration.isError && deleteGeneration.variables === g.id}
+              onRetry={() => void retryGeneration(g)}
+              retrying={retryingId === g.id}
             />
           ))
         )}
@@ -468,6 +515,9 @@ function GenerationCard({
   onUseAsReference,
   onCreateVideo,
   onDelete,
+  deleteFailed,
+  onRetry,
+  retrying,
 }: {
   generation: FlowGeneration;
   infoOpen: boolean;
@@ -475,6 +525,9 @@ function GenerationCard({
   onUseAsReference: () => void;
   onCreateVideo?: () => void;
   onDelete: () => void;
+  deleteFailed: boolean;
+  onRetry: () => void;
+  retrying: boolean;
 }) {
   return (
     <div className="space-y-1.5">
@@ -485,8 +538,11 @@ function GenerationCard({
             <p className="text-[11px]">{g.kind === "video" ? "Rendering…" : "Generating…"}</p>
           </div>
         ) : g.status === "failed" ? (
-          <div className="flex aspect-video flex-col items-center justify-center gap-1 px-6 text-center">
+          <div className="flex aspect-video flex-col items-center justify-center gap-2 px-6 text-center">
             <p className="text-[11px] text-red-600">{g.errorMessage ?? "Generation failed."}</p>
+            <Button size="sm" variant="outline" onClick={onRetry} disabled={retrying}>
+              {retrying ? <Loader2 className="size-3.5 animate-spin" /> : "Retry"}
+            </Button>
           </div>
         ) : g.outputUrl ? (
           <>
@@ -543,6 +599,7 @@ function GenerationCard({
         >
           <Info className="size-3" /> {g.prompt.length > 80 ? `${g.prompt.slice(0, 80)}…` : g.prompt}
         </button>
+        {deleteFailed && <p className="mt-1 text-[10.5px] text-destructive">Couldn&apos;t delete this — try again.</p>}
         {infoOpen && (
           <div className="mt-1 space-y-0.5 rounded-lg bg-muted/50 p-2 text-[10.5px] text-muted-foreground">
             <p className="whitespace-pre-wrap text-foreground">{g.prompt}</p>
