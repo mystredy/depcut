@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  AudioLines,
   Bot,
   ChevronDown,
   Clapperboard,
@@ -14,8 +15,10 @@ import {
   FileCheck2,
   FileText,
   Folder,
+  FolderOpen,
   Gift,
   HelpCircle,
+  Image as ImageIcon,
   Key,
   LayoutDashboard,
   Layers,
@@ -31,6 +34,7 @@ import {
   Sparkles,
   Terminal,
   Users2,
+  Video,
   Workflow,
   Zap,
   type LucideIcon,
@@ -84,6 +88,19 @@ const SECTIONS: NavSection[] = [
       { label: "Users Dashboard", href: soon("User Management — Users Dashboard"), icon: LayoutDashboard, color: "text-amber-500" },
       { label: "User Deletion Requests", href: soon("User Management — Deletion Requests"), icon: ShieldAlert, color: "text-red-500" },
       { label: "User Permissions", href: "/admin/users", icon: ShieldAlert, color: "text-pink-600" },
+    ],
+  },
+  {
+    kind: "group",
+    id: "content",
+    label: "Content",
+    icon: FolderOpen,
+    color: "text-fuchsia-500",
+    children: [
+      { label: "Projects", href: "/admin/content/projects", icon: Clapperboard, color: "text-violet-500" },
+      { label: "Images", href: "/admin/content/images", icon: ImageIcon, color: "text-amber-500" },
+      { label: "Videos", href: "/admin/content/videos", icon: Video, color: "text-rose-500" },
+      { label: "Audio", href: "/admin/content/audio", icon: AudioLines, color: "text-sky-500" },
     ],
   },
   {

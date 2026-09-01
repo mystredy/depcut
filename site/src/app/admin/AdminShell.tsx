@@ -11,7 +11,13 @@ import { cn } from "@/lib/utils";
 // narrow. A page whose content is inherently wide (a data table with enough
 // columns that centering it just forces a horizontal scrollbar inside a
 // half-empty card) opts out here instead of fighting the shared max-width.
-const FULL_WIDTH_ROUTES = new Set(["/admin/users"]);
+const FULL_WIDTH_ROUTES = new Set([
+  "/admin/users",
+  "/admin/content/projects",
+  "/admin/content/images",
+  "/admin/content/videos",
+  "/admin/content/audio",
+]);
 
 const COLLAPSED_STORAGE_KEY = "admin-sidebar-collapsed";
 

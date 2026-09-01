@@ -7,6 +7,11 @@ import { categoriesQueryKey } from "@/queries/categories";
 
 export const adminUsersQueryKey = (q?: string) => ["admin", "users", q ?? ""] as const;
 export const adminUsageQueryKey = ["admin", "usage"] as const;
+export const adminContentProjectsQueryKey = ["admin", "content-projects"] as const;
+export const adminContentGenerationsQueryKey = (kind: "image" | "video") =>
+  ["admin", "content-generations", kind] as const;
+export const adminContentAudioQueryKey = (tool?: "text-to-speech" | "dubbing") =>
+  ["admin", "content-audio", tool ?? ""] as const;
 export const adminUploadsQueryKey = ["admin", "uploads"] as const;
 export const adminPaymentMethodsQueryKey = ["admin", "payment-methods"] as const;
 export const adminAiModelsQueryKey = ["admin", "ai-models"] as const;
@@ -508,6 +513,75 @@ export function useAdminUsage() {
   return useQuery({
     queryFn: () => apiFetch<AdminUsage>("/api/admin/usage"),
     queryKey: adminUsageQueryKey,
+  });
+}
+
+export type AdminContentOwner = { id: string; name: string; displayName: string | null; email: string; image: string | null };
+
+export type AdminContentProject = {
+  id: string;
+  userId: string;
+  name: string;
+  previewUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+  owner: AdminContentOwner | null;
+};
+
+export function useAdminContentProjects() {
+  return useQuery({
+    queryFn: () => apiFetch<{ items: AdminContentProject[] }>("/api/admin/content/projects"),
+    queryKey: adminContentProjectsQueryKey,
+  });
+}
+
+export type AdminContentGeneration = {
+  id: string;
+  userId: string;
+  flowId: string;
+  kind: string;
+  prompt: string;
+  provider: string;
+  model: string;
+  outputUrl: string | null;
+  posterUrl: string | null;
+  createdAt: string;
+  owner: AdminContentOwner | null;
+};
+
+export function useAdminContentGenerations(kind: "image" | "video") {
+  return useQuery({
+    queryFn: () =>
+      apiFetch<{ items: AdminContentGeneration[] }>(`/api/admin/content/generations?kind=${kind}`),
+    queryKey: adminContentGenerationsQueryKey(kind),
+  });
+}
+
+export type AdminContentAudio = {
+  id: string;
+  userId: string;
+  tool: string;
+  script: string;
+  direction: string | null;
+  voice: string;
+  language: string | null;
+  sourceLabel: string | null;
+  transcript: string | null;
+  targetLanguage: string | null;
+  outputUrl: string;
+  outputMime: string;
+  durationSeconds: number | null;
+  createdAt: string;
+  owner: AdminContentOwner | null;
+};
+
+export function useAdminContentAudio(tool?: "text-to-speech" | "dubbing") {
+  return useQuery({
+    queryFn: () =>
+      apiFetch<{ items: AdminContentAudio[] }>(
+        `/api/admin/content/audio${tool ? `?tool=${tool}` : ""}`,
+      ),
+    queryKey: adminContentAudioQueryKey(tool),
   });
 }
 
