@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  ArrowLeftRight,
   ArrowRight,
   AtSign,
   ChevronDown,
@@ -26,7 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { AddRefButton, MentionTextarea, RefChips } from "@/cut/components/AssetRefs";
+import { AddRefButton, FrameSlotButton, MentionTextarea, RefChips } from "@/cut/components/AssetRefs";
 import {
   COUNT_OPTIONS,
   DURATION_OPTIONS,
@@ -115,6 +116,10 @@ export default function FlowThreadPage() {
   const promptRef = useRef<HTMLTextAreaElement>(null);
   const [refs, setRefs] = useState<AssetRef[]>([]);
   const [refMode, setRefModeState] = useState<VideoRefMode>("ingredients");
+  // Frames mode only: the render's closing frame, alongside the opening one
+  // in refs[0] — a slot of its own rather than a second entry in refs, same
+  // split the in-editor video panel (GeneratePanel/videoGen.ts) already uses.
+  const [endFrame, setEndFrame] = useState<AssetRef | null>(null);
   const [imageTier, setImageTier] = useState<ImageTier>("pro");
   const [imageAspect, setImageAspect] = useState<ImageAspect>("16:9");
   const [videoTier, setVideoTier] = useState<VideoTier>("omni");
@@ -123,6 +128,13 @@ export default function FlowThreadPage() {
   const [durationSeconds, setDurationSeconds] = useState(8);
   const [count, setCount] = useState<CountValue>(1);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // OS files dropped straight onto the composer — a self-contained native
+  // HTML5 drop handler rather than AssetRefs.tsx's useAssetDrop(onFiles):
+  // that path is bridged by the main editor shell's own window-level drop
+  // routing (Editor.tsx's fileZoneAt), which isn't mounted on this route, so
+  // wiring it here would highlight the drop zone without ever delivering a
+  // file.
+  const [dragActive, setDragActive] = useState(false);
   const [busy, setBusy] = useState(false);
   // A ref, not just the busy state above: a fast double-fire (Enter plus a
   // click landing in the same tick, or a double-click) reads `busy` from the
@@ -138,6 +150,7 @@ export default function FlowThreadPage() {
   const setRefMode = (m: VideoRefMode) => {
     setRefModeState(m);
     setRefs([]);
+    setEndFrame(null);
   };
 
   // Every `@`-mentionable reference for this composer: the account's library
@@ -208,18 +221,33 @@ export default function FlowThreadPage() {
 
   const generateVideo = async (text: string, allRefs: AssetRef[]) => {
     let sentPrompt = text;
-    let inputs: { images?: InlineImage[]; referenceImages?: InlineImage[] } | undefined;
-    if (allRefs.length > 0) {
-      if (refMode === "ingredients") {
+    let inputs: { images?: InlineImage[]; referenceImages?: InlineImage[]; lastFrame?: InlineImage[] } | undefined;
+    if (refMode === "ingredients") {
+      if (allRefs.length > 0) {
         const anchors = await Promise.all(
           (await refsToInlineImages(visualRefs(allRefs).slice(0, videoModel.maxReferenceImages))).map(videoSafeInline)
         );
         if (anchors.length > 0) inputs = { referenceImages: anchors };
-      } else {
+      }
+    } else {
+      // Frames mode: refs[0] (the Start slot) opens the render, endFrame
+      // closes it — resolved independently so "last frame only" (no Start)
+      // works too, matching generate.ts's own lastFrame shape for the
+      // in-editor video panel's Start/End slots.
+      let images: InlineImage[] = [];
+      if (allRefs.length > 0) {
         const { prompt: sent, images: rawImages } = await promptAndImages("video", text, allRefs, true, 1);
         sentPrompt = sent;
-        const images = await Promise.all(rawImages.map(videoSafeInline));
-        if (images.length > 0) inputs = { images };
+        images = await Promise.all(rawImages.map(videoSafeInline));
+      }
+      const [lastFrameImage] = endFrame
+        ? await Promise.all((await refsToInlineImages(visualRefs([endFrame]))).map(videoSafeInline))
+        : [];
+      if (images.length > 0 || lastFrameImage) {
+        inputs = {
+          ...(images.length > 0 ? { images } : {}),
+          ...(lastFrameImage ? { lastFrame: [lastFrameImage] } : {}),
+        };
       }
     }
     const base: Omit<CreateGenerationInput, "idempotencyKey"> = {
@@ -249,6 +277,7 @@ export default function FlowThreadPage() {
       else await generateVideo(text, allRefs);
       setPrompt("");
       setRefs([]);
+      setEndFrame(null);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Generation failed.";
       setError({ text: message, credits: message === NO_CREDITS_MESSAGE });
@@ -388,24 +417,81 @@ export default function FlowThreadPage() {
       </div>
 
       <div className="border-t p-3">
-        <div className="relative flex flex-col rounded-2xl border border-input bg-card focus-within:border-ring">
+        <div
+          className={cn(
+            "relative flex flex-col rounded-2xl border border-input bg-card focus-within:border-ring",
+            dragActive && "border-[#0a84ff] ring-2 ring-[#0a84ff]/30"
+          )}
+          onDragEnter={(e) => {
+            if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+            e.preventDefault();
+            setDragActive(true);
+          }}
+          onDragOver={(e) => {
+            if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+          }}
+          onDragLeave={() => setDragActive(false)}
+          onDrop={(e) => {
+            if (e.dataTransfer.files.length === 0) return;
+            e.preventDefault();
+            setDragActive(false);
+            for (const file of Array.from(e.dataTransfer.files)) {
+              const ref = refFromLocalFile(file);
+              if (mode === "video" && refMode === "frames" && !refs[0]) setRefs([ref]);
+              else addRef(ref);
+            }
+          }}
+        >
           <div className="flex items-center gap-1 px-2.5 pt-2.5">
             <ModeToggle
               mode={mode}
               onChange={(m) => {
                 setMode(m);
                 setRefs([]);
+                setEndFrame(null);
               }}
             />
           </div>
-          {acceptsReferences && (
-            <RefChips
-              refs={refs}
-              onRemove={(r) => setRefs((prev) => prev.filter((x) => !(x.scope === r.scope && x.id === r.id)))}
-              className="p-2.5 pb-0"
-              thumbClassName="size-12"
-            />
-          )}
+          {acceptsReferences &&
+            (mode === "video" && refMode === "frames" ? (
+              <div className="flex shrink-0 items-center gap-1.5 p-2.5 pb-0">
+                <FrameSlotButton
+                  label="Start"
+                  value={refs[0] ?? null}
+                  onChange={(ref) => setRefs(ref ? [ref] : [])}
+                  onUploadFile={(file) => setRefs([refFromLocalFile(file)])}
+                />
+                <button
+                  type="button"
+                  title="Swap start and end"
+                  aria-label="Swap start and end frames"
+                  disabled={!refs[0] && !endFrame}
+                  className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+                  onClick={() => {
+                    const start = refs[0] ?? null;
+                    setRefs(endFrame ? [endFrame] : []);
+                    setEndFrame(start);
+                  }}
+                >
+                  <ArrowLeftRight className="size-3.5" />
+                </button>
+                <FrameSlotButton
+                  label="End"
+                  value={endFrame}
+                  onChange={setEndFrame}
+                  onUploadFile={(file) => setEndFrame(refFromLocalFile(file))}
+                />
+              </div>
+            ) : (
+              <RefChips
+                refs={refs}
+                onRemove={(r) => setRefs((prev) => prev.filter((x) => !(x.scope === r.scope && x.id === r.id)))}
+                className="p-2.5 pb-0"
+                thumbClassName="size-12"
+              />
+            ))}
           <MentionTextarea
             className="min-h-[80px] w-full resize-y bg-transparent px-3.5 py-3 text-[13px] leading-relaxed outline-none"
             placeholder={mode === "image" ? "Describe an image…" : "Describe a video…"}
