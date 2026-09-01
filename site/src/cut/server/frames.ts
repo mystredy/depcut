@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, readdir, readFile, rm, unlink } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { mediaPath } from "./projects";
@@ -120,6 +120,23 @@ export async function makeFreezeFrame(
     if (frame) return { fileName, duration: dur, width: frame.w, height: frame.h };
     const dims = await probeDims(png);
     return { fileName, duration: dur, width: dims.width, height: dims.height };
+  } finally {
+    void rm(tmp, { recursive: true, force: true });
+  }
+}
+
+/** Extract one JPEG frame from raw video bytes — for a source that isn't a
+ * project media file on disk (see Flow's own video generations, which land
+ * straight in R2), so this writes to a temp file itself rather than reading
+ * through mediaPath. Used for a Flow video's poster frame. */
+export async function extractPosterFrame(bytes: Buffer, atSeconds = 0.5): Promise<Buffer> {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), "poster-"));
+  try {
+    const src = path.join(tmp, "source");
+    await writeFile(src, bytes);
+    const out = path.join(tmp, "frame.jpg");
+    await run("ffmpeg", ["-y", "-ss", atSeconds.toFixed(3), "-i", src, "-frames:v", "1", "-q:v", "3", out]);
+    return await readFile(out);
   } finally {
     void rm(tmp, { recursive: true, force: true });
   }

@@ -35,10 +35,10 @@ const updateSchema = z
   .refine((v) => v.name !== undefined || v.coverGenerationId !== undefined, { message: "Nothing to update." });
 
 // Rename Flow, or pin an explicit cover — the client names a generation by
-// id (never a raw storage key) and the server resolves its outputKey here,
-// the same boundary listFlowGenerations already keeps for read (the key
-// itself never reaches the client). setFlowCover flips coverIsAuto off so a
-// later generation never silently replaces the pick.
+// id (never a raw storage key) and the server resolves its displayable key
+// here, the same boundary listFlowGenerations already keeps for read (the
+// key itself never reaches the client). setFlowCover flips coverIsAuto off
+// so a later generation never silently replaces the pick.
 export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
   const flow = await ownedFlow(request.donkey.userId, id);
@@ -52,15 +52,25 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
   if (parsed.data.coverGenerationId !== undefined) {
     const generation = await prisma.flowGeneration.findFirst({
       where: { id: parsed.data.coverGenerationId, flowId: id, status: "completed" },
-      select: { outputKey: true },
+      select: { kind: true, outputKey: true, posterKey: true },
     });
-    if (!generation?.outputKey) {
+    // A video's own bytes can't render as a cover <img> — only its poster
+    // frame can (see submit.ts's makePosterKey). An image's output already
+    // is one.
+    const coverKey = generation && (generation.kind === "video" ? generation.posterKey : generation.outputKey);
+    if (!coverKey) {
       return NextResponse.json(
-        { error: "Invalid request", message: "That generation has no output to use as a cover." },
+        {
+          error: "Invalid request",
+          message:
+            generation?.kind === "video"
+              ? "This video doesn't have a poster frame yet — try again in a moment."
+              : "That generation has no output to use as a cover.",
+        },
         { status: 400 },
       );
     }
-    await setFlowCover(id, generation.outputKey);
+    await setFlowCover(id, coverKey);
   }
   return NextResponse.json({ ok: true });
 });

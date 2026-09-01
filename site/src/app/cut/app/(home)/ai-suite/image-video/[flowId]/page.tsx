@@ -635,7 +635,13 @@ function GenerationCard({
             onDelete={onDelete}
           >
             {g.kind === "video" ? (
-              <video src={g.outputUrl} controls playsInline className="w-full rounded-xl" />
+              <video
+                src={g.outputUrl}
+                poster={g.posterUrl ?? undefined}
+                controls
+                playsInline
+                className="w-full rounded-xl"
+              />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element -- a presigned R2 URL, not a Next-optimizable asset
               <img src={g.outputUrl} alt={g.prompt} className="w-full rounded-xl" />

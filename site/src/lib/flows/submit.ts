@@ -17,6 +17,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { maybeSetAutoCover } from "@/lib/flows/db";
 import { flowMediaKey, putObject } from "@/cut/server/cloud/r2";
+import { extractPosterFrame } from "@/cut/server/frames";
 
 /** True for a Prisma unique-constraint violation — same pattern
  * lib/credits/inference.ts uses for its own idempotent grant inserts. */
@@ -156,11 +157,35 @@ async function land(
   const mime = out.contentType ?? (kind === "video" ? "video/mp4" : "image/png");
   const key = flowMediaKey(userId, flowId, `${generationId}.${extFor(mime, kind)}`);
   await putObject(key, bytes, mime);
+
+  // A video's own bytes can't be a Flow/gallery cover (an <img> can't
+  // render an mp4) — only its poster frame can. A failed poster capture
+  // must not fail the video that already rendered successfully; it just
+  // leaves this generation without one to show as a cover or preview until
+  // a later generation (with its own poster) takes the cover instead.
+  const posterKey = kind === "video" ? await makePosterKey(userId, flowId, generationId, bytes) : null;
+
   await prisma.flowGeneration.update({
     where: { id: generationId },
-    data: { status: "completed", outputKey: key, outputMime: mime },
+    data: { status: "completed", outputKey: key, outputMime: mime, ...(posterKey ? { posterKey } : {}) },
   });
-  await maybeSetAutoCover(flowId, key);
+  const coverCandidate = kind === "video" ? posterKey : key;
+  if (coverCandidate) await maybeSetAutoCover(flowId, coverCandidate);
+}
+
+/** Best-effort poster frame for a completed video, uploaded to the same
+ * flow's R2 prefix. Null (never throws) on any failure — ffmpeg missing,
+ * an unreadable source, a timeout — so a poster gap never fails the video
+ * generation itself. */
+async function makePosterKey(userId: string, flowId: string, generationId: string, bytes: Buffer): Promise<string | null> {
+  try {
+    const jpeg = await extractPosterFrame(bytes);
+    const key = flowMediaKey(userId, flowId, `${generationId}-poster.jpg`);
+    await putObject(key, jpeg, "image/jpeg");
+    return key;
+  } catch {
+    return null;
+  }
 }
 
 export type SubmitFlowGenerationInput = {

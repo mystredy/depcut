@@ -54,7 +54,7 @@ export async function listFlows(userId: string, filters?: FlowListFilters): Prom
   const generations = await prisma.flowGeneration.findMany({
     where: { flowId: { in: flowIds } },
     orderBy: { createdAt: "asc" },
-    select: { flowId: true, kind: true, status: true, outputKey: true, favorite: true },
+    select: { flowId: true, kind: true, status: true, outputKey: true, posterKey: true, favorite: true },
   });
   const byFlow = new Map<string, typeof generations>();
   for (const g of generations) {
@@ -66,7 +66,13 @@ export async function listFlows(userId: string, filters?: FlowListFilters): Prom
   return Promise.all(
     flows.map(async (f) => {
       const rows = byFlow.get(f.id) ?? [];
-      const coverKey = f.coverKey ?? rows.find((r) => r.status === "completed" && r.outputKey)?.outputKey ?? null;
+      // A video's own bytes can't render as a cover <img> — only its poster
+      // frame can. An image row's output is a picture already.
+      const auto = rows
+        .filter((r) => r.status === "completed")
+        .map((r) => (r.kind === "video" ? r.posterKey : r.outputKey))
+        .find((k): k is string => !!k);
+      const coverKey = f.coverKey ?? auto ?? null;
       return {
         id: f.id,
         name: f.name,
