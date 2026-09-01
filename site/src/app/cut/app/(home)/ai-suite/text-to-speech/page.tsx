@@ -15,6 +15,7 @@ import { AudioPlayer } from "@/cut/components/AudioPlayer";
 import { SectionTitle } from "@/cut/components/SectionTitle";
 import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { useSpeakerVoice, useSpeechLanguage, VoicePicker } from "@/cut/components/VoicePicker";
+import { persistAudioGeneration } from "@/cut/lib/audioGenerationPersist";
 import { creditsUrl, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { uploadToLibrary } from "@/cut/lib/library";
 import { NoCreditsError, renderSpeechClip } from "@/cut/lib/tts";
@@ -77,6 +78,13 @@ export default function TextToSpeechPage() {
         return { url: URL.createObjectURL(blob), blob, language: spoken };
       });
       setLibraryState("idle");
+      void persistAudioGeneration(blob, {
+        tool: "text-to-speech",
+        script: text,
+        voice,
+        direction: direction.trim() || undefined,
+        language: spoken,
+      });
       history.save({
         inputs: { direction, script: text },
         result: { blob, filename: "text-to-speech.wav", kind: "blob", mimeType: blob.type || "audio/wav" },

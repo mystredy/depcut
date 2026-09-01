@@ -101,6 +101,12 @@ export const FLOW_PREFIX = "flows/";
 export const flowMediaKey = (userId: string, flowId: string, fileName: string) =>
   `${FLOW_PREFIX}${userId}/${flowId}/${fileName}`;
 
+/** Text to Speech and Dubbing's persisted output — same "own top-level
+ * prefix, outside a user's project media" split as FLOW_PREFIX above. */
+export const AUDIO_GENERATION_PREFIX = "audio-generations/";
+export const audioGenerationKey = (userId: string, id: string, fileName: string) =>
+  `${AUDIO_GENERATION_PREFIX}${userId}/${id}/${fileName}`;
+
 export function presignPut(key: string, mime: string): Promise<string> {
   return getSignedUrl(
     r2(),

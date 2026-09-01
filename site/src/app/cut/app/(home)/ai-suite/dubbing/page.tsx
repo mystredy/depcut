@@ -18,6 +18,7 @@ import { SubTabs } from "@/cut/components/SubTabs";
 import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { useSpeakerVoice, VoicePicker } from "@/cut/components/VoicePicker";
 import { formatBytes } from "@/cut/components/desktopFolders";
+import { persistAudioGeneration } from "@/cut/lib/audioGenerationPersist";
 import { creditsUrl, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { cloudTranscribeRecording, transcribeSourceUrl } from "@/cut/lib/cloudTranscribe";
 import { NoCreditsError, renderSpeechClip, SPEECH_LANGUAGES } from "@/cut/lib/tts";
@@ -149,12 +150,25 @@ export default function DubbingPage() {
 
       setStage("dubbing");
       const ask = `Say it in ${target.label}.`;
-      const { blob } = await renderSpeechClip([{ text, at: 0 }], {
+      const { blob, layout, language: spoken } = await renderSpeechClip([{ text, at: 0 }], {
         voice,
         direction: style.trim() ? `${style.trim()} ${ask}` : ask,
         language: target.id,
       });
       setResult({ url: URL.createObjectURL(blob) });
+      void persistAudioGeneration(blob, {
+        tool: "dubbing",
+        // The line actually spoken — renderSpeechClip translates it from
+        // `text` internally (planVoiceover, in tts.ts), so layout carries
+        // the real dubbed line where the caller only has the original.
+        script: layout[0]?.text ?? text,
+        voice,
+        direction: style.trim() || undefined,
+        language: spoken ?? target.id,
+        sourceLabel,
+        transcript: text,
+        targetLanguage: target.id,
+      });
       history.save({
         inputs: { style, targetLanguage },
         result: { blob, data: { transcript: text }, filename: "dubbed-audio.wav", kind: "blob", mimeType: blob.type || "audio/wav" },

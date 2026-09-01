@@ -1,0 +1,41 @@
+// A durable record of every Text to Speech and Dubbing render, mirroring how
+// GenerationFlows.prisma persists Flow's images/videos — before this, those
+// two tools rendered their audio entirely client-side (see cut/lib/tts.ts)
+// and only kept it in the browser's own local tool history, or in the user's
+// Library if they explicitly clicked "Add to library." Nothing landed here
+// automatically, so there was no way to see what any account had generated.
+// Only a SUCCESSFUL render is ever written — there is no in-progress or
+// failed row, since the client already has the finished clip in hand before
+// it calls the persistence endpoint (audioGenerations/db.ts's create). Media
+// bytes live in R2 under this row's own outputKey (see
+// audioGenerations/media.ts's audioGenerationKey), same split as
+// CutProject/CutMediaObject and Flow/FlowGeneration. A plain userId (better-
+// auth id) with no FK, same as FlowGeneration, keeps the table self-contained.
+model AudioGeneration {
+  id     String @id @default(cuid())
+  userId String
+
+  tool String // text-to-speech | dubbing
+
+  // The text actually spoken — for dubbing, the translated line, not the
+  // original-language transcript (see `transcript` below).
+  script    String
+  direction String?
+  voice     String
+  language  String?
+
+  // Dubbing only. sourceLabel is the original file's name or the pasted
+  // link; transcript is the original-language text before translation.
+  sourceLabel    String?
+  transcript     String?
+  targetLanguage String?
+
+  outputKey       String
+  outputMime      String
+  durationSeconds Float?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([tool, createdAt])
+}
