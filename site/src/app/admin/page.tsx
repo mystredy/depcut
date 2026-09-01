@@ -50,14 +50,14 @@ export default function AdminOverviewPage() {
         <p className="mt-1 text-sm text-muted-foreground">Site management for Depcut.</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 rounded-2xl border bg-card p-6 sm:grid-cols-5">
+      <div className="flex flex-wrap gap-x-10 gap-y-5 rounded-2xl border bg-card p-6">
         {usage.isLoading ? (
           <>
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-24" />
+            <Skeleton className="h-12 w-24" />
+            <Skeleton className="h-12 w-24" />
+            <Skeleton className="h-12 w-24" />
+            <Skeleton className="h-12 w-24" />
           </>
         ) : (
           <>
@@ -106,8 +106,8 @@ export default function AdminOverviewPage() {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-2xl font-semibold tabular-nums">{value}</div>
-      <p className="mt-1 text-xs text-muted-foreground">{label}</p>
+      <div className="text-2xl font-semibold whitespace-nowrap tabular-nums">{value}</div>
+      <p className="mt-1 whitespace-nowrap text-xs text-muted-foreground">{label}</p>
     </div>
   );
 }
