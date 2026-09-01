@@ -1,20 +1,31 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   ArrowRight,
+  AtSign,
   ChevronDown,
   Clapperboard,
   Download,
+  Image as ImageIcon,
   ImagePlus,
   Info,
   Loader2,
+  MoreVertical,
+  RotateCcw,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { AddRefButton, MentionTextarea, RefChips } from "@/cut/components/AssetRefs";
 import {
   COUNT_OPTIONS,
@@ -25,7 +36,7 @@ import {
   SegRow,
 } from "@/cut/components/VideoGenControls";
 import { useSelectableModels } from "@/cut/lib/aiModelAvailability";
-import { addRefOnce, type AssetRef, collectRefs, useRefCandidates } from "@/cut/lib/assetRef";
+import { addRefOnce, insertRefToken, type AssetRef, collectRefs, useRefCandidates } from "@/cut/lib/assetRef";
 import { creditsUrl, NO_CREDITS_MESSAGE, promptAndImages, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { IMAGE_MODELS, type ImageTier } from "@/cut/lib/imageModels";
 import { useCutBase } from "@/cut/lib/nav";
@@ -46,6 +57,7 @@ import {
   useCreateGeneration,
   useDeleteGeneration,
   useFlow,
+  useSetFlowCover,
 } from "@/queries/flows";
 import { cn } from "@/lib/utils";
 
@@ -95,6 +107,7 @@ export default function FlowThreadPage() {
   const flow = useFlow(flowId);
   const createGeneration = useCreateGeneration(flowId);
   const deleteGeneration = useDeleteGeneration(flowId);
+  const setCover = useSetFlowCover();
   const generations = flow.data?.generations ?? [];
 
   const [mode, setMode] = useState<Mode>("image");
@@ -245,6 +258,26 @@ export default function FlowThreadPage() {
     promptRef.current?.focus();
   };
 
+  // "Add to prompt" — the media menu's version of picking a candidate from
+  // the "+" button: attaches the ref AND drops its @mention token into the
+  // composer text at the cursor, so the reference reads in the prompt
+  // instead of riding along silently as a chip.
+  const addToPrompt = (g: FlowGeneration) => {
+    const ref = refFromGeneration(g);
+    addRef(ref);
+    const { text, caret } = insertRefToken(prompt, ref, promptRef.current);
+    setPrompt(text);
+    requestAnimationFrame(() => {
+      promptRef.current?.focus();
+      promptRef.current?.setSelectionRange(caret, caret);
+    });
+  };
+
+  const reusePrompt = (g: FlowGeneration) => {
+    setPrompt(g.prompt);
+    promptRef.current?.focus();
+  };
+
   const [retryingId, setRetryingId] = useState<string | null>(null);
   // Resubmits a failed row's own prompt/model/parameters as a fresh
   // generation — a real, separately billed attempt, not a reopened one.
@@ -324,6 +357,11 @@ export default function FlowThreadPage() {
               onToggleInfo={() => setInfoOpenId((id) => (id === g.id ? null : g.id))}
               onUseAsReference={() => addRef(refFromGeneration(g))}
               onCreateVideo={g.kind === "image" ? () => createVideoFrom(g) : undefined}
+              onAddToPrompt={() => addToPrompt(g)}
+              onReusePrompt={() => reusePrompt(g)}
+              onSetCover={() => setCover.mutate({ id: flowId, generationId: g.id })}
+              settingCover={setCover.isPending && setCover.variables?.generationId === g.id}
+              coverFailed={setCover.isError && setCover.variables?.generationId === g.id}
               onDelete={() => deleteGeneration.mutate(g.id)}
               deleteFailed={deleteGeneration.isError && deleteGeneration.variables === g.id}
               onRetry={() => void retryGeneration(g)}
@@ -529,6 +567,11 @@ function GenerationCard({
   onToggleInfo,
   onUseAsReference,
   onCreateVideo,
+  onAddToPrompt,
+  onReusePrompt,
+  onSetCover,
+  settingCover,
+  coverFailed,
   onDelete,
   deleteFailed,
   onRetry,
@@ -539,6 +582,11 @@ function GenerationCard({
   onToggleInfo: () => void;
   onUseAsReference: () => void;
   onCreateVideo?: () => void;
+  onAddToPrompt: () => void;
+  onReusePrompt: () => void;
+  onSetCover: () => void;
+  settingCover: boolean;
+  coverFailed: boolean;
   onDelete: () => void;
   deleteFailed: boolean;
   onRetry: () => void;
@@ -546,7 +594,7 @@ function GenerationCard({
 }) {
   return (
     <div className="space-y-1.5">
-      <div className="group relative overflow-hidden rounded-xl border bg-muted/30">
+      <div className="relative overflow-hidden rounded-xl border bg-muted/30">
         {g.status === "in_progress" ? (
           <div className="flex aspect-video flex-col items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="size-5 animate-spin" />
@@ -560,50 +608,23 @@ function GenerationCard({
             </Button>
           </div>
         ) : g.outputUrl ? (
-          <>
+          <GeneratedMediaMenu
+            generation={g}
+            onCreateVideo={onCreateVideo}
+            onUseAsReference={onUseAsReference}
+            onAddToPrompt={onAddToPrompt}
+            onReusePrompt={onReusePrompt}
+            onSetCover={onSetCover}
+            settingCover={settingCover}
+            onDelete={onDelete}
+          >
             {g.kind === "video" ? (
               <video src={g.outputUrl} controls playsInline className="w-full rounded-xl" />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element -- a presigned R2 URL, not a Next-optimizable asset
               <img src={g.outputUrl} alt={g.prompt} className="w-full rounded-xl" />
             )}
-            <div className="pointer-events-none absolute top-1.5 right-1.5 flex items-center gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
-              {onCreateVideo && (
-                <button
-                  type="button"
-                  title="Create video from this image"
-                  onClick={onCreateVideo}
-                  className="grid size-6 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
-                >
-                  <Clapperboard className="size-3" />
-                </button>
-              )}
-              <button
-                type="button"
-                title="Use as reference"
-                onClick={onUseAsReference}
-                className="grid size-6 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
-              >
-                <ImagePlus className="size-3" />
-              </button>
-              <a
-                href={g.outputUrl}
-                download={`${g.kind}-${g.id}.${g.kind === "video" ? "mp4" : "png"}`}
-                title="Download"
-                className="grid size-6 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
-              >
-                <Download className="size-3" />
-              </a>
-              <button
-                type="button"
-                title="Delete"
-                onClick={onDelete}
-                className="grid size-6 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
-              >
-                <Trash2 className="size-3" />
-              </button>
-            </div>
-          </>
+          </GeneratedMediaMenu>
         ) : null}
       </div>
       <div className="px-1">
@@ -615,6 +636,9 @@ function GenerationCard({
           <Info className="size-3" /> {g.prompt.length > 80 ? `${g.prompt.slice(0, 80)}…` : g.prompt}
         </button>
         {deleteFailed && <p className="mt-1 text-[10.5px] text-destructive">Couldn&apos;t delete this — try again.</p>}
+        {coverFailed && (
+          <p className="mt-1 text-[10.5px] text-destructive">Couldn&apos;t set this as the Flow cover — try again.</p>
+        )}
         {infoOpen && (
           <div className="mt-1 space-y-0.5 rounded-lg bg-muted/50 p-2 text-[10.5px] text-muted-foreground">
             <p className="whitespace-pre-wrap text-foreground">{g.prompt}</p>
@@ -625,6 +649,130 @@ function GenerationCard({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The action menu for one generated image/video card — Depcut's answer to
+ * the OS's own long-press image menu (Share/Save/Copy), which otherwise
+ * fires instead of anything app-specific. Opens on a visible three-dot
+ * button (works with a keyboard or a tap, no hover required), a desktop
+ * right-click, or a mobile long-press — all three land on the same
+ * controlled DropdownMenu instance so there's one menu, one set of actions,
+ * regardless of how it was opened. The native browser/OS context menu is
+ * suppressed only on the media wrapper below, not anywhere else on the page.
+ */
+function GeneratedMediaMenu({
+  generation: g,
+  onCreateVideo,
+  onUseAsReference,
+  onAddToPrompt,
+  onReusePrompt,
+  onSetCover,
+  settingCover,
+  onDelete,
+  children,
+}: {
+  generation: FlowGeneration;
+  onCreateVideo?: () => void;
+  onUseAsReference: () => void;
+  onAddToPrompt: () => void;
+  onReusePrompt: () => void;
+  onSetCover: () => void;
+  settingCover: boolean;
+  onDelete: () => void;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressStart = useRef<{ x: number; y: number } | null>(null);
+
+  const clearPress = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    pressStart.current = null;
+  };
+
+  const download = () => {
+    if (!g.outputUrl) return;
+    const a = document.createElement("a");
+    a.href = g.outputUrl;
+    a.download = `${g.kind}-${g.id}.${g.kind === "video" ? "mp4" : "png"}`;
+    a.click();
+  };
+
+  return (
+    <div className="relative">
+      <div
+        className="[-webkit-touch-callout:none] select-none"
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setOpen(true);
+        }}
+        onPointerDown={(e) => {
+          // Only a touch/pen press starts the long-press timer — a mouse
+          // already has right-click, and a long mouse-down (e.g. dragging
+          // the video scrubber) must not also pop the menu.
+          if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+          pressStart.current = { x: e.clientX, y: e.clientY };
+          pressTimer.current = setTimeout(() => {
+            pressTimer.current = null;
+            setOpen(true);
+          }, 500);
+        }}
+        onPointerMove={(e) => {
+          if (!pressStart.current) return;
+          // A real drag (scrubbing video, a scroll starting here) cancels
+          // the hold instead of popping the menu mid-gesture.
+          const dx = e.clientX - pressStart.current.x;
+          const dy = e.clientY - pressStart.current.y;
+          if (Math.hypot(dx, dy) > 10) clearPress();
+        }}
+        onPointerUp={clearPress}
+        onPointerLeave={clearPress}
+        onPointerCancel={clearPress}
+      >
+        {children}
+      </div>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger
+          title="Media options"
+          className="absolute top-1.5 right-1.5 grid size-6 place-items-center rounded-full bg-black/55 text-white transition-colors hover:bg-black/75 data-[state=open]:bg-black/75"
+        >
+          <MoreVertical className="size-3.5" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {onCreateVideo && (
+            <DropdownMenuItem onClick={onCreateVideo}>
+              <Clapperboard /> Animate
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onClick={onAddToPrompt}>
+            <AtSign /> Add to prompt
+          </DropdownMenuItem>
+          {g.kind === "image" && (
+            <DropdownMenuItem onClick={onUseAsReference}>
+              <ImagePlus /> Use as reference
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onClick={onReusePrompt}>
+            <RotateCcw /> Reuse prompt
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onSetCover} disabled={settingCover}>
+            <ImageIcon /> Set Flow cover
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={download}>
+            <Download /> Download
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onClick={onDelete}>
+            <Trash2 /> Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
