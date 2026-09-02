@@ -26,6 +26,7 @@ Supported product and engineering guides live in `docs/guides/`. This list is th
 
 - [Install Donkey Locally](guides/install-donkey.md) — building the app bundle and disk image for local testing.
 - [Releasing Donkey](guides/releasing-donkey.md) — how production releases are built and shipped, including the tools that ship inside the app.
+- [Vercel Function Budget](guides/vercel-function-budget.md) — how the hosted site's route handlers bundle into Vercel functions, the current Hobby-plan ceiling, and the options for getting headroom.
 
 **Working in this repo**
 
