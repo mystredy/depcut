@@ -339,19 +339,21 @@ export function Preview() {
 
 /**
  * Direct-manipulation handle for the selected video layer's frame region: drag
- * the box to reposition, drag the corner to resize (both update the clip's
- * `frame` rect). Works for a regioned track-0 clip (split-screen half) or an
- * overlay clip, and only while that clip is live under the playhead so it lines
- * up with the compositor. A full-frame layer needs no handle.
+ * the box to reposition, drag a grip to resize (both update the clip's
+ * `frame` rect). Shows for any selected clip on any track — a full-frame
+ * layer gets a handle flush with the stage edges, so dragging a grip inward
+ * is how it becomes a regioned (split-screen or PiP) clip in the first
+ * place — and only while that clip is live under the playhead so it lines up
+ * with the compositor.
  */
 function OverlayPipHandle({ stage }: { stage: { w: number; h: number } }) {
   const selection = useEditor((s) => s.selection);
   const clips = useEditor((s) => s.clips);
   const currentTime = useEditor((s) => s.currentTime);
 
-  // Resolve the selected, live, regioned clip (any track) plus how to patch its
-  // rect. A clip's own footprint equals its span length, so one path serves
-  // every track.
+  // Resolve the selected, live clip (any track) plus how to patch its rect. A
+  // clip's own footprint equals its span length, so one path serves every
+  // track.
   let rect: FrameRect | null = null;
   let apply: ((frame: FrameRect) => void) | null = null;
   if (selection?.kind === "clip") {
@@ -365,7 +367,7 @@ function OverlayPipHandle({ stage }: { stage: { w: number; h: number } }) {
       }
     }
   }
-  if (!rect || !apply || isFullRect(rect)) return null;
+  if (!rect || !apply) return null;
   const r = rect;
   const patch = apply;
 
