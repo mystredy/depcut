@@ -1,6 +1,8 @@
-// Project-copy jobs: a viewer copying a share into their own account, and an
-// owner duplicating their own project from the dashboard. A copy moves a
-// whole project's worth of R2 objects, so it never runs in the request that
+// Project-copy jobs: a viewer copying a share into their own account, an
+// owner duplicating their own project from the dashboard, and an admin
+// cloning any account's project into their own from Content → Projects. A
+// copy moves a whole project's worth of R2 objects, so it never runs in the
+// request that
 // asked for it: the request writes a CutCopyJob row and publishes its id to
 // the Cloudflare Queue, the queue's serial consumer (the Cut worker's queue
 // handler) calls back into /api/cut-copy-worker one message at a time, and
@@ -188,6 +190,41 @@ async function duplicateSource(job: {
   };
 }
 
+/** An admin cloning any account's project into their own — same shape as
+ * duplicateSource, but the source lookup carries no ownership constraint (an
+ * admin can clone any account's project, not just their own) and every
+ * source read uses the row's own owner rather than job.userId, which here is
+ * the destination (the admin), not the source. Gated entirely by the route
+ * that enqueues this job: only isDonkeySuperUser reaches
+ * copyJobs.requestAdminClone. folderId drops to null like a share copy
+ * (not carried over like a same-account duplicate) — the admin's own folder
+ * structure has nothing to do with the original owner's. */
+async function adminCloneSource(job: {
+  projectId: string | null;
+  userId: string;
+}): Promise<CopySource | string> {
+  const row = job.projectId ? await prisma.cutProject.findUnique({ where: { id: job.projectId } }) : null;
+  if (!row) return "The project was deleted.";
+  const doc = row.doc as unknown as ProjectDoc;
+  const media = await completeMedia(row.userId, row.id);
+  const chats = await prisma.cutChatThread.findMany({
+    where: { userId: row.userId, projectId: row.id },
+    select: { id: true, data: true },
+  });
+  const gv = doc.genvideo;
+  return {
+    doc: {
+      ...doc,
+      genvideo: gv && (gv.phase === "done" || gv.phase === "failed") ? gv : undefined,
+    },
+    name: `${doc.name} (admin clone)`,
+    folderId: null,
+    media,
+    chats,
+    added: mediaBytes(media),
+  };
+}
+
 /** Re-check the job's viewer against the share at execution time — access
  * revoked between request and drain cancels the copy. */
 async function viewerAllowed(share: ShareRow, viewerId: string): Promise<boolean> {
@@ -204,7 +241,7 @@ async function viewerAllowed(share: ShareRow, viewerId: string): Promise<boolean
  * runs now, before responding — a serverless response must not leave
  * fire-and-forget work behind. */
 async function enqueue(data: {
-  kind: "share" | "duplicate";
+  kind: "share" | "duplicate" | "admin-clone";
   shareId?: string;
   projectId?: string;
   userId: string;
@@ -270,6 +307,23 @@ export const copyJobs = {
     }
   },
 
+  /** An admin clones any account's project into their own, from the Content
+   * → Projects list — same queue, same pacing as an owner's own duplicate;
+   * only the source ownership check is dropped (isDonkeySuperUser, checked
+   * by the route that calls this, is the actual gate). */
+  async requestAdminClone(adminUserId: string, projectId: string) {
+    try {
+      const row = await prisma.cutProject.findUnique({ where: { id: projectId } });
+      if (!row) return err("Project not found.", 404);
+      const media = await completeMedia(row.userId, projectId);
+      const over = await quotaCheck(adminUserId, mediaBytes(media));
+      if (over) return over;
+      return await enqueue({ kind: "admin-clone", projectId, userId: adminUserId });
+    } catch (e) {
+      return caught(e, "Could not clone the project.");
+    }
+  },
+
   /** Poll a share copy (public namespace: share access re-checked). */
   async status(token: string, jobId: string, req: Request) {
     const view = await resolveShare(token, req);
@@ -292,10 +346,11 @@ export const copyJobs = {
 };
 
 /** Execute one copy job (called by the queue consumer through
- * /api/cut-copy-worker). The kind picks the source — a share's filtered view
- * or the owner's own project — and the rest is one materialization path. A
- * 200 consumes the message (including permanent failures, which land on the
- * job row); a 500 releases the claim and lets the queue retry. */
+ * /api/cut-copy-worker). The kind picks the source — a share's filtered view,
+ * an owner's own project, or (an admin's) any account's project — and the
+ * rest is one materialization path. A 200 consumes the message (including
+ * permanent failures, which land on the job row); a 500 releases the claim
+ * and lets the queue retry. */
 export async function executeCopyJob(jobId: string): Promise<Response> {
   const claimed = await prisma.cutCopyJob.updateMany({
     where: { id: jobId, state: "queued" },
@@ -315,7 +370,12 @@ export async function executeCopyJob(jobId: string): Promise<Response> {
   try {
     const job = await prisma.cutCopyJob.findUnique({ where: { id: jobId } });
     if (!job) return Response.json({ ok: true });
-    const src = job.kind === "duplicate" ? await duplicateSource(job) : await shareSource(job);
+    const src =
+      job.kind === "duplicate"
+        ? await duplicateSource(job)
+        : job.kind === "admin-clone"
+          ? await adminCloneSource(job)
+          : await shareSource(job);
     if (typeof src === "string") return fail(src);
     const over = await quotaCheck(job.userId, src.added);
     if (over) return fail(QUOTA_MESSAGE);

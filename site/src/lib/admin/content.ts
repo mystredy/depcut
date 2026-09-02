@@ -18,6 +18,11 @@ export type AdminCutProject = {
   previewUrl: string | null;
   previewIsImage: boolean;
   previewStart: number;
+  /** Whether this project has ever been exported at least once — a project's
+   * previewKey is only ever written by the export job (see exportJob.ts) and
+   * nothing clears it afterward, so its presence is a true, durable "has this
+   * been exported" signal, not just "does it currently have a proxy." */
+  hasExported: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -67,6 +72,7 @@ export async function listCutProjectsForAdmin(): Promise<AdminCutProject[]> {
       // source asset starts at the clip's own trim-in (see ProjectsHome.tsx).
       previewIsImage: !summary.hasPreview && Boolean(summary.previewIsImage),
       previewStart: summary.hasPreview ? 0 : (summary.previewStart ?? 0),
+      hasExported: Boolean(summary.hasPreview),
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
     };

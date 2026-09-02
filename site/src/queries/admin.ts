@@ -525,6 +525,7 @@ export type AdminContentProject = {
   previewUrl: string | null;
   previewIsImage: boolean;
   previewStart: number;
+  hasExported: boolean;
   createdAt: string;
   updatedAt: string;
   owner: AdminContentOwner | null;
@@ -534,6 +535,32 @@ export function useAdminContentProjects() {
   return useQuery({
     queryFn: () => apiFetch<{ items: AdminContentProject[] }>("/api/admin/content/projects"),
     queryKey: adminContentProjectsQueryKey,
+  });
+}
+
+/** Clone any account's project into the admin's own — POST queues the copy
+ * job (same pipeline an owner's own "Duplicate" uses), then this polls the
+ * existing owner-scoped job-status route every 2s until it settles. Mirrors
+ * ProjectsHome.tsx's own duplicate() polling loop; here the "owner" polling
+ * is the admin, since the job's destination account is the admin's. */
+export function useAdminCloneProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (projectId: string) => {
+      const { jobId } = await apiFetch<{ jobId: string }>(
+        `/api/admin/content/projects/${projectId}/clone`,
+        { method: "POST" },
+      );
+      for (;;) {
+        await new Promise((done) => setTimeout(done, 2000));
+        const job = await apiFetch<{ state: string; newProjectId?: string; error?: string }>(
+          `/api/cut-cloud/copy-jobs/${jobId}`,
+        );
+        if (job.state === "done") return { newProjectId: job.newProjectId };
+        if (job.state === "error") throw new Error(job.error || "Could not clone the project.");
+      }
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminContentProjectsQueryKey }),
   });
 }
 
