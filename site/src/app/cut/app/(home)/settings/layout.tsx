@@ -22,10 +22,8 @@ export default function CutSettingsLayout({ children }: { children: ReactNode })
     <SettingsGuard>
       <div className="flex h-full flex-col overflow-y-auto">
         <SettingsHeader />
-        <div className="min-h-0 flex-1">
-          <div className="mx-auto h-full w-full max-w-6xl px-10">
-            <div className="h-full p-px">{children}</div>
-          </div>
+        <div className="mx-auto h-full min-h-0 w-full max-w-6xl flex-1 px-10">
+          <div className="h-full p-px">{children}</div>
         </div>
       </div>
     </SettingsGuard>
