@@ -130,9 +130,22 @@
    matter its specificity. Repointing this one token flows everywhere keyed to
    bg-background: the html/overscroll area, body, and every shadcn component
    (e.g. the outline button variant). CSS variables inherit from html, so
-   portaled dialogs pick it up too. */
-html.app-surface {
+   portaled dialogs pick it up too.
+
+   The app's own Light/Dark/System choice (ThemeProvider, toggling `.dark` on
+   this same element) only needs to win here when it's actually dark — a
+   light or system-light app keeps this surface's own white rather than the
+   dark palette's neutral gray, which is a different shade than plain white. */
+html.app-surface:not(.dark) {
   --background: oklch(1 0 0);
+}
+
+/* If a dark preference lingers on <html> outside the app surface — say, a
+   client-side navigation back to the marketing page — the landing page keeps
+   its fixed cream background regardless. It was never part of the app's
+   Light/Dark/System choice to begin with. */
+html.dark:not(.app-surface) {
+  --background: #F5EFE0;
 }
 
 @layer base {

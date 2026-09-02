@@ -6,6 +6,7 @@ import { ConnectGate } from "@/cut/components/ConnectGate";
 import { ExportsDock } from "@/cut/components/ExportsDock";
 import { CutOnboarding } from "@/cut/components/onboarding/CutOnboarding";
 import { RequireSession } from "@/cut/components/RequireSession";
+import { ThemeProvider, ThemeScript } from "@/cut/components/ThemeProvider";
 
 // The Cut app (projects home, library, editor) renders on the same white
 // product surface as Donkey's /app, not the cream marketing background of the
@@ -20,19 +21,22 @@ import { RequireSession } from "@/cut/components/RequireSession";
 // welcome sequence a new account sees before any of it.
 export default function CutAppLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-white font-system text-foreground antialiased">
-      <AppSurfaceBackground />
-      <NoSessionReplay />
-      <RequireSession>
-        <ConnectGate>
-          {children}
-          {/* App-wide: exports keep showing as you move between projects. */}
-          <ExportsDock />
-        </ConnectGate>
-        {/* Outside the gate so a first run covers the whole window, gate and
-            all, and hands over to it when the last slide closes. */}
-        <CutOnboarding />
-      </RequireSession>
-    </div>
+    <ThemeProvider>
+      <ThemeScript />
+      <div className="min-h-screen bg-background font-system text-foreground antialiased">
+        <AppSurfaceBackground />
+        <NoSessionReplay />
+        <RequireSession>
+          <ConnectGate>
+            {children}
+            {/* App-wide: exports keep showing as you move between projects. */}
+            <ExportsDock />
+          </ConnectGate>
+          {/* Outside the gate so a first run covers the whole window, gate and
+              all, and hands over to it when the last slide closes. */}
+          <CutOnboarding />
+        </RequireSession>
+      </div>
+    </ThemeProvider>
   );
 }

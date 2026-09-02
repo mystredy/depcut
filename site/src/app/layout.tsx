@@ -30,6 +30,10 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // The signed-in app's ThemeScript can add "dark" to this element before
+      // React hydrates, which would otherwise read as a hydration mismatch
+      // here even though it's an intentional, pre-paint change.
+      suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
         <PostHogProvider>

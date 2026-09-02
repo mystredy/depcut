@@ -10,8 +10,12 @@ import {
   EllipsisVertical,
   LogOut,
   MessageCircleHeart,
+  Monitor,
+  Moon,
   Settings,
   Sparkles,
+  Sun,
+  SunMoon,
   Wallet,
   Zap,
 } from "lucide-react";
@@ -21,13 +25,19 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { CreatorApplicationDialog } from "@/cut/components/CreatorApplicationDialog";
 import { FeedbackDialog } from "@/cut/components/FeedbackDialog";
 import { NavStorage } from "@/cut/components/NavStorage";
 import { Skeleton } from "@/components/ui/skeleton";
+import { type ThemeChoice, useTheme } from "@/cut/components/ThemeProvider";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { formatUsd } from "@/lib/credits/format-usd";
 import { openOnboarding } from "@/cut/lib/onboarding";
@@ -82,6 +92,7 @@ export function NavUser() {
   // before the other could start.
   const { data: profile, isPending } = useAccountProfile();
   const credits = useCreditBalance();
+  const { theme, setTheme } = useTheme();
 
   // The name and picture the user chose live in the profile, not the
   // session — resolved only once `profile` actually lands.
@@ -201,6 +212,27 @@ export function NavUser() {
           <DropdownMenuItem onClick={() => router.push(`${base}/settings/profile`)}>
             <Settings /> Settings
           </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <SunMoon /> Theme
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuRadioGroup
+                value={theme}
+                onValueChange={(value) => setTheme(value as ThemeChoice)}
+              >
+                <DropdownMenuRadioItem value="light">
+                  <Sun /> Light
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="dark">
+                  <Moon /> Dark
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="system">
+                  <Monitor /> System
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <DropdownMenuItem onClick={() => setFeedbackOpen(true)}>
             <MessageCircleHeart /> Give feedback
           </DropdownMenuItem>
