@@ -27,6 +27,21 @@ export type AdminCutProject = {
   updatedAt: Date;
 };
 
+export type AdminProjectFilters = {
+  /** Matched against the project's own name, case-insensitive. */
+  q?: string;
+  /** Matched against the owner's name, display name, or email — resolved to
+   * a set of userIds first (Prisma can't join CutProject to User directly;
+   * see the file header on why the tables stay FK-less), so an owner query
+   * that matches nobody short-circuits to an empty result rather than
+   * silently ignoring the filter. */
+  ownerQuery?: string;
+  exported?: "yes" | "no";
+  /** updatedAt lower/upper bound, inclusive. */
+  from?: Date;
+  to?: Date;
+};
+
 /** Every video editor project across every account, most recently updated
  * first — the admin Content → Projects list. Reuses summarize() (the same
  * function the Projects Home page's own list uses) rather than only
@@ -34,8 +49,28 @@ export type AdminCutProject = {
  * that key alone would leave nearly every card blank. summarize() falls
  * back to the doc's own first clip/asset — a live source file, the same
  * thing the Marquee grid already plays as its preview. */
-export async function listCutProjectsForAdmin(): Promise<AdminCutProject[]> {
+export async function listCutProjectsForAdmin(filters: AdminProjectFilters = {}): Promise<AdminCutProject[]> {
+  let ownerIds: string[] | undefined;
+  if (filters.ownerQuery?.trim()) {
+    const q = filters.ownerQuery.trim();
+    const owners = await prisma.user.findMany({
+      where: { OR: [{ name: { contains: q, mode: "insensitive" } }, { displayName: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }] },
+      select: { id: true },
+    });
+    ownerIds = owners.map((o) => o.id);
+    if (ownerIds.length === 0) return [];
+  }
+
   const rows = await prisma.cutProject.findMany({
+    where: {
+      ...(filters.q?.trim() ? { name: { contains: filters.q.trim(), mode: "insensitive" } } : {}),
+      ...(ownerIds ? { userId: { in: ownerIds } } : {}),
+      ...(filters.exported === "yes" ? { previewKey: { not: null } } : {}),
+      ...(filters.exported === "no" ? { previewKey: null } : {}),
+      ...(filters.from || filters.to
+        ? { updatedAt: { ...(filters.from ? { gte: filters.from } : {}), ...(filters.to ? { lte: filters.to } : {}) } }
+        : {}),
+    },
     orderBy: { updatedAt: "desc" },
     take: ADMIN_PAGE_SIZE,
     select: {

@@ -7,7 +7,9 @@ import { categoriesQueryKey } from "@/queries/categories";
 
 export const adminUsersQueryKey = (q?: string) => ["admin", "users", q ?? ""] as const;
 export const adminUsageQueryKey = ["admin", "usage"] as const;
-export const adminContentProjectsQueryKey = ["admin", "content-projects"] as const;
+export const adminContentProjectsQueryKeyBase = ["admin", "content-projects"] as const;
+export const adminContentProjectsQueryKey = (filters: AdminContentProjectFilters = {}) =>
+  [...adminContentProjectsQueryKeyBase, filters] as const;
 export const adminContentGenerationsQueryKey = (kind: "image" | "video") =>
   ["admin", "content-generations", kind] as const;
 export const adminContentAudioQueryKey = (tool?: "text-to-speech" | "dubbing") =>
@@ -531,10 +533,33 @@ export type AdminContentProject = {
   owner: AdminContentOwner | null;
 };
 
-export function useAdminContentProjects() {
+export type AdminContentProjectFilters = {
+  q?: string;
+  owner?: string;
+  exported?: "yes" | "no";
+  /** ISO date strings (yyyy-mm-dd from a plain <input type="date">). */
+  from?: string;
+  to?: string;
+};
+
+function contentProjectsQueryString(filters: AdminContentProjectFilters): string {
+  const params = new URLSearchParams();
+  if (filters.q?.trim()) params.set("q", filters.q.trim());
+  if (filters.owner?.trim()) params.set("owner", filters.owner.trim());
+  if (filters.exported) params.set("exported", filters.exported);
+  if (filters.from) params.set("from", filters.from);
+  if (filters.to) params.set("to", filters.to);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export function useAdminContentProjects(filters: AdminContentProjectFilters = {}) {
   return useQuery({
-    queryFn: () => apiFetch<{ items: AdminContentProject[] }>("/api/admin/content/projects"),
-    queryKey: adminContentProjectsQueryKey,
+    queryFn: () =>
+      apiFetch<{ items: AdminContentProject[] }>(
+        `/api/admin/content/projects${contentProjectsQueryString(filters)}`,
+      ),
+    queryKey: adminContentProjectsQueryKey(filters),
   });
 }
 
@@ -560,7 +585,7 @@ export function useAdminCloneProject() {
         if (job.state === "error") throw new Error(job.error || "Could not clone the project.");
       }
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminContentProjectsQueryKey }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminContentProjectsQueryKeyBase }),
   });
 }
 
@@ -571,7 +596,7 @@ export function useAdminDeleteProject() {
   return useMutation({
     mutationFn: (projectId: string) =>
       apiFetch<{ ok: true }>(`/api/admin/content/projects/${projectId}`, { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminContentProjectsQueryKey }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminContentProjectsQueryKeyBase }),
   });
 }
 
