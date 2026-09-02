@@ -15,11 +15,6 @@ import {
 import { setPreviewCanvas } from "@/cut/lib/previewCanvas";
 import { frameOf, isFullRect, rectOf, type Aspect, type ClipSpan, type FrameRect, type MediaAsset, type VideoClip } from "@/cut/lib/types";
 import { cn } from "@/lib/utils";
-<<<<<<< HEAD
-=======
-import { MaskGizmoCore, OverlayLayer } from "./OverlayLayer";
-import { HANDLE_AXIS, TransformHandles, type ResizeHandle } from "./TransformHandles";
->>>>>>> 96a51d67 (feat(site): eight-grip resize on every box)
 import {
   ClipExtractStrip,
   ClipFramingSection,
@@ -386,15 +381,10 @@ function OverlayPipHandle({ stage }: { stage: { w: number; h: number } }) {
     });
   };
 
-  // A grip drags its own edges and leaves the opposite ones where they are:
-  // the box keeps its far corner planted while the grabbed side travels, and
-  // a moving edge snaps to the frame the same way a move does.
-  const onResize = (handle: ResizeHandle, e: React.PointerEvent) => {
+  const onResize = (e: React.PointerEvent) => {
     e.stopPropagation();
     useEditor.getState().pushHistory();
-    const a = HANDLE_AXIS[handle];
     startDrag(e, {
-<<<<<<< HEAD
       onMove: (dx, dy) =>
         patch({
           ...r,
@@ -404,140 +394,6 @@ function OverlayPipHandle({ stage }: { stage: { w: number; h: number } }) {
     });
   };
 
-=======
-      onMove: (dx, dy) => {
-        // One axis at a time: where the grabbed edge lands, snapped to the
-        // frame, then the span it leaves against the planted edge.
-        const pull = (
-          dir: -1 | 0 | 1,
-          pos: number,
-          size: number,
-          d: number,
-          stageSize: number
-        ) => {
-          if (!dir) return { pos, size, guide: null as number | null };
-          const far = dir > 0 ? pos : pos + size;
-          const edge = (dir > 0 ? pos + size : pos) + d / stageSize;
-          const snapped = snapEdge(edge, SNAP_PX / stageSize);
-          const at = snapped ?? edge;
-          // Signed: a grip dragged past the planted edge stops at the floor and
-          // the box keeps its side.
-          const span = dir > 0 ? at - far : far - at;
-          const next = Math.max(0.1, Math.min(REGION_MAX_SCALE, span));
-          return {
-            pos: dir > 0 ? far : far - next,
-            size: next,
-            guide: snapped !== null && next === span ? snapped : null,
-          };
-        };
-        const hx = pull(a.x, r.x, r.w, dx, stage.w);
-        const hy = pull(a.y, r.y, r.h, dy, stage.h);
-        setGuides({ x: hx.guide, y: hy.guide });
-        patch({ ...r, x: hx.pos, w: hx.size, y: hy.pos, h: hy.size });
-      },
-      onUp: () => setGuides({ x: null, y: null }),
-    });
-  };
-
-  const panContent = pan;
-  const onPanContent = (e: React.PointerEvent) => {
-    if (!panContent) return;
-    e.stopPropagation();
-    useEditor.getState().pushHistory();
-    const toFrame = frameOf(aspect).w / stage.w; // screen px → frame px
-    startDrag(e, {
-      onMove: (dx, dy) => {
-        // Content follows the pointer; pan is the crop-window position.
-        useEditor.getState().updateClipTransient(panContent.id, {
-          panX:
-            panContent.ox > 1
-              ? Math.max(-1, Math.min(1, panContent.panX0 - (dx * toFrame) / (panContent.ox / 2)))
-              : 0,
-          panY:
-            panContent.oy > 1
-              ? Math.max(-1, Math.min(1, panContent.panY0 - (dy * toFrame) / (panContent.oy / 2)))
-              : 0,
-        });
-      },
-    });
-  };
-
-  const box = {
-    left: r.x * stage.w,
-    top: r.y * stage.h,
-    width: r.w * stage.w,
-    height: r.h * stage.h,
-  };
-  // The dashed box draws the full extent; the frame-clipped solid ring paints
-  // over it, so dashes show only where the box leaves the frame.
-  return (
-    <>
-      <div
-        className="absolute cursor-move rounded-[3px] border-2 border-dashed border-[#0a84ff]"
-        style={box}
-        onPointerDown={onMove}
-      >
-        {/* Overflowing fill content pans from the interior; the ring at the
-            border moves the box, the corner resizes it. */}
-        {panContent && (
-          <div
-            className="absolute inset-2 cursor-grab active:cursor-grabbing"
-            onPointerDown={onPanContent}
-          />
-        )}
-        <TransformHandles color="#0a84ff" className="z-20" onResize={onResize} />
-      </div>
-      <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-xl">
-        <div
-          className="absolute rounded-[3px] shadow-[inset_0_0_0_2px_#0a84ff]"
-          style={box}
-        />
-        {guides.x !== null && (
-          <div className="absolute inset-y-0 w-px bg-[#0a84ff]" style={{ left: guides.x * stage.w }} />
-        )}
-        {guides.y !== null && (
-          <div className="absolute inset-x-0 h-px bg-[#0a84ff]" style={{ top: guides.y * stage.h }} />
-        )}
-      </div>
-    </>
-  );
-}
-
-/**
- * The selected video clip's mask on the stage: the shared gizmo mounted at
- * the mask's anchor — the clip rect's center, carried through the clip's
- * pose so the outline sits where the compositor draws. Shows while the clip
- * is live under the playhead; the anchor point is a zero-size box, so the
- * gizmo's center-relative coordinates measure from it directly.
- */
-function ClipMaskGizmo({ stage }: { stage: { w: number; h: number } }) {
-  const selection = useEditor((s) => s.selection);
-  const clips = useEditor((s) => s.clips);
-  const skimTime = useSkim();
-  // A keyframed mask travels with the clock, so this one does follow every
-  // frame — but only while a masked clip is the selection.
-  const masked =
-    selection?.kind === "clip" ? clips.find((c) => c.id === selection.id) ?? null : null;
-  const armed = !!masked?.mask && masked.mask.kind !== "subject" && !masked.hidden;
-  const tLocal = usePreviewSelector((t) => (armed && masked ? t - masked.start : -1));
-  if (skimTime !== null) return null;
-  const clip = masked;
-  if (!armed || !clip?.mask) return null;
-  const speed = clip.speed && clip.speed > 0 ? clip.speed : 1;
-  const len = Math.max(0.1, (clip.out - clip.in) / speed);
-  if (tLocal < 0 || tLocal >= len) return null;
-  const rect = rectOf(clip);
-  const pose = clipKeyed(clip) ? clipPoseAt(clip, tLocal) : null;
-  const ax = pose ? pose.x : rect.x + rect.w / 2;
-  const ay = pose ? pose.y : rect.y + rect.h / 2;
-  const writeGeom = (patch: Partial<Omit<MaskKey, "t">>) => {
-    const st = useEditor.getState();
-    const cur = st.clips.find((c) => c.id === clip.id)?.mask;
-    if (!cur) return;
-    if (hasMaskKeys(cur)) return st.setClipMaskKey(clip.id, tLocal, patch, { transient: true });
-    st.updateClipTransient(clip.id, { mask: { ...cur, ...patch } });
-  };
->>>>>>> 96a51d67 (feat(site): eight-grip resize on every box)
   return (
     <div
       className="absolute cursor-move rounded-[3px] shadow-[inset_0_0_0_2px_#a855f7]"

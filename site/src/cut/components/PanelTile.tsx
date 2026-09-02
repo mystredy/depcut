@@ -29,8 +29,7 @@ export function Tile({
   onClick: () => void;
   /** Pointer entering or leaving — a tile whose preview only plays on hover. */
   onHover?: (inside: boolean) => void;
-  /** Caption under the preview; a tile whose preview is the name skips it. */
-  label?: string;
+  label: string;
   className?: string;
   /** A tile that places something by being dragged onto the timeline. */
   draggable?: boolean;
@@ -61,7 +60,7 @@ export function Tile({
       onClick={onClick}
     >
       {children}
-      {label && <span className="leading-none">{label}</span>}
+      <span className="leading-none">{label}</span>
     </button>
   );
 }
