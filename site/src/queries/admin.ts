@@ -564,6 +564,17 @@ export function useAdminCloneProject() {
   });
 }
 
+/** Delete any account's project — the Content → Projects list's right-click
+ * "Delete project" action. Irreversible, same as an owner's own delete. */
+export function useAdminDeleteProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: string) =>
+      apiFetch<{ ok: true }>(`/api/admin/content/projects/${projectId}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminContentProjectsQueryKey }),
+  });
+}
+
 export type AdminContentGeneration = {
   id: string;
   userId: string;
