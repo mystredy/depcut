@@ -153,6 +153,7 @@ const SECTIONS: NavSection[] = [
     color: "text-emerald-500",
     children: [
       { label: "Dashboard", href: "/admin/finance", icon: LayoutDashboard, color: "text-emerald-500" },
+      { label: "Creator Applications", href: "/admin/finance/creator-applications", icon: Clapperboard, color: "text-fuchsia-500" },
       { label: "Withdrawals", href: "/admin/finance/withdrawals", icon: DollarSign, color: "text-rose-500" },
       { label: "Rates", href: "/admin/finance/rates", icon: Coins, color: "text-amber-500" },
       { label: "Transactions", href: "/admin/finance/transactions", icon: Activity, color: "text-blue-500" },

@@ -52,6 +52,7 @@ model User {
   financeTransactions FinanceTransaction[]
   giveawayPayments GiveawayPayment[]
   referralCommission ReferralCommission?
+  creatorApplication CreatorApplication?
 
   @@map("user")
 }

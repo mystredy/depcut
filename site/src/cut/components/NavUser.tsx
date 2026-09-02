@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ChartColumn,
   ChevronRight,
+  Clapperboard,
   CreditCard,
   EllipsisVertical,
   LogOut,
@@ -23,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { CreatorApplicationDialog } from "@/cut/components/CreatorApplicationDialog";
 import { FeedbackDialog } from "@/cut/components/FeedbackDialog";
 import { NavStorage } from "@/cut/components/NavStorage";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -71,6 +73,7 @@ export function NavUser() {
   const router = useRouter();
   const base = useCutBase();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [creatorApplicationOpen, setCreatorApplicationOpen] = useState(false);
   const { data: session } = authClient.useSession();
   // Started unconditionally rather than waiting on the session hook to
   // resolve first — /api/account/profile reads the session cookie itself,
@@ -187,6 +190,9 @@ export function NavUser() {
           <DropdownMenuItem onClick={() => router.push(`${base}/settings/payouts`)}>
             <Wallet /> Payouts
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setCreatorApplicationOpen(true)}>
+            <Clapperboard /> Apply to be creator
+          </DropdownMenuItem>
           {/* The welcome sequence is a full-window overlay mounted in the app
               shell, so this asks for it rather than routing anywhere. */}
           <DropdownMenuItem onClick={openOnboarding}>
@@ -205,6 +211,9 @@ export function NavUser() {
         </DropdownMenuContent>
       </DropdownMenu>
       {feedbackOpen && <FeedbackDialog onClose={() => setFeedbackOpen(false)} />}
+      {creatorApplicationOpen && (
+        <CreatorApplicationDialog onClose={() => setCreatorApplicationOpen(false)} />
+      )}
     </>
   );
 }

@@ -40,6 +40,7 @@ export const adminFinanceTransactionsQueryKey = (filters: {
 export const adminFinanceGiveawaysQueryKey = ["admin", "finance-giveaways"] as const;
 export const adminFinanceReferralsQueryKey = ["admin", "finance-referrals"] as const;
 export const adminFinanceOverviewQueryKey = ["admin", "finance-overview"] as const;
+export const adminCreatorApplicationsQueryKey = ["admin", "creator-applications"] as const;
 export const adminTasksQueryKey = ["admin", "tasks"] as const;
 export const adminAnnouncementsQueryKey = ["admin", "announcements"] as const;
 export const adminApiIntegrationsQueryKey = ["admin", "api-integrations"] as const;
@@ -134,6 +135,20 @@ export type AdminCreatorRateAccount = {
   available: number;
   referral: number;
   lifetime: number;
+};
+
+export type AdminCreatorApplication = {
+  userId: string;
+  applicantName: string;
+  applicantEmail: string;
+  reason: string;
+  portfolio: string | null;
+  status: "Pending" | "Approved" | "Rejected";
+  reviewNote: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type AdminWithdrawal = {
@@ -1224,6 +1239,36 @@ export function useUpdateWithdrawal() {
       queryClient.invalidateQueries({ queryKey: ["admin", "finance-rates"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "finance-transactions"] });
       queryClient.invalidateQueries({ queryKey: adminFinanceOverviewQueryKey });
+    },
+  });
+}
+
+export function useAdminCreatorApplications() {
+  return useQuery({
+    queryFn: () => apiFetch<{ applications: AdminCreatorApplication[] }>("/api/admin/creator-applications"),
+    queryKey: adminCreatorApplicationsQueryKey,
+  });
+}
+
+export function useReviewCreatorApplication() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      userId,
+      status,
+      reviewNote,
+    }: {
+      userId: string;
+      status: "Approved" | "Rejected";
+      reviewNote?: string;
+    }) =>
+      apiFetch<{ application: AdminCreatorApplication }>(`/api/admin/creator-applications/${userId}`, {
+        body: JSON.stringify({ reviewNote, status }),
+        method: "PATCH",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminCreatorApplicationsQueryKey });
+      queryClient.invalidateQueries({ queryKey: ["admin", "finance-rates"] });
     },
   });
 }
