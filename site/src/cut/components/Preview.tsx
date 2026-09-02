@@ -25,6 +25,7 @@ import {
   ClipVolumeSection,
 } from "./Inspector";
 import { OverlayLayer } from "./OverlayLayer";
+import { HANDLE_AXIS, TransformHandles, type ResizeHandle } from "./TransformHandles";
 import { PlayheadShuttleControl, TimelineShuttleControl } from "./ShuttleBar";
 import { StageEffectPaint, stageSlices, useEffectLanes, useStageEffects } from "./StageEffects";
 
@@ -381,16 +382,25 @@ function OverlayPipHandle({ stage }: { stage: { w: number; h: number } }) {
     });
   };
 
-  const onResize = (e: React.PointerEvent) => {
+  // A grip drags its own edge and leaves the opposite one planted: the box
+  // keeps its far corner where it is while the grabbed side travels.
+  const onResize = (handle: ResizeHandle, e: React.PointerEvent) => {
     e.stopPropagation();
     useEditor.getState().pushHistory();
+    const a = HANDLE_AXIS[handle];
+    const pull = (dir: -1 | 0 | 1, pos: number, size: number, delta: number) => {
+      if (!dir) return { pos, size };
+      if (dir > 0) return { pos, size: Math.max(0.1, Math.min(1 - pos, size + delta)) };
+      const far = pos + size;
+      const next = Math.max(0.1, Math.min(far, size - delta));
+      return { pos: far - next, size: next };
+    };
     startDrag(e, {
-      onMove: (dx, dy) =>
-        patch({
-          ...r,
-          w: Math.max(0.1, Math.min(1 - r.x, r.w + dx / stage.w)),
-          h: Math.max(0.1, Math.min(1 - r.y, r.h + dy / stage.h)),
-        }),
+      onMove: (dx, dy) => {
+        const hx = pull(a.x, r.x, r.w, dx / stage.w);
+        const hy = pull(a.y, r.y, r.h, dy / stage.h);
+        patch({ ...r, x: hx.pos, w: hx.size, y: hy.pos, h: hy.size });
+      },
     });
   };
 
@@ -400,9 +410,10 @@ function OverlayPipHandle({ stage }: { stage: { w: number; h: number } }) {
       style={{ left: r.x * stage.w, top: r.y * stage.h, width: r.w * stage.w, height: r.h * stage.h }}
       onPointerDown={onMove}
     >
-      <span
-        className="absolute -right-1.5 -bottom-1.5 size-3 cursor-nwse-resize rounded-full bg-violet-500 shadow-[0_0_0_2px_white]"
-        onPointerDown={onResize}
+      <TransformHandles
+        color="#a855f7"
+        handles={["nw", "n", "ne", "e", "se", "s", "sw", "w"]}
+        onResize={onResize}
       />
     </div>
   );
