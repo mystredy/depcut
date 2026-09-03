@@ -27,8 +27,11 @@ export function isDragActive() {
   return activeDrags > 0;
 }
 
-/** Pointer-drag helper: tracks deltas from pointerdown until release. */
-export function startDrag(e: React.PointerEvent, opts: DragOpts) {
+/** Pointer-drag helper: tracks deltas from pointerdown until release.
+ * Returns a `cancel` that tears the gesture down without firing `onUp` — for
+ * a caller that needs to hand the same pointer off to something else (a
+ * second finger turning a single-finger drag into a pinch, say). */
+export function startDrag(e: React.PointerEvent, opts: DragOpts): () => void {
   e.preventDefault();
   e.stopPropagation();
   // preventDefault also suppresses the browser's default focus move, so end
@@ -37,6 +40,11 @@ export function startDrag(e: React.PointerEvent, opts: DragOpts) {
     (document.activeElement as HTMLElement | null)?.blur?.();
   }
 
+  // Scoped to the pointer that started the gesture: window-level listeners
+  // otherwise fire for every active pointer, so a second finger touching
+  // down anywhere else while this drag is live would otherwise feed its own
+  // moves into the same delta math and jitter the result between the two.
+  const pointerId = e.pointerId;
   const startX = e.clientX;
   const startY = e.clientY;
   let moved = false;
@@ -60,7 +68,17 @@ export function startDrag(e: React.PointerEvent, opts: DragOpts) {
     document.head.append(pin);
   }
 
+  const cancel = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", up);
+    pin?.remove();
+    activeDrags--;
+    dragListeners.forEach((fn) => fn());
+  };
+
   const move = (ev: PointerEvent) => {
+    if (ev.pointerId !== pointerId) return;
     const dx = ev.clientX - startX;
     const dy = ev.clientY - startY;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
@@ -68,15 +86,13 @@ export function startDrag(e: React.PointerEvent, opts: DragOpts) {
     holdCursor();
   };
   const up = (ev: PointerEvent) => {
-    window.removeEventListener("pointermove", move);
-    window.removeEventListener("pointerup", up);
-    window.removeEventListener("pointercancel", up);
-    pin?.remove();
-    activeDrags--;
-    dragListeners.forEach((fn) => fn());
+    if (ev.pointerId !== pointerId) return;
+    cancel();
     opts.onUp?.(ev.clientX - startX, ev.clientY - startY, moved);
   };
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
   window.addEventListener("pointercancel", up);
+
+  return cancel;
 }
