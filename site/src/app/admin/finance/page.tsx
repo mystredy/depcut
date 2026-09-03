@@ -4,24 +4,19 @@ import Link from "next/link";
 import { ArrowDownCircle, ArrowUpCircle, Coins, Wallet } from "lucide-react";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAdminFinanceOverview } from "@/queries/admin";
+import { formatUsd } from "@/lib/credits/format-usd";
+import { useAdminFinanceOverview, useAdminUsage } from "@/queries/admin";
 
 export default function AdminFinanceDashboardPage() {
   const overview = useAdminFinanceOverview();
   const data = overview.data;
+  // AI credit totals (what accounts hold/earned/spent on inference), not the
+  // Rates economy the rest of this page covers — same numbers as /admin/usage.
+  const usage = useAdminUsage();
+  const creditTotals = usage.data?.totals;
 
   const pendingUsd = data ? data.totalPendingRates * data.exchangeRate.currentRate : 0;
   const availableUsd = data ? data.totalAvailableRates * data.exchangeRate.currentRate : 0;
-  // Everything a creator currently holds, in any state — the platform's
-  // outstanding Rates liability if every account cashed out today.
-  const totalBalanceRates = data
-    ? data.totalAvailableRates + data.totalPendingRates + data.totalReferralRates
-    : 0;
-  const totalBalanceUsd = data ? totalBalanceRates * data.exchangeRate.currentRate : 0;
-  // Lifetime is cumulative and never decreases on withdrawal, so it's what
-  // creators have received in total — spent (Paid withdrawals) is the USD
-  // that's actually left the platform.
-  const totalReceivedUsd = data ? data.totalLifetimeRates * data.exchangeRate.currentRate : 0;
 
   return (
     <div className="space-y-6">
@@ -38,38 +33,39 @@ export default function AdminFinanceDashboardPage() {
         <p className="text-sm text-destructive">Couldn&apos;t load the overview. Try again.</p>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 rounded-2xl border bg-card p-6 sm:grid-cols-3">
-            <div>
-              <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                <Wallet className="size-3.5" /> Total Balance
-              </p>
-              <p className="mt-1 text-2xl font-bold">
-                ${totalBalanceUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {totalBalanceRates.toLocaleString()} Rates across every account
-              </p>
-            </div>
-            <div className="sm:border-l sm:pl-6">
-              <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
-                <ArrowDownCircle className="size-3.5" /> Total Received
-              </p>
-              <p className="mt-1 text-2xl font-bold">
-                ${totalReceivedUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {data.totalLifetimeRates.toLocaleString()} Rates earned, lifetime
-              </p>
-            </div>
-            <div className="sm:border-l sm:pl-6">
-              <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-rose-600 dark:text-rose-400">
-                <ArrowUpCircle className="size-3.5" /> Total Spent
-              </p>
-              <p className="mt-1 text-2xl font-bold">
-                ${data.totalCreatorPayouts.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">Paid out to creators</p>
-            </div>
+          <div className="rounded-2xl border bg-card p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              AI Credits
+            </p>
+            {usage.isLoading ? (
+              <Skeleton className="mt-3 h-16 w-full" />
+            ) : usage.isError || !creditTotals ? (
+              <p className="mt-3 text-sm text-destructive">Couldn&apos;t load AI credit totals.</p>
+            ) : (
+              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                    <Wallet className="size-3.5" /> Total Balance
+                  </p>
+                  <p className="mt-1 text-2xl font-bold">{formatUsd(creditTotals.balance)}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Across every account</p>
+                </div>
+                <div className="sm:border-l sm:pl-6">
+                  <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+                    <ArrowDownCircle className="size-3.5" /> Total Received
+                  </p>
+                  <p className="mt-1 text-2xl font-bold">{formatUsd(creditTotals.lifetimeGranted)}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Granted, lifetime</p>
+                </div>
+                <div className="sm:border-l sm:pl-6">
+                  <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-rose-600 dark:text-rose-400">
+                    <ArrowUpCircle className="size-3.5" /> Total Spent
+                  </p>
+                  <p className="mt-1 text-2xl font-bold">{formatUsd(creditTotals.lifetimeCharged)}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Charged on AI usage, lifetime</p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-4 rounded-2xl border bg-gradient-to-r from-emerald-500/5 to-amber-500/5 p-6 md:grid-cols-2">
