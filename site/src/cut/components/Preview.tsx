@@ -303,7 +303,7 @@ export function Preview() {
             sibling mirrors .stage's own centering so the two align exactly. */}
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-3 p-3">
           <div className="relative" style={{ width: stage.w, height: stage.h }}>
-            <OverlayPipHandle stage={stage} stageRef={stageRef} />
+            <OverlayPipHandle stage={stage} stageRef={stageRef} panDrag={panDrag} />
           </div>
         </div>
       </div>
@@ -373,14 +373,19 @@ const ROTATE_SNAP = [-180, -90, 0, 90, 180];
  * clip on any track — a full-frame layer gets a handle flush with the stage
  * edges, so dragging a grip inward is how it becomes a regioned (split-screen
  * or PiP) clip in the first place — and only while that clip is live under
- * the playhead so it lines up with the compositor.
+ * the playhead so it lines up with the compositor. Dragging the box itself
+ * pans instead of repositioning whenever the clip is pannable (filling, or
+ * zoomed past what fitting/filling needs) — reposition would be a no-op on a
+ * full-frame box anyway, and pan is what a filled or zoomed clip needs.
  */
 function OverlayPipHandle({
   stage,
   stageRef,
+  panDrag,
 }: {
   stage: { w: number; h: number };
   stageRef: RefObject<HTMLDivElement | null>;
+  panDrag: (e: React.PointerEvent) => boolean;
 }) {
   const selection = useEditor((s) => s.selection);
   const clips = useEditor((s) => s.clips);
@@ -413,6 +418,10 @@ function OverlayPipHandle({
   const setRotation = applyRotation;
 
   const onMove = (e: React.PointerEvent) => {
+    // A pannable clip (filling, or zoomed) drags its crop window instead —
+    // repositioning the frame rect would be a no-op on a full-frame box, and
+    // panDrag already checks pannability itself (fit/zoom, actual overflow).
+    if (panDrag(e)) return;
     e.stopPropagation();
     useEditor.getState().pushHistory();
     startDrag(e, {
