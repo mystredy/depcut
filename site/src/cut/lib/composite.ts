@@ -420,7 +420,7 @@ export class FrameCompositor {
     const dh = vh * scale;
     let dx = (W - dw) / 2;
     let dy = (H - dh) / 2;
-    if (fill) {
+    if (fill || zoom > 1) {
       // Pan the crop window across the overflow (matches the export crop).
       const kx = 0.5 + (clip?.panX ?? 0) / 2;
       const ky = 0.5 + (clip?.panY ?? 0) / 2;

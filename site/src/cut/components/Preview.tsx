@@ -63,13 +63,16 @@ function pannableSpan(s: {
   const span =
     spans.find((sp) => s.currentTime >= sp.start && sp.start + sp.len > s.currentTime) ??
     spans[spans.length - 1];
-  // Pan only makes sense for a full-frame fill clip; a regioned clip is moved
-  // with its own preview handle instead.
-  if (!span || span.clip.fit !== "fill" || !isFullRect(rectOf(span.clip))) return null;
+  // Pan only makes sense for a full-frame clip that actually overflows its
+  // box — filling, or zoomed past what fitting/filling already needs. A
+  // regioned clip is moved with its own preview handle instead.
+  const clip = span?.clip;
+  const zoom = clip?.zoom && clip.zoom > 1 ? clip.zoom : 1;
+  if (!span || !clip || !(clip.fit === "fill" || zoom > 1) || !isFullRect(rectOf(clip))) return null;
   const { width, height } = span.asset;
   if (!width || !height) return null;
   const frame = frameOf(s.aspect);
-  const scale = Math.max(frame.w / width, frame.h / height);
+  const scale = (clip.fit === "fill" ? Math.max(frame.w / width, frame.h / height) : Math.min(frame.w / width, frame.h / height)) * zoom;
   const ox = width * scale - frame.w;
   const oy = height * scale - frame.h;
   return ox > 1 || oy > 1 ? span : null;
@@ -175,7 +178,10 @@ export function Preview() {
     if (!span) return false;
     const fr = frameOf(s.aspect);
     const { width = 1, height = 1 } = span.asset;
-    const scale = Math.max(fr.w / width, fr.h / height);
+    const zoom = span.clip.zoom && span.clip.zoom > 1 ? span.clip.zoom : 1;
+    const scale =
+      (span.clip.fit === "fill" ? Math.max(fr.w / width, fr.h / height) : Math.min(fr.w / width, fr.h / height)) *
+      zoom;
     const ox = width * scale - fr.w;
     const oy = height * scale - fr.h;
     const clipId = span.clip.id;

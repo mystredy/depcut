@@ -800,8 +800,12 @@ export function ClipExtractStrip({ clip }: { clip: VideoClip }) {
   );
 }
 
+const MAX_ZOOM = 4;
+
 export function ClipFramingSection({ clip }: { clip: VideoClip }) {
   const updateClip = useEditor((s) => s.updateClip);
+  const [zoomDraft, setZoomDraft] = useState<number | null>(null);
+  const zoom = zoomDraft ?? clip.zoom ?? 1;
   return (
     <div className="flex flex-col gap-1 px-3.5 pb-4">
       <Row label="Framing">
@@ -823,7 +827,38 @@ export function ClipFramingSection({ clip }: { clip: VideoClip }) {
           ))}
         </div>
       </Row>
-      {clip.fit === "fill" && ((clip.panX ?? 0) !== 0 || (clip.panY ?? 0) !== 0) && (
+      <Row label="Zoom">
+        <Slider
+          className="clip-zoom data-horizontal:w-24"
+          min={1}
+          max={MAX_ZOOM}
+          step={0.1}
+          value={zoom}
+          onValueChange={(v) => setZoomDraft(Number(v))}
+          onValueCommitted={() => {
+            if (zoomDraft != null) {
+              updateClip(clip.id, { zoom: zoomDraft <= 1 ? undefined : zoomDraft });
+            }
+            setZoomDraft(null);
+          }}
+        />
+        <ScrubValue
+          label="Zoom"
+          className="w-9 text-muted-foreground"
+          value={zoom}
+          min={1}
+          max={MAX_ZOOM}
+          step={0.1}
+          format={formatPercent}
+          parse={parsePercentInput}
+          onScrub={setZoomDraft}
+          onCommit={(v) => {
+            updateClip(clip.id, { zoom: v <= 1 ? undefined : v });
+            setZoomDraft(null);
+          }}
+        />
+      </Row>
+      {(clip.fit === "fill" || (clip.zoom ?? 1) > 1) && ((clip.panX ?? 0) !== 0 || (clip.panY ?? 0) !== 0) && (
         <Row label="Position">
           <button
             className="clip-recenter rounded-md border border-input px-2 py-0.5 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
