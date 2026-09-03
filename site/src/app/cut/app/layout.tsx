@@ -6,7 +6,8 @@ import { ConnectGate } from "@/cut/components/ConnectGate";
 import { ExportsDock } from "@/cut/components/ExportsDock";
 import { CutOnboarding } from "@/cut/components/onboarding/CutOnboarding";
 import { RequireSession } from "@/cut/components/RequireSession";
-import { ThemeProvider, ThemeScript } from "@/cut/components/ThemeProvider";
+import { ThemeProvider } from "@/cut/components/ThemeProvider";
+import { ThemeScript } from "@/cut/components/ThemeScript";
 
 // The Cut app (projects home, library, editor) renders on the same white
 // product surface as Donkey's /app, not the cream marketing background of the

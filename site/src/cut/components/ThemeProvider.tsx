@@ -2,9 +2,9 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
-export type ThemeChoice = "light" | "dark" | "system";
+import { THEME_STORAGE_KEY } from "@/cut/components/ThemeScript";
 
-const STORAGE_KEY = "cut.theme";
+export type ThemeChoice = "light" | "dark" | "system";
 
 function prefersDark(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -16,20 +16,11 @@ function isDark(choice: ThemeChoice): boolean {
 
 function readStoredTheme(): ThemeChoice {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
     return stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
   } catch {
     return "system";
   }
-}
-
-// Inline, synchronous, and rendered before the rest of the app subtree so it
-// runs ahead of first paint — the same trick every theme-switcher needs to
-// avoid a flash of the wrong theme while React is still hydrating. It writes
-// straight to the DOM rather than waiting on a React effect.
-export function ThemeScript() {
-  const script = `(function(){try{var t=localStorage.getItem(${JSON.stringify(STORAGE_KEY)});var d=t==="dark"||((!t||t==="system")&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d)document.documentElement.classList.add("dark");}catch(e){}})();`;
-  return <script dangerouslySetInnerHTML={{ __html: script }} />;
 }
 
 type ThemeContextValue = { theme: ThemeChoice; setTheme: (theme: ThemeChoice) => void };
@@ -55,7 +46,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setTheme = (next: ThemeChoice) => {
     setThemeState(next);
     try {
-      localStorage.setItem(STORAGE_KEY, next);
+      localStorage.setItem(THEME_STORAGE_KEY, next);
     } catch {
       // A private window or full storage just means the choice doesn't
       // survive the next visit — the toggle itself still works this session.
