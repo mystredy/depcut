@@ -240,6 +240,8 @@ export interface VideoClip {
    * of the oversized video stays visible. */
   panX?: number;
   panY?: number;
+  /** Clockwise rotation in degrees, about the clip's own box center; absent = 0. */
+  rotation?: number;
   /** Playback rate, default 1 (absent). The source (out-in) seconds play in
    * (out-in)/speed timeline seconds, so >1 is faster and shorter. */
   speed?: number;

@@ -37,6 +37,8 @@ export interface ExportSpec {
     fit?: "fit" | "fill";
     panX?: number; // crop-window pan -1..1 (fill mode, full frame)
     panY?: number;
+    /** Clockwise rotation in degrees, about the clip's own box center; absent = 0. */
+    rotation?: number;
     /** Region of the frame this clip fills; absent = full frame. */
     frame?: { x: number; y: number; w: number; h: number };
     speed?: number; // playback rate, default 1
@@ -703,6 +705,17 @@ export async function runExport(
       : `[${idx}:v]trim=${num(c.in)}:${num(c.out)},setpts=(PTS-STARTPTS)/${num(speed)}`;
     if ((c.image || videoPresence.get(c.file)) && !c.hidden) {
       const region = regionPx(c.frame, W, H);
+      // A rotated picture's own bounding box grows past its unrotated size;
+      // rotate into a square canvas big enough for any angle (its diagonal),
+      // transparent outside the picture, so the pad step below can center
+      // and letterbox it same as an unrotated one — same technique as the
+      // engine's existing keyframed-rotation export path.
+      const rotateFilter = (boxW: number, boxH: number) => {
+        if (!c.rotation) return "";
+        const diag = 2 * Math.ceil(Math.hypot(boxW, boxH) / 2);
+        const rad = (c.rotation * Math.PI) / 180;
+        return `,rotate=a=${num(rad)}:ow=${diag}:oh=${diag}:c=black@0.0`;
+      };
       let frame: string;
       if (region) {
         // A regioned track-0 clip (split-screen half) scales into its rect,
@@ -710,19 +723,26 @@ export async function runExport(
         const { rx, ry, rw, rh } = region;
         frame =
           c.fit === "fill"
-            ? `scale=${rw}:${rh}:force_original_aspect_ratio=increase,crop=${rw}:${rh},` +
-              `pad=${W}:${H}:${rx}:${ry}:color=${padColor}`
-            : `scale=${rw}:${rh}:force_original_aspect_ratio=decrease:force_divisible_by=2,` +
-              `pad=${W}:${H}:${rx}+(${rw}-iw)/2:${ry}+(${rh}-ih)/2:color=${padColor}`;
+            ? `scale=${rw}:${rh}:force_original_aspect_ratio=increase,crop=${rw}:${rh}` +
+              rotateFilter(rw, rh) +
+              `,pad=${W}:${H}:${rx}+(${rw}-iw)/2:${ry}+(${rh}-ih)/2:color=${padColor}`
+            : `scale=${rw}:${rh}:force_original_aspect_ratio=decrease:force_divisible_by=2` +
+              rotateFilter(rw, rh) +
+              `,pad=${W}:${H}:${rx}+(${rw}-iw)/2:${ry}+(${rh}-ih)/2:color=${padColor}`;
       } else {
         frame =
           c.fit === "fill"
             ? // Cover the frame, then crop; the pan chooses the visible window.
+              // A rotated fill clip can't cover every corner of a rectangular
+              // frame any more, so it letterboxes like a rotated fit clip.
               `scale=${W}:${H}:force_original_aspect_ratio=increase,` +
               `crop=${W}:${H}:(iw-ow)*${num(0.5 + Math.max(-1, Math.min(1, c.panX ?? 0)) / 2)}` +
-              `:(ih-oh)*${num(0.5 + Math.max(-1, Math.min(1, c.panY ?? 0)) / 2)}`
-            : `scale=${W}:${H}:force_original_aspect_ratio=decrease,` +
-              `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=${padColor}`;
+              `:(ih-oh)*${num(0.5 + Math.max(-1, Math.min(1, c.panY ?? 0)) / 2)}` +
+              rotateFilter(W, H) +
+              (c.rotation ? `,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=${padColor}` : "")
+            : `scale=${W}:${H}:force_original_aspect_ratio=decrease` +
+              rotateFilter(W, H) +
+              `,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=${padColor}`;
       }
       // setpts/speed rescales the clip's duration on the timeline (footage);
       // a still just replays its looped input.

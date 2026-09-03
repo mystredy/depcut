@@ -224,6 +224,7 @@ async function buildExportPayload(
     fit: sp.clip.fit ?? "fit",
     panX: sp.clip.panX ?? 0,
     panY: sp.clip.panY ?? 0,
+    rotation: sp.clip.rotation,
     frame: sp.clip.frame,
     speed: clipSpeed(sp.clip),
     transition: sp.transitionOut,

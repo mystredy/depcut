@@ -107,6 +107,7 @@ function useCachedFirstFrame(canvasRef: RefObject<HTMLCanvasElement | null>) {
 export function Preview() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const [stage, setStage] = useState({ w: 270, h: 480 });
   const pannable = useEditor((s) => pannableSpan(s) !== null);
   const aspect = useEditor((s) => s.aspect);
@@ -212,7 +213,7 @@ export function Preview() {
     <section className="preview-pane flex min-h-0 min-w-0 flex-col bg-muted/40 select-none">
       <div
         ref={wrapRef}
-        className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-3"
+        className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-3"
         // The empty room around the picture is the only part of the preview that
         // clears the selection; the picture itself just plays and pauses.
         onPointerDown={(e) => {
@@ -220,6 +221,7 @@ export function Preview() {
         }}
       >
         <div
+          ref={stageRef}
           className={cn(
             "stage relative overflow-hidden rounded-xl bg-black shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_12px_36px_rgba(0,0,0,0.18)]",
             pannable && "cursor-grab active:cursor-grabbing"
@@ -272,7 +274,6 @@ export function Preview() {
               <p className="text-sm text-white/60">Drag a clip from Media onto the timeline to preview it here</p>
             </div>
           )}
-          <OverlayPipHandle stage={stage} />
           {slices.map((slice) =>
             slice.kind === "elements" ? (
               <OverlayLayer
@@ -288,6 +289,16 @@ export function Preview() {
               <StageEffectPaint key={slice.key} states={slice.states} />
             )
           )}
+        </div>
+        {/* Rendered outside .stage, not inside it — the rotate handle sits
+            above the box, and .stage's own overflow-hidden (there to clip
+            the picture to its rounded corners) would cut it off whenever the
+            selected clip's box sits flush against the stage's top edge. This
+            sibling mirrors .stage's own centering so the two align exactly. */}
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-3 p-3">
+          <div className="relative" style={{ width: stage.w, height: stage.h }}>
+            <OverlayPipHandle stage={stage} stageRef={stageRef} />
+          </div>
         </div>
       </div>
       {/* A narrow viewport hands Timeline/Playhead's shuttle here instead of
@@ -337,25 +348,46 @@ export function Preview() {
   );
 }
 
+/** Rotate a screen-space drag delta by `-deg` — back into a rotated box's own
+ * unrotated axes, so a grip still pulls the edge it visually sits on. */
+function unturn(dx: number, dy: number, deg: number): { dx: number; dy: number } {
+  if (!deg) return { dx, dy };
+  const rad = (deg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  return { dx: dx * cos + dy * sin, dy: -dx * sin + dy * cos };
+}
+
+const ROTATE_SNAP = [-180, -90, 0, 90, 180];
+
 /**
  * Direct-manipulation handle for the selected video layer's frame region: drag
  * the box to reposition, drag a grip to resize (both update the clip's
- * `frame` rect). Shows for any selected clip on any track — a full-frame
- * layer gets a handle flush with the stage edges, so dragging a grip inward
- * is how it becomes a regioned (split-screen or PiP) clip in the first
- * place — and only while that clip is live under the playhead so it lines up
- * with the compositor.
+ * `frame` rect), drag the top handle to rotate it. Shows for any selected
+ * clip on any track — a full-frame layer gets a handle flush with the stage
+ * edges, so dragging a grip inward is how it becomes a regioned (split-screen
+ * or PiP) clip in the first place — and only while that clip is live under
+ * the playhead so it lines up with the compositor.
  */
-function OverlayPipHandle({ stage }: { stage: { w: number; h: number } }) {
+function OverlayPipHandle({
+  stage,
+  stageRef,
+}: {
+  stage: { w: number; h: number };
+  stageRef: RefObject<HTMLDivElement | null>;
+}) {
   const selection = useEditor((s) => s.selection);
   const clips = useEditor((s) => s.clips);
   const currentTime = useEditor((s) => s.currentTime);
+  const [turning, setTurning] = useState<number | null>(null);
 
   // Resolve the selected, live clip (any track) plus how to patch its rect. A
   // clip's own footprint equals its span length, so one path serves every
   // track.
   let rect: FrameRect | null = null;
   let apply: ((frame: FrameRect) => void) | null = null;
+  let applyRotation: ((deg: number | undefined) => void) | null = null;
+  let rotation = 0;
   if (selection?.kind === "clip") {
     const clip = clips.find((c) => c.id === selection.id);
     if (clip && !clip.hidden) {
@@ -363,13 +395,16 @@ function OverlayPipHandle({ stage }: { stage: { w: number; h: number } }) {
       const len = Math.max(0.1, (clip.out - clip.in) / speed);
       if (currentTime >= clip.start && currentTime < clip.start + len) {
         rect = rectOf(clip);
+        rotation = clip.rotation ?? 0;
         apply = (frame) => useEditor.getState().updateClipTransient(clip.id, { frame });
+        applyRotation = (deg) => useEditor.getState().updateClipTransient(clip.id, { rotation: deg });
       }
     }
   }
-  if (!rect || !apply) return null;
+  if (!rect || !apply || !applyRotation) return null;
   const r = rect;
   const patch = apply;
+  const setRotation = applyRotation;
 
   const onMove = (e: React.PointerEvent) => {
     e.stopPropagation();
@@ -385,7 +420,9 @@ function OverlayPipHandle({ stage }: { stage: { w: number; h: number } }) {
   };
 
   // A grip drags its own edge and leaves the opposite one planted: the box
-  // keeps its far corner where it is while the grabbed side travels.
+  // keeps its far corner where it is while the grabbed side travels. The drag
+  // delta is un-rotated back into the box's own axes first, so a grip on a
+  // turned box still pulls the edge it visually sits on.
   const onResize = (handle: ResizeHandle, e: React.PointerEvent) => {
     e.stopPropagation();
     useEditor.getState().pushHistory();
@@ -399,24 +436,63 @@ function OverlayPipHandle({ stage }: { stage: { w: number; h: number } }) {
     };
     startDrag(e, {
       onMove: (dx, dy) => {
-        const hx = pull(a.x, r.x, r.w, dx / stage.w);
-        const hy = pull(a.y, r.y, r.h, dy / stage.h);
+        const u = unturn(dx, dy, rotation);
+        const hx = pull(a.x, r.x, r.w, u.dx / stage.w);
+        const hy = pull(a.y, r.y, r.h, u.dy / stage.h);
         patch({ ...r, x: hx.pos, w: hx.size, y: hy.pos, h: hy.size });
       },
     });
   };
 
+  // The pointer's polar angle around the box's own (screen-space) center, at
+  // grab time vs. during the drag — the difference is added onto the clip's
+  // existing rotation, wrapped to ±180° and snapped to the cardinal angles
+  // within a few degrees.
+  const onRotate = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    useEditor.getState().pushHistory();
+    const stageEl = stageRef.current;
+    if (!stageEl) return;
+    const stageBox = stageEl.getBoundingClientRect();
+    const cx = stageBox.left + (r.x + r.w / 2) * stage.w;
+    const cy = stageBox.top + (r.y + r.h / 2) * stage.h;
+    const angleAt = (x: number, y: number) => (Math.atan2(y - cy, x - cx) * 180) / Math.PI + 90;
+    const grabX = e.clientX;
+    const grabY = e.clientY;
+    const from = angleAt(grabX, grabY);
+    setTurning(rotation);
+    startDrag(e, {
+      onMove: (dx, dy) => {
+        const raw = rotation + (angleAt(grabX + dx, grabY + dy) - from);
+        const wrapped = ((((raw + 180) % 360) + 360) % 360) - 180;
+        const snapped = ROTATE_SNAP.find((t) => Math.abs(wrapped - t) < 4);
+        const deg = Math.round(snapped ?? wrapped);
+        setTurning(deg);
+        setRotation(deg === 0 ? undefined : deg);
+      },
+      onUp: () => setTurning(null),
+    });
+  };
+
   return (
     <div
-      className="absolute cursor-move rounded-[3px] shadow-[inset_0_0_0_2px_#a855f7]"
+      className="absolute rounded-[3px]"
       style={{ left: r.x * stage.w, top: r.y * stage.h, width: r.w * stage.w, height: r.h * stage.h }}
-      onPointerDown={onMove}
     >
-      <TransformHandles
-        color="#a855f7"
-        handles={["nw", "n", "ne", "e", "se", "s", "sw", "w"]}
-        onResize={onResize}
-      />
+      <div
+        className="pointer-events-auto absolute inset-0 cursor-move rounded-[3px] border-2 border-dashed border-[#0a84ff]"
+        style={rotation ? { transform: `rotate(${rotation}deg)` } : undefined}
+        onPointerDown={onMove}
+      >
+        <TransformHandles
+          color="#0a84ff"
+          handles={["nw", "n", "ne", "e", "se", "s", "sw", "w"]}
+          rotation={rotation}
+          angle={turning}
+          onResize={onResize}
+          onRotate={onRotate}
+        />
+      </div>
     </div>
   );
 }
