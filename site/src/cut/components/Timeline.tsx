@@ -170,8 +170,10 @@ type XBar = {
 };
 
 /** How far an anchor reaches while a bar is in flight, px. Inside it the drop
- * aligns to the anchor; outside it the bar lands exactly where it is. */
-const XBAR_MAGNET_PX = 16;
+ * aligns to the anchor; outside it the bar lands exactly where it is. Wide
+ * enough that a dragged transition tile catches a cut without pixel-precise
+ * aim — a tight reach is what made dropping one feel unreliable. */
+const XBAR_MAGNET_PX = 28;
 
 
 const overlayFamily = (o: Overlay): OverlayFamily =>
@@ -898,6 +900,11 @@ export function Timeline() {
   // The row a shape or effect dragged out of a panel would land on, so the
   // band shows where it is going.
   const [elementDropRow, setElementDropRow] = useState<number | null>(null);
+  // The cut (or open edge) a dragged transition tile is currently snapped to —
+  // rendered as a ghost slot so the drag reads as landing on something real
+  // instead of a blind drop with no feedback until it either takes or silently
+  // does nothing.
+  const [transitionDropAnchor, setTransitionDropAnchor] = useState<Anchor | null>(null);
   // A drag past the top edge opens a row there, pushing the stack down by one
   // for as long as it is aimed that way.
   const topRowShift =
@@ -1250,6 +1257,7 @@ export function Timeline() {
           setOverlayDrop(null);
           setAudioDrop(null);
           setDropType(null);
+          setTransitionDropAnchor(null);
           return;
         }
         const isLib = hasLibraryDrag(e);
@@ -1271,9 +1279,13 @@ export function Timeline() {
           setElementDropRow(
             element && element.kind !== "transition" ? overlayRowAt(e.clientY) ?? null : null
           );
+          setTransitionDropAnchor(
+            element?.kind === "transition" ? nearestAnchor(dropTimeAt(e.clientX)) : null
+          );
           return;
         }
         setElementDropRow(null);
+        setTransitionDropAnchor(null);
         // Preview where a video would land; audio drops free-form. Library and
         // stock drags carry their own shape since they aren't in the project yet.
         let type: "video" | "audio" | "image" | undefined;
@@ -1369,6 +1381,7 @@ export function Timeline() {
           setAudioDrop(null);
           setDropType(null);
           setElementDropRow(null);
+          setTransitionDropAnchor(null);
         }
       }}
       onDrop={(e) => {
@@ -1376,6 +1389,7 @@ export function Timeline() {
         const audioRow = audioRowAt(e.clientY);
         const elementLane = overlayLaneAt(e.clientY);
         setElementDropRow(null);
+        setTransitionDropAnchor(null);
         const videoPlace = resolveDropTrack(e.clientX, e.clientY);
         setAssetDrop(null);
         setOverlayDrop(null);
@@ -1793,6 +1807,23 @@ export function Timeline() {
                 </span>
               </div>
             )}
+            {transitionDropAnchor && (
+              // Where a dragged transition tile will actually land: the same
+              // span `dropTransitionAt` would give it, so the ghost is never a
+              // promise the drop doesn't keep.
+              <div
+                className="tl-transition-drop-slot pointer-events-none absolute top-0.5 z-20 rounded-md border-[1.5px] border-dashed border-primary bg-primary/15 transition-[left] duration-100 ease-out"
+                style={{
+                  left: anchorBarStart(transitionDropAnchor, transitionDropAnchor.len) * pps,
+                  width: Math.max(6, transitionDropAnchor.len * pps),
+                  height: VIDEO_H - 4,
+                }}
+              >
+                <span className="absolute top-1 left-1 rounded-[5px] bg-black/65 px-1.5 py-px font-mono text-[10px] tabular-nums text-white">
+                  {transitionDropAnchor.len.toFixed(1)}s
+                </span>
+              </div>
+            )}
             {spans.map((span, i) => (
               <ClipView
                 key={span.clip.id}
@@ -1826,15 +1857,22 @@ export function Timeline() {
                 transitions.find((x) => x.role?.kind === "cut" && x.role.clipId === span.clip.id)
                   ?.t ?? null;
               const Icon = existing ? TRANSITION_ICONS[existing.style] : Blend;
+              // A dragged transition tile currently snapped to this exact cut:
+              // grow the button so the drop target is unmistakable, instead of
+              // the same-size icon it is the rest of the time.
+              const isDropTarget =
+                transitionDropAnchor?.kind === "cut" && transitionDropAnchor.clipId === span.clip.id;
               return (
                 <button
                   key={`cut-${span.clip.id}`}
                   type="button"
                   className={cn(
-                    "tl-cut-transition absolute top-1/2 z-5 grid size-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border shadow-sm transition-colors",
-                    existing
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-border bg-card text-muted-foreground hover:text-foreground"
+                    "tl-cut-transition absolute top-1/2 z-5 grid size-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border shadow-sm transition-all duration-150",
+                    isDropTarget
+                      ? "scale-[1.4] border-primary bg-primary text-primary-foreground ring-4 ring-primary/25"
+                      : existing
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-card text-muted-foreground hover:text-foreground"
                   )}
                   style={{ left: (span.start + span.len) * pps }}
                   title={existing ? `${TRANSITION_STYLE_LABELS[existing.style]} — click to change` : "Add a transition"}
