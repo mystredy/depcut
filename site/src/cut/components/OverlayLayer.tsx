@@ -367,7 +367,7 @@ function SubtitleCaption({
   return (
     <div
       ref={(el) => registerBox(subtitleBoxId(lane), el)}
-      className="sub-caption pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 cursor-grab text-center whitespace-pre-wrap active:cursor-grabbing"
+      className="sub-caption pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 touch-none cursor-grab text-center whitespace-pre-wrap active:cursor-grabbing"
       onPointerDown={(e) => {
         const s = useEditor.getState();
         s.pushHistory();
@@ -712,6 +712,10 @@ function OverlayItem({
       className={cn(
         "overlay-item pointer-events-auto absolute cursor-grab rounded-xs text-center whitespace-pre active:cursor-grabbing",
         selected && "outline-[1.5px] outline-offset-[3px] outline-[#0a84ff]",
+        // Touch-dragging this box needs to win over the page's own scroll —
+        // but not while editing, where a touch is placing a text cursor
+        // instead and the browser's own text-selection gestures still apply.
+        !editing && "touch-none",
         editing && "cursor-text"
       )}
       style={style}
@@ -776,7 +780,7 @@ function OverlayItem({
               the element's own top edge, so moving is never caught by it. */}
           <span
             title="Drag to rotate"
-            className="overlay-rotate absolute -top-8 left-1/2 grid size-7 -translate-x-1/2 place-items-center"
+            className="overlay-rotate absolute -top-8 left-1/2 grid size-7 -translate-x-1/2 touch-none place-items-center"
             // The handle rides the element's rotation, so the cursor turns
             // with it and its heads keep pointing along the drag.
             style={{ cursor: rotateCursor(live?.rotation ?? o.rotation ?? 0) }}
@@ -786,7 +790,7 @@ function OverlayItem({
           </span>
           <span
             title="Drag to resize"
-            className="overlay-resize absolute -right-2 -bottom-2 size-[13px] cursor-nwse-resize rounded-full border-[2.5px] border-[#0a84ff] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.4)]"
+            className="overlay-resize absolute -right-2 -bottom-2 size-[13px] touch-none cursor-nwse-resize rounded-full border-[2.5px] border-[#0a84ff] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.4)]"
             onPointerDown={resizeFrom}
           />
         </>

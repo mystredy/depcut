@@ -220,7 +220,7 @@ export function Preview() {
       >
         <div
           className={cn(
-            "stage relative overflow-hidden rounded-xl bg-black shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_12px_36px_rgba(0,0,0,0.18)]",
+            "stage relative touch-none overflow-hidden rounded-xl bg-black shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_12px_36px_rgba(0,0,0,0.18)]",
             pannable && "cursor-grab active:cursor-grabbing"
           )}
           style={{ width: stage.w, height: stage.h }}
@@ -396,12 +396,12 @@ function OverlayPipHandle({ stage }: { stage: { w: number; h: number } }) {
 
   return (
     <div
-      className="absolute cursor-move rounded-[3px] shadow-[inset_0_0_0_2px_#a855f7]"
+      className="absolute touch-none cursor-move rounded-[3px] shadow-[inset_0_0_0_2px_#a855f7]"
       style={{ left: r.x * stage.w, top: r.y * stage.h, width: r.w * stage.w, height: r.h * stage.h }}
       onPointerDown={onMove}
     >
       <span
-        className="absolute -right-1.5 -bottom-1.5 size-3 cursor-nwse-resize rounded-full bg-violet-500 shadow-[0_0_0_2px_white]"
+        className="absolute -right-1.5 -bottom-1.5 size-3 touch-none cursor-nwse-resize rounded-full bg-violet-500 shadow-[0_0_0_2px_white]"
         onPointerDown={onResize}
       />
     </div>
