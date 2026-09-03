@@ -252,12 +252,13 @@ function regionPx(
   const even = (n: number) => 2 * Math.round(n / 2);
   const rw = Math.min(W, Math.max(2, even(frame.w * W)));
   const rh = Math.min(H, Math.max(2, even(frame.h * H)));
-  // Clamp the origin so rx+rw ≤ W and ry+rh ≤ H — independent even-rounding can
-  // otherwise push an edge-touching region a pixel past the frame, which makes
-  // the pad filter reject the input ("not within the padded area") and aborts
-  // the whole export.
-  const rx = Math.max(0, Math.min(even(frame.x * W), W - rw));
-  const ry = Math.max(0, Math.min(even(frame.y * H), H - rh));
+  // Free to sit anywhere from fully off-frame past one edge to fully off past
+  // the other, matching the UI's own drag bound (Preview.tsx's onMove) — the
+  // pad filter below clips a negative or overflowing offset to what's
+  // actually visible rather than rejecting it, so nothing needs clamping
+  // back on-frame.
+  const rx = Math.max(-rw, Math.min(W, even(frame.x * W)));
+  const ry = Math.max(-rh, Math.min(H, even(frame.y * H)));
   if (rx <= 0 && ry <= 0 && rw >= W && rh >= H) return null;
   return { rx, ry, rw, rh };
 }

@@ -425,11 +425,14 @@ function OverlayPipHandle({
     e.stopPropagation();
     useEditor.getState().pushHistory();
     startDrag(e, {
+      // Free to drag anywhere from fully on-frame to fully off past either
+      // edge — not clamped to stay inside the visible frame, since parking a
+      // clip off to one side (ready to slide in, say) is a real use.
       onMove: (dx, dy) =>
         patch({
           ...r,
-          x: Math.max(0, Math.min(1 - r.w, r.x + dx / stage.w)),
-          y: Math.max(0, Math.min(1 - r.h, r.y + dy / stage.h)),
+          x: Math.max(-r.w, Math.min(1, r.x + dx / stage.w)),
+          y: Math.max(-r.h, Math.min(1, r.y + dy / stage.h)),
         }),
     });
   };
