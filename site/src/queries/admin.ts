@@ -206,6 +206,8 @@ export type AdminFinanceOverview = {
   settings: AdminFinanceSettings;
   totalPendingRates: number;
   totalAvailableRates: number;
+  totalReferralRates: number;
+  totalLifetimeRates: number;
   totalCreatorPayouts: number;
   withdrawalCounts: { pending: number; approved: number; paid: number; rejected: number };
 };
