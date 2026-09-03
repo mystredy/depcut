@@ -119,7 +119,7 @@ export function TransitionsPanel() {
           {TRANSITION_STYLE_GROUPS.map((g) => (
             <section key={g.label} className="mb-3 flex flex-col gap-1.5">
               <SectionTitle>{g.label}</SectionTitle>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {g.ids.map((id) => (
                   <TransitionTile key={id} style={id} live={live} bareCutAt={bareCut} a={a} b={b} />
                 ))}
