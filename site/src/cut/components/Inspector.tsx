@@ -804,8 +804,12 @@ const MAX_ZOOM = 4;
 
 export function ClipFramingSection({ clip }: { clip: VideoClip }) {
   const updateClip = useEditor((s) => s.updateClip);
-  const [zoomDraft, setZoomDraft] = useState<number | null>(null);
-  const zoom = zoomDraft ?? clip.zoom ?? 1;
+  const zoomCk = useSliderCheckpoint();
+  const zoom = clip.zoom ?? 1;
+  const setZoom = (v: number) => {
+    zoomCk.begin();
+    useEditor.getState().updateClipTransient(clip.id, { zoom: v <= 1 ? undefined : v });
+  };
   return (
     <div className="flex flex-col gap-1 px-3.5 pb-4">
       <Row label="Framing">
@@ -834,13 +838,8 @@ export function ClipFramingSection({ clip }: { clip: VideoClip }) {
           max={MAX_ZOOM}
           step={0.1}
           value={zoom}
-          onValueChange={(v) => setZoomDraft(Number(v))}
-          onValueCommitted={() => {
-            if (zoomDraft != null) {
-              updateClip(clip.id, { zoom: zoomDraft <= 1 ? undefined : zoomDraft });
-            }
-            setZoomDraft(null);
-          }}
+          onValueChange={(v) => setZoom(Number(v))}
+          onValueCommitted={zoomCk.end}
         />
         <ScrubValue
           label="Zoom"
@@ -851,10 +850,10 @@ export function ClipFramingSection({ clip }: { clip: VideoClip }) {
           step={0.1}
           format={formatPercent}
           parse={parsePercentInput}
-          onScrub={setZoomDraft}
+          onScrub={setZoom}
           onCommit={(v) => {
-            updateClip(clip.id, { zoom: v <= 1 ? undefined : v });
-            setZoomDraft(null);
+            setZoom(v);
+            zoomCk.end();
           }}
         />
       </Row>
