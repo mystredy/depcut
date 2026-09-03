@@ -800,8 +800,16 @@ export function ClipExtractStrip({ clip }: { clip: VideoClip }) {
   );
 }
 
+const MAX_ZOOM = 4;
+
 export function ClipFramingSection({ clip }: { clip: VideoClip }) {
   const updateClip = useEditor((s) => s.updateClip);
+  const zoomCk = useSliderCheckpoint();
+  const zoom = clip.zoom ?? 1;
+  const setZoom = (v: number) => {
+    zoomCk.begin();
+    useEditor.getState().updateClipTransient(clip.id, { zoom: v <= 1 ? undefined : v });
+  };
   return (
     <div className="flex flex-col gap-1 px-3.5 pb-4">
       <Row label="Framing">
@@ -823,7 +831,33 @@ export function ClipFramingSection({ clip }: { clip: VideoClip }) {
           ))}
         </div>
       </Row>
-      {clip.fit === "fill" && ((clip.panX ?? 0) !== 0 || (clip.panY ?? 0) !== 0) && (
+      <Row label="Zoom">
+        <Slider
+          className="clip-zoom data-horizontal:w-24"
+          min={1}
+          max={MAX_ZOOM}
+          step={0.1}
+          value={zoom}
+          onValueChange={(v) => setZoom(Number(v))}
+          onValueCommitted={zoomCk.end}
+        />
+        <ScrubValue
+          label="Zoom"
+          className="w-9 text-muted-foreground"
+          value={zoom}
+          min={1}
+          max={MAX_ZOOM}
+          step={0.1}
+          format={formatPercent}
+          parse={parsePercentInput}
+          onScrub={setZoom}
+          onCommit={(v) => {
+            setZoom(v);
+            zoomCk.end();
+          }}
+        />
+      </Row>
+      {(clip.fit === "fill" || (clip.zoom ?? 1) > 1) && ((clip.panX ?? 0) !== 0 || (clip.panY ?? 0) !== 0) && (
         <Row label="Position">
           <button
             className="clip-recenter rounded-md border border-input px-2 py-0.5 text-[11.5px] text-muted-foreground transition-colors hover:text-foreground"
@@ -831,6 +865,19 @@ export function ClipFramingSection({ clip }: { clip: VideoClip }) {
           >
             Center
           </button>
+        </Row>
+      )}
+      {!!clip.rotation && (
+        <Row label="Rotation">
+          <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+            <span className="tabular-nums">{clip.rotation}°</span>
+            <button
+              className="clip-rotation-reset rounded-md border border-input px-2 py-0.5 transition-colors hover:text-foreground"
+              onClick={() => updateClip(clip.id, { rotation: undefined })}
+            >
+              Reset
+            </button>
+          </div>
         </Row>
       )}
       <LayoutButtons

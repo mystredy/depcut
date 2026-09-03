@@ -37,6 +37,10 @@ export interface ExportSpec {
     fit?: "fit" | "fill";
     panX?: number; // crop-window pan -1..1 (fill mode, full frame)
     panY?: number;
+    /** Clockwise rotation in degrees, about the clip's own box center; absent = 0. */
+    rotation?: number;
+    /** Scale beyond what fit/fill already needs, 1..4; absent = 1. */
+    zoom?: number;
     /** Region of the frame this clip fills; absent = full frame. */
     frame?: { x: number; y: number; w: number; h: number };
     speed?: number; // playback rate, default 1
@@ -248,12 +252,13 @@ function regionPx(
   const even = (n: number) => 2 * Math.round(n / 2);
   const rw = Math.min(W, Math.max(2, even(frame.w * W)));
   const rh = Math.min(H, Math.max(2, even(frame.h * H)));
-  // Clamp the origin so rx+rw ≤ W and ry+rh ≤ H — independent even-rounding can
-  // otherwise push an edge-touching region a pixel past the frame, which makes
-  // the pad filter reject the input ("not within the padded area") and aborts
-  // the whole export.
-  const rx = Math.max(0, Math.min(even(frame.x * W), W - rw));
-  const ry = Math.max(0, Math.min(even(frame.y * H), H - rh));
+  // Free to sit anywhere from fully off-frame past one edge to fully off past
+  // the other, matching the UI's own drag bound (Preview.tsx's onMove) — the
+  // pad filter below clips a negative or overflowing offset to what's
+  // actually visible rather than rejecting it, so nothing needs clamping
+  // back on-frame.
+  const rx = Math.max(-rw, Math.min(W, even(frame.x * W)));
+  const ry = Math.max(-rh, Math.min(H, even(frame.y * H)));
   if (rx <= 0 && ry <= 0 && rw >= W && rh >= H) return null;
   return { rx, ry, rw, rh };
 }
@@ -703,26 +708,69 @@ export async function runExport(
       : `[${idx}:v]trim=${num(c.in)}:${num(c.out)},setpts=(PTS-STARTPTS)/${num(speed)}`;
     if ((c.image || videoPresence.get(c.file)) && !c.hidden) {
       const region = regionPx(c.frame, W, H);
+      // A rotated picture's own bounding box grows past its unrotated size —
+      // rotate into a square canvas big enough for any angle (its diagonal,
+      // which always exceeds the box on both sides), transparent outside the
+      // picture, then crop straight back down to the box, centered. The crop
+      // (not a pad) matters: the rotated canvas is always bigger than the
+      // box, and pad can only grow a frame, never shrink one — same
+      // technique as the engine's existing keyframed-rotation export path.
+      const rotateFilter = (boxW: number, boxH: number) => {
+        if (!c.rotation) return "";
+        const diag = 2 * Math.ceil(Math.hypot(boxW, boxH) / 2);
+        const rad = (c.rotation * Math.PI) / 180;
+        return `,rotate=a=${num(rad)}:ow=${diag}:oh=${diag}:c=black@0.0,crop=${boxW}:${boxH}`;
+      };
+      // Scale beyond what the box's own fit/fill already needs, same as the
+      // preview's zoom multiplier. 1 (absent) changes nothing below.
+      const zoom = c.zoom && c.zoom > 1 ? Math.min(c.zoom, 4) : 1;
+      const panKx = num(0.5 + Math.max(-1, Math.min(1, c.panX ?? 0)) / 2);
+      const panKy = num(0.5 + Math.max(-1, Math.min(1, c.panY ?? 0)) / 2);
       let frame: string;
       if (region) {
         // A regioned track-0 clip (split-screen half) scales into its rect,
-        // then pads out to the full frame with black around it.
+        // then pads out to the full frame with black around it. Zoomed, it
+        // still just centers in the region — panning a regioned clip isn't
+        // wired up anywhere (the preview doesn't offer it either).
         const { rx, ry, rw, rh } = region;
-        frame =
+        const zw = Math.round(rw * zoom);
+        const zh = Math.round(rh * zoom);
+        const box =
           c.fit === "fill"
-            ? `scale=${rw}:${rh}:force_original_aspect_ratio=increase,crop=${rw}:${rh},` +
-              `pad=${W}:${H}:${rx}:${ry}:color=${padColor}`
-            : `scale=${rw}:${rh}:force_original_aspect_ratio=decrease:force_divisible_by=2,` +
-              `pad=${W}:${H}:${rx}+(${rw}-iw)/2:${ry}+(${rh}-ih)/2:color=${padColor}`;
+            ? zoom === 1
+              ? `scale=${rw}:${rh}:force_original_aspect_ratio=increase,crop=${rw}:${rh}`
+              : `scale=${zw}:${zh}:force_original_aspect_ratio=increase,crop=${rw}:${rh}`
+            : zoom === 1
+              ? `scale=${rw}:${rh}:force_original_aspect_ratio=decrease:force_divisible_by=2`
+              : // Fit within the zoomed box first (still may not fill it — a
+                // very wide source in a tall region, say); pad up to at least
+                // the region before cropping, so the crop below is always safe.
+                `scale=${zw}:${zh}:force_original_aspect_ratio=decrease:force_divisible_by=2,` +
+                `pad=max(iw\\,${rw}):max(ih\\,${rh}):(ow-iw)/2:(oh-ih)/2:color=${padColor},crop=${rw}:${rh}`;
+        frame = box + rotateFilter(rw, rh) + `,pad=${W}:${H}:${rx}+(${rw}-iw)/2:${ry}+(${rh}-ih)/2:color=${padColor}`;
       } else {
+        const zw = Math.round(W * zoom);
+        const zh = Math.round(H * zoom);
         frame =
           c.fit === "fill"
             ? // Cover the frame, then crop; the pan chooses the visible window.
-              `scale=${W}:${H}:force_original_aspect_ratio=increase,` +
-              `crop=${W}:${H}:(iw-ow)*${num(0.5 + Math.max(-1, Math.min(1, c.panX ?? 0)) / 2)}` +
-              `:(ih-oh)*${num(0.5 + Math.max(-1, Math.min(1, c.panY ?? 0)) / 2)}`
-            : `scale=${W}:${H}:force_original_aspect_ratio=decrease,` +
-              `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=${padColor}`;
+              // A rotated fill clip can't cover every corner of a rectangular
+              // frame any more, so it letterboxes like a rotated fit clip.
+              `scale=${zw}:${zh}:force_original_aspect_ratio=increase,` +
+              `crop=${W}:${H}:(iw-ow)*${panKx}:(ih-oh)*${panKy}` +
+              rotateFilter(W, H)
+            : zoom === 1
+              ? `scale=${W}:${H}:force_original_aspect_ratio=decrease` +
+                // rotateFilter already crops back down to exactly W×H, so the
+                // fit letterbox pad only applies when nothing rotated it.
+                (c.rotation ? rotateFilter(W, H) : `,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=${padColor}`)
+              : // Same pad-up-then-crop safety as the regioned case, but the
+                // crop takes the pan so a zoomed "fit" clip can be repositioned
+                // too, same as the preview.
+                `scale=${zw}:${zh}:force_original_aspect_ratio=decrease,` +
+                `pad=max(iw\\,${W}):max(ih\\,${H}):(ow-iw)/2:(oh-ih)/2:color=${padColor},` +
+                `crop=${W}:${H}:(iw-ow)*${panKx}:(ih-oh)*${panKy}` +
+                rotateFilter(W, H);
       }
       // setpts/speed rescales the clip's duration on the timeline (footage);
       // a still just replays its looped input.

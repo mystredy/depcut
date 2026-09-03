@@ -240,6 +240,12 @@ export interface VideoClip {
    * of the oversized video stays visible. */
   panX?: number;
   panY?: number;
+  /** Clockwise rotation in degrees, about the clip's own box center; absent = 0. */
+  rotation?: number;
+  /** Scale beyond what fitting/filling the box already needs, 1..4; absent = 1.
+   * Crops the overflow to the box, same as fill mode's oversized crop window —
+   * panX/panY choose which part stays visible. */
+  zoom?: number;
   /** Playback rate, default 1 (absent). The source (out-in) seconds play in
    * (out-in)/speed timeline seconds, so >1 is faster and shorter. */
   speed?: number;

@@ -497,7 +497,7 @@ class Engine {
         masterFrame: this.frameOf(masterEl),
         masterClip: masterSpan.clip,
         masterAlpha: plan.masterAlpha,
-        masterZoom: plan.masterZoom,
+        masterZoom: plan.masterZoom * (masterSpan.clip.zoom ?? 1),
         masterFx: {
           dx: plan.masterFxFrac.dx * this.canvas.width,
           dy: plan.masterFxFrac.dy * this.canvas.height,
@@ -505,7 +505,7 @@ class Engine {
         incFrame: this.frameOf(incEl),
         incClip: plan.incoming?.clip,
         incAlpha: plan.incAlpha,
-        incZoom: plan.incZoom,
+        incZoom: plan.incZoom * (plan.incoming?.clip.zoom ?? 1),
       },
       t
     );
@@ -607,7 +607,7 @@ class Engine {
     return this.liveOverlays(t).map(({ clip, asset, alpha, zoom, gain }) => ({
       clip,
       alpha,
-      zoom,
+      zoom: zoom * (clip.zoom ?? 1),
       el: this.prepareOverlay(clip, asset, t, play, gain),
     }));
   }

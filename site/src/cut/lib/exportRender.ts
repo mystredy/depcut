@@ -654,7 +654,7 @@ export async function renderProjectToMp4(
             masterFrame,
             masterClip: master.clip,
             masterAlpha: plan.masterAlpha,
-            masterZoom: plan.masterZoom,
+            masterZoom: plan.masterZoom * (master.clip.zoom ?? 1),
             masterFx: {
               dx: plan.masterFxFrac.dx * settings.width,
               dy: plan.masterFxFrac.dy * settings.height,
@@ -662,7 +662,7 @@ export async function renderProjectToMp4(
             incFrame,
             incClip: plan.incoming?.clip,
             incAlpha: plan.incAlpha,
-            incZoom: plan.incZoom,
+            incZoom: plan.incZoom * (plan.incoming?.clip.zoom ?? 1),
           },
           t
         );
@@ -675,7 +675,7 @@ export async function renderProjectToMp4(
         const frame = await readerFor(layer.asset).frameAt(sourceTimeAt(span, t));
         const rect = rectOf(layer.clip);
         const cover = layer.clip.fit === "fill" || (layer.clip.fit == null && isFullRect(rect));
-        comp.drawIntoRect(frame, rect, cover, layer.alpha, t, layer.zoom, layer.clip);
+        comp.drawIntoRect(frame, rect, cover, layer.alpha, t, layer.zoom * (layer.clip.zoom ?? 1), layer.clip);
       }
 
       // Behind-speaker titles: video → text → segmented person, exactly the

@@ -338,6 +338,13 @@ export class FrameCompositor {
     const src = this.gradedSource(frame, clip);
     const prevAlpha = ctx.globalAlpha;
     ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+    const rotated = !!clip?.rotation;
+    if (rotated) {
+      ctx.save();
+      ctx.translate(rx + rw / 2, ry + rh / 2);
+      ctx.rotate((clip!.rotation! * Math.PI) / 180);
+      ctx.translate(-(rx + rw / 2), -(ry + rh / 2));
+    }
     if (fill || zoom > 1) {
       ctx.save();
       ctx.beginPath();
@@ -350,6 +357,7 @@ export class FrameCompositor {
     }
     ctx.globalAlpha = prevAlpha;
     this.applyLookPost(clip, rx, ry, rw, rh, alpha, at);
+    if (rotated) ctx.restore();
   }
 
   /**
@@ -412,7 +420,7 @@ export class FrameCompositor {
     const dh = vh * scale;
     let dx = (W - dw) / 2;
     let dy = (H - dh) / 2;
-    if (fill) {
+    if (fill || zoom > 1) {
       // Pan the crop window across the overflow (matches the export crop).
       const kx = 0.5 + (clip?.panX ?? 0) / 2;
       const ky = 0.5 + (clip?.panY ?? 0) / 2;
@@ -421,9 +429,17 @@ export class FrameCompositor {
     }
     const prevAlpha = ctx.globalAlpha;
     ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+    const rotated = !!clip?.rotation;
+    if (rotated) {
+      ctx.save();
+      ctx.translate(W / 2, H / 2);
+      ctx.rotate((clip!.rotation! * Math.PI) / 180);
+      ctx.translate(-W / 2, -H / 2);
+    }
     ctx.drawImage(this.gradedSource(frame, clip), dx, dy, dw, dh);
     ctx.globalAlpha = prevAlpha;
     this.applyLookPost(clip, 0, 0, W, H, alpha, at);
+    if (rotated) ctx.restore();
     if (hasFx) ctx.restore();
   }
 
