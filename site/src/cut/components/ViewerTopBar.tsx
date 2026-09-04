@@ -68,7 +68,7 @@ export function ViewerTopBar() {
   return (
     <header className="relative flex items-center justify-between border-b border-border bg-card pr-3 pl-3">
       <div className="flex min-w-0 items-center gap-1">
-        <SiteLogo width={22} height={22} />
+        <SiteLogo width={22} height={22} compact />
         <span className="ml-1.5 max-w-64 truncate px-2 py-1 text-sm font-medium tracking-tight">
           {projectName}
         </span>

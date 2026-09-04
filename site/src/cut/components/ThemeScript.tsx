@@ -15,7 +15,14 @@ export const THEME_STORAGE_KEY = "cut.theme";
 // the route's module graph, unrelated to this file — never re-renders one
 // either. A raw <script> element only tolerates the very first, real
 // hydration pass; Script tolerates being processed any number of times.
-export function ThemeScript() {
-  const script = `(function(){try{var t=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});var d=t==="dark"||((!t||t==="system")&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d)document.documentElement.classList.add("dark");}catch(e){}})();`;
+//
+// `defaultTheme` (admin/settings/general) is read by the caller — cut/app/layout.tsx
+// — and passed in as a plain prop rather than read here directly: this file
+// sits right on the boundary into ThemeProvider ("use client"), and an async
+// component here pulling in publicSiteSettings()'s Prisma import chain broke
+// the client bundle even though it's only ever rendered server-side. A plain
+// string prop has no module graph of its own to leak.
+export function ThemeScript({ defaultTheme }: { defaultTheme: string }) {
+  const script = `(function(){try{var t=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});var mode=t||${JSON.stringify(defaultTheme)};var d=mode==="dark"||(mode==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(d)document.documentElement.classList.add("dark");}catch(e){}})();`;
   return <Script id="cut-theme-init" strategy="afterInteractive" dangerouslySetInnerHTML={{ __html: script }} />;
 }

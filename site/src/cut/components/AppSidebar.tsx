@@ -9,6 +9,7 @@ import { ALL_GROUPS, CREATOR_HUB_GROUP, GROUPS, LINKS, type NavGroup } from "@/c
 import { homeHref, useCutBase } from "@/cut/lib/nav";
 import { useMobileSidebar } from "@/cut/lib/mobileSidebar";
 import { useAccount } from "@/queries/credits";
+import { BetaBadge } from "@/cut/components/BetaBadge";
 import { SiteLogo } from "@/cut/components/SiteLogo";
 import { cn } from "@/lib/utils";
 
@@ -173,6 +174,7 @@ export function AppSidebar() {
                 <SiteLogo
                   width={36}
                   height={36}
+                  compact
                   className="transition-opacity group-hover:opacity-0"
                 />
                 <ChevronRight className="absolute inset-0 m-auto size-4 text-sidebar-foreground opacity-0 transition-opacity group-hover:opacity-100" />
@@ -220,6 +222,7 @@ export function AppSidebar() {
               <div className="flex items-center gap-2.5">
                 <SiteLogo width={36} height={36} />
                 <span className="text-[17px] font-semibold tracking-tight">DepCut</span>
+                <BetaBadge />
               </div>
               <button
                 type="button"

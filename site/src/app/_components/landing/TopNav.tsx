@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { PillButton } from "@/app/_components/landing/LandingPrimitives";
+import { BetaBadge } from "@/cut/components/BetaBadge";
 import { useHydrationSafeSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
@@ -79,6 +80,7 @@ export function TopNav({
             />
           </div>
           <span className="text-2xl font-semibold">{wordmark}</span>
+          <BetaBadge className="ml-2" />
         </Link>
         <div className="flex items-center gap-[10px] md:gap-4">
           {isSignedIn ? (

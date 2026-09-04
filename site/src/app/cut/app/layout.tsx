@@ -8,6 +8,7 @@ import { CutOnboarding } from "@/cut/components/onboarding/CutOnboarding";
 import { RequireSession } from "@/cut/components/RequireSession";
 import { ThemeProvider } from "@/cut/components/ThemeProvider";
 import { ThemeScript } from "@/cut/components/ThemeScript";
+import { publicSiteSettings } from "@/lib/siteSettings";
 
 // The Cut app (projects home, library, editor) renders on the same white
 // product surface as DepCut's /app, not the cream marketing background of the
@@ -20,10 +21,11 @@ import { ThemeScript } from "@/cut/components/ThemeScript";
 // browser's local-network prompt, the cloud otherwise — and owns the banner
 // that reports an engine this browser can no longer reach. CutOnboarding is the
 // welcome sequence a new account sees before any of it.
-export default function CutAppLayout({ children }: { children: ReactNode }) {
+export default async function CutAppLayout({ children }: { children: ReactNode }) {
+  const { defaultTheme } = await publicSiteSettings();
   return (
     <ThemeProvider>
-      <ThemeScript />
+      <ThemeScript defaultTheme={defaultTheme} />
       <div className="min-h-screen bg-background font-system text-foreground antialiased">
         <AppSurfaceBackground />
         <NoSessionReplay />

@@ -350,7 +350,7 @@ export function TopBar({
         >
           <ChevronLeft />
         </Button>
-        <SiteLogo width={22} height={22} />
+        <SiteLogo width={22} height={22} compact />
         {editing ? (
           <input
             autoFocus

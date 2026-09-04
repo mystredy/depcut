@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+import { publicSiteSettings } from "@/lib/siteSettings";
 import { QueryProvider } from "@/queries/QueryProvider";
 import { ErrorReporter } from "./_components/ErrorReporter";
 import { PostHogProvider } from "./_components/PostHogProvider";
@@ -16,16 +17,22 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "DepCut",
-  description: "A video editor that does all its work on your Mac.",
-};
+// admin/settings/general's Website Name and Description. generateMetadata
+// (not a static export) because both come from the database.
+export async function generateMetadata(): Promise<Metadata> {
+  const { appName, description } = await publicSiteSettings();
+  return {
+    description: description ?? "A video editor that does all its work on your Mac.",
+    title: appName,
+  };
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { accentColor } = await publicSiteSettings();
   return (
     <html
       lang="en"
@@ -36,6 +43,12 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
+        {/* admin/settings/general's Brand / Accent Color: overrides --primary
+            (globals.css's @theme maps --color-primary to it), the one lever
+            this offers rather than recoloring every token in the palette. A
+            raw <style> tag applies its cascade the same regardless of where
+            it sits in the tree, so this needs no special <head> placement. */}
+        {accentColor && <style>{`:root{--primary:${accentColor}}`}</style>}
         <PostHogProvider>
           <QueryProvider>
             {children}
