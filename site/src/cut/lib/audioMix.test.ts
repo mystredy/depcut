@@ -25,21 +25,41 @@ describe("foldClips", () => {
     expect(geo.every((g) => g.fadeIn === 0 && g.fadeOut === 0)).toBe(true);
   });
 
-  test("crossfades the pair across the blend, overlapping by its length", () => {
+  test("overlaps the pair by the transition's length either way — audio only actually crosses when asked", () => {
     const geo = foldClips([clip({ transition: 1 }), clip()]);
     expect(geo[0].at).toBe(0);
     // The second clip starts a full transition early — the pair genuinely
-    // overlaps, so the cut shortens.
+    // overlaps, so the cut shortens — for the picture regardless of whether
+    // the sound follows it.
+    expect(geo[1].at).toBe(3);
+    // Off by default: no ramp on either side, just a silent head to trim.
+    expect(geo[0].fadeOut).toBe(0);
+    expect(geo[1].fadeIn).toBe(0);
+    expect(geo[1].silenceHead).toBe(1);
+  });
+
+  test("crossfades the audio too when the cut opts in", () => {
+    const geo = foldClips([clip({ transition: 1, transitionAudioCrossfade: true }), clip()]);
     expect(geo[1].at).toBe(3);
     expect(geo[0].fadeOut).toBe(1);
     expect(geo[1].fadeIn).toBe(1);
+    expect(geo[1].silenceHead).toBe(0);
   });
 
   test("scales a blend down so it cannot swallow its clip", () => {
-    const geo = foldClips([clip({ out: 1, transition: 2 }), clip({ out: 1 })]);
+    const geo = foldClips([
+      clip({ out: 1, transition: 2, transitionAudioCrossfade: true }),
+      clip({ out: 1 }),
+    ]);
     expect(geo[0].fadeOut).toBeLessThanOrEqual(0.9);
     expect(geo[1].fadeIn).toBe(geo[0].fadeOut);
     expect(geo[1].at).toBeCloseTo(1 - geo[0].fadeOut, 5);
+  });
+
+  test("the same clamp applies to the silent-head default", () => {
+    const geo = foldClips([clip({ out: 1, transition: 2 }), clip({ out: 1 })]);
+    expect(geo[1].silenceHead).toBeLessThanOrEqual(0.9);
+    expect(geo[1].at).toBeCloseTo(1 - geo[1].silenceHead, 5);
   });
 
   test("counts a speed change against the footprint, not the source span", () => {

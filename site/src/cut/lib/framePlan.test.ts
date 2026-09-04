@@ -68,8 +68,18 @@ describe("trackZeroPlan", () => {
     expect(trackZeroPlan(spans[0], spans, start + 0.1).incoming).toBe(spans[1]);
   });
 
-  test("fades the outgoing sound out and the incoming sound in across the blend window", () => {
+  test("holds the outgoing sound at full and the incoming one silent — no crossfade by default", () => {
     const spans = spansOf(2, 4, [2]);
+    const start = spans[1].start;
+    expect(trackZeroPlan(spans[0], spans, start).gain).toBeCloseTo(1, 5);
+    expect(trackZeroPlan(spans[0], spans, start).incGain).toBe(0);
+    expect(trackZeroPlan(spans[0], spans, start + 1).gain).toBeCloseTo(1, 5);
+    expect(trackZeroPlan(spans[0], spans, start + 1).incGain).toBe(0);
+  });
+
+  test("fades the outgoing sound out and the incoming sound in when the cut opts into it", () => {
+    const spans = spansOf(2, 4, [2]);
+    spans[0].clip.transitionAudioCrossfade = true;
     const start = spans[1].start;
     expect(trackZeroPlan(spans[0], spans, start).gain).toBeCloseTo(1, 5);
     expect(trackZeroPlan(spans[0], spans, start).incGain).toBeCloseTo(0, 5);
@@ -87,6 +97,46 @@ describe("trackZeroPlan", () => {
     // The same instant, with spans[1] as the master: it settles over its head.
     const after = trackZeroPlan(spans[1], spans, start + 1);
     expect(after.masterZoom).toBeCloseTo(TRANSITION_ZOOM - (TRANSITION_ZOOM - 1) * 0.5, 5);
+  });
+
+  test("a clip mid-chain is master for one blend and incoming for the next, never both live at once", () => {
+    // Three clips, two independent 1s dissolves: [0,4) blends into [3,7)
+    // over [3,4), which blends into [6,10) over [6,7).
+    const spans = spansOf(3, 4, [1, 1]);
+    // Squarely inside the first blend: span 1 is incoming over span 0, and
+    // the second blend (span 1 → span 2) hasn't started.
+    const first = trackZeroPlan(spans[0], spans, 3.5);
+    expect(first.incoming).toBe(spans[1]);
+    expect(first.p).toBeCloseTo(0.5, 5);
+    // Squarely inside the second blend: span 1 is still the master handing
+    // off to span 2 — its own incoming side of the first blend is done and
+    // forgotten, not still blending against span 0.
+    const second = trackZeroPlan(spans[1], spans, 6.5);
+    expect(second.incoming).toBe(spans[2]);
+    expect(second.p).toBeCloseTo(0.5, 5);
+    expect(second.masterAlpha).toBe(1);
+    // Between the two blends, span 1 alone: no transition live either way.
+    const between = trackZeroPlan(spans[1], spans, 5);
+    expect(between.incoming).toBe(null);
+    expect(between.p).toBe(0);
+  });
+
+  test("seeking to any instant inside a chain of transitions gives a stable, continuous answer", () => {
+    // Sweeping the whole timeline in small steps: progress never jumps and
+    // always lands in [0, 1] while a blend is live, matching a real scrub.
+    // The master at each instant is whichever span hasn't yet reached its
+    // own footprint's end — the same rule the engine uses to hand off.
+    const spans = spansOf(3, 4, [1, 1]);
+    const total = spans[2].start + spans[2].len;
+    let prevP = 0;
+    for (let t = 0; t <= total; t += 0.05) {
+      const master = spans.find((sp) => t < sp.start + sp.len) ?? spans[spans.length - 1];
+      const plan = trackZeroPlan(master, spans, t);
+      expect(plan.p).toBeGreaterThanOrEqual(0);
+      expect(plan.p).toBeLessThanOrEqual(1);
+      if (plan.p > 0 && prevP > 0) expect(Math.abs(plan.p - prevP)).toBeLessThan(0.06);
+      prevP = plan.p;
+    }
   });
 
   test("veils a fade-in from black at the head of the timeline", () => {

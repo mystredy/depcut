@@ -480,6 +480,7 @@ export function mixSpecFor(doc: ExportDoc, resolve: (asset: MediaAsset) => strin
             speed: sp.clip.speed,
             volume: sp.clip.volume,
             transition: sp.transitionOut,
+            transitionAudioCrossfade: sp.clip.transitionAudioCrossfade,
           },
         ]);
 

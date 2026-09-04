@@ -233,6 +233,7 @@ async function buildExportPayload(
     // xfade name (and the cross-zoom ramps) itself, so the spec carries only
     // the id.
     transitionStyle: sp.clip.transitionStyle,
+    transitionAudioCrossfade: sp.clip.transitionAudioCrossfade,
     animIn: sp.clip.animIn,
     animOut: sp.clip.animOut,
     look: sp.clip.look,

@@ -256,6 +256,9 @@ export interface VideoClip {
   transition?: number;
   /** Look of that transition; absent = "crossfade". */
   transitionStyle?: TransitionStyle;
+  /** Whether that transition's audio crossfades with the picture; absent =
+   * false — a hard cut at the transition's end instead. */
+  transitionAudioCrossfade?: boolean;
   /** Entrance animation on this clip's own head (absent = none). Unlike a
    * transition it belongs to one clip and never moves its neighbors. */
   animIn?: ClipAnim;
@@ -303,8 +306,8 @@ export function clampCutOverlap(declaredSeconds: number, lenA: number, lenB: num
  * starts on, an open tail it ends on. It cannot be moved off that boundary;
  * only retimed (a shorter or longer window on the same one) or deleted. If
  * the boundary it played stops existing — its clips move apart, one is
- * deleted — the store drops the bar on the next write rather than leaving it
- * parked. */
+ * deleted — it sits inert until something lines up with it again, same as
+ * one dropped on a bare clip that has yet to gain a neighbor. */
 export interface TimelineTransition {
   id: string;
   /** Bar start on the timeline, seconds; the window is [start, start+seconds]. */
@@ -312,6 +315,12 @@ export interface TimelineTransition {
   /** Blend length, 0.1..TRANSITION_MAX. */
   seconds: number;
   style: TransitionStyle;
+  /** Whether this cut's audio crossfades along with the picture. Off by
+   * default: the picture blends, but the sound hard-cuts at the transition's
+   * own end — the outgoing track at full volume throughout the overlap, the
+   * incoming one silent until that instant — so an editor never gets a
+   * doubled/mixed track they didn't ask for. */
+  audioCrossfade?: boolean;
 }
 
 /** Effective whole-video fade length: the stored seconds, capped at half the
