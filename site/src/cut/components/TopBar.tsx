@@ -36,6 +36,7 @@ import { useEditor } from "@/cut/lib/store";
 import { useCreateDraftSubmission } from "@/queries/submissions";
 import { cn } from "@/lib/utils";
 import { FeedbackDialog } from "@/cut/components/FeedbackDialog";
+import { SiteLogo } from "@/cut/components/SiteLogo";
 import { RecordDialog, type RecordMode } from "./RecordDialog";
 import { ShareDialog } from "./ShareDialog";
 import { StoragePill } from "./StoragePill";
@@ -349,15 +350,7 @@ export function TopBar({
         >
           <ChevronLeft />
         </Button>
-        <span className="grid size-[22px] shrink-0 place-items-center">
-          <img
-            src="/deepw-logo.svg"
-            alt="DepCut"
-            width={22}
-            height={22}
-            className="block h-full w-full object-contain"
-          />
-        </span>
+        <SiteLogo width={22} height={22} />
         {editing ? (
           <input
             autoFocus

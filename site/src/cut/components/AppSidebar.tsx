@@ -9,6 +9,7 @@ import { ALL_GROUPS, CREATOR_HUB_GROUP, GROUPS, LINKS, type NavGroup } from "@/c
 import { homeHref, useCutBase } from "@/cut/lib/nav";
 import { useMobileSidebar } from "@/cut/lib/mobileSidebar";
 import { useAccount } from "@/queries/credits";
+import { SiteLogo } from "@/cut/components/SiteLogo";
 import { cn } from "@/lib/utils";
 
 export function AppSidebar() {
@@ -169,10 +170,10 @@ export function AppSidebar() {
                 title="Expand sidebar"
                 className="group relative mb-4 size-9 shrink-0 transition-transform hover:scale-105"
               >
-                <img
-                  src="/deepw-logo.svg"
-                  alt="DepCut"
-                  className="size-9 object-contain transition-opacity group-hover:opacity-0"
+                <SiteLogo
+                  width={36}
+                  height={36}
+                  className="transition-opacity group-hover:opacity-0"
                 />
                 <ChevronRight className="absolute inset-0 m-auto size-4 text-sidebar-foreground opacity-0 transition-opacity group-hover:opacity-100" />
               </button>
@@ -217,15 +218,7 @@ export function AppSidebar() {
           <div className="flex h-full w-60 flex-col px-3 py-4">
             <div className="mb-5 flex items-center justify-between gap-2.5 px-2">
               <div className="flex items-center gap-2.5">
-                <span className="grid size-9 shrink-0 place-items-center">
-                  <img
-                    src="/deepw-logo.svg"
-                    alt="DepCut"
-                    width={36}
-                    height={36}
-                    className="block h-full w-full object-contain"
-                  />
-                </span>
+                <SiteLogo width={36} height={36} />
                 <span className="text-[17px] font-semibold tracking-tight">DepCut</span>
               </div>
               <button

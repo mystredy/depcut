@@ -9,6 +9,7 @@ import { quotaErrorMessage } from "@/cut/lib/backend/cloud";
 import { projectHref, useCutBase } from "@/cut/lib/nav";
 import { useEditor } from "@/cut/lib/store";
 import { authClient } from "@/lib/auth-client";
+import { SiteLogo } from "@/cut/components/SiteLogo";
 
 // Chrome for the read-only share view: logo, project name, a "View only"
 // chip, and the viewer's two actions — open the shared chat (when the share
@@ -67,15 +68,7 @@ export function ViewerTopBar() {
   return (
     <header className="relative flex items-center justify-between border-b border-border bg-card pr-3 pl-3">
       <div className="flex min-w-0 items-center gap-1">
-        <span className="grid size-[22px] shrink-0 place-items-center">
-          <img
-            src="/deepw-logo.svg"
-            alt="DepCut"
-            width={22}
-            height={22}
-            className="block h-full w-full object-contain"
-          />
-        </span>
+        <SiteLogo width={22} height={22} />
         <span className="ml-1.5 max-w-64 truncate px-2 py-1 text-sm font-medium tracking-tight">
           {projectName}
         </span>

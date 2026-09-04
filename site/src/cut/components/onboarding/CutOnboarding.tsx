@@ -12,6 +12,7 @@ import { ReferralSlide } from "@/cut/components/onboarding/slides/Referral";
 import { WelcomeSlide } from "@/cut/components/onboarding/slides/Welcome";
 import { useCutBase } from "@/cut/lib/nav";
 import { onOpenOnboarding, setOnboardingCover } from "@/cut/lib/onboarding";
+import { SiteLogo } from "@/cut/components/SiteLogo";
 import { track } from "@/lib/analytics";
 import { authClient } from "@/lib/auth-client";
 import {
@@ -221,15 +222,7 @@ export function CutOnboarding() {
   // nothing.
   const lockup = (
     <span className="flex items-center gap-0">
-      <span className="flex size-[59px] shrink-0 items-center justify-center overflow-hidden rounded-[10px]">
-        <img
-          src="/deepw-logo.svg"
-          alt=""
-          width={59}
-          height={59}
-          className="block h-full w-full object-contain"
-        />
-      </span>
+      <SiteLogo alt="" width={59} height={59} className="overflow-hidden rounded-[10px]" />
       <span className="text-2xl font-semibold">DepCut</span>
     </span>
   );
