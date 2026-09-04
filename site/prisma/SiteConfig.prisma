@@ -14,6 +14,17 @@ model AppSettings {
   maintenanceHeader    String?
   maintenanceParagraph String?
   maintenanceFooter    String?
+  // Site branding, uploaded from admin/settings/general. Light/dark logos are
+  // shown by SiteLogo (site/src/cut/components/SiteLogo.tsx) — the admin
+  // surfaces' logo, CSS-toggled by theme — falling back to the bundled
+  // default wherever a theme has no upload. The favicon backs the /icon and
+  // /apple-icon routes (site/src/app/icon.tsx), falling back the same way.
+  logoLight            Bytes?
+  logoLightContentType String?
+  logoDark             Bytes?
+  logoDarkContentType  String?
+  favicon              Bytes?
+  faviconContentType   String?
   updatedAt            DateTime @updatedAt
 
   @@map("app_settings")
