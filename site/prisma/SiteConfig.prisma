@@ -2,29 +2,78 @@
 // platform OAuth credentials for the future publish pipeline (see
 // Upload/Post in Marketplace.prisma).
 
-// Singleton row (id is always "singleton"): general app settings and
-// maintenance-mode copy. GET creates it on first read if missing.
+// Singleton row (id is always "singleton"): every setting admin/settings/general
+// exposes — site identity, localization, user access, legal links, and
+// maintenance-mode copy. GET creates it on first read if missing. The public
+// half of this row (everything but adminEmail and the raw image bytes) is
+// served by /api/site/settings for signed-out surfaces — the marketing
+// footer, the maintenance gate, the theme default; see that route for
+// exactly which fields it omits and why.
 model AppSettings {
   id                   String   @id @default("singleton")
   appName              String   @default("DepCut")
+  tagline              String?
+  description          String?
+  websiteUrl           String?
+  // Shown to visitors (the footer, a "need help" link). adminEmail below is
+  // the operator's own notification address and never rendered publicly.
+  supportEmail         String?
+  contactEmail         String?
   adminEmail           String?
   defaultLocale        String   @default("en-US")
   timezone             String   @default("UTC")
+  // date-fns-style tokens ("MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD", …) and
+  // "12h" | "24h" — read by src/lib/siteDateFormat.ts.
+  dateFormat           String   @default("MM/DD/YYYY")
+  timeFormat           String   @default("12h")
+  // "light" | "dark" | "system" — the theme a visitor with no stored
+  // preference of their own gets; see ThemeScript.tsx.
+  defaultTheme         String   @default("system")
+  // Hex, e.g. "#7C5CFA" — overrides --primary site-wide; see app/layout.tsx.
+  accentColor          String?
+  copyrightText        String?
+  footerText           String?
   maintenanceMode      Boolean  @default(false)
   maintenanceHeader    String?
   maintenanceParagraph String?
   maintenanceFooter    String?
-  // Site branding, uploaded from admin/settings/general. Light/dark logos are
-  // shown by SiteLogo (site/src/cut/components/SiteLogo.tsx) — the admin
-  // surfaces' logo, CSS-toggled by theme — falling back to the bundled
-  // default wherever a theme has no upload. The favicon backs the /icon and
-  // /apple-icon routes (site/src/app/icon.tsx), falling back the same way.
+  // Gates new-account creation on sign-in (auth.ts's databaseHooks.user.create.before)
+  // without touching an existing account's ability to keep signing in.
+  allowRegistration    Boolean  @default(true)
+  // Stored for when email/password sign-in exists — every account today
+  // signs in with Google, which better-auth already treats as verified, so
+  // this has nothing to gate yet (see auth.ts).
+  requireEmailVerification Boolean @default(false)
+  // Stored for when a role system exists — nothing in this codebase branches
+  // on a user role yet (only the superUser flag on User).
+  defaultUserRole      String   @default("User")
+  termsUrl             String?
+  privacyUrl           String?
+  cookiePolicyUrl      String?
+  helpCenterUrl        String?
+  // { youtube?, tiktok?, instagram?, x?, discord?: string }, each a full URL.
+  socialLinks          Json?
+  // Shows a Beta badge beside the logo and an optional notice; see BetaBadge.tsx.
+  betaMode             Boolean  @default(false)
+  // Site branding, uploaded from admin/settings/general. Light/dark/compact
+  // logos are shown by SiteLogo (site/src/cut/components/SiteLogo.tsx) — the
+  // admin surfaces' logo, CSS-toggled by theme — falling back to the bundled
+  // default wherever a variant has no upload. The favicon and apple touch
+  // icon back the /icon and /apple-icon routes (site/src/app/icon.tsx and
+  // apple-icon.tsx) independently — one is not derived from the other. The
+  // social share image feeds the root layout's Open Graph/Twitter meta.
   logoLight            Bytes?
   logoLightContentType String?
   logoDark             Bytes?
   logoDarkContentType  String?
+  logoCompact               Bytes?
+  logoCompactContentType    String?
   favicon              Bytes?
   faviconContentType   String?
+  appleTouchIcon            Bytes?
+  appleTouchIconContentType String?
+  socialShareImage          Bytes?
+  socialShareImageContentType String?
   updatedAt            DateTime @updatedAt
 
   @@map("app_settings")
