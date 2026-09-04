@@ -6,6 +6,7 @@ import {
   isDepCutHost,
   isLocalHost,
 } from "@/cut/lib/hosts";
+import { fetchPublicSiteSettings } from "@/lib/siteSettings";
 
 // Cut (the video editor, publicly "DepCut") lives under /cut in this single
 // site app: the marketing landing at /cut and the app under /cut/app. Every
@@ -57,6 +58,10 @@ function cutApi(req: NextRequest): NextResponse {
 // docs), the site admin panel, and the legal pages. "/app/settings" is not
 // among them: Cut ships its own billing and usage pages under
 // /cut/app/settings, which the generic rewrite serves at /app/settings.
+// The four icon/social-image routes are Next's own file-convention paths
+// (site/src/app/icon.tsx and friends) — they have no extension in the URL,
+// so unlike the old static favicon.ico (excluded by the matcher's own dot
+// check below) they'd otherwise be rewritten to a nonexistent /cut/icon.
 const PASSTHROUGH = [
   "/install",
   "/privacy",
@@ -65,7 +70,37 @@ const PASSTHROUGH = [
   "/sign-up",
   "/depcutvision",
   "/admin",
+  "/icon",
+  "/apple-icon",
+  "/opengraph-image",
+  "/twitter-image",
 ];
+
+// What maintenance mode still has to serve regardless: admins need "/admin"
+// to turn it back off and "/sign-in" to get there, and every icon/share-image
+// route is chrome, not content, so a maintenance visitor's tab still gets a
+// real favicon instead of a 503. Narrower than PASSTHROUGH on purpose —
+// "closed to visitors" means /install, /sign-up, and the legal pages gate
+// too, even though the rewrite lets them through untouched otherwise.
+const MAINTENANCE_BYPASS = ["/admin", "/sign-in", "/icon", "/apple-icon", "/opengraph-image", "/twitter-image"];
+
+function maintenancePage(header: string | null, paragraph: string | null, footer: string | null): NextResponse {
+  const esc = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(header ?? "We'll be right back")}</title>
+<style>body{font-family:system-ui,sans-serif;background:#F5EFE6;color:#0F0E0D;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;padding:24px}
+main{max-width:32rem;text-align:center}h1{font-size:1.75rem;margin:0 0 12px}p{color:#555;line-height:1.5}</style>
+</head><body><main><h1>${esc(header ?? "We'll be right back")}</h1>
+<p>${esc(paragraph ?? "The site is down for maintenance. Please check back soon.")}</p>
+${footer ? `<div>${footer}</div>` : ""}
+</main></body></html>`;
+  return new NextResponse(html, {
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+    status: 503,
+  });
+}
 
 // Whole-segment prefix match, so "/cut" covers "/cut/…" but not "/cut-app".
 const underPath = (pathname: string, prefix: string) =>
@@ -74,7 +109,26 @@ const underPath = (pathname: string, prefix: string) =>
 const passesThrough = (pathname: string) =>
   PASSTHROUGH.some((p) => underPath(pathname, p));
 
-export function proxy(req: NextRequest) {
+// This runs on every page request, so a real DB read per request would size
+// the connection pool to the site's traffic rather than to how often anyone
+// actually flips this switch. A warm serverless instance reuses this module
+// scope across invocations, so most requests answer from here instead —
+// still fresh within a few seconds of a real toggle, which is what
+// "temporarily unavailable" needs, not instant propagation.
+const MAINTENANCE_CACHE_MS = 10_000;
+let maintenanceCache: { at: number; settings: Awaited<ReturnType<typeof fetchPublicSiteSettings>> } | null = null;
+
+async function cachedMaintenanceSettings() {
+  const now = Date.now();
+  if (maintenanceCache && now - maintenanceCache.at < MAINTENANCE_CACHE_MS) {
+    return maintenanceCache.settings;
+  }
+  const settings = await fetchPublicSiteSettings();
+  maintenanceCache = { at: now, settings };
+  return settings;
+}
+
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (isCutApi(pathname)) return cutApi(req);
 
@@ -98,6 +152,23 @@ export function proxy(req: NextRequest) {
   }
 
   if (underPath(pathname, "/api")) return NextResponse.next();
+
+  // admin/settings/general's Maintenance Mode toggle, enforced here rather
+  // than left for each page to check on its own — one gate before the
+  // rewrite below ever picks a destination. Next 16's `proxy` runs on
+  // Node.js (unlike old edge middleware), so a direct Prisma read is exactly
+  // as available here as anywhere else in this app.
+  if (!MAINTENANCE_BYPASS.some((p) => underPath(pathname, p))) {
+    const settings = await cachedMaintenanceSettings();
+    if (settings.maintenanceMode) {
+      return maintenancePage(
+        settings.maintenanceHeader,
+        settings.maintenanceParagraph,
+        settings.maintenanceFooter,
+      );
+    }
+  }
+
   if (passesThrough(pathname)) return NextResponse.next();
   // The notch prototype is a dev-only page.
   if (isLocalHost(host) && underPath(pathname, "/prototype")) {

@@ -68,6 +68,19 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
+        // admin/settings/general's Allow New Registrations toggle. Fires only
+        // for a genuinely new account — an existing user signing back in
+        // never reaches user.create at all — so turning this off closes
+        // sign-up without touching anyone already signed up.
+        before: async () => {
+          const settings = await prisma.appSettings.findUnique({
+            select: { allowRegistration: true },
+            where: { id: "singleton" },
+          });
+          if (settings && !settings.allowRegistration) {
+            throw new APIError("FORBIDDEN", { message: "New sign-ups are currently closed." });
+          }
+        },
         // Every new account is provisioned with its signup grants (app credits
         // + free Vision API calls). provisionSignupGrants is idempotent and
         // swallows its own errors, so it never blocks user creation.
