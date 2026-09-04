@@ -1,15 +1,23 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ImageUp, Loader2, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
+  useAdminSettings,
+  useRemoveAppleTouchIcon,
   useRemoveFavicon,
   useRemoveSiteLogo,
+  useRemoveSocialShareImage,
+  useUpdateAdminSettings,
+  useUploadAppleTouchIcon,
   useUploadFavicon,
   useUploadSiteLogo,
+  useUploadSocialShareImage,
 } from "@/queries/admin";
 
 type Slot = {
@@ -146,6 +154,63 @@ function BrandAssetSlot({
   );
 }
 
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+// Overrides --primary site-wide (see app/layout.tsx) the moment it's saved —
+// a plain PATCH through the same general-settings mutation everything else
+// on this page uses, not an upload.
+function AccentColorField() {
+  const settings = useAdminSettings();
+  const update = useUpdateAdminSettings();
+  const [hex, setHex] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (settings.data) setHex(settings.data.settings.accentColor ?? "");
+  }, [settings.data]);
+
+  const save = (next: string) => {
+    setHex(next);
+    if (next !== "" && !HEX_RE.test(next)) {
+      setError("Use a 6-digit hex color, like #7C5CFA.");
+      return;
+    }
+    setError(null);
+    update.mutate({ accentColor: next });
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <Label>Brand / Accent Color</Label>
+      <p className="text-xs text-muted-foreground">
+        Overrides the primary color used across the signed-in app.
+      </p>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={HEX_RE.test(hex) ? hex : "#7c5cfa"}
+          onChange={(e) => save(e.target.value)}
+          className="size-9 cursor-pointer rounded-lg border border-input bg-transparent p-0.5"
+          aria-label="Accent color picker"
+        />
+        <Input
+          value={hex}
+          onChange={(e) => save(e.target.value)}
+          placeholder="#7C5CFA"
+          className="w-32 font-mono"
+        />
+        {hex && (
+          <Button variant="outline" size="sm" onClick={() => save("")}>
+            <Trash2 className="size-3.5" data-icon="inline-start" />
+            Clear
+          </Button>
+        )}
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
 const LOGO_TYPES = "image/svg+xml,image/png,image/webp";
 const LOGO_MAX_BYTES = 1024 * 1024;
 
@@ -154,16 +219,27 @@ export function BrandingSection() {
   const removeLight = useRemoveSiteLogo("light");
   const uploadDark = useUploadSiteLogo("dark");
   const removeDark = useRemoveSiteLogo("dark");
+  const uploadCompact = useUploadSiteLogo("compact");
+  const removeCompact = useRemoveSiteLogo("compact");
   const uploadFavicon = useUploadFavicon();
   const removeFavicon = useRemoveFavicon();
+  const uploadAppleTouchIcon = useUploadAppleTouchIcon();
+  const removeAppleTouchIcon = useRemoveAppleTouchIcon();
+  const uploadSocialShareImage = useUploadSocialShareImage();
+  const removeSocialShareImage = useRemoveSocialShareImage();
+
+  const settings = useAdminSettings();
+  if (settings.isLoading) return <Skeleton className="h-96 w-full max-w-2xl" />;
+  if (settings.isError) {
+    return <p className="text-sm text-destructive">Couldn&apos;t load settings. Try again.</p>;
+  }
 
   return (
     <div className="max-w-2xl space-y-5 rounded-2xl border bg-card p-6">
       <div>
         <h2 className="text-sm font-semibold">Branding</h2>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          The logo shown across the signed-in app, and the browser tab icon. Each falls
-          back to the default the moment it&apos;s removed.
+          Every image here falls back to its bundled default the moment it&apos;s removed.
         </p>
       </div>
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -191,19 +267,56 @@ export function BrandingSection() {
           uploading={uploadDark.isPending}
           removing={removeDark.isPending}
         />
+        <BrandAssetSlot
+          label="Logo Icon / Compact"
+          hint="Used in the collapsed sidebar and small icon spots. Falls back to the theme logo above when unset."
+          previewSrc="/api/site/logo/compact"
+          accept={LOGO_TYPES}
+          maxBytes={LOGO_MAX_BYTES}
+          typeError="Logos must be SVG, PNG, or WebP."
+          upload={(file) => uploadCompact.mutateAsync(file)}
+          remove={() => removeCompact.mutateAsync()}
+          uploading={uploadCompact.isPending}
+          removing={removeCompact.isPending}
+        />
+        <BrandAssetSlot
+          label="Favicon"
+          hint="The browser tab icon. PNG only, ideally square."
+          previewSrc="/icon"
+          accept="image/png"
+          maxBytes={256 * 1024}
+          typeError="Favicons must be a PNG image."
+          upload={(file) => uploadFavicon.mutateAsync(file)}
+          remove={() => removeFavicon.mutateAsync()}
+          uploading={uploadFavicon.isPending}
+          removing={removeFavicon.isPending}
+        />
+        <BrandAssetSlot
+          label="Apple Touch Icon"
+          hint="Shown when someone saves the site to an iPhone/iPad home screen. PNG only."
+          previewSrc="/apple-icon"
+          accept="image/png"
+          maxBytes={512 * 1024}
+          typeError="The apple touch icon must be a PNG image."
+          upload={(file) => uploadAppleTouchIcon.mutateAsync(file)}
+          remove={() => removeAppleTouchIcon.mutateAsync()}
+          uploading={uploadAppleTouchIcon.isPending}
+          removing={removeAppleTouchIcon.isPending}
+        />
+        <BrandAssetSlot
+          label="Default Social Share Image"
+          hint="Shown when a link to this site is shared on WhatsApp, X, Facebook, Discord, etc. PNG or JPEG, 1200×630 works best."
+          previewSrc="/opengraph-image"
+          accept="image/png,image/jpeg"
+          maxBytes={2 * 1024 * 1024}
+          typeError="The social share image must be a PNG or JPEG image."
+          upload={(file) => uploadSocialShareImage.mutateAsync(file)}
+          remove={() => removeSocialShareImage.mutateAsync()}
+          uploading={uploadSocialShareImage.isPending}
+          removing={removeSocialShareImage.isPending}
+        />
       </div>
-      <BrandAssetSlot
-        label="Favicon"
-        hint="The browser tab icon, and the home-screen icon on iOS. PNG only, ideally square."
-        previewSrc="/icon"
-        accept="image/png"
-        maxBytes={256 * 1024}
-        typeError="Favicons must be a PNG image."
-        upload={(file) => uploadFavicon.mutateAsync(file)}
-        remove={() => removeFavicon.mutateAsync()}
-        uploading={uploadFavicon.isPending}
-        removing={removeFavicon.isPending}
-      />
+      <AccentColorField />
     </div>
   );
 }
