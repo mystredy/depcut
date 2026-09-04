@@ -51,6 +51,10 @@ export interface ExportSpec {
      * zoom renders as the fade plus zoom ramps on both segments' overlap
      * windows. */
     transitionStyle?: string;
+    /** Whether that transition's audio crossfades with the picture; absent
+     * plays the outgoing track through and trims the silent overlap off the
+     * incoming one's head instead — a hard cut, not a mix. */
+    transitionAudioCrossfade?: boolean;
     /** This clip's own entrance/exit animation, baked into the segment's
      * head/tail window: fade (audio follows), zoom, pop, or a slide
      * against black. Unknown styles render as a fade. */
@@ -923,11 +927,22 @@ export async function runExport(
       // (or an old spec without a style) renders as a plain fade.
       const kind = TRANSITION_XFADE[prev.transitionStyle as TransitionStyle] ?? "fade";
       filters.push(`[${vAcc}][${segLabel[j]}]xfade=transition=${kind}:duration=${num(d)}:offset=${num(offset)}[${vOut}]`);
-      // acrossfade blends the accumulator's tail against this clip's own
-      // head over `d` seconds and concatenates the rest itself — the audio
-      // analog of xfade, and needs no offset since it always crosses at the
-      // join.
-      filters.push(`[${aAcc}][a${j}]acrossfade=d=${num(d)}:c1=tri:c2=tri[${aOut}]`);
+      if (prev.transitionAudioCrossfade) {
+        // acrossfade blends the accumulator's tail against this clip's own
+        // head over `d` seconds and concatenates the rest itself — the
+        // audio analog of xfade, and needs no offset since it always
+        // crosses at the join.
+        filters.push(`[${aAcc}][a${j}]acrossfade=d=${num(d)}:c1=tri:c2=tri[${aOut}]`);
+      } else {
+        // The picture blends but this cut opted the sound out of it: the
+        // outgoing track plays through untouched, and the incoming one is
+        // trimmed to start from the cut instead of its own head — the `d`
+        // seconds its video already spent silently overlapping never sound,
+        // so the join is a clean hard cut rather than two tracks briefly
+        // doubled up.
+        filters.push(`[a${j}]atrim=start=${num(d)},asetpts=PTS-STARTPTS[a${j}tail]`);
+        filters.push(`[${aAcc}][a${j}tail]concat=n=2:v=0:a=1[${aOut}]`);
+      }
     } else {
       filters.push(`[${vAcc}][${segLabel[j]}]concat=n=2:v=1:a=0[${vOut}]`);
       filters.push(`[${aAcc}][a${j}]concat=n=2:v=0:a=1[${aOut}]`);

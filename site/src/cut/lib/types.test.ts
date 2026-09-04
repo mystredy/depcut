@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { migrateLegacyTransitions, normalizeAspect, TRANSITION_STYLE_IDS, type VideoClip } from "./types";
+import { clampCutOverlap, migrateLegacyTransitions, normalizeAspect, TRANSITION_STYLE_IDS, type VideoClip } from "./types";
 
 /** A minimal track-0 clip; legacy docs carry retired transitionStyle strings. */
 function clip(
@@ -18,6 +18,26 @@ function clip(
     ...patch,
   } as VideoClip;
 }
+
+describe("clampCutOverlap", () => {
+  // The one clamp the timeline layout (store.ts), the audio mixdown
+  // (audioMix.ts) and the server export (exportPipeline.ts) all import and
+  // call with the same three numbers — this is what makes their answers
+  // agree instead of three re-derivations quietly drifting apart.
+  test("passes a declared duration through when both clips can afford it", () => {
+    expect(clampCutOverlap(1, 4, 4)).toBeCloseTo(1);
+  });
+
+  test("caps at 90% of the shorter neighbor, whichever side it's on", () => {
+    expect(clampCutOverlap(5, 1, 10)).toBeCloseTo(0.9);
+    expect(clampCutOverlap(5, 10, 1)).toBeCloseTo(0.9);
+  });
+
+  test("never negative, even for a negative or zero declared duration", () => {
+    expect(clampCutOverlap(0, 4, 4)).toBe(0);
+    expect(clampCutOverlap(-1, 4, 4)).toBe(0);
+  });
+});
 
 describe("migrateLegacyTransitions", () => {
   test("docs without legacy styles pass through untouched", () => {

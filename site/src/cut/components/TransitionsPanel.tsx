@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 
 /**
  * The Transitions tab: how one clip hands over to the next, and how a clip
@@ -111,6 +112,16 @@ export function TransitionsPanel() {
                 {(durationDraft ?? live.seconds).toFixed(2)}s
               </span>
             </div>
+          </div>
+        )}
+        {live && (
+          <div className="mb-3 flex items-center justify-between gap-2.5">
+            <span className="text-[13px] text-muted-foreground">Crossfade audio</span>
+            <Switch
+              checked={!!live.audioCrossfade}
+              onCheckedChange={(v) => useEditor.getState().updateTransition(live.id, { audioCrossfade: v })}
+              aria-label="Crossfade audio"
+            />
           </div>
         )}
         {/* One key handler over every group, so arrows walk the whole list

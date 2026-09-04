@@ -330,11 +330,12 @@ export function trackZeroPlan(master: ClipSpan, spans: ClipSpan[], t: number): T
     incAlpha,
     incZoom,
     veil: anim.veil,
-    // The outgoing sound leaves with the picture and the incoming one arrives
-    // with its own, both ramping across the same blend window — a genuine
-    // audio crossfade, matching the export's mix.
-    gain: anim.gain * (1 - p),
-    incGain: p,
+    // The picture always blends; the sound only does when this cut opted
+    // into it. Off (the default), the outgoing track holds full volume
+    // through the whole window and the incoming one stays silent — a clean
+    // handoff at the cut instead of two tracks briefly mixed together.
+    gain: anim.gain * (master.clip.transitionAudioCrossfade ? 1 - p : 1),
+    incGain: master.clip.transitionAudioCrossfade ? p : 0,
     backdrop,
     upcoming: next && t < next.start && t >= next.start - PREROLL_LEAD_S ? next : null,
   };

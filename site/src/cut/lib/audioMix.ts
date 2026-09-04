@@ -33,6 +33,10 @@ export interface MixClip {
   volume?: number;
   /** Cross-dissolve overlap into the next clip, timeline seconds. */
   transition?: number;
+  /** Whether that overlap's audio actually crossfades; absent/false plays
+   * the outgoing track through at full volume and holds the incoming one
+   * silent until the cut instead. */
+  transitionAudioCrossfade?: boolean;
 }
 
 /** A clip placed at an absolute time: an upper-track video's audio, a
@@ -81,20 +85,35 @@ const itemDur = (a: MixItem) => Math.max(0, (a.out - a.in) / speedOf(a.speed));
 /**
  * Where the sequential fold puts each track-0 clip, and how long its
  * transition edges are. A live transition genuinely overlaps the pair — the
- * next clip's `at` lands that many seconds before it otherwise would — with
- * the outgoing clip fading out and the incoming one fading in across the same
- * window, a real crossfade rather than a fade-to-hard-cut.
+ * next clip's `at` lands that many seconds before it otherwise would, its
+ * own audio already advancing through its source in step with its video —
+ * but only actually crosses if the cut opted into it: `fadeOut`/`fadeIn` ramp
+ * the two together across the window; otherwise the outgoing track holds
+ * full volume until its source runs out on its own and `silenceHead` mutes
+ * the incoming one for exactly the overlap, so it arrives at full volume the
+ * instant the cut lands instead of fading in early.
  */
 export function foldClips(clips: MixClip[]) {
-  const geo = clips.map((clip) => ({ clip, at: 0, dur: clipDur(clip), fadeIn: 0, fadeOut: 0 }));
+  const geo = clips.map((clip) => ({
+    clip,
+    at: 0,
+    dur: clipDur(clip),
+    fadeIn: 0,
+    fadeOut: 0,
+    silenceHead: 0,
+  }));
   let acc = 0;
   geo.forEach((g, j) => {
     g.at = acc;
     const next = geo[j + 1];
     const fade = next ? clampCutOverlap(g.clip.transition ?? 0, g.dur, next.dur) : 0;
     if (fade > 0.01) {
-      g.fadeOut = fade;
-      next!.fadeIn = fade;
+      if (g.clip.transitionAudioCrossfade) {
+        g.fadeOut = fade;
+        next!.fadeIn = fade;
+      } else {
+        next!.silenceHead = fade;
+      }
       acc += g.dur - fade;
     } else {
       acc += g.dur;
@@ -273,6 +292,13 @@ export async function renderMix(spec: MixSpec, opts: MixOptions): Promise<AudioB
       if (g.fadeOut > 0) {
         gain.gain.setValueAtTime(level, g.at + g.dur - g.fadeOut);
         gain.gain.linearRampToValueAtTime(0, g.at + g.dur);
+      }
+      // No crossfade: silent for exactly the overlap its video plays
+      // through, then a hard step to full — never ramps, never doubles up
+      // against the outgoing track still sounding at that instant.
+      if (g.silenceHead > 0) {
+        gain.gain.setValueAtTime(0, g.at);
+        gain.gain.setValueAtTime(level, g.at + g.silenceHead);
       }
     });
   }
