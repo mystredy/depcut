@@ -2679,7 +2679,7 @@ function Ruler({
     const subPps = pps / 10; // ten ticks/second — each one RULER_FPS/10 frames wide
     const count = Math.ceil((width / pps) * 10);
     return (
-      <div className="relative cursor-ew-resize" style={{ height: RULER_H }} onPointerDown={onScrub}>
+      <div className="relative touch-none cursor-ew-resize" style={{ height: RULER_H }} onPointerDown={onScrub}>
         {Array.from({ length: count }, (_, i) => {
           const seconds = i / 10;
           const onSecond = i % 10 === 0;
@@ -2796,7 +2796,7 @@ function PlayheadCap({
   const t = useEditor((s) => s.currentTime);
   return (
     <div
-      className="tl-playhead-cap absolute top-0 left-[-7px] h-5 w-4 cursor-ew-resize"
+      className="tl-playhead-cap absolute top-0 left-[-7px] h-5 w-4 touch-none cursor-ew-resize"
       style={{ transform: `translateX(${t * pps}px)` }}
       onPointerDown={onScrub}
     >
