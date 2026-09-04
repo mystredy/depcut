@@ -216,6 +216,10 @@ export function SidePanel({
   // A shared view shows only the surfaces the share opted in; the Library is
   // the viewer's own cross-project shelf and never appears there.
   const sharedFeatures = useEditor((s) => s.sharedFeatures);
+  // Transitions live on cuts and open edges between track-0 clips
+  // (`transitionBoundaries`) — with none there, the tab has nothing to act
+  // on, so its rail tile fades instead of opening an empty panel.
+  const hasTrackZeroClips = useEditor((s) => s.clips.some((c) => c.track === 0));
   const visibleTabs = !sharedFeatures
     ? TABS
     : TABS.filter(({ id }) =>
@@ -440,6 +444,10 @@ export function SidePanel({
               ? unseen[id].length
               : 0;
           const tileBusy = merged ? GEN_TABS.some((g) => !!busy[g.id]) : !!busy[id];
+          // Transitions has nothing to play with an empty track 0 — fade the
+          // tile and take it out of the tab order rather than open a panel
+          // with nothing to attach to.
+          const disabled = id === "transitions" && !hasTrackZeroClips;
           // Full width of the rail, whatever a scrollbar has left of it, so a
           // label that no longer fits ellipsises inside the tile rather than
           // running out past both edges of a centred one. The open tab reads
@@ -447,7 +455,7 @@ export function SidePanel({
           // the rail edges. The outline stays off — click focus otherwise
           // draws one around the tile.
           const tileClass =
-            "flex w-full min-w-0 shrink-0 flex-col items-center gap-0 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5";
+            "flex w-full min-w-0 shrink-0 flex-col items-center gap-0 rounded-lg px-1 py-1 text-muted-foreground outline-none transition-colors hover:text-foreground sm:py-1.5 disabled:pointer-events-none disabled:opacity-40 disabled:hover:text-muted-foreground";
           const inner = (
             <>
               <span
@@ -476,6 +484,8 @@ export function SidePanel({
               className={tileClass}
               aria-label={effectiveLabel}
               aria-pressed={active}
+              disabled={disabled}
+              title={disabled ? "Add a clip to the timeline to use transitions" : undefined}
               onClick={() => {
                 setExtraTab(null);
                 if (merged) setTab(genTabOpen ? null : lastGenTab.current);

@@ -372,19 +372,6 @@ class Engine {
     if (el.readyState >= 2 && !el.seeking) void el.play().catch(() => {});
   }
 
-  /** Park a clip's element on its entrance frame, paused and silent — the
-   * picture a transition blends in before the clip starts playing. */
-  private holdAtEntrance(span: ClipSpan): MediaEl {
-    const el = this.videoFor(span.clip, span.asset);
-    if (isImageEl(el)) return el;
-    el.muted = true;
-    if (!el.paused) el.pause();
-    else if (!el.seeking && Math.abs(el.currentTime - span.clip.in) > 0.05) {
-      el.currentTime = span.clip.in;
-    }
-    return el;
-  }
-
   /** Seek/rate/play one clip's element toward its frame at timeline time `t`,
    * without touching any other element (the caller pauses stale ones). */
   private prepare(span: ClipSpan, t: number, play: boolean, muted: boolean): MediaEl {
@@ -457,24 +444,24 @@ class Engine {
     // Prime the next clip's decoder+audio pipeline shortly before its entrance
     // (the dissolve start, or the hard cut) so the handoff `play()` resumes hot
     // — no cold-start spin-up freezing the picture and playhead at the cut.
-    // A transitioned cut holds its incoming clip on the entrance frame instead
-    // of rolling it: the blend draws that exact frame for the whole window, and
-    // a pre-roll would park the decoder on the wrong one — the seek at
-    // window-open then leaves the push/wipe geometry a black region until the
-    // frame decodes.
     if (plan.upcoming && plan.upcoming !== plan.incoming) {
-      if (masterSpan.transitionOut > 0) this.holdAtEntrance(plan.upcoming);
-      else this.warmNext(plan.upcoming, t, play);
+      this.warmNext(plan.upcoming, t, play);
       keep.add(plan.upcoming.clip.id);
     }
     // Each clip owns its element, so a transition's two clips decode side by
-    // side — a true blend even when they are trims of the same source. The
-    // incoming clip has not started yet (the blend window sits before its
-    // footprint), so it holds parked on its entrance frame; it starts playing
-    // when the cut lands and it becomes the master.
+    // side — a true blend even when they are trims of the same source. Track
+    // 0's layout already overlaps the pair by the blend length, so the
+    // incoming clip's own footprint has already started: it plays for real
+    // across the window, the same seek/play the master gets, and is already
+    // sitting at the right frame when it becomes the master at the cut.
     let incEl: MediaEl | null = null;
     if (plan.incoming) {
-      incEl = this.holdAtEntrance(plan.incoming);
+      incEl = this.prepare(
+        plan.incoming,
+        t,
+        play,
+        plan.incoming.clip.muted || !!plan.incoming.clip.hidden
+      );
       keep.add(plan.incoming.clip.id);
     }
     // A live voiceover ducks the master clip's sound under it. The clip's own
@@ -484,6 +471,12 @@ class Engine {
       masterEl.volume = Math.max(
         0,
         Math.min(1, plan.gain * duck * (masterSpan.clip.volume ?? 1))
+      );
+    }
+    if (incEl && !isImageEl(incEl)) {
+      incEl.volume = Math.max(
+        0,
+        Math.min(1, plan.incGain * duck * (plan.incoming!.clip.volume ?? 1))
       );
     }
     this.pauseExcept(keep);

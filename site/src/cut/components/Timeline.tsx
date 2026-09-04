@@ -905,6 +905,12 @@ export function Timeline() {
   // instead of a blind drop with no feedback until it either takes or silently
   // does nothing.
   const [transitionDropAnchor, setTransitionDropAnchor] = useState<Anchor | null>(null);
+  // A double-clicked cut button, expanded into a draggable pill spanning its
+  // live overlap instead of the plain round icon — the on-timeline way to
+  // retime a transition without opening the side panel. Keyed by the clip
+  // whose cut it plays; double-clicking it again (or losing the transition
+  // it shows) collapses it back.
+  const [expandedCutId, setExpandedCutId] = useState<string | null>(null);
   // A drag past the top edge opens a row there, pushing the stack down by one
   // for as long as it is aimed that way.
   const topRowShift =
@@ -1828,6 +1834,7 @@ export function Timeline() {
               <ClipView
                 key={span.clip.id}
                 span={span}
+                headOverlap={i > 0 ? spans[i - 1].transitionOut : 0}
                 mention={`@c${i + 1}`}
                 pps={pps}
                 selected={selKeys.has(`clip:${span.clip.id}`)}
@@ -1862,6 +1869,62 @@ export function Timeline() {
               // the same-size icon it is the rest of the time.
               const isDropTarget =
                 transitionDropAnchor?.kind === "cut" && transitionDropAnchor.clipId === span.clip.id;
+              // Double-clicked open: a draggable pill spanning the transition's
+              // live overlap, its left edge the one on-timeline gesture for
+              // retiming it (the right edge is pinned to the cut). A plain
+              // click still selects it and opens the side panel, same as the
+              // round icon; double-click again collapses it back.
+              if (expandedCutId === span.clip.id && existing) {
+                const t = existing;
+                const cutAt = span.start + span.len;
+                return (
+                  <div
+                    key={`cut-${span.clip.id}`}
+                    className="group absolute top-1/2 z-5 -translate-y-1/2 rounded-full border-2 border-primary bg-primary/90 shadow-md"
+                    style={{ left: (cutAt - t.seconds) * pps, width: Math.max(14, t.seconds * pps), height: 20 }}
+                    title={`${TRANSITION_STYLE_LABELS[t.style]} — drag the left edge to retime, double-click to collapse`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const s = useEditor.getState();
+                      s.setTransitionCutClip(null);
+                      s.select({ kind: "transition", id: t.id });
+                      requestSidePanel("transitions");
+                    }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedCutId(null);
+                    }}
+                  >
+                    <span className="pointer-events-none absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[5px] bg-black/70 px-1.5 py-px font-mono text-[10px] tabular-nums text-white">
+                      {t.seconds.toFixed(2)}s
+                    </span>
+                    <span
+                      className={cn(trimHandle, "tl-transition-trim left-0")}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        const st0 = useEditor.getState();
+                        if (st0.readOnly) return;
+                        if (st0.playing) st0.setPlaying(false);
+                        const startSeconds = t.seconds;
+                        st0.beginHistoryBatch();
+                        startDrag(e, {
+                          cursor: () => "ew-resize",
+                          onMove: (dx) => {
+                            const seconds = Math.max(0.1, Math.min(TRANSITION_MAX, startSeconds - dx / pps));
+                            useEditor.getState().updateTransitionTransient(t.id, {
+                              seconds,
+                              start: cutAt - seconds,
+                            });
+                          },
+                          onUp: () => {
+                            useEditor.getState().endHistoryBatch();
+                          },
+                        });
+                      }}
+                    />
+                  </div>
+                );
+              }
               return (
                 <button
                   key={`cut-${span.clip.id}`}
@@ -1874,8 +1937,8 @@ export function Timeline() {
                         ? "border-primary bg-primary text-primary-foreground"
                         : "border-border bg-card text-muted-foreground hover:text-foreground"
                   )}
-                  style={{ left: (span.start + span.len) * pps }}
-                  title={existing ? `${TRANSITION_STYLE_LABELS[existing.style]} — click to change` : "Add a transition"}
+                  style={{ left: (span.start + span.len - span.transitionOut / 2) * pps }}
+                  title={existing ? `${TRANSITION_STYLE_LABELS[existing.style]} — click to change, double-click to drag` : "Add a transition"}
                   onClick={(e) => {
                     e.stopPropagation();
                     const s = useEditor.getState();
@@ -1889,6 +1952,10 @@ export function Timeline() {
                       s.setTransitionCutClip(span.clip.id);
                     }
                     requestSidePanel("transitions");
+                  }}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    if (existing) setExpandedCutId(span.clip.id);
                   }}
                 >
                   <Icon className="size-3" />
@@ -2808,6 +2875,7 @@ function PlayheadCap({
 
 function ClipView({
   span,
+  headOverlap,
   mention,
   pps,
   selected,
@@ -2822,6 +2890,9 @@ function ClipView({
   onFrameMenu,
 }: {
   span: ClipSpan;
+  /** The live overlap the previous clip's transition holds into this one's
+   * own head, in timeline seconds (0 with no transition there). */
+  headOverlap: number;
   /** The clip's chat mention token ("@c2"), shown on hover so the user can
    * point the assistant at this exact segment. */
   mention: string;
@@ -2849,10 +2920,16 @@ function ClipView({
 }) {
   const { clip, asset } = span;
   const speed = clipSpeed(clip);
-  // Every box is its clip's whole footprint. Clips never overlap — a
-  // transition is a render-time blend at the cut, drawn as the bar above the
-  // tracks — so a box's width is the clip's own length, whatever joins it.
-  const w = span.len * pps;
+  // A transitioned pair genuinely overlaps now, so their two boxes would
+  // otherwise stack on top of each other across the whole blend — instead
+  // each gives up half of the shared span, meeting in the middle of it: this
+  // clip's own start draws inset by half of what the previous clip's
+  // transition holds into it, and its end draws inset by half of what its
+  // own transition holds into the next one. Only the shared edges move; the
+  // clip's real geometry (drag math, seek, export) is untouched.
+  const visStart = span.start + headOverlap / 2;
+  const visLen = span.len - headOverlap / 2 - span.transitionOut / 2;
+  const w = visLen * pps;
   const filmIn = clip.in;
   const filmOut = filmIn + span.len * speed;
 
@@ -2875,7 +2952,7 @@ function ClipView({
     rowH: VIDEO_H,
     laneCount: 0,
     homeRow: 0,
-    visStart: span.start,
+    visStart,
     onDrag,
     onSnap,
     vertical: {
@@ -2899,7 +2976,7 @@ function ClipView({
           : parting && "transition-[left] duration-150 ease-out"
       )}
       style={{
-        left: drag ? drag.ghostX : span.start * pps,
+        left: drag ? drag.ghostX : visStart * pps,
         top: drag ? 2 + drag.ghostY : undefined,
         width: Math.max(10, w - CLIP_GAP),
         height: VIDEO_H - 4,

@@ -75,7 +75,7 @@ export function EffectsPanel() {
           starts at the scroll edge, and a ring drawn outside the tile would be
           cut off there. */}
       <ScrollArea className="min-h-0 flex-1" contentClassName="px-3.5 pt-1 pb-4">
-        <div className="grid grid-cols-2 gap-2" onKeyDown={pickGridNav}>
+        <div className="grid grid-cols-3 gap-2" onKeyDown={pickGridNav}>
           {EFFECT_IDS.filter((id) => groupOf(id) === group).map((id) => (
             <EffectTile key={id} id={id} live={live} frame={frame} />
           ))}
