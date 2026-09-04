@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 // Marks every Pending/Approved withdrawal as Paid in one pass and logs a
 // transaction for each — the Payout Queue's "Bulk Pay All Queued" action.
-export const POST = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const POST = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can do this." },
       { status: 403 },

@@ -780,7 +780,7 @@ export default function FlowThreadPage() {
         </div>
         {signedOut ? (
           <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-            Generating runs on your Depcut account.{" "}
+            Generating runs on your DepCut account.{" "}
             <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
               Sign in
             </a>{" "}
@@ -1055,7 +1055,7 @@ function GenerationCard({
 }
 
 /**
- * The action menu for one generated image/video card — Depcut's answer to
+ * The action menu for one generated image/video card — DepCut's answer to
  * the OS's own long-press image menu (Share/Save/Copy), which otherwise
  * fires instead of anything app-specific. Opens on a visible three-dot
  * button (works with a keyboard or a tap, no hover required), a desktop

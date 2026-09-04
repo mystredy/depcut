@@ -1,7 +1,7 @@
 import { ArrowUp, CloudSync, Coins, MessageCircleWarning, Shield } from 'lucide-react';
 import { type FormEvent, type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import { DonkeyCursor } from '@/app/prototype/_components/DonkeyCursor';
+import { DepCutCursor } from '@/app/prototype/_components/DepCutCursor';
 import { ExpandedTaskRow } from '@/app/prototype/_components/ExpandedTaskRow';
 import { ERROR_RED } from '@/app/prototype/_components/tasks';
 import type { LiveTask, NotchState, NotchUpdate, NotchVariant } from '@/app/prototype/_components/types';
@@ -54,7 +54,7 @@ const METRICS = {
   // Spec: the expanded notch window and its input box both use a 14px radius.
   expandedCornerRadius: 14,
   contentInset: 14,
-  // Logged out: collapsed just shows the "Login to use Donkey" line; expanding reveals a wide bar with
+  // Logged out: collapsed just shows the "Login to use DepCut" line; expanding reveals a wide bar with
   // the label on the left and the Login button on the right.
   loginCollapsedChinHeight: 22,
   loginExpandedHeight: 84,
@@ -322,7 +322,7 @@ export function Notch({
 
   return (
     <section
-      aria-label="Depcut status"
+      aria-label="DepCut status"
       className="absolute left-1/2 top-0 z-30 -translate-x-1/2 overflow-hidden focus:outline-none"
       style={{
         width: collapsedWidth,
@@ -360,12 +360,12 @@ export function Notch({
         }}
       >
         {/* Logged out: the notch becomes a login call-to-action instead of the task surface. The
-            collapsed chin reads "Login to use Donkey" with a Login button; expanding shows the
+            collapsed chin reads "Login to use DepCut" with a Login button; expanding shows the
             minimal login view. */}
         {loggedOut && (
           <>
             {/* Collapsed: the idle silhouette sits in the left gutter beside the void, and the chin
-                below reads "Login to use Donkey" — no button until expanded. */}
+                below reads "Login to use DepCut" — no button until expanded. */}
             <div
               className="absolute inset-0"
               style={{ opacity: expanded ? 0 : 1, transition: 'opacity 150ms ease-out' }}
@@ -374,7 +374,7 @@ export function Notch({
                 className="absolute left-0 top-0 grid place-items-center"
                 style={{ width: METRICS.contentAreaWidth, height: contentRowHeight }}
               >
-                <DonkeyCursor color={activeColor} size={METRICS.pointerSize} silhouette />
+                <DepCutCursor color={activeColor} size={METRICS.pointerSize} silhouette />
               </div>
               <div
                 className="absolute left-0 overflow-hidden"
@@ -385,7 +385,7 @@ export function Notch({
                   padding: '0 12px',
                 }}
               >
-                <p className="truncate text-[12px] leading-[15px] text-white/[0.82]">Login to use Depcut</p>
+                <p className="truncate text-[12px] leading-[15px] text-white/[0.82]">Login to use DepCut</p>
               </div>
             </div>
 
@@ -402,7 +402,7 @@ export function Notch({
                 transition: expanded ? 'opacity 300ms ease-out 150ms' : 'opacity 100ms ease-out',
               }}
             >
-              <span className="text-[16px] leading-none text-white/[0.92]">Login to use Depcut</span>
+              <span className="text-[16px] leading-none text-white/[0.92]">Login to use DepCut</span>
               <button
                 type="button"
                 onClick={(event) => {
@@ -435,7 +435,7 @@ export function Notch({
           >
             {clusterCount === 0 ? (
               <div className="grid h-full w-full place-items-center">
-                <DonkeyCursor color={activeColor} size={METRICS.pointerSize} silhouette />
+                <DepCutCursor color={activeColor} size={METRICS.pointerSize} silhouette />
               </div>
             ) : (
               <div
@@ -459,7 +459,7 @@ export function Notch({
                       animation: task.status === 'running' ? 'notchArrowPulse 1.6s ease-in-out infinite' : undefined,
                     }}
                   >
-                    <DonkeyCursor color={task.color} size={METRICS.pointerSize} />
+                    <DepCutCursor color={task.color} size={METRICS.pointerSize} />
                   </div>
                 ))}
               </div>
@@ -634,15 +634,15 @@ export function Notch({
             onClick={(event) => event.stopPropagation()}
             onSubmit={handleFollowUpSubmit}
           >
-            <label className="sr-only" htmlFor="donkey-follow-up-input">
+            <label className="sr-only" htmlFor="depcut-follow-up-input">
               Follow-up
             </label>
             <textarea
-              id="donkey-follow-up-input"
+              id="depcut-follow-up-input"
               ref={followUpRef}
               name="followUp"
               rows={1}
-              placeholder="What can Depcut do for you?"
+              placeholder="What can DepCut do for you?"
               onInput={resizeFollowUp}
               className="flex-1 resize-none border-0 bg-transparent p-0 pr-11 text-[16px] font-light leading-[20px] text-white outline-none placeholder:text-white/[0.58]"
               style={{

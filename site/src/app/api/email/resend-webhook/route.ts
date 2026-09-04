@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { Webhook } from "svix";
 import { z } from "zod";
 
-import { unauthorizedResponse } from "@/lib/donkey-api-auth";
+import { unauthorizedResponse } from "@/lib/depcut-api-auth";
 import { setMarketingUnsubscribed } from "@/lib/email/unsubscribe";
 import { prisma } from "@/lib/prisma";
 
@@ -20,7 +20,7 @@ const contactUpdatedSchema = z.object({
   type: z.literal("contact.updated"),
 });
 
-// Public exception to withDonkeyAuth (docs/guides/backend-apis.md): Resend
+// Public exception to withDepCutAuth (docs/guides/backend-apis.md): Resend
 // calls this endpoint directly. Every request is Svix-signature-verified
 // against RESEND_WEBHOOK_SECRET before it is read.
 export async function POST(request: NextRequest) {

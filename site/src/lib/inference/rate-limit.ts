@@ -5,7 +5,7 @@ type RateLimitBucket = {
   count: number;
 };
 
-const globalBucketsKey = "__donkeyInferenceRateLimitBuckets";
+const globalBucketsKey = "__depcutInferenceRateLimitBuckets";
 
 type GlobalWithBuckets = typeof globalThis & {
   [globalBucketsKey]?: Map<string, RateLimitBucket>;

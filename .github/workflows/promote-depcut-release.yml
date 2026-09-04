@@ -1,0 +1,345 @@
+name: Release DepCut
+
+on:
+  # A push cuts a patch release when it carries the ` [rebuild]` label — the
+  # commit-subject rule in CLAUDE.md. Whether a change needs a new Mac app build is
+  # the author's call, stated in the commit, rather than something inferred from the
+  # paths it touched: the engine compiles a handful of shared modules that also serve
+  # the hosted page, so a path list either releases site-only edits or misses app ones.
+  # Every push runs the gate; only a labelled one reaches the build.
+  #
+  # The tools recipe (tools/**, fetch-bundled-tools.sh) goes the long way round. Those
+  # changes go to Publish Bundled Tools first, which builds the new bundle, commits the
+  # manifest pinning it, and then dispatches this workflow. Releasing on the recipe push
+  # too would ship a build that still stages the previous bundle.
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+# One release at a time, repo-wide: version numbers are derived from the tags that
+# already exist, so two runs deriving in parallel would both claim the same patch.
+# Never cancel in progress — a run killed between creating the release and moving the
+# aliases leaves a tagged release the website and appcast never learn about.
+concurrency:
+  group: release-depcut
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Decide release
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.decide.outputs.should_release }}
+      target_sha: ${{ steps.decide.outputs.target_sha }}
+      version: ${{ steps.decide.outputs.version }}
+      tag: ${{ steps.decide.outputs.tag }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Fetch tags
+        run: git fetch --tags --force origin
+
+      - name: Decide release
+        id: decide
+        env:
+          # Automatic push releases are always patches; a manual run picks its own bump.
+          BUMP: ${{ inputs.bump || 'patch' }}
+        run: |
+          target_sha="$(git rev-parse HEAD)"
+          should_release=true
+
+          # This job checks out the branch tip rather than the pushed commit, so a run
+          # queued behind another can land on a commit that already shipped. A numeric
+          # tag pointing at HEAD says exactly that. A manual run bypasses the check so a
+          # release that failed after tagging can be retried.
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            existing="$(git tag --points-at HEAD | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)"
+            if [[ -n "$existing" ]]; then
+              should_release=false
+              echo "::notice::${target_sha} is already released as ${existing}; skipping."
+            fi
+          fi
+
+          # A push ships only what asked to ship. The ` [rebuild]` label marks a commit
+          # whose code goes inside the Mac app; with none since the last release there is
+          # nothing new to build, and the appcast commit this workflow pushes itself is the
+          # commonest such push. The whole range is read rather than the pushed commits, so
+          # a labelled commit still ships when its own run is skipped or queued behind
+          # another. A manual run bypasses the check: the run is the ask.
+          if [[ "$GITHUB_EVENT_NAME" == "push" && "$should_release" == "true" ]]; then
+            last_tag="$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' HEAD 2>/dev/null || true)"
+            if ! git log --format=%s "${last_tag:+$last_tag..}HEAD" | grep -qE '\[rebuild\][[:space:]]*$'; then
+              should_release=false
+              echo "::notice::No [rebuild] commit since ${last_tag:-the start of history}; skipping."
+            fi
+          fi
+
+          version="$(python3 - "$BUMP" <<'PY'
+          from __future__ import annotations
+
+          import re
+          import subprocess
+          import sys
+
+          bump = sys.argv[1]
+          if bump not in {"major", "minor", "patch"}:
+              raise SystemExit(f"Unsupported version bump: {bump}")
+
+          tag_re = re.compile(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+          tags = subprocess.check_output(["git", "tag", "--list"], text=True).splitlines()
+          versions = [
+              tuple(int(part) for part in match.groups())
+              for tag in tags
+              if (match := tag_re.match(tag.strip()))
+          ]
+
+          if versions:
+              major, minor, patch = max(versions)
+              if bump == "major":
+                  major, minor, patch = major + 1, 0, 0
+              elif bump == "minor":
+                  minor, patch = minor + 1, 0
+              else:
+                  patch += 1
+          else:
+              major, minor, patch = 0, 1, 0
+
+          print(f"{major}.{minor}.{patch}")
+          PY
+          )"
+
+          {
+            echo "should_release=$should_release"
+            echo "target_sha=$target_sha"
+            echo "version=$version"
+            echo "tag=v$version"
+          } >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Build and release
+    needs: gate
+    if: needs.gate.outputs.should_release == 'true'
+    # The macos-26 image carries the Xcode 26 SDK that defines the SpeechAnalyzer /
+    # SpeechTranscriber APIs the app compiles against (gated to macOS 26 at runtime).
+    runs-on: macos-26
+
+    steps:
+      # Build the exact commit the gate approved. A push landing between the two jobs
+      # gets its own queued run; letting it ride along here would ship it under a version
+      # derived before it existed and then release the same code twice.
+      - name: Check out release commit
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.gate.outputs.target_sha }}
+
+      - name: Configure git
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Name the detached release commit as the default branch. The promote step
+          # commits the appcast here, then rebases onto origin before pushing, so
+          # anything that landed during the build is preserved.
+          git checkout -B "$DEFAULT_BRANCH"
+
+      - name: Fetch tags
+        run: git fetch --tags --force origin
+
+      - name: Prepare release values
+        id: release
+        env:
+          VERSION: ${{ needs.gate.outputs.version }}
+          TAG: ${{ needs.gate.outputs.tag }}
+          TARGET_SHA: ${{ needs.gate.outputs.target_sha }}
+        run: |
+          build="${GITHUB_RUN_NUMBER}"
+          if [[ ! "$build" =~ ^[0-9]+$ ]]; then
+            echo "Build must be numeric for CFBundleVersion." >&2
+            exit 1
+          fi
+
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG"
+            echo "build=$build"
+            echo "target_sha=$TARGET_SHA"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check Sparkle secrets
+        env:
+          DEPCUT_SPARKLE_PUBLIC_ED_KEY: ${{ secrets.DEPCUT_SPARKLE_PUBLIC_ED_KEY }}
+          DEPCUT_SPARKLE_PRIVATE_ED_KEY: ${{ secrets.DEPCUT_SPARKLE_PRIVATE_ED_KEY }}
+        run: |
+          if [[ -z "$DEPCUT_SPARKLE_PUBLIC_ED_KEY" ]]; then
+            echo "Missing DEPCUT_SPARKLE_PUBLIC_ED_KEY repository secret." >&2
+            exit 1
+          fi
+          if [[ -z "$DEPCUT_SPARKLE_PRIVATE_ED_KEY" ]]; then
+            echo "Missing DEPCUT_SPARKLE_PRIVATE_ED_KEY repository secret." >&2
+            exit 1
+          fi
+
+      - name: Install packaging dependencies
+        run: |
+          if ! command -v magick >/dev/null 2>&1; then
+            brew install imagemagick
+          fi
+
+      # Import the Developer ID cert into a throwaway keychain and stage the notary API key, so the app
+      # and DMG are signed + notarized. Absent the secrets this no-ops to ad-hoc signing (runnable
+      # locally, not distributable), so a release without signing configured still builds.
+      - name: Set up Developer ID signing
+        id: signing
+        env:
+          CERT_P12: ${{ secrets.DEPCUT_DEVELOPER_ID_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.DEPCUT_DEVELOPER_ID_CERT_PASSWORD }}
+          SIGN_IDENTITY: ${{ secrets.DEPCUT_APP_SIGN_IDENTITY }}
+          NOTARY_KEY_P8: ${{ secrets.DEPCUT_NOTARY_KEY_P8 }}
+        run: |
+          if [ -z "$CERT_P12" ] || [ -z "$SIGN_IDENTITY" ]; then
+            echo "::warning::No Developer ID secrets; the app will be ad-hoc signed (not for distribution)."
+            echo "identity=-" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/depcut-signing.keychain-db"
+          kpw="$(uuidgen)"
+          security create-keychain -p "$kpw" "$keychain"
+          # No -t/-lut: disable the auto-lock timeout entirely so the keychain stays unlocked across the
+          # later (separate) Package step. With a timeout the long Swift build can elapse and re-lock it,
+          # hiding the private key from codesign — which then reports "no identity found". Safe on an
+          # ephemeral CI runner.
+          security set-keychain-settings "$keychain"
+          security unlock-keychain -p "$kpw" "$keychain"
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kpw" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | sed -e 's/"//g')
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+          # Show what landed in the keychain. The identity name is a registered secret (masked ***), but the
+          # "N valid identities found" count is not: 0 means the .p12 had no usable codesigning identity
+          # (typically a cert exported without its private key); 1+ means the cert+key imported fine.
+          echo "Codesigning identities in the signing keychain:"
+          security find-identity -v -p codesigning "$keychain"
+
+          # Sign by the cert's SHA-1 hash, not by the DEPCUT_APP_SIGN_IDENTITY name string. A name carried in
+          # a secret can pick up a trailing newline/whitespace that codesign rejects ("no identity found")
+          # even though the cert is present — and a substring name match can be ambiguous. The hash is exact
+          # and whitespace-free. Parse it from the "  1) <HASH> "name"" line.
+          hash="$(security find-identity -v -p codesigning "$keychain" | sed -n 's/^[[:space:]]*1)[[:space:]]*\([0-9A-Fa-f]\{40\}\).*/\1/p')"
+          if [ -z "$hash" ]; then
+            echo "::error::No usable codesigning identity in the keychain. Confirm DEPCUT_DEVELOPER_ID_CERT_P12 includes the private key (export the cert AND its key) and that DEPCUT_DEVELOPER_ID_CERT_PASSWORD is correct."
+            exit 1
+          fi
+
+          # Prove real signing works here — with the same keychain + hash the Package step will use — so any
+          # failure surfaces now with context instead of as a terse error 3 minutes into the build.
+          smoke="$RUNNER_TEMP/codesign-smoketest"
+          cp /bin/echo "$smoke"
+          if ! codesign --force --options runtime --timestamp=none --keychain "$keychain" --sign "$hash" "$smoke"; then
+            echo "::error::codesign smoke test failed against the signing keychain. The identity is present but not usable for signing (check the key partition list / keychain unlock)."
+            exit 1
+          fi
+          rm -f "$smoke"
+          echo "Codesign smoke test passed; signing with identity hash $hash."
+
+          if [ -n "$NOTARY_KEY_P8" ]; then
+            echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          fi
+          echo "identity=$hash" >> "$GITHUB_OUTPUT"
+          # Hand the keychain path to the Package step so codesign can target it explicitly (--keychain)
+          # rather than depending on the search-list state set above carrying across steps.
+          echo "keychain=$keychain" >> "$GITHUB_OUTPUT"
+
+      # The bundled CLI tools (ffmpeg, ffprobe, yt-dlp) ship inside the app. Packaging stages them
+      # itself — ensure-bundled-tools.sh fetches the artifact published by the Publish Bundled Tools
+      # workflow (or builds from source), and package-depcut-app.sh bakes and re-signs the directory.
+      - name: Package DepCut
+        env:
+          DEPCUT_APP_VERSION: ${{ steps.release.outputs.version }}
+          DEPCUT_APP_BUILD: ${{ steps.release.outputs.build }}
+          DEPCUT_SPARKLE_FEED_URL: https://depcut.com/appcast.xml
+          DEPCUT_SPARKLE_PUBLIC_ED_KEY: ${{ secrets.DEPCUT_SPARKLE_PUBLIC_ED_KEY }}
+          DEPCUT_APP_SIGN_IDENTITY: ${{ steps.signing.outputs.identity }}
+          DEPCUT_SIGN_KEYCHAIN: ${{ steps.signing.outputs.keychain }}
+          DEPCUT_NOTARY_KEY_P8: ${{ runner.temp }}/notary.p8
+          DEPCUT_NOTARY_KEY_ID: ${{ secrets.DEPCUT_NOTARY_KEY_ID }}
+          DEPCUT_NOTARY_ISSUER_ID: ${{ secrets.DEPCUT_NOTARY_ISSUER_ID }}
+        run: ./scripts/package-depcut-app.sh
+
+      - name: Generate checksum
+        run: shasum -a 256 dist/DepCut.dmg > dist/DepCut.dmg.sha256
+
+      - name: Sign update archive
+        id: sparkle
+        env:
+          DEPCUT_SPARKLE_PRIVATE_ED_KEY: ${{ secrets.DEPCUT_SPARKLE_PRIVATE_ED_KEY }}
+        run: |
+          sign_update="$(find apps/DepCut/.build/artifacts/sparkle/Sparkle/bin -name sign_update -type f | head -n 1)"
+          if [[ -z "$sign_update" ]]; then
+            echo "Sparkle sign_update tool was not found after packaging." >&2
+            exit 1
+          fi
+
+          signature="$(printf '%s' "$DEPCUT_SPARKLE_PRIVATE_ED_KEY" | "$sign_update" --ed-key-file - -p dist/DepCut.dmg)"
+          if [[ -z "$signature" ]]; then
+            echo "Sparkle signature was empty." >&2
+            exit 1
+          fi
+          echo "signature=$signature" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/DepCut.dmg dist/DepCut.dmg.sha256 --clobber
+            gh release edit "$TAG" --title "DepCut $TAG"
+          else
+            gh release create "$TAG" dist/DepCut.dmg dist/DepCut.dmg.sha256 \
+              --target "${{ steps.release.outputs.target_sha }}" \
+              --title "DepCut $TAG" \
+              --generate-notes
+          fi
+
+      - name: Promote website, appcast, and aliases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # `gh release create` made the numeric tag server-side; pull it down so the
+          # alias tags can be pointed at it.
+          git fetch --tags --force origin
+
+          args=(
+            --repo "${{ github.repository }}"
+            --version "${{ steps.release.outputs.version }}"
+            --build "${{ steps.release.outputs.build }}"
+            --sparkle-ed-signature "${{ steps.sparkle.outputs.signature }}"
+            --asset-name "DepCut.dmg"
+            --keep-releases 10
+            --commit
+          )
+
+          python3 scripts/promote-github-release.py "${args[@]}"

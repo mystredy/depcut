@@ -527,7 +527,7 @@ export default function SpeechToTextPage() {
 
         {signedOut ? (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Transcription runs on your Depcut account.{" "}
+            Transcription runs on your DepCut account.{" "}
             <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
               Sign in
             </a>{" "}

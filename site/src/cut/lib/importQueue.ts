@@ -17,6 +17,7 @@
 //   retry it rather than discover later that it was never saved.
 import { getBackend, type CutBackend } from "./backend";
 import type { PendingImport } from "./media";
+import { clearPendingUpload, dropLocalMedia, localMediaUrl } from "./mediaSync";
 import { useEditor } from "./store";
 import { mediaUrl } from "./types";
 
@@ -86,12 +87,16 @@ function dropLanded(job: Job, fileName: string) {
 }
 
 /** Stop an upload whose asset is gone. A claim the copy never completed is
- * left incomplete on purpose — it was never counted against the account. */
+ * left incomplete on purpose — it was never counted against the account.
+ * Drops the stash (mediaSync.ts) it was pinning, when there was one; a plain
+ * object URL (the browser couldn't hold a store) revokes directly instead,
+ * which is a harmless no-op on a URL the drop already revoked. */
 export function cancelUpload(assetId: string) {
   const job = jobs.get(assetId);
   if (!job) return;
   jobs.delete(assetId);
   job.controller.abort();
+  void dropLocalMedia(job.projectId, job.pending.asset.fileName);
   URL.revokeObjectURL(job.pending.localUrl);
 }
 
@@ -132,7 +137,17 @@ async function run(job: Job) {
     // learns it here). Filmstrips are self-contained frames and survive the
     // swap; a still's single "frame" is the source itself, so it repoints
     // with the asset.
-    const url = mediaUrl(job.projectId, fileName);
+    //
+    // A dropped file's bytes were already written into this browser's store
+    // at import time (mediaSync.ts, `prepareImport`'s stash) — keeping that
+    // local copy is the whole point of stashing it: the clip never has to
+    // fall back to streaming the signed URL once the upload lands. Unpin it
+    // now that the cloud holds its own copy, and reuse it if it's there; a
+    // remote import (nothing was stashed) or a browser that can't hold a
+    // store falls through to the stored file's URL, as before.
+    await clearPendingUpload(job.projectId, fileName);
+    const local = await localMediaUrl(job.projectId, fileName);
+    const url = local ?? mediaUrl(job.projectId, fileName);
     useEditor.getState().updateAsset(asset.id, {
       fileName,
       url,
@@ -140,8 +155,11 @@ async function run(job: Job) {
       ...(asset.type === "image" ? { thumbs: [url] } : {}),
     });
     // Decoders repoint on the URL change; let the frame they are painting
-    // finish before the bytes behind them go away.
-    setTimeout(() => URL.revokeObjectURL(localUrl), 10_000);
+    // finish before the bytes behind them go away. Skipped when the stash
+    // landed: `prepareImport`'s own background handler already revoked
+    // `localUrl` once it swapped the asset onto the durable copy — the same
+    // one `local` just found.
+    if (!local) setTimeout(() => URL.revokeObjectURL(localUrl), 10_000);
   } catch (err) {
     if (job.controller.signal.aborted) return;
     if (!wanted(job)) return cancelUpload(asset.id);

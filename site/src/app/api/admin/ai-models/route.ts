@@ -3,14 +3,14 @@ import { z } from "zod";
 
 import { aiModelKey } from "@/lib/ai-models-seed";
 import { listAiModels } from "@/lib/ai-models";
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 // Super-user only. Self-seeds via listAiModels() — see that file's header.
-export const GET = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const GET = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can view this." },
       { status: 403 },
@@ -57,8 +57,8 @@ const createModelSchema = z
 // model id has a configured price in provider-pricing.ts. This row is what
 // an admin sees and can flip on; wiring a genuinely new model into an actual
 // picker and pricing it is still a code change.
-export const POST = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const POST = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can do this." },
       { status: 403 },

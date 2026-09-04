@@ -1,6 +1,6 @@
 "use client";
 
-import { hasOverlayAnim } from "@donkeycut/effects-kit";
+import { hasOverlayAnim } from "@depcut/effects-kit";
 import { chatOwner } from "./chatAssets";
 import { useGenerate } from "./generate";
 import { getClipSpans, overlayLayers, totalDuration, useEditor } from "./store";

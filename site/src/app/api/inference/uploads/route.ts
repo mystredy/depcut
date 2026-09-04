@@ -11,7 +11,7 @@ import {
   validationErrorResponse,
 } from "@/lib/inference/responses";
 import { inferenceUploadRequestSchema } from "@/lib/inference/schemas";
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -41,8 +41,8 @@ const EXTENSIONS: Record<string, string> = {
   "video/webm": "webm",
 };
 
-export const POST = withDonkeyAuth(async (request) => {
-  const client = requireInferenceClientId(request.donkey.clientId);
+export const POST = withDepCutAuth(async (request) => {
+  const client = requireInferenceClientId(request.depcut.clientId);
   if (!client.ok) {
     return client.response;
   }
@@ -61,7 +61,7 @@ export const POST = withDonkeyAuth(async (request) => {
         const ext = EXTENSIONS[blob.mimeType];
         if (!ext) return { skipped: "unsupported" };
         if (blob.bytes > MAX_BLOB_BYTES) return { skipped: "too_large" };
-        const key = inferenceBlobKey(request.donkey.userId, blob.sha256, ext);
+        const key = inferenceBlobKey(request.depcut.userId, blob.sha256, ext);
         const stored = await head(key);
         if (stored && stored.bytes === blob.bytes) {
           return { blobRef: key };

@@ -11,7 +11,7 @@ function isInternalHref(href: string) {
 
 // The auth pages (/sign-in, /sign-up) are proxy passthrough routes that live
 // outside the "/" → "/cut" rewrite the proxy uses to serve the landing on
-// donkeycut.com. App Router soft-navigation can't cross that rewrite boundary —
+// depcut.com. App Router soft-navigation can't cross that rewrite boundary —
 // a next/link click flips the URL but never renders the auth screen — so links
 // to these routes must be plain anchors that trigger a full-page navigation.
 function isAuthPassthroughHref(href: string) {

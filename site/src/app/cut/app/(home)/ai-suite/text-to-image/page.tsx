@@ -22,7 +22,7 @@ const ASPECTS: Aspect[] = ["16:9", "4:3", "1:1", "3:4", "9:16"];
 const COUNTS = [1, 2, 3, 4] as const;
 
 async function readError(res: Response, fallback: string): Promise<string> {
-  if (res.status === 401) return "Sign in to Depcut to generate images.";
+  if (res.status === 401) return "Sign in to DepCut to generate images.";
   if (res.status === 402) return NO_CREDITS_MESSAGE;
   const body = (await res.json().catch(() => null)) as {
     error?: unknown;
@@ -243,7 +243,7 @@ export default function TextToImagePage() {
       <div>
         <h1 className="text-lg font-semibold">Text to Image</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Describe an image and Depcut's AI model will render it.
+          Describe an image and DepCut's AI model will render it.
         </p>
       </div>
 
@@ -325,7 +325,7 @@ export default function TextToImagePage() {
 
         {signedOut ? (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Generating runs on your Depcut account.{" "}
+            Generating runs on your DepCut account.{" "}
             <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
               Sign in
             </a>{" "}

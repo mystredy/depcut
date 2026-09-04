@@ -5,8 +5,8 @@ import { AdminGuard } from "@/app/admin/AdminGuard";
 import { AdminShell } from "@/app/admin/AdminShell";
 
 export const metadata: Metadata = {
-  title: "Admin | Depcut",
-  description: "Site management for Depcut.",
+  title: "Admin | DepCut",
+  description: "Site management for DepCut.",
 };
 
 // Standalone area outside the Cut app shell (no editor sidebar/header) — its

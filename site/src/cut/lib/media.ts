@@ -5,6 +5,7 @@ import { apiFetch, apiJson, getBackend, type CutBackend } from "./backend";
 import { quotaErrorMessage } from "./backend/cloud";
 import { encodeWav } from "./cloudTranscribe";
 import { startUpload } from "./importQueue";
+import { stashCloudMedia } from "./mediaSync";
 import {
   audioChunks,
   audioPeaks,
@@ -380,6 +381,21 @@ export async function prepareImport(
       url: localUrl,
       upload: { progress: 0 },
     };
+    // Written into this browser's store under the claimed name and pinned
+    // (mediaSync.ts), behind the editor exactly like the upload itself: the
+    // asset plays from `localUrl` the moment it lands on the timeline, and
+    // swaps onto the durable copy once the write does, so it survives the
+    // tab closing mid-upload and never has to fall back to streaming the
+    // signed URL once the upload completes. A no-op wherever the browser
+    // can't hold a store, and the asset may already be gone by the time it
+    // resolves (deleted before the import finished).
+    void stashCloudMedia(projectId, file, signed.fileName).then((stashedUrl) => {
+      if (!stashedUrl) return;
+      const s = useEditor.getState();
+      if (!s.assets.some((a) => a.id === asset.id)) return;
+      s.updateAsset(asset.id, { url: stashedUrl });
+      URL.revokeObjectURL(localUrl);
+    });
     const send = async (opts?: {
       onProgress?: (fraction: number) => void;
       signal?: AbortSignal;

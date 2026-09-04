@@ -76,7 +76,7 @@ export const analyticsSnapshotFileSchema = z.object({
     }),
   ),
   balances: z.array(z.object({ userId: z.string(), balanceMicros: z.string() })),
-  // Every Donkey Pro subscription row, whatever its Stripe status.
+  // Every DepCut Pro subscription row, whatever its Stripe status.
   subscriptions: z.array(
     z.object({
       userId: z.string(),

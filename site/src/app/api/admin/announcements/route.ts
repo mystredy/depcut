@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 // Super-user only. Every broadcast announcement.
-export const GET = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const GET = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can view this." },
       { status: 403 },
@@ -34,8 +34,8 @@ const createSchema = z
     message: "At least one targetUserIds entry is required when targetType is specific_user",
   });
 
-export const POST = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const POST = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can do this." },
       { status: 403 },

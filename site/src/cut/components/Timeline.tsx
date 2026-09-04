@@ -47,11 +47,11 @@ import type { VideoTrackPlacement } from "@/cut/lib/store";
 import { laneHidden, subtitleLaneCount } from "@/cut/lib/subtitles";
 import { formatTimecode } from "@/cut/lib/time";
 import { registerTimelineScroll } from "@/cut/lib/timelineScroll";
-import { EFFECT_LABELS } from "@donkeycut/effects-kit";
+import { EFFECT_LABELS } from "@depcut/effects-kit";
 import { emptySubtitles, IMAGE_CLIP_SECONDS, SHAPE_LABELS, TRANSITION_DEFAULT_SECONDS, TRANSITION_MAX, TRANSITION_STYLE_LABELS } from "@/cut/lib/types";
 import type { AudioClip, ClipSpan, ColorGrade, MediaAsset, Overlay, StickerOverlay, SubtitleCue, TimelineTransition, TransitionStyle, VideoClip } from "@/cut/lib/types";
 import { isLottieAsset } from "@/cut/lib/lottieAssets";
-import { gradeTint, gradeToCssFilter } from "@donkeycut/effects-kit";
+import { gradeTint, gradeToCssFilter } from "@depcut/effects-kit";
 import { cn } from "@/lib/utils";
 
 const TRANSITION_ICONS: Record<TransitionStyle, LucideIcon> = {

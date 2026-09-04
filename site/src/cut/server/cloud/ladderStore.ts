@@ -19,7 +19,7 @@
 // is a container), so both reach KV over the REST API, the same way copyQueue
 // publishes to Cloudflare Queues. The namespace is addressed by title and
 // resolved once per process; only the token comes from the environment.
-const KV_NAMESPACE_TITLE = "donkey-cut-ladders";
+const KV_NAMESPACE_TITLE = "depcut-cut-ladders";
 
 const KEY_PREFIX = "hls:";
 const ladderKey = (projectId: string) => `${KEY_PREFIX}${projectId}`;

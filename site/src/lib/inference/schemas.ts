@@ -39,7 +39,7 @@ export const responsesProviderSelectionSchema = z.enum(["openai", "gemini"]);
 
 export const responseCreateRequestSchema = z
   .object({
-    donkeyProvider: responsesProviderSelectionSchema.optional(),
+    depcutProvider: responsesProviderSelectionSchema.optional(),
     input: z.union([
       z.string().min(1).max(200_000),
       z.array(jsonObjectSchema).min(1),
@@ -52,11 +52,11 @@ export const responseCreateRequestSchema = z
   })
   .passthrough()
   .transform((value) => {
-    const { donkeyProvider, ...body } = value;
+    const { depcutProvider, ...body } = value;
     // `stream` selects the route's SSE branch; the provider body always says
     // stream:false because the adapter picks its own streaming API call.
     return {
-      donkeyProvider,
+      depcutProvider,
       stream: value.stream,
       body: toJsonObject({
         ...body,

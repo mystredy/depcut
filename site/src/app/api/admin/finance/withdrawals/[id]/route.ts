@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import {
-  isDonkeySuperUser,
+  isDepCutSuperUser,
   notFoundResponse,
-  withDonkeyAuth,
-} from "@/lib/donkey-api-auth";
+  withDepCutAuth,
+} from "@/lib/depcut-api-auth";
 import { notifyUser } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
 
@@ -15,8 +15,8 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 const updateSchema = z.object({ status: z.enum(["Approved", "Paid", "Rejected"]) }).strict();
 
-export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can do this." },
       { status: 403 },

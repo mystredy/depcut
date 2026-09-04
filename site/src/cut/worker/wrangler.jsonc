@@ -4,7 +4,7 @@
 // Secrets (DATABASE_URL, R2_*) are set once with `wrangler secret put`, never
 // checked in.
 {
-  "name": "donkey-cut-worker",
+  "name": "depcut-worker",
   "main": "cf/worker.ts",
   "compatibility_date": "2026-07-01",
   // Streams the container's stdout/stderr into Workers Logs (wrangler tail).
@@ -47,11 +47,11 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["CutRenderWorker"] }],
   // Share-copy jobs drain serially: one message per batch, one batch in
   // flight, so a burst of copy requests can't stampede R2 or the database.
-  // Create the queue once: npx wrangler queues create donkey-cut-copy
+  // Create the queue once: npx wrangler queues create depcut-copy
   "queues": {
     "consumers": [
       {
-        "queue": "donkey-cut-copy",
+        "queue": "depcut-copy",
         "max_batch_size": 1,
         "max_concurrency": 1,
         "max_retries": 10,

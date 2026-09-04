@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { getCreditBalance } from "@/lib/credits/inference";
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 
 export const dynamic = "force-dynamic";
 
-export const GET = withDonkeyAuth(async (request) => {
-  const balance = await getCreditBalance(request.donkey.userId);
+export const GET = withDepCutAuth(async (request) => {
+  const balance = await getCreditBalance(request.depcut.userId);
 
   return NextResponse.json(balance);
 });

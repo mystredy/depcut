@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- DepCut is not sandboxed: it runs the bundled Cut engine and the media tools as child processes.
+       Screen recording and the microphone are governed by TCC plus the Info.plist usage strings, not
+       entitlements, so it needs none of its own. -->
+</dict>
+</plist>

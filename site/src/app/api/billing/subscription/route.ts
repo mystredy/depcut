@@ -2,18 +2,18 @@ import { NextResponse } from "next/server";
 
 import { isActiveVisionStatus } from "@/lib/billing/vision-subscription";
 import {
-  donkeySessionUserId,
+  depcutSessionUserId,
   unauthorizedResponse,
-  withDonkeyAuth,
-} from "@/lib/donkey-api-auth";
+  withDepCutAuth,
+} from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 // Current Vision API subscription for the signed-in user, or null. Returns
 // isActive so clients don't re-derive the active-status rule.
-export const GET = withDonkeyAuth(async (request) => {
-  const userId = donkeySessionUserId(request);
+export const GET = withDepCutAuth(async (request) => {
+  const userId = depcutSessionUserId(request);
   if (!userId) {
     return unauthorizedResponse();
   }

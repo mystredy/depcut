@@ -14,7 +14,7 @@ import {
   OVERLAY_ANIM_MIN_SECONDS,
   OVERLAY_ANIM_STYLE_IDS,
   OVERLAY_LOOP_STYLE_IDS,
-} from "@donkeycut/effects-kit";
+} from "@depcut/effects-kit";
 import { num, obj, str, type AiToolDef } from "@/cut/lib/aiToolDef";
 
 const RAMP_SECONDS = `${OVERLAY_ANIM_MIN_SECONDS}..${OVERLAY_ANIM_MAX_SECONDS} (default ${OVERLAY_ANIM_DEFAULT_SECONDS})`;

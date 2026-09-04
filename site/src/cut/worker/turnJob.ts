@@ -15,7 +15,7 @@ import type { ClaimedJob } from "./db";
 // shared secret plus the job's user — so the turn spends that user's credits
 // and writes that user's project, exactly as the page would.
 
-const CLIENT_ID = "donkey-cut-runner";
+const CLIENT_ID = "depcut-cut-runner";
 
 /** A stored thread as the AI panel keeps it; the runner appends whole
  * messages and touches nothing else in the payload. */
@@ -33,9 +33,9 @@ function runnerSession(job: ClaimedJob): HeadlessSession {
     return {
       base: CUT_HOSTED_ORIGIN,
       headers: {
-        "x-donkey-client-id": CLIENT_ID,
-        "x-donkey-runner-secret": secret,
-        "x-donkey-runner-user": job.userId,
+        "x-depcut-client-id": CLIENT_ID,
+        "x-depcut-runner-secret": secret,
+        "x-depcut-runner-user": job.userId,
       },
     };
   if (process.env.NODE_ENV === "production")
@@ -44,7 +44,7 @@ function runnerSession(job: ClaimedJob): HeadlessSession {
   // same one the eval scripts use.
   return {
     base: CUT_HOSTED_ORIGIN,
-    headers: { "x-donkey-client-id": CLIENT_ID, "x-donkey-dev-auth-bypass": "1" },
+    headers: { "x-depcut-client-id": CLIENT_ID, "x-depcut-dev-auth-bypass": "1" },
   };
 }
 

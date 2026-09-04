@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 import { notifyTelegramWithMedia } from "@/lib/telegram/notify";
 
@@ -47,7 +47,7 @@ const listSelect = {
   attachments: { select: { id: true, contentType: true } },
 } as const;
 
-export const POST = withDonkeyAuth(async (request) => {
+export const POST = withDepCutAuth(async (request) => {
   const parsed = createSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json(
@@ -80,14 +80,14 @@ export const POST = withDonkeyAuth(async (request) => {
     prisma.supportTicket.create({
       data: {
         ...fields,
-        userId: request.donkey.userId,
+        userId: request.depcut.userId,
         attachments: { create: attachments.map((a) => ({ contentType: a.contentType, data: a.data })) },
       },
       select: listSelect,
     }),
     prisma.user.findUnique({
       select: { displayName: true, email: true, name: true },
-      where: { id: request.donkey.userId },
+      where: { id: request.depcut.userId },
     }),
   ]);
 
@@ -99,11 +99,11 @@ export const POST = withDonkeyAuth(async (request) => {
 });
 
 // The signed-in user's own tickets, newest first.
-export const GET = withDonkeyAuth(async (request) => {
+export const GET = withDepCutAuth(async (request) => {
   const tickets = await prisma.supportTicket.findMany({
     orderBy: { createdAt: "desc" },
     select: listSelect,
-    where: { userId: request.donkey.userId },
+    where: { userId: request.depcut.userId },
   });
 
   return NextResponse.json({ tickets });

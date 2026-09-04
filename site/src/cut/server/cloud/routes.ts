@@ -2,9 +2,9 @@
 // The client's cloud driver rewrites /api/cut/X -> /api/cut-cloud/X, so paths
 // mirror the engine table (http/routes.ts) with the cloud prefix, plus the
 // cloud-only presign/job routes. Auth happens in the Next catch-all
-// (withDonkeyAuth); every handler receives the session's userId and scopes
+// (withDepCutAuth); every handler receives the session's userId and scopes
 // every query by it.
-import { type DonkeyAuthenticatedRequest, isDonkeySuperUser } from "@/lib/donkey-api-auth";
+import { type DepCutAuthenticatedRequest, isDepCutSuperUser } from "@/lib/depcut-api-auth";
 import { matchRouteTable, type RouteEntry } from "../http/match";
 import { captionsCloud } from "./captions";
 import { chatsCloud } from "./chats";
@@ -105,7 +105,7 @@ const CUT_CLOUD_ROUTES: CloudRoute[] = [
     method: "GET",
     path: "/api/cut-cloud/gc",
     handler: async (_r, u) =>
-      (await isDonkeySuperUser(u)) ? runGc() : new Response("Not found.", { status: 404 }),
+      (await isDepCutSuperUser(u)) ? runGc() : new Response("Not found.", { status: 404 }),
   },
 
   // The engine's models probe reports local CLI availability; hosted Cut has
@@ -116,13 +116,13 @@ const CUT_CLOUD_ROUTES: CloudRoute[] = [
     handler: () =>
       Response.json({
         providers: {
-          gemini: { available: true, note: "runs on your Depcut account", installed: true },
+          gemini: { available: true, note: "runs on your DepCut account", installed: true },
         },
       }),
   },
 ];
 
-export async function cutCloudCatchAll(req: DonkeyAuthenticatedRequest): Promise<Response> {
+export async function cutCloudCatchAll(req: DepCutAuthenticatedRequest): Promise<Response> {
   const { pathname } = new URL(req.url);
   const match = matchRouteTable(CUT_CLOUD_ROUTES, req.method, pathname);
   if (!match) return new Response("Not found.", { status: 404 });
@@ -132,7 +132,7 @@ export async function cutCloudCatchAll(req: DonkeyAuthenticatedRequest): Promise
       headers: { Allow: match.methodNotAllowed.join(", ") },
     });
   }
-  const res = await match.route.handler(req, req.donkey.userId, match.params);
+  const res = await match.route.handler(req, req.depcut.userId, match.params);
   // A HEAD reply carries the GET headers but no body.
   if (match.head && res.body) {
     void res.body.cancel();

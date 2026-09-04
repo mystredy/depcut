@@ -35,7 +35,7 @@ const proxyPath = () =>
  * every data route requires — without it tools/list 400s and the model, left
  * with no editor tools, narrates tool calls as raw XML instead. */
 function mcpCommand(base: string, sessionKey: string, user: string): { command: string; args: string[] } {
-  return process.env.DONKEY_CUT_ENGINE
+  return process.env.DEPCUT_CUT_ENGINE
     ? { command: process.execPath, args: ["mcp-proxy", base, sessionKey, user] }
     : { command: process.execPath, args: [proxyPath(), base, sessionKey, user] };
 }
@@ -80,8 +80,8 @@ async function runClaude(
       ...(body.providerSession ? { resume: body.providerSession } : {}),
       // Inside the compiled engine the SDK can't resolve its built-in CLI;
       // the engine resolves the user's own Claude Code install at startup.
-      ...(process.env.DONKEY_CUT_CLAUDE
-        ? { pathToClaudeCodeExecutable: process.env.DONKEY_CUT_CLAUDE }
+      ...(process.env.DEPCUT_CUT_CLAUDE
+        ? { pathToClaudeCodeExecutable: process.env.DEPCUT_CUT_CLAUDE }
         : {}),
       systemPrompt: systemPrompt(),
       tools: [], // no built-in tools — the editor MCP server is the whole surface
@@ -449,9 +449,9 @@ export const aiApi = {
       providers: {
         claude: { available: value.claude.ok, note: value.claude.note, installed: value.claude.installed },
         codex: { available: value.codex.ok, note: value.codex.note, installed: value.codex.installed },
-        // Gemini chats run from the page through Donkey's hosted inference;
+        // Gemini chats run from the page through DepCut's hosted inference;
         // the browser overlays the real availability from its sign-in probe.
-        gemini: { available: true, note: "runs on your Depcut account", installed: true },
+        gemini: { available: true, note: "runs on your DepCut account", installed: true },
         test: { available: true, note: "hermetic test provider", installed: true },
       },
     });

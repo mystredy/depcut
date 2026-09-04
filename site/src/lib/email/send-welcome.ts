@@ -1,6 +1,6 @@
 import {
-  DONKEY_LOGO_CID,
-  DONKEY_LOGO_PNG_BASE64,
+  DEPCUT_LOGO_CID,
+  DEPCUT_LOGO_PNG_BASE64,
 } from "@/emails/_components/logo";
 import WelcomeEmail from "@/emails/welcome";
 import {
@@ -64,10 +64,10 @@ export async function sendWelcomeEmail(user: EmailUser): Promise<void> {
       // fetch-free form that renders everywhere.
       attachments: [
         {
-          content: DONKEY_LOGO_PNG_BASE64,
-          contentId: DONKEY_LOGO_CID,
+          content: DEPCUT_LOGO_PNG_BASE64,
+          contentId: DEPCUT_LOGO_CID,
           contentType: "image/png",
-          filename: "donkey-cut.png",
+          filename: "depcut-cut.png",
         },
       ],
       // RFC 8058 one-click: mail providers POST here with no session; the

@@ -6,7 +6,7 @@ import { renderProjectToMp4 } from "./exportRender";
 import { putSigned } from "./media";
 import { clipSpeed, getClipSpans, overlayLayers, projectDuration, spanSequence, useEditor } from "./store";
 import { captionStyle, cueOverlay, cueWordWindows, laneCues, laneHidden, subtitleLaneCount, trackPos } from "./subtitles";
-import { isOverlayAnimated, normalizeGrade } from "@donkeycut/effects-kit";
+import { isOverlayAnimated, normalizeGrade } from "@depcut/effects-kit";
 import { renderElementFrames, renderElementPng } from "./textRender";
 import { frameOf, isStickerOverlay, isTextOverlay, laneOf, overlayAnimStyle } from "./types";
 import type {

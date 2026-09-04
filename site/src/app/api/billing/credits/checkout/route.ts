@@ -9,7 +9,7 @@ import {
   creditTopUpMinDollars,
   dollarsToStripeCents,
 } from "@/lib/credits/top-up";
-import { unauthorizedResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { unauthorizedResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +25,7 @@ const checkoutRequestSchema = z
 
 // Start a one-time Stripe Checkout to buy credits. Session-only (no API keys).
 // The card is saved (setup_future_usage) so auto-reload can charge it later.
-export const POST = withDonkeyAuth(async (request) => {
+export const POST = withDepCutAuth(async (request) => {
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session) {
     return unauthorizedResponse();
@@ -67,8 +67,8 @@ export const POST = withDonkeyAuth(async (request) => {
         price_data: {
           currency: "usd",
           product_data: {
-            description: `$${amountDollars} of Depcut inference credits`,
-            name: "Depcut credits",
+            description: `$${amountDollars} of DepCut inference credits`,
+            name: "DepCut credits",
           },
           unit_amount: dollarsToStripeCents(amountDollars),
         },

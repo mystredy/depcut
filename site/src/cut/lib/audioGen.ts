@@ -6,8 +6,8 @@ import { importFileToProject } from "./media";
 import { NoCreditsError } from "./tts";
 import { mediaSlug, type MediaAsset } from "./types";
 
-// Client side of AI music generation: Gemini/Lyria on Donkey's hosted inference
-// routes, with the user's Donkey sign-in and credits (same-origin on the cut
+// Client side of AI music generation: Gemini/Lyria on DepCut's hosted inference
+// routes, with the user's DepCut sign-in and credits (same-origin on the cut
 // hosts, like image/video/voiceover generation). The prompt describes the mood
 // and genre; the model renders a track — a full song with sung vocals, or an
 // instrumental bed when asked — that comes back inline and saves into the
@@ -23,7 +23,7 @@ export const MUSIC_VARIANTS: { id: MusicVariant; label: string; hint: string }[]
 ];
 
 async function readError(res: Response, fallback: string): Promise<string> {
-  if (res.status === 401) return "Sign in to Depcut to generate music.";
+  if (res.status === 401) return "Sign in to DepCut to generate music.";
   const body = (await res.json().catch(() => null)) as {
     error?: unknown;
     message?: unknown;
@@ -32,7 +32,7 @@ async function readError(res: Response, fallback: string): Promise<string> {
   const message = [body?.message, body?.error].find(
     (v): v is string => typeof v === "string" && v.length > 0
   );
-  if (res.status === 402) return message ?? "Not enough Depcut credits — top up to continue.";
+  if (res.status === 402) return message ?? "Not enough DepCut credits — top up to continue.";
   // The provider's own error (`details.message`) names the actual rejection (a
   // filtered prompt, a timeout); the top-level message is generic.
   const detail = body?.details?.message;

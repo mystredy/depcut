@@ -96,7 +96,7 @@ The benchmark sheet — the artist to match:`,
         { type: "input_image", dataBase64: candidate.data, mimeType: candidate.mimeType },
       ];
       const res = await hostedPost("/api/inference/responses", {
-        donkeyProvider: "gemini",
+        depcutProvider: "gemini",
         model: geminiModelRoles.review,
         instructions: FRAME_INSTRUCTIONS,
         response_format: { type: "json_object" },
@@ -140,7 +140,7 @@ The look: ${input.style || "(none)"}`,
       // Nothing to compare in isolation — a lone frame can't fail continuity.
       if (seen.length < 2) return allOk();
       const res = await hostedPost("/api/inference/responses", {
-        donkeyProvider: "gemini",
+        depcutProvider: "gemini",
         model: geminiModelRoles.review,
         instructions: STORYBOARD_INSTRUCTIONS,
         response_format: { type: "json_object" },
@@ -219,7 +219,7 @@ The timeline slot needs ${input.slotSec.toFixed(1)}s of this take.`,
         content.push({ type: "input_image", dataBase64: img.data, mimeType: img.mimeType });
       }
       const res = await hostedPost("/api/inference/responses", {
-        donkeyProvider: "gemini",
+        depcutProvider: "gemini",
         model: geminiModelRoles.review,
         instructions: REVIEW_INSTRUCTIONS,
         response_format: { type: "json_object" },
@@ -275,7 +275,7 @@ The canonical design sheet for "${sheet.name}":`,
             idContent.push({ type: "input_image", dataBase64: fi.data, mimeType: fi.mimeType });
           }
           const idRes = await hostedPost("/api/inference/responses", {
-            donkeyProvider: "gemini",
+            depcutProvider: "gemini",
             model: geminiModelRoles.review,
             instructions: IDENTITY_INSTRUCTIONS,
             response_format: { type: "json_object" },

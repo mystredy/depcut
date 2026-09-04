@@ -2,18 +2,18 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { allowedOrigin, corsHeaders, preflightHeaders } from "@/cut/server/cors";
 import {
-  DONKEYCUT_CANONICAL,
-  isDonkeycutHost,
+  DEPCUT_CANONICAL,
+  isDepCutHost,
   isLocalHost,
 } from "@/cut/lib/hosts";
 
-// Cut (the video editor, publicly "Donkey Cut") lives under /cut in this single
+// Cut (the video editor, publicly "DepCut") lives under /cut in this single
 // site app: the marketing landing at /cut and the app under /cut/app. Every
 // host gets the same mapping — "/" → landing, "/app/…" → editor app (generic
-// "/…" → "/cut/…" rewrite) — with donkeycut.com as the one production host.
-// The auth pages (/sign-in, /sign-up), "/install", "/donkeyvision", and the
+// "/…" → "/cut/…" rewrite) — with depcut.com as the one production host.
+// The auth pages (/sign-in, /sign-up), "/install", "/depcutvision", and the
 // legal pages are real root-level routes and pass through the rewrite.
-// www. 308s to the apex; retired domains redirect to donkeycut.com at the
+// www. 308s to the apex; retired domains redirect to depcut.com at the
 // edge (Cloudflare) and never reach this app.
 //
 // This file must live in src/ (next to app/) and use the Next 16 `proxy` name;
@@ -53,7 +53,7 @@ function cutApi(req: NextRequest): NextResponse {
 }
 
 // Root-level routes the generic "/…" → "/cut/…" rewrite must not capture:
-// auth pages, the Mac download, Donkey Vision (marketing, settings, and API
+// auth pages, the Mac download, DepCut Vision (marketing, settings, and API
 // docs), the site admin panel, and the legal pages. "/app/settings" is not
 // among them: Cut ships its own billing and usage pages under
 // /cut/app/settings, which the generic rewrite serves at /app/settings.
@@ -63,7 +63,7 @@ const PASSTHROUGH = [
   "/terms",
   "/sign-in",
   "/sign-up",
-  "/donkeyvision",
+  "/depcutvision",
   "/admin",
 ];
 
@@ -81,10 +81,10 @@ export function proxy(req: NextRequest) {
   const host = req.headers.get("host");
 
   // Aliases (www.) canonicalize to the apex.
-  if (isDonkeycutHost(host) && host?.split(":")[0] !== "donkeycut.com") {
+  if (isDepCutHost(host) && host?.split(":")[0] !== "depcut.com") {
     const url = req.nextUrl.clone();
     return NextResponse.redirect(
-      `${DONKEYCUT_CANONICAL}${pathname}${url.search}`,
+      `${DEPCUT_CANONICAL}${pathname}${url.search}`,
       308,
     );
   }
@@ -116,7 +116,7 @@ export const config = {
   // Page routes (skip Next internals and files with an extension) plus every
   // Cut API path — including media/export files with extensions — so the
   // hosted 404 and local CORS above cover all of them. "/sitemap.xml" is
-  // matched explicitly so donkeycut.com can serve its own sitemap.
+  // matched explicitly so depcut.com can serve its own sitemap.
   matcher: [
     "/((?!_next/|.*\\..*).*)",
     "/api/cut/:path*",

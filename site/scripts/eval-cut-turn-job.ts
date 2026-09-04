@@ -21,8 +21,8 @@ const base = arg("base") ?? "http://localhost:3000";
 const voiceover = process.argv.includes("--voiceover");
 const headers = {
   "Content-Type": "application/json",
-  "x-donkey-client-id": "donkey-cut-eval",
-  "x-donkey-dev-auth-bypass": "1",
+  "x-depcut-client-id": "depcut-cut-eval",
+  "x-depcut-dev-auth-bypass": "1",
 };
 const api = (path: string, init?: RequestInit) => fetch(base + path, { headers, ...init && { ...init, headers: { ...headers, ...init.headers } } });
 const fail = (msg: string): never => {
@@ -44,7 +44,7 @@ console.log(`seeded project ${projectId}`);
 try {
   const threadId = `thread-${Date.now()}`;
   const ask = voiceover
-    ? 'Generate a voiceover that says "Donkey headless test" and place it at the very start.'
+    ? 'Generate a voiceover that says "DepCut headless test" and place it at the very start.'
     : 'Add a title that says "TURNJOB" at the very start of the video.';
   const queued = await api(`/api/cut-cloud/projects/${projectId}/turns`, {
     method: "POST",

@@ -29,8 +29,8 @@ const keep = process.argv.includes("--keep");
 const session: HeadlessSession = {
   base,
   headers: {
-    "x-donkey-client-id": "donkey-cut-eval",
-    "x-donkey-dev-auth-bypass": "1",
+    "x-depcut-client-id": "depcut-cut-eval",
+    "x-depcut-dev-auth-bypass": "1",
   },
 };
 

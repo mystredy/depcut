@@ -76,7 +76,7 @@ export function createGeminiResponsesProvider(
   function responseRequestSetup(request: ResponseCreateRequest) {
     // Caller-defined function tools are honored only when the caller explicitly
     // asked for Gemini; the default Responses route keeps sending them elsewhere.
-    const allowFunctionTools = request.donkeyProvider === geminiProviderID;
+    const allowFunctionTools = request.depcutProvider === geminiProviderID;
     if (hasExplicitUnsupportedTools(request.body.tools, allowFunctionTools)) {
       throw new InferenceProviderError("Gemini Responses received unsupported tool declarations.", {
         statusCode: 400,
@@ -285,7 +285,7 @@ export function createGeminiResponsesProvider(
     canCreateResponse: (request) => {
       return !hasExplicitUnsupportedTools(
         request.body.tools,
-        request.donkeyProvider === geminiProviderID,
+        request.depcutProvider === geminiProviderID,
       );
     },
     // This adapter renders input_audio/input_video parts (see mediaPart); declare it so the router

@@ -8,7 +8,7 @@ import {
   leakGradient,
   streakGradient,
   type EffectPreviewState,
-} from "@donkeycut/effects-kit";
+} from "@depcut/effects-kit";
 import { useEditor } from "@/cut/lib/store";
 import { isEffectOverlay, laneOf } from "@/cut/lib/types";
 import type { LiveEffect } from "@/cut/lib/effectStack";

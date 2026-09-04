@@ -171,7 +171,7 @@ export function AppSidebar() {
               >
                 <img
                   src="/deepw-logo.svg"
-                  alt="Depcut"
+                  alt="DepCut"
                   className="size-9 object-contain transition-opacity group-hover:opacity-0"
                 />
                 <ChevronRight className="absolute inset-0 m-auto size-4 text-sidebar-foreground opacity-0 transition-opacity group-hover:opacity-100" />
@@ -220,13 +220,13 @@ export function AppSidebar() {
                 <span className="grid size-9 shrink-0 place-items-center">
                   <img
                     src="/deepw-logo.svg"
-                    alt="Depcut"
+                    alt="DepCut"
                     width={36}
                     height={36}
                     className="block h-full w-full object-contain"
                   />
                 </span>
-                <span className="text-[17px] font-semibold tracking-tight">Depcut</span>
+                <span className="text-[17px] font-semibold tracking-tight">DepCut</span>
               </div>
               <button
                 type="button"

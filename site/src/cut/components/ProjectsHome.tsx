@@ -96,7 +96,7 @@ type View = "gallery" | "list";
 // editor. Each section's listing is cached (lib/queries.ts), so returning here
 // paints the shelf immediately and revalidates behind it.
 //
-// That cache is also what keeps the Mac's shelf on screen with the Donkey app
+// That cache is also what keeps the Mac's shelf on screen with the DepCut app
 // closed: local projects still exist, so they still list, and the card says
 // where each one lives. What they don't do is change — a shelf whose engine
 // isn't answering takes no renames, moves, or deletes, so the cards carry no
@@ -129,14 +129,14 @@ function formatDate(ts: number) {
 }
 
 // The badge marks where one project lives, so it says that outright rather
-// than repeating the shelf heading it sits under. A local project the Donkey
+// than repeating the shelf heading it sits under. A local project the DepCut
 // app isn't answering for says that instead: it is the reason its card can't
 // be renamed or moved.
 const RESIDENCY_HINT: Record<Residency, string> = {
   local: "This is a local project",
   cloud: "This is a cloud project",
 };
-const OFFLINE_HINT = "This is a local project — open the Depcut app to edit it";
+const OFFLINE_HINT = "This is a local project — open the DepCut app to edit it";
 
 function ResidencyBadge({
   residency,
@@ -213,7 +213,7 @@ export function ProjectsHome() {
   const homeMode: Residency = mode === "cloud" ? "cloud" : "local";
   // What this home shows and what a new project can be made on are two
   // questions now. The Mac's shelf lists whenever this browser has used it,
-  // reachable or not; creating on it needs the Donkey app answering.
+  // reachable or not; creating on it needs the DepCut app answering.
   const residencies = useListedResidencies();
   const { target } = useNewProjectTarget();
   const dual = residencies.length > 1;

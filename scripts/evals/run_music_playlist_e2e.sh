@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Live end-to-end check of the music-playlist flow: submit
-# "Create a playlist of the 10 best songs from 2000" to Donkey Dev as a real user turn —
+# "Create a playlist of the 10 best songs from 2000" to DepCut Dev as a real user turn —
 # real hosted planning, real MusicKit, real Apple Music library — wait for the run to finish,
 # then verify the outcome independently:
 #   1. the turn's slice of thread.md shows the planning block and grouped step blocks and ends
@@ -13,16 +13,16 @@ set -euo pipefail
 # A follow-up turn APPENDS to an existing thread.md (the app reuses the conversation thread), so
 # every check runs against the content appended after submission, never the whole file.
 #
-# Requirements: persisted Donkey Dev login, an Apple Music subscription, the site dev server on
-# :3000 (or DONKEY_WEB_BASE_URL pointing elsewhere), and Accessibility permission for the
+# Requirements: persisted DepCut Dev login, an Apple Music subscription, the site dev server on
+# :3000 (or DEPCUT_WEB_BASE_URL pointing elsewhere), and Accessibility permission for the
 # terminal running this script (System Events keystrokes drive the prompt).
 #
 # This CREATES A REAL PLAYLIST and Apple provides no delete API — remove it by hand in the
 # Music app afterwards (the output names it).
 #
 # Usage: scripts/evals/run_music_playlist_e2e.sh
-#   DONKEY_E2E_TIMEOUT    seconds to wait for the run to finish (default 600)
-#   DONKEY_E2E_MIN_TRACKS minimum tracks for a pass (default 8 — the model may miss a search)
+#   DEPCUT_E2E_TIMEOUT    seconds to wait for the run to finish (default 600)
+#   DEPCUT_E2E_MIN_TRACKS minimum tracks for a pass (default 8 — the model may miss a search)
 
 # BSD grep under a C locale silently fails to match multibyte patterns, so pin UTF-8 and keep all
 # grep patterns ASCII-only anyway (the thread headings contain emoji and "·").
@@ -30,9 +30,9 @@ export LC_ALL=en_US.UTF-8
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 COMMAND_TEXT="Create a playlist of the 10 best songs from 2000"
-THREADS_DIR="$HOME/Library/Application Support/Donkey/Threads"
-TIMEOUT_SECONDS="${DONKEY_E2E_TIMEOUT:-600}"
-MIN_TRACKS="${DONKEY_E2E_MIN_TRACKS:-8}"
+THREADS_DIR="$HOME/Library/Application Support/DepCut/Threads"
+TIMEOUT_SECONDS="${DEPCUT_E2E_TIMEOUT:-600}"
+MIN_TRACKS="${DEPCUT_E2E_MIN_TRACKS:-8}"
 
 THREAD_MD=""
 BASE_LINES=0
@@ -51,21 +51,21 @@ fail() {
   exit 1
 }
 
-# 1. Make sure Donkey Dev is running (build + launch when it is not).
-if ! pgrep -xq "Donkey Dev"; then
-  echo "Donkey Dev is not running — building and launching (this takes a few minutes)…"
-  DONKEY_START_SITE=0 DONKEY_LAUNCH_APP=0 "$REPO_ROOT/scripts/run-donkey-dev.sh"
-  DEV_APP_BINARY="$(find "$REPO_ROOT/apps/Donkey/.build" -path "*/debug/Donkey Dev.app/Contents/MacOS/Donkey Dev" | head -n 1)"
-  [ -n "$DEV_APP_BINARY" ] || fail "built Donkey Dev binary not found under apps/Donkey/.build"
-  "$DEV_APP_BINARY" > /tmp/donkey-music-e2e-stdout.log 2>&1 &
+# 1. Make sure DepCut Dev is running (build + launch when it is not).
+if ! pgrep -xq "DepCut Dev"; then
+  echo "DepCut Dev is not running — building and launching (this takes a few minutes)…"
+  DEPCUT_START_SITE=0 DEPCUT_LAUNCH_APP=0 "$REPO_ROOT/scripts/run-depcut-dev.sh"
+  DEV_APP_BINARY="$(find "$REPO_ROOT/apps/DepCut/.build" -path "*/debug/DepCut Dev.app/Contents/MacOS/DepCut Dev" | head -n 1)"
+  [ -n "$DEV_APP_BINARY" ] || fail "built DepCut Dev binary not found under apps/DepCut/.build"
+  "$DEV_APP_BINARY" > /tmp/depcut-music-e2e-stdout.log 2>&1 &
   for _ in $(seq 1 30); do
-    pgrep -xq "Donkey Dev" && break
+    pgrep -xq "DepCut Dev" && break
     sleep 1
   done
-  pgrep -xq "Donkey Dev" || fail "Donkey Dev did not start"
+  pgrep -xq "DepCut Dev" || fail "DepCut Dev did not start"
   sleep 5 # let the overlay finish coming up
 fi
-echo "Donkey Dev is running."
+echo "DepCut Dev is running."
 
 # 2. Snapshot every existing thread.md's length, so the new turn is found by what got APPENDED.
 SNAPSHOT="$(mktemp)"
@@ -147,7 +147,7 @@ echo "Created playlist (per thread): $PLAYLIST_NAME"
 # observed taking several minutes. Poll generously, take the MAX track count across all playlists
 # with the name (an older empty duplicate must not mask the filled one), and relaunch Music once a
 # minute — it pulls the cloud library on launch, which reliably nudges a stalled sync.
-SYNC_TIMEOUT="${DONKEY_E2E_SYNC_TIMEOUT:-360}"
+SYNC_TIMEOUT="${DEPCUT_E2E_SYNC_TIMEOUT:-360}"
 TRACK_COUNT=""
 sync_elapsed=0
 while [ "$sync_elapsed" -lt "$SYNC_TIMEOUT" ]; do

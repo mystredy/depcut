@@ -12,7 +12,7 @@ export type { ExportSpec } from "./exportPipeline";
 
 export interface Job {
   id: string;
-  /** The Donkey account that started the job. The cross-project feed is scoped
+  /** The DepCut account that started the job. The cross-project feed is scoped
    * to it, so accounts sharing a Mac never see each other's exports. */
   user: string;
   projectId: string;

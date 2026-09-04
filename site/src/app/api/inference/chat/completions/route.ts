@@ -19,15 +19,15 @@ import {
 } from "@/lib/inference/responses";
 import { chatCompletionRequestSchema } from "@/lib/inference/schemas";
 import {
-  shouldBypassDonkeyInferenceCredits,
-  withDonkeyAuth,
-} from "@/lib/donkey-api-auth";
+  shouldBypassDepCutInferenceCredits,
+  withDepCutAuth,
+} from "@/lib/depcut-api-auth";
 import { InferenceProviderError } from "@/lib/inference/providers";
 
 export const dynamic = "force-dynamic";
 
-export const POST = withDonkeyAuth(async (request) => {
-  const client = requireInferenceClientId(request.donkey.clientId);
+export const POST = withDepCutAuth(async (request) => {
+  const client = requireInferenceClientId(request.depcut.clientId);
   if (!client.ok) {
     return client.response;
   }
@@ -52,12 +52,12 @@ export const POST = withDonkeyAuth(async (request) => {
 
   const requestedModel =
     parsed.data.model?.trim() || parsed.data.models?.[0]?.trim() || "unknown";
-  const bypassCredits = shouldBypassDonkeyInferenceCredits(request.donkey);
+  const bypassCredits = shouldBypassDepCutInferenceCredits(request.depcut);
   if (!bypassCredits) {
     const credits = await requireInferenceCredits({
       model: requestedModel,
       route: inferenceUsageRoutes.chatCompletions,
-      userId: request.donkey.userId,
+      userId: request.depcut.userId,
     });
     if (!credits.ok) {
       return credits.response;
@@ -73,7 +73,7 @@ export const POST = withDonkeyAuth(async (request) => {
       ...parsed.data,
       messages: (await resolveInferenceBlobs(
         toJsonValue(parsed.data.messages),
-        request.donkey.userId,
+        request.depcut.userId,
       )) as typeof parsed.data.messages,
     };
     const registry = createProviderRegistry();
@@ -86,13 +86,13 @@ export const POST = withDonkeyAuth(async (request) => {
         if (!bypassCredits) {
           await recordFailedInferenceUsage({
             clientId: client.clientId,
-            conversationId: request.donkey.conversationId,
+            conversationId: request.depcut.conversationId,
             errorCode: "streaming_unavailable",
             model: requestedModel,
             provider: failedUsageProvider,
             requestKind: "chat_completions",
             route: inferenceUsageRoutes.chatCompletions,
-            userId: request.donkey.userId,
+            userId: request.depcut.userId,
           });
         }
 
@@ -106,17 +106,17 @@ export const POST = withDonkeyAuth(async (request) => {
 
       let streamUsageHeaders: Record<string, string> = {};
       if (bypassCredits) {
-        streamUsageHeaders["X-Donkey-Dev-Auth-Bypass"] = "true";
+        streamUsageHeaders["X-DepCut-Dev-Auth-Bypass"] = "true";
       } else {
         const recordedUsage = await recordInferenceUsage({
           clientId: client.clientId,
-          conversationId: request.donkey.conversationId,
+          conversationId: request.depcut.conversationId,
           model: result.model,
           provider: result.provider,
           requestKind: "chat_completions",
           route: inferenceUsageRoutes.chatCompletions,
           status: "succeeded",
-          userId: request.donkey.userId,
+          userId: request.depcut.userId,
         });
         streamUsageHeaders = creditUsageHeaders(recordedUsage);
       }
@@ -128,8 +128,8 @@ export const POST = withDonkeyAuth(async (request) => {
             result.response.headers.get("content-type") ?? "text/event-stream",
           "Cache-Control": "no-cache",
           Connection: "keep-alive",
-          "X-Donkey-Inference-Provider": result.provider,
-          "X-Donkey-Inference-Model": result.model,
+          "X-DepCut-Inference-Provider": result.provider,
+          "X-DepCut-Inference-Model": result.model,
           ...streamUsageHeaders,
         },
       });
@@ -140,13 +140,13 @@ export const POST = withDonkeyAuth(async (request) => {
       if (!bypassCredits) {
         await recordFailedInferenceUsage({
           clientId: client.clientId,
-          conversationId: request.donkey.conversationId,
+          conversationId: request.depcut.conversationId,
           errorCode: "completion_unavailable",
           model: requestedModel,
           provider: failedUsageProvider,
           requestKind: "chat_completions",
           route: inferenceUsageRoutes.chatCompletions,
-          userId: request.donkey.userId,
+          userId: request.depcut.userId,
         });
       }
 
@@ -160,26 +160,26 @@ export const POST = withDonkeyAuth(async (request) => {
 
     let usageHeaders: Record<string, string> = {};
     if (bypassCredits) {
-      usageHeaders["X-Donkey-Dev-Auth-Bypass"] = "true";
+      usageHeaders["X-DepCut-Dev-Auth-Bypass"] = "true";
     } else {
       const recordedUsage = await recordInferenceUsage({
         clientId: client.clientId,
-        conversationId: request.donkey.conversationId,
+        conversationId: request.depcut.conversationId,
         model: result.model,
         provider: result.provider,
         requestKind: "chat_completions",
         route: inferenceUsageRoutes.chatCompletions,
         status: "succeeded",
         usage: result.usage,
-        userId: request.donkey.userId,
+        userId: request.depcut.userId,
       });
       usageHeaders = creditUsageHeaders(recordedUsage);
     }
 
     return NextResponse.json(result.body, {
       headers: {
-        "X-Donkey-Inference-Provider": result.provider,
-        "X-Donkey-Inference-Model": result.model,
+        "X-DepCut-Inference-Provider": result.provider,
+        "X-DepCut-Inference-Model": result.model,
         ...usageHeaders,
       },
     });
@@ -187,13 +187,13 @@ export const POST = withDonkeyAuth(async (request) => {
     if (!bypassCredits) {
       await recordFailedInferenceUsage({
         clientId: client.clientId,
-        conversationId: request.donkey.conversationId,
+        conversationId: request.depcut.conversationId,
         errorCode: inferenceErrorCode(error),
         model: requestedModel,
         provider: failedUsageProvider,
         requestKind: "chat_completions",
         route: inferenceUsageRoutes.chatCompletions,
-        userId: request.donkey.userId,
+        userId: request.depcut.userId,
       });
     }
     const creditResponse = creditErrorResponse(error);

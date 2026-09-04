@@ -102,7 +102,7 @@ async function claimKeys(blobs: Claimable[], clientId: string): Promise<Claim[]>
       const unavailable = batch.map(() => ({ skipped: "unavailable" }));
       const res = await fetch("/api/inference/uploads", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-donkey-client-id": clientId },
+        headers: { "Content-Type": "application/json", "x-depcut-client-id": clientId },
         body: JSON.stringify({ blobs: batch }),
       }).catch(() => null);
       if (!res?.ok) return unavailable;

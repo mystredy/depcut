@@ -3,12 +3,12 @@ import { NextResponse } from "next/server";
 import { createProviderRegistry } from "@/lib/inference/router";
 import { requireInferenceClientId } from "@/lib/inference/responses";
 import { parseRequestedModalities } from "@/lib/inference/schemas";
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 
 export const dynamic = "force-dynamic";
 
-export const GET = withDonkeyAuth(async (request) => {
-  const client = requireInferenceClientId(request.donkey.clientId);
+export const GET = withDepCutAuth(async (request) => {
+  const client = requireInferenceClientId(request.depcut.clientId);
   if (!client.ok) {
     return client.response;
   }

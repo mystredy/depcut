@@ -5,10 +5,10 @@ import { creditMicrosToString, creditStringToMicros } from "@/lib/credits/amount
 import { getCreditBalance, grantCredits } from "@/lib/credits/inference";
 import { maxCreditGrantDollars } from "@/lib/credits/top-up";
 import {
-  isDonkeySuperUser,
+  isDepCutSuperUser,
   notFoundResponse,
-  withDonkeyAuth,
-} from "@/lib/donkey-api-auth";
+  withDepCutAuth,
+} from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -29,8 +29,8 @@ const creditGrantRequestSchema = z
     message: "Provide a userId or an email.",
   });
 
-export const POST = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const POST = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       {
         error: "Forbidden",
@@ -79,7 +79,7 @@ export const POST = withDonkeyAuth(async (request) => {
     description,
     metadata: {
       amountDollars: String(parsed.data.amountDollars),
-      grantedByUserId: request.donkey.userId,
+      grantedByUserId: request.depcut.userId,
       targetUserId: targetUser.id,
     },
     source: "manual_dollar",

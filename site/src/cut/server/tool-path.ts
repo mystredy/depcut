@@ -30,11 +30,11 @@ function loginShellPath(): Promise<string | null> {
   });
 }
 
-/** The repo's vendor/donkey-tools when running from a source checkout (the
+/** The repo's vendor/depcut-tools when running from a source checkout (the
  * Next dev server and `engine:dev` both run with cwd = site/). The packaged
  * app has no such directory, so this resolves to nothing there. */
 async function devVendorToolsDir(): Promise<string | null> {
-  const dir = path.resolve(process.cwd(), "..", "vendor", "donkey-tools");
+  const dir = path.resolve(process.cwd(), "..", "vendor", "depcut-tools");
   return (await exists(dir)) ? dir : null;
 }
 
@@ -47,7 +47,7 @@ async function widenPath(): Promise<void> {
     }
   };
   push(path.dirname(process.execPath));
-  push(process.env.DONKEY_CUT_TOOLS_DIR);
+  push(process.env.DEPCUT_CUT_TOOLS_DIR);
   push(await devVendorToolsDir());
   // The login-shell PATH lookup and COMMON_BIN_DIRS below exist for macOS:
   // a GUI-spawned process (double-clicked, not launched from a terminal)

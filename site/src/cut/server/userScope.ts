@@ -6,7 +6,7 @@ import { exists } from "./util";
 
 /**
  * Every data route runs inside a signed-in user's scope: the page sends the
- * Donkey account id with each engine request (the `u` query param api.ts
+ * DepCut account id with each engine request (the `u` query param api.ts
  * appends), the dispatcher binds it here, and all project/library paths hang
  * off users/<id> under the data root. The engine cannot verify the id — it
  * never talks to the hosted backend — so this is per-account separation on a
@@ -14,7 +14,7 @@ import { exists } from "./util";
  */
 const scope = new AsyncLocalStorage<string>();
 
-// Donkey account ids are URL-safe tokens; anything else is refused before it
+// DepCut account ids are URL-safe tokens; anything else is refused before it
 // can become a filesystem path.
 const USER_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { groupRemap } from "@donkeycut/effects-kit";
+import { groupRemap } from "@depcut/effects-kit";
 import { adoptTransitionFields, clipLen, deriveTransitionFields, docOverlays, getClipSpans, liftClipLooks, moveOverlayGroup, overlayLaneOrder, normalizeElementLanes, placeInRun, projectDuration, separateOverlaps, serializeDoc, totalDuration, useEditor } from "./store";
 import { emptySubtitles, TRANSITION_MAX } from "./types";
 import { foldClips } from "./audioMix";

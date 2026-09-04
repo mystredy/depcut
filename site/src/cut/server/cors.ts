@@ -4,7 +4,7 @@
  * Cut page is the only browser origin allowed to reach the engine
  * cross-origin; every other origin is refused before any handler runs.
  */
-export const CUT_CLIENT_ORIGINS = new Set(["https://donkeycut.com"]);
+export const CUT_CLIENT_ORIGINS = new Set(["https://depcut.com"]);
 
 /** The echo-back origin for an allowed caller, else null. */
 export function allowedOrigin(origin: string): string | null {

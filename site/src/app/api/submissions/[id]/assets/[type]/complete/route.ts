@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { head } from "@/cut/server/cloud/r2";
 import { failSubmissionAsset, tryPromoteSubmission } from "@/lib/marketplace/submission-promotion";
 import { prisma } from "@/lib/prisma";
@@ -15,7 +15,7 @@ const ASSET_TYPES = ["video", "thumbnail", "verification"] as const;
 // checks whether the submission itself can now be promoted. The browser
 // only ever reports "the bytes are up" here — this route is what decides
 // whether that's actually true, and whether it's enough to submit.
-export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
+export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   const { id, type: rawType } = await context.params;
   if (!ASSET_TYPES.includes(rawType as (typeof ASSET_TYPES)[number])) {
     return NextResponse.json(
@@ -29,7 +29,7 @@ export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
     where: { id },
   });
   if (!submission) return notFoundResponse();
-  if (submission.userId !== request.donkey.userId) {
+  if (submission.userId !== request.depcut.userId) {
     return NextResponse.json({ error: "Forbidden", message: "Forbidden" }, { status: 403 });
   }
 

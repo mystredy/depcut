@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { isDonkeySuperUser, notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -20,8 +20,8 @@ const updateSchema = z
 
 // Super-user only. Toggles whether this model is offered to users, renames
 // it, or both in one call.
-export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can do this." },
       { status: 403 },

@@ -14,7 +14,7 @@ import {
   recordInferenceUsage,
   requireInferenceCredits,
 } from "@/lib/credits/inference";
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import {
   requireInferenceClientId,
   validationErrorResponse,
@@ -35,15 +35,15 @@ const runSchema = z.object({
 // Run an agentic browser task and return its result. The backend runs it to
 // completion and charges credits here (by step count), so charging never depends
 // on the client polling.
-export const POST = withDonkeyAuth(async (request) => {
-  const client = requireInferenceClientId(request.donkey.clientId);
+export const POST = withDepCutAuth(async (request) => {
+  const client = requireInferenceClientId(request.depcut.clientId);
   if (!client.ok) return client.response;
 
   const parsed = runSchema.safeParse(await request.json());
   if (!parsed.success) return validationErrorResponse(parsed.error);
 
   const credits = await requireInferenceCredits({
-    userId: request.donkey.userId,
+    userId: request.depcut.userId,
     route: inferenceUsageRoutes.browserRun,
     provider: browserUseProvider,
     model: browserUseDefaultModel,
@@ -70,9 +70,9 @@ export const POST = withDonkeyAuth(async (request) => {
     // Record a failed usage event for audit (a failed status is never charged) and return a clean
     // error instead of an unhandled 500 that leaves no trace of the run.
     await recordFailedInferenceUsage({
-      userId: request.donkey.userId,
+      userId: request.depcut.userId,
       clientId: client.clientId,
-      conversationId: request.donkey.conversationId,
+      conversationId: request.depcut.conversationId,
       route: inferenceUsageRoutes.browserRun,
       requestKind: "browser_automation",
       provider: browserUseProvider,
@@ -94,9 +94,9 @@ export const POST = withDonkeyAuth(async (request) => {
   const stepCount = session.stepCount ?? 0;
   // Browser Use bills steps even on failure, so charge regardless of success.
   const recorded = await recordInferenceUsage({
-    userId: request.donkey.userId,
+    userId: request.depcut.userId,
     clientId: client.clientId,
-    conversationId: request.donkey.conversationId,
+    conversationId: request.depcut.conversationId,
     route: inferenceUsageRoutes.browserRun,
     requestKind: "browser_automation",
     provider: browserUseProvider,

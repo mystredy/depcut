@@ -1,6 +1,6 @@
-# Donkey Cut's AI Assistant
+# DepCut's AI Assistant
 
-The assistant is the chat panel inside the Donkey Cut editor. It answers questions about the open project and edits it by calling typed tools against the live editor state, while the user watches the changes land. Three providers share one brain — the user's Claude Code login, the user's Codex login, and Gemini through Donkey's hosted inference — and all three get the same system prompt, tool catalog, and skills library; only the transport differs.
+The assistant is the chat panel inside the DepCut editor. It answers questions about the open project and edits it by calling typed tools against the live editor state, while the user watches the changes land. Three providers share one brain — the user's Claude Code login, the user's Codex login, and Gemini through DepCut's hosted inference — and all three get the same system prompt, tool catalog, and skills library; only the transport differs.
 
 **The one rule: the model makes every decision.** No code inspects the user's words. A message goes to a model with the project state attached, and the harness acts only on the typed tool calls that come back. If you're tempted to write `if (text.includes("subtitles"))` anywhere in the chat path, that knowledge belongs in the system prompt, a tool description, or a skill.
 
@@ -19,7 +19,7 @@ user message + @attachments + fresh <editor_state> snapshot
   │                                       ▲   runs the tool on the editor
   │                                       └── store, POSTs the result back
   │
-  ├─ Gemini picked ──▶ hosted inference route (Donkey sign-in + credits)
+  ├─ Gemini picked ──▶ hosted inference route (DepCut sign-in + credits)
   │       the page itself loops: model round → run the function calls
   │       on the editor store → send results back → next round,
   │       until a round returns no calls
@@ -33,7 +33,7 @@ On the engine path, the chat route holds one streaming response open per turn. T
 
 A turn outlives its tab. The bridge remembers each session's project, so a call arriving after the editor stream closed runs in the engine itself: the doc on disk hydrates into the same editor store, the tool runs, and the result lands back on disk — re-read fresh each call, so a page save between turns survives. Tools that need the page's decoders or its hosted sign-in answer with a typed refusal, and the mapping drops when the provider run settles so a reloaded tab never races a leftover executor.
 
-The Gemini path skips the engine entirely — the same carve-out as AI media generation. The loop runs on the pi agent harness (the `@earendil-works` packages) in the browser: a custom transport speaks Donkey's hosted responses route with the user's session, tools execute directly against the store, and each thread's conversation persists as the harness's own structured history — past tool calls replay as real tool records, so no bookkeeping rides as prose the model could imitate. Gemini's quirks live in that transport: thought signatures replay exactly with each call, tool media returns as its own following turn, and an empty round retries before it surfaces as an error.
+The Gemini path skips the engine entirely — the same carve-out as AI media generation. The loop runs on the pi agent harness (the `@earendil-works` packages) in the browser: a custom transport speaks DepCut's hosted responses route with the user's session, tools execute directly against the store, and each thread's conversation persists as the harness's own structured history — past tool calls replay as real tool records, so no bookkeeping rides as prose the model could imitate. Gemini's quirks live in that transport: thought signatures replay exactly with each call, tool media returns as its own following turn, and an empty round retries before it surfaces as an error.
 
 The turn's route is decided by an intent gate while the turn is already running. A light-model call judges the newest message three ways — a turn that requests nothing, one self-contained ask, a composed job — and the first round goes out immediately on the light chat model with the full catalog while that call is in flight. Tool execution waits on the verdict and the round's output buffers: a simple verdict (the common case) releases the buffer and keeps the run, so the gate costs no wall time, while a chat or complex verdict discards the speculative run with nothing shown and nothing executed and restarts the turn routed — every tool declaration withheld for chat, the full model for a composed job or any classifier doubt. A message carrying attachments is complex on sight and runs routed from the start.
 

@@ -90,8 +90,8 @@ function run(cmd: string, args: string[], notFound?: string, timeoutMs = 600_000
 export async function ensureStt(): Promise<string> {
   const prebuilt = await findOnPath("cut-stt");
   if (prebuilt) return prebuilt;
-  if (process.env.DONKEY_CUT_ENGINE) {
-    throw new Error("The speech tool is missing. Update Depcut to restore transcription.");
+  if (process.env.DEPCUT_CUT_ENGINE) {
+    throw new Error("The speech tool is missing. Update DepCut to restore transcription.");
   }
 
   const src = path.join(process.cwd(), "src", "cut", "server", "native", "cut-stt.swift");
@@ -99,7 +99,7 @@ export async function ensureStt(): Promise<string> {
   const [b, s] = await Promise.all([stat(bin).catch(() => null), stat(src).catch(() => null)]);
   if (b?.isFile() && (!s || b.mtimeMs >= s.mtimeMs)) return bin;
   if (!s) {
-    throw new Error("The speech tool is missing. Update Depcut to restore transcription.");
+    throw new Error("The speech tool is missing. Update DepCut to restore transcription.");
   }
   await mkdir(path.dirname(bin), { recursive: true });
   await run(

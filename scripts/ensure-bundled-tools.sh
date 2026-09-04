@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Guarantees vendor/donkey-tools/ holds the command-line tools the Cut engine runs by
+# Guarantees vendor/depcut-tools/ holds the command-line tools the Cut engine runs by
 # bare name (ffmpeg, ffprobe, yt-dlp). The dev run script and app packaging both call
 # this, so the tools are present without a manual step.
 #
@@ -13,12 +13,12 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-VENDOR_DIR="${DONKEY_TOOLS_DIR:-$ROOT_DIR/vendor/donkey-tools}"
-MANIFEST="$ROOT_DIR/apps/Donkey/Sources/DonkeyRuntime/Resources/bundled-tools.json"
+VENDOR_DIR="${DEPCUT_TOOLS_DIR:-$ROOT_DIR/vendor/depcut-tools}"
+MANIFEST="$ROOT_DIR/apps/DepCut/Sources/DepCutRuntime/Resources/bundled-tools.json"
 
 # Every tool the app ships. All of them are required: they travel inside the app, so a
 # build that can't stage one would ship a capability that silently doesn't work on a
-# machine that happens not to have it. Scoped to the Donkey Cut video editor —
+# machine that happens not to have it. Scoped to the DepCut video editor —
 # ffmpeg/ffprobe (export, probe, frame extract) and yt-dlp (URL import). Keep in sync
 # with fetch-bundled-tools.sh and BundledTools.swift — the Swift list is checked
 # against this one by BundledToolsTests.
@@ -79,16 +79,16 @@ download_prebuilt() {
   echo "Installed prebuilt tools into $VENDOR_DIR."
 }
 
-# A custom DONKEY_TOOLS_DIR is a caller-supplied prebuilt set: validate what's present and NEVER build into
+# A custom DEPCUT_TOOLS_DIR is a caller-supplied prebuilt set: validate what's present and NEVER build into
 # it (nor rebuild for source-change reasons — the prebuilt binaries are authoritative). A complete set is
 # done; only a genuinely missing tool fails, with the real list rather than an empty one.
-if [ -n "${DONKEY_TOOLS_DIR:-}" ]; then
+if [ -n "${DEPCUT_TOOLS_DIR:-}" ]; then
   missing="$(missing_of "${REQUIRED_TOOLS[@]}" | grep -v '^$' | tr '\n' ' ' | xargs)"
   if [ -n "$missing" ]; then
-    echo "ERROR: DONKEY_TOOLS_DIR=$VENDOR_DIR is missing required tools: $missing" >&2
+    echo "ERROR: DEPCUT_TOOLS_DIR=$VENDOR_DIR is missing required tools: $missing" >&2
     exit 1
   fi
-  echo "Bundled tools present in $VENDOR_DIR (DONKEY_TOOLS_DIR)"
+  echo "Bundled tools present in $VENDOR_DIR (DEPCUT_TOOLS_DIR)"
   exit 0
 fi
 

@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 // The signed-in user's own notification feed — newest 30, plus the unread
 // count for the bell badge.
-export const GET = withDonkeyAuth(async (request) => {
-  const userId = request.donkey.userId;
+export const GET = withDepCutAuth(async (request) => {
+  const userId = request.depcut.userId;
 
   const [notifications, unreadCount] = await Promise.all([
     prisma.notification.findMany({

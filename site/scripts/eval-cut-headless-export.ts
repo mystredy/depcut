@@ -26,7 +26,7 @@ const arg = (name: string): string | undefined => {
 const base = arg("base") ?? "http://localhost:3000";
 const session: HeadlessSession = {
   base,
-  headers: { "x-donkey-client-id": "donkey-cut-eval", "x-donkey-dev-auth-bypass": "1" },
+  headers: { "x-depcut-client-id": "depcut-cut-eval", "x-depcut-dev-auth-bypass": "1" },
 };
 const api = (path: string, init?: RequestInit) =>
   fetch(base + path, {

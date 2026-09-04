@@ -1,6 +1,6 @@
 import type { CardColor } from "@/app/_components/landing/theme";
 
-// The shape pricing cards render from. Donkey Use no longer sells through the
+// The shape pricing cards render from. DepCut Use no longer sells through the
 // site, so plans exist only where a product still lists them (Cut's landing —
 // see cutPricingPlans.ts); every action is a plain link.
 export type PricingPlanAction = {

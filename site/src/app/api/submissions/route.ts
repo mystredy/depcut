@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,7 @@ const MAX_OPEN_DRAFTS = 3;
 // (draft) submission at a time, so clicking Submit again on a project that
 // already has one continues that draft instead of creating a duplicate and
 // silently eating a slot toward MAX_OPEN_DRAFTS.
-export const POST = withDonkeyAuth(async (request) => {
+export const POST = withDepCutAuth(async (request) => {
   let projectId: string | undefined;
   try {
     const body = (await request.json()) as { projectId?: string };
@@ -40,21 +40,21 @@ export const POST = withDonkeyAuth(async (request) => {
   if (projectId) {
     const project = await prisma.cutProject.findUnique({
       select: { name: true },
-      where: { id: projectId, userId: request.donkey.userId },
+      where: { id: projectId, userId: request.depcut.userId },
     });
     if (!project) {
       return NextResponse.json({ error: "not_found", message: "Project not found." }, { status: 404 });
     }
     projectName = project.name;
     const existing = await prisma.submission.findFirst({
-      where: { projectId, userId: request.donkey.userId, status: "draft" },
+      where: { projectId, userId: request.depcut.userId, status: "draft" },
       include: { assets: true, project: { select: { name: true } } },
     });
     if (existing) return NextResponse.json({ submission: existing });
   }
 
   const openDrafts = await prisma.submission.count({
-    where: { status: "draft", userId: request.donkey.userId },
+    where: { status: "draft", userId: request.depcut.userId },
   });
   if (openDrafts >= MAX_OPEN_DRAFTS) {
     return NextResponse.json(
@@ -72,7 +72,7 @@ export const POST = withDonkeyAuth(async (request) => {
   // renaming the project later doesn't silently retitle an in-progress
   // submission, and renaming the submission doesn't touch the project.
   const submission = await prisma.submission.create({
-    data: { status: "draft", userId: request.donkey.userId, projectId, title: projectName },
+    data: { status: "draft", userId: request.depcut.userId, projectId, title: projectName },
     include: { assets: true, project: { select: { name: true } } },
   });
   return NextResponse.json({ submission });
@@ -81,14 +81,14 @@ export const POST = withDonkeyAuth(async (request) => {
 // The signed-in user's own submissions, newest first — feeds My Submissions.
 // Includes every draft regardless of how far along it is; the client filters
 // by status (draft / submitting / failed / submitted) for the status tabs.
-export const GET = withDonkeyAuth(async (request) => {
+export const GET = withDepCutAuth(async (request) => {
   const submissions = await prisma.submission.findMany({
     include: {
       assets: true,
       category: { select: { emoji: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
-    where: { userId: request.donkey.userId },
+    where: { userId: request.depcut.userId },
   });
 
   return NextResponse.json({ submissions });

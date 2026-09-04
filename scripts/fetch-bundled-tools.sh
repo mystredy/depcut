@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# Vendors the arm64 command-line tools the Donkey Cut video editor runs into
-# vendor/donkey-tools/, making each binary self-contained (its Homebrew dylibs are
+# Vendors the arm64 command-line tools the DepCut video editor runs into
+# vendor/depcut-tools/, making each binary self-contained (its Homebrew dylibs are
 # copied alongside and the install names are rewritten to @loader_path). The
-# packaging step (scripts/package-donkey-app.sh -> stage_bundled_tools) then copies
-# this directory into Donkey.app/Contents/Resources/donkey-tools/.
+# packaging step (scripts/package-depcut-app.sh -> stage_bundled_tools) then copies
+# this directory into DepCut.app/Contents/Resources/depcut-tools/.
 #
 # The vendored binaries are large and are NOT committed to git — run this
 # on the build machine before packaging. Re-runnable; each tool is independent, so
@@ -15,7 +15,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-VENDOR_DIR="$ROOT_DIR/vendor/donkey-tools"
+VENDOR_DIR="$ROOT_DIR/vendor/depcut-tools"
 BREW_LIB="$(brew --prefix 2>/dev/null)/lib"
 
 mkdir -p "$VENDOR_DIR"

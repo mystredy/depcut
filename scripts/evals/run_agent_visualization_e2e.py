@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Simulator e2e checks for Donkey agent action visualization.
+"""Simulator e2e checks for DepCut agent action visualization.
 
 The simulator exercises the feedback-loop contract without launching or
 controlling real apps: intent class -> visualization plan -> grounded cursor

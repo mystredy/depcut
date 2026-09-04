@@ -8,7 +8,7 @@
  * a sticker can sit on different frames.
  */
 
-import { createLottieHandle, isLottieData, type LottieHandle } from "@donkeycut/effects-kit";
+import { createLottieHandle, isLottieData, type LottieHandle } from "@depcut/effects-kit";
 import type { MediaAsset } from "./types";
 
 const dataCache = new Map<string, Promise<unknown | null>>();

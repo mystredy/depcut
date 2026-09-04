@@ -7,7 +7,7 @@ import { useHydrationSafeSession } from "@/lib/auth-client";
 const DEFAULT_APP_TARGET = "/app";
 
 // The auth screens live at root-level /sign-in and /sign-up on the auth-owning
-// host (donkeycut.com owns auth directly) and read callbackURL in either mode.
+// host (depcut.com owns auth directly) and read callbackURL in either mode.
 // The app target (already root-prefixed for the host) rides along as the
 // post-auth callback.
 export function authHrefFor(

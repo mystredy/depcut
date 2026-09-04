@@ -17,7 +17,7 @@ import { SharedProjectView } from "./SharedProjectView";
 /** Absolute origin for this request — card URLs must be absolute for crawlers. */
 async function origin(): Promise<string> {
   const h = await headers();
-  const host = h.get("host") ?? "donkeycut.com";
+  const host = h.get("host") ?? "depcut.com";
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   return `${proto}://${host}`;
 }
@@ -36,7 +36,7 @@ export async function generateMetadata({
   const meta = await shareMetaForToken(token);
   if (!meta || !meta.isPublic) {
     return {
-      title: "Shared project · Depcut",
+      title: "Shared project · DepCut",
       description: "This project is shared with specific people.",
       robots: { index: false, follow: false },
     };
@@ -44,7 +44,7 @@ export async function generateMetadata({
   const base = await origin();
   const url = `${base}${sharePath(token)}`;
   const card = (kind: "gif" | "jpg") => `${url}/card/${kind}?v=${meta.version}`;
-  const description = `A video project shared from Depcut. Watch ${meta.name} in the browser.`;
+  const description = `A video project shared from DepCut. Watch ${meta.name} in the browser.`;
   // The GIF leads: the platforms that animate it play the opening seconds, and
   // the rest fall back to its first frame — the same picture the JPEG carries
   // for anything that would rather not take a multi-megabyte image. Either URL
@@ -58,7 +58,7 @@ export async function generateMetadata({
     { url: card("jpg"), alt: meta.name },
   ];
   return {
-    title: `${meta.name} · Depcut`,
+    title: `${meta.name} · DepCut`,
     description,
     alternates: { canonical: url },
     openGraph: {
@@ -66,7 +66,7 @@ export async function generateMetadata({
       title: meta.name,
       description,
       url,
-      siteName: "Depcut",
+      siteName: "DepCut",
       images,
     },
     twitter: {

@@ -96,8 +96,8 @@ async function runOnce(prompt: string): Promise<string> {
     prompt,
     options: {
       model: MODEL,
-      ...(process.env.DONKEY_CUT_CLAUDE
-        ? { pathToClaudeCodeExecutable: process.env.DONKEY_CUT_CLAUDE }
+      ...(process.env.DEPCUT_CUT_CLAUDE
+        ? { pathToClaudeCodeExecutable: process.env.DEPCUT_CUT_CLAUDE }
         : {}),
       tools: [],
       permissionMode: "dontAsk",

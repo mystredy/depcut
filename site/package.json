@@ -2,7 +2,7 @@
   "name": "site",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://donkeycut.com",
+  "homepage": "https://depcut.com",
   "license": "Apache-2.0",
   "workspaces": [
     "packages/*"
@@ -39,7 +39,7 @@
     "@better-auth/core": "1.6.11",
     "@better-auth/kysely-adapter": "1.6.11",
     "@better-auth/utils": "0.4.0",
-    "@donkeycut/effects-kit": "*",
+    "@depcut/effects-kit": "*",
     "@earendil-works/pi-agent-core": "0.84.1",
     "@earendil-works/pi-ai": "0.84.1",
     "@elevenlabs/elevenlabs-js": "^2.49.1",

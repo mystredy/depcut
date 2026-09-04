@@ -3,7 +3,7 @@
 /**
  * The media roles — image, video, voice — over the exact browser-side
  * generation the panels and chat already use (`useGenerate`, `tts`). Each runs
- * on the user's Donkey session and credits and lands its output as a real
+ * on the user's DepCut session and credits and lands its output as a real
  * project asset, so what these return is a placeable asset id and the editor
  * bridge's `importMedia` has nothing left to do.
  *

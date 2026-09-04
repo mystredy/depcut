@@ -24,7 +24,7 @@ export function EmailSection() {
           <span className="min-w-0">
             <span className="block text-sm font-medium">Product emails</span>
             <span className="mt-0.5 block text-sm text-muted-foreground">
-              News and announcements about Depcut.
+              News and announcements about DepCut.
             </span>
           </span>
           <Switch

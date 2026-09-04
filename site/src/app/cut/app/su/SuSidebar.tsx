@@ -27,8 +27,8 @@ export function SuSidebar() {
       <div className="mb-5 flex items-center gap-2.5 px-2">
         <span className="grid size-9 shrink-0 place-items-center p-0.5">
           <img
-            src="/donkey-logo.svg"
-            alt="Depcut"
+            src="/depcut-logo.svg"
+            alt="DepCut"
             width={36}
             height={36}
             className="block h-full w-full object-contain"

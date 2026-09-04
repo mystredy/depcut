@@ -20,7 +20,7 @@ function stubFetch() {
       calls.push({
         url: href,
         body,
-        clientId: new Headers(init?.headers).get("x-donkey-client-id"),
+        clientId: new Headers(init?.headers).get("x-depcut-client-id"),
       });
       return new Response(JSON.stringify({ blobs: body.blobs.map((_, i) => claim(i)) }), {
         status: 200,
@@ -42,7 +42,7 @@ describe("offloadHostedMedia", () => {
       kind: "image",
       prompt: "hi",
       inputs: { images: [{ data: bigImage, mimeType: "image/png" }] },
-    }, "donkey-cut")) as { inputs: { images: Record<string, unknown>[] } };
+    }, "depcut-cut")) as { inputs: { images: Record<string, unknown>[] } };
 
     const part = out.inputs.images[0];
     expect(part.data).toBeUndefined();
@@ -52,13 +52,13 @@ describe("offloadHostedMedia", () => {
     expect(part.mimeType).toBe("image/png");
     expect(calls.map((c) => c.url)).toEqual(["/api/inference/uploads", "https://r2/put/0"]);
     // The claim is an inference call like any other, and the routes require it.
-    expect(calls[0].clientId).toBe("donkey-cut");
+    expect(calls[0].clientId).toBe("depcut-cut");
   });
 
   test("content parts keep their own payload field", async () => {
     const out = (await offloadHostedMedia({
       input: [{ type: "input_image", dataBase64: bigImage, mimeType: "image/jpeg" }],
-    }, "donkey-cut")) as { input: Record<string, unknown>[] };
+    }, "depcut-cut")) as { input: Record<string, unknown>[] };
 
     expect(out.input[0].dataBase64).toBeUndefined();
     expect(out.input[0].blobField).toBe("dataBase64");
@@ -66,9 +66,9 @@ describe("offloadHostedMedia", () => {
 
   test("the same picture in many requests uploads once", async () => {
     const body = { inputs: { images: [{ data: otherImage, mimeType: "image/png" }] } };
-    await offloadHostedMedia(body, "donkey-cut");
+    await offloadHostedMedia(body, "depcut-cut");
     const before = calls.length;
-    const out = (await offloadHostedMedia(body, "donkey-cut")) as {
+    const out = (await offloadHostedMedia(body, "depcut-cut")) as {
       inputs: { images: Record<string, unknown>[] };
     };
     // Second pass: no claim, no PUT, and still a reference.
@@ -80,7 +80,7 @@ describe("offloadHostedMedia", () => {
     claim = () => ({ skipped: "unsupported" });
     const out = (await offloadHostedMedia({
       inputs: { images: [{ data: btoa("q".repeat(200_000)), mimeType: "image/avif" }] },
-    }, "donkey-cut")) as { inputs: { images: Record<string, unknown>[] } };
+    }, "depcut-cut")) as { inputs: { images: Record<string, unknown>[] } };
 
     expect(out.inputs.images[0].blobRef).toBeUndefined();
     expect(typeof out.inputs.images[0].data).toBe("string");
@@ -90,7 +90,7 @@ describe("offloadHostedMedia", () => {
     globalThis.fetch = (async () => new Response(null, { status: 503 })) as unknown as typeof fetch;
     const out = (await offloadHostedMedia({
       inputs: { images: [{ data: btoa("w".repeat(200_000)), mimeType: "image/png" }] },
-    }, "donkey-cut")) as { inputs: { images: Record<string, unknown>[] } };
+    }, "depcut-cut")) as { inputs: { images: Record<string, unknown>[] } };
 
     expect(typeof out.inputs.images[0].data).toBe("string");
   });
@@ -101,7 +101,7 @@ describe("offloadHostedMedia", () => {
       inputs: { images: [{ data: tinyImage, mimeType: "image/png" }] },
       parameters: { data: "not base64, just a string" },
     };
-    expect(await offloadHostedMedia(body, "donkey-cut")).toBe(body);
+    expect(await offloadHostedMedia(body, "depcut-cut")).toBe(body);
     expect(calls.length).toBe(0);
   });
 });

@@ -3,7 +3,7 @@
 Backend APIs are the Next.js route handlers under the site project. They serve
 the site's own client views, signed in with a session cookie.
 
-**The one rule:** every route handler is wrapped in `withDonkeyAuth`. A public
+**The one rule:** every route handler is wrapped in `withDepCutAuth`. A public
 endpoint is a deliberate exception with a product reason — today only Better
 Auth's own routes, the signature-verified Stripe and Resend webhooks, the
 HMAC-token-verified one-click email unsubscribe, and a plain health check. Ship
@@ -11,7 +11,7 @@ a handler without the wrapper and the endpoint is open to anyone.
 
 ## Authentication
 
-`withDonkeyAuth` takes a session cookie. Inside the handler, `request.donkey`
+`withDepCutAuth` takes a session cookie. Inside the handler, `request.depcut`
 carries who the caller is. Its `method` field says how they authenticated — by
 session cookie or dev bypass — and the handler branches on that, never on the
 path.
@@ -74,7 +74,7 @@ asset generation. Everything a client and the backend share — routes, schemas,
 the stateless provider calls — stays provider-neutral. Provider names live only
 inside private adapters, as configuration and data.
 
-Every inference route requires the `x-donkey-client-id` header. Provider request
+Every inference route requires the `x-depcut-client-id` header. Provider request
 mapping lives behind the provider registry, so handlers import the registry and
 the neutral schemas, never an individual adapter.
 
@@ -151,11 +151,11 @@ references, or any other user content.
 ```typescript
 import { NextResponse } from "next/server";
 
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 
-export const GET = withDonkeyAuth((request) => {
+export const GET = withDepCutAuth((request) => {
   return NextResponse.json({
-    clientId: request.donkey.clientId,
+    clientId: request.depcut.clientId,
   });
 });
 ```

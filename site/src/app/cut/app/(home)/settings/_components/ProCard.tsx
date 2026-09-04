@@ -44,7 +44,7 @@ export function ProCard() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-3">
-          Depcut Pro
+          DepCut Pro
           {isActive && data ? (
             <Badge variant="default">{data.status}</Badge>
           ) : null}

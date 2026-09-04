@@ -3,7 +3,7 @@ import { executeCopyJob } from "@/cut/server/cloud/copyQueue";
 
 // Execution callback for queued share-copies: the Cut worker's Cloudflare
 // Queue consumer POSTs one job id at a time (see cut/server/cloud/copyQueue.ts).
-// Deliberately not wrapped in withDonkeyAuth — the caller is a machine, not a
+// Deliberately not wrapped in withDepCutAuth — the caller is a machine, not a
 // session — and gated by the shared secret instead, like the render worker's
 // wake in the other direction.
 export const runtime = "nodejs";

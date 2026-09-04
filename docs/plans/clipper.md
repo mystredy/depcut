@@ -5,7 +5,7 @@ it's a scoping doc for a feature that doesn't exist yet, kept separate from
 `docs/guides/` for that reason. Nothing here should be treated as how the app
 currently works.
 
-Clipper is a new top-level feature in Donkey Cut, alongside the video editor
+Clipper is a new top-level feature in DepCut, alongside the video editor
 and Speech-to-Text: a user brings in a movie-length video, watches it in a
 Netflix-style viewer, and while watching can tag a moment with a label for
 later, or cut a range out into a standalone clip saved to a library.
@@ -17,7 +17,7 @@ never be able to corrupt or shorten the original.
 
 ## Getting the source video
 
-The four acquisition paths the user described all match something Donkey Cut
+The four acquisition paths the user described all match something DepCut
 already has, built for the editor's own import flow:
 
 | Acquisition path | Existing piece to reuse |

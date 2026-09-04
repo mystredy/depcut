@@ -31,7 +31,7 @@ export type TelegramLinkCredential = {
 };
 
 // Issues a fresh deep link + pin pair. The caller opens the deep link (a new
-// tab, so the Depcut tab with Preferences open survives to show the linked
+// tab, so the DepCut tab with Preferences open survives to show the linked
 // state once the user comes back and this query refetches) and shows the pin
 // as the fallback for whoever that link doesn't cleanly open Telegram for.
 export function useCreateTelegramLink() {

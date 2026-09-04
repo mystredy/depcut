@@ -10,8 +10,8 @@ import {
 import {
   notFoundResponse,
   unauthorizedResponse,
-  withDonkeyAuth,
-} from "@/lib/donkey-api-auth";
+  withDepCutAuth,
+} from "@/lib/depcut-api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -28,9 +28,9 @@ function subscriptionPriceId(planKey: string): string | null {
 }
 
 // Start a Stripe Checkout session for a subscription (Vision API or Pro).
-// Session-only (API keys are not accepted here, the default for withDonkeyAuth).
+// Session-only (API keys are not accepted here, the default for withDepCutAuth).
 // This route keeps its getSession call because it needs the user's email/name.
-export const POST = withDonkeyAuth(async (request) => {
+export const POST = withDepCutAuth(async (request) => {
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session) {
     return unauthorizedResponse();

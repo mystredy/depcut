@@ -16,7 +16,7 @@ export function requireInferenceClientId(clientId: string | null) {
     response: NextResponse.json(
       {
         error: "Missing client id",
-        message: "The x-donkey-client-id header is required for inference APIs.",
+        message: "The x-depcut-client-id header is required for inference APIs.",
       },
       { status: 400 },
     ),

@@ -20,7 +20,7 @@ import { filterDocForShare, resolveShare, type ShareRow } from "./sharedView";
 import { addUsage, quotaCheck } from "./usage";
 import { caught, err } from "./util";
 
-const COPY_QUEUE_NAME = "donkey-cut-copy";
+const COPY_QUEUE_NAME = "depcut-cut-copy";
 // A queued job untouched this long has likely lost its message (a failed
 // publish, a dropped delivery) — the status poll re-publishes, mirroring the
 // render worker's self-healing wake. Double delivery is safe: execution
@@ -195,7 +195,7 @@ async function duplicateSource(job: {
  * admin can clone any account's project, not just their own) and every
  * source read uses the row's own owner rather than job.userId, which here is
  * the destination (the admin), not the source. Gated entirely by the route
- * that enqueues this job: only isDonkeySuperUser reaches
+ * that enqueues this job: only isDepCutSuperUser reaches
  * copyJobs.requestAdminClone. folderId drops to null like a share copy
  * (not carried over like a same-account duplicate) — the admin's own folder
  * structure has nothing to do with the original owner's. */
@@ -309,7 +309,7 @@ export const copyJobs = {
 
   /** An admin clones any account's project into their own, from the Content
    * → Projects list — same queue, same pacing as an owner's own duplicate;
-   * only the source ownership check is dropped (isDonkeySuperUser, checked
+   * only the source ownership check is dropped (isDepCutSuperUser, checked
    * by the route that calls this, is the actual gate). */
   async requestAdminClone(adminUserId: string, projectId: string) {
     try {

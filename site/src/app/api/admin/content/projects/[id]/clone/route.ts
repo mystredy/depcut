@@ -1,5 +1,5 @@
 import { copyJobs } from "@/cut/server/cloud/copyQueue";
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -11,10 +11,10 @@ type RouteContext = { params: Promise<{ id: string }> };
 // investigating a report without touching the original. Queues the same
 // copy-job pipeline an owner's own "Duplicate" already uses (see
 // copyQueue.ts's requestAdminClone); the client polls it the same way too.
-export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const POST = withDepCutAuth(async (request, context: RouteContext) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json({ error: "Forbidden", message: "Only super users can do this." }, { status: 403 });
   }
   const { id } = await context.params;
-  return copyJobs.requestAdminClone(request.donkey.userId, id);
+  return copyJobs.requestAdminClone(request.depcut.userId, id);
 });

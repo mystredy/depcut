@@ -47,7 +47,7 @@ next-env.d.ts
 /src/generated/prisma
 
 # Cut dev data lived at these paths in the checkout before the move to
-# ~/Movies/DonkeyCutDev (2026-08-07); keep ignoring them so leftover personal
+# ~/Movies/DepCutDev (2026-08-07); keep ignoring them so leftover personal
 # media in older checkouts stays out of git.
 /users/
 /projects/

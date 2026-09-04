@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { tryPromoteSubmission } from "@/lib/marketplace/submission-promotion";
 import { prisma } from "@/lib/prisma";
 
@@ -14,14 +14,14 @@ type RouteContext = { params: Promise<{ id: string }> };
 // (submitRequestedAt), and moves to "submitting". Promotes straight to
 // "submitted" immediately if every asset already finished uploading;
 // otherwise each asset's own /complete callback does that later.
-export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
+export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
   const submission = await prisma.submission.findUnique({
     include: { assets: true },
     where: { id },
   });
   if (!submission) return notFoundResponse();
-  if (submission.userId !== request.donkey.userId) {
+  if (submission.userId !== request.depcut.userId) {
     return NextResponse.json({ error: "Forbidden", message: "Forbidden" }, { status: 403 });
   }
   if (submission.status !== "draft") {

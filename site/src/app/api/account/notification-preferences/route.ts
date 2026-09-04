@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 const SELECT = { emailDigest: true, pushPayouts: true, telegramAlerts: true } as const;
 
-export const GET = withDonkeyAuth(async (request) => {
+export const GET = withDepCutAuth(async (request) => {
   const prefs = await prisma.userNotificationPreferences.upsert({
-    create: { userId: request.donkey.userId },
+    create: { userId: request.depcut.userId },
     select: SELECT,
     update: {},
-    where: { userId: request.donkey.userId },
+    where: { userId: request.depcut.userId },
   });
   return NextResponse.json(prefs);
 });
@@ -26,17 +26,17 @@ const updateSchema = z
   })
   .strict();
 
-export const PATCH = withDonkeyAuth(async (request) => {
+export const PATCH = withDepCutAuth(async (request) => {
   const parsed = updateSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
   const prefs = await prisma.userNotificationPreferences.upsert({
-    create: { userId: request.donkey.userId, ...parsed.data },
+    create: { userId: request.depcut.userId, ...parsed.data },
     select: SELECT,
     update: parsed.data,
-    where: { userId: request.donkey.userId },
+    where: { userId: request.depcut.userId },
   });
   return NextResponse.json(prefs);
 });

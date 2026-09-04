@@ -1,5 +1,5 @@
 {
-  "name": "@donkeycut/effects-kit",
+  "name": "@depcut/effects-kit",
   "version": "0.1.0",
   "description": "Host-agnostic graphics elements for web video editors: overlay model, canvas painters, plugin registry.",
   "license": "Apache-2.0",

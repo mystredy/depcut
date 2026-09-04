@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { ownedFlow } from "@/lib/flows/db";
 import { saveFrameAsAsset } from "@/lib/flows/submit";
 
@@ -19,9 +19,9 @@ const saveFrameSchema = z.object({ atSeconds: z.number().min(0) }).strict();
 
 // Save Frame — capture one frame from this (completed) video and land it as
 // a new, unbilled image asset in the same Flow.
-export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
+export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   const { id, genId } = await context.params;
-  const flow = await ownedFlow(request.donkey.userId, id);
+  const flow = await ownedFlow(request.depcut.userId, id);
   if (!flow) return notFoundResponse();
 
   const parsed = saveFrameSchema.safeParse(await request.json());
@@ -29,7 +29,7 @@ export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
   try {
-    const result = await saveFrameAsAsset(request.donkey.userId, id, genId, parsed.data.atSeconds);
+    const result = await saveFrameAsAsset(request.depcut.userId, id, genId, parsed.data.atSeconds);
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Couldn't save that frame.";

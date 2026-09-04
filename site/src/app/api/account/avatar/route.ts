@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 
 import {
   notFoundResponse,
-  withDonkeyAuth,
-  type DonkeyAuthenticatedRequest,
-} from "@/lib/donkey-api-auth";
+  withDepCutAuth,
+  type DepCutAuthenticatedRequest,
+} from "@/lib/depcut-api-auth";
 import { accountProfile } from "@/lib/account-profile";
 import { prisma } from "@/lib/prisma";
 
@@ -20,9 +20,9 @@ const ALLOWED_TYPES = new Set(["image/webp", "image/jpeg", "image/png"]);
 // id — the session decides whose bytes come back — and the profile hands out a
 // URL stamped with `updatedAt`, so the response can be cached hard and a new
 // upload lands on a new URL.
-export const GET = withDonkeyAuth(async (request: DonkeyAuthenticatedRequest) => {
+export const GET = withDepCutAuth(async (request: DepCutAuthenticatedRequest) => {
   const avatar = await prisma.userAvatar.findUnique({
-    where: { userId: request.donkey.userId },
+    where: { userId: request.depcut.userId },
   });
   if (!avatar) return notFoundResponse();
 
@@ -35,7 +35,7 @@ export const GET = withDonkeyAuth(async (request: DonkeyAuthenticatedRequest) =>
   });
 });
 
-export const PUT = withDonkeyAuth(async (request: DonkeyAuthenticatedRequest) => {
+export const PUT = withDepCutAuth(async (request: DepCutAuthenticatedRequest) => {
   const contentType = request.headers.get("content-type")?.split(";")[0].trim() ?? "";
   if (!ALLOWED_TYPES.has(contentType)) {
     return NextResponse.json({ error: "Unsupported image type." }, { status: 415 });
@@ -46,7 +46,7 @@ export const PUT = withDonkeyAuth(async (request: DonkeyAuthenticatedRequest) =>
     return NextResponse.json({ error: "Image too large." }, { status: 413 });
   }
 
-  const userId = request.donkey.userId;
+  const userId = request.depcut.userId;
   await prisma.userAvatar.upsert({
     create: { contentType, data, userId },
     update: { contentType, data },
@@ -56,8 +56,8 @@ export const PUT = withDonkeyAuth(async (request: DonkeyAuthenticatedRequest) =>
   return NextResponse.json(await accountProfile(userId));
 });
 
-export const DELETE = withDonkeyAuth(async (request: DonkeyAuthenticatedRequest) => {
-  const userId = request.donkey.userId;
+export const DELETE = withDepCutAuth(async (request: DepCutAuthenticatedRequest) => {
+  const userId = request.depcut.userId;
   await prisma.userAvatar.deleteMany({ where: { userId } });
   return NextResponse.json(await accountProfile(userId));
 });

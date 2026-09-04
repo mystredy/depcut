@@ -9,7 +9,7 @@ import { bindHostedSession } from "../hosted";
 // (tools, generation, media import) reaches the right server on its own.
 
 export interface HeadlessSession {
-  /** Absolute origin of the hosted site, e.g. https://donkeycut.com. */
+  /** Absolute origin of the hosted site, e.g. https://depcut.com. */
   base: string;
   /** Auth folded into every request: a session cookie, the runner grant, or
    * the dev bypass. */

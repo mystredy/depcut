@@ -242,7 +242,7 @@ export function AdminNav() {
   return (
     <nav className="flex w-64 shrink-0 flex-col border-r bg-card">
       <div className="px-4 py-4">
-        <p className="text-sm font-semibold">Depcut Admin</p>
+        <p className="text-sm font-semibold">DepCut Admin</p>
         <p className="text-xs text-muted-foreground">Site management</p>
       </div>
       <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 pb-3">
@@ -325,7 +325,7 @@ export function AdminNav() {
       </div>
       <div className="border-t px-4 py-3">
         <Link href="/app" className="text-xs text-muted-foreground hover:text-foreground hover:underline">
-          ← Back to Depcut
+          ← Back to DepCut
         </Link>
       </div>
     </nav>

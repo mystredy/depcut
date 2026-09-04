@@ -83,5 +83,5 @@ export function pageTitleForPath(pathname: string, base: string): string {
     );
     if (child) return child.label;
   }
-  return "Depcut";
+  return "DepCut";
 }

@@ -25,7 +25,7 @@ function isUniqueConstraintError(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
 
-const DONKEY_CLIENT_ID = "donkey-cut";
+const DEPCUT_CLIENT_ID = "depcut-cut";
 
 type GenerationOutput = { dataBase64?: string; url?: string; contentType?: string };
 /** An error response's `message` is the generic, caller-facing wrapper
@@ -56,7 +56,7 @@ type AssetGenerationResult = {
 function innerRequest(originalHeaders: Headers, path: string, body: unknown): NextRequest {
   const headers = new Headers(originalHeaders);
   headers.set("content-type", "application/json");
-  headers.set("x-donkey-client-id", DONKEY_CLIENT_ID);
+  headers.set("x-depcut-client-id", DEPCUT_CLIENT_ID);
   return new NextRequest(new URL(path, "http://internal.local"), {
     method: "POST",
     headers,

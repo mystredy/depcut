@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { getProject, summarize } from "@/cut/server/cloud/projects";
 import { del } from "@/cut/server/cloud/r2";
 import { prisma } from "@/lib/prisma";
@@ -12,7 +12,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 // Hydrates the Submit Project editor when resuming an existing draft (or
 // watching a "submitting" one finish).
-export const GET = withDonkeyAuth(async (request, context: RouteContext) => {
+export const GET = withDepCutAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
   const submission = await prisma.submission.findUnique({
     include: {
@@ -23,7 +23,7 @@ export const GET = withDonkeyAuth(async (request, context: RouteContext) => {
     where: { id },
   });
   if (!submission) return notFoundResponse();
-  if (submission.userId !== request.donkey.userId) {
+  if (submission.userId !== request.depcut.userId) {
     return NextResponse.json({ error: "Forbidden", message: "Forbidden" }, { status: 403 });
   }
   // The linked project's own preview state — same fields the Projects page
@@ -70,14 +70,14 @@ const patchSchema = z
   })
   .strict();
 
-export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
+export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
   const submission = await prisma.submission.findUnique({
     select: { status: true, userId: true },
     where: { id },
   });
   if (!submission) return notFoundResponse();
-  if (submission.userId !== request.donkey.userId) {
+  if (submission.userId !== request.depcut.userId) {
     return NextResponse.json({ error: "Forbidden", message: "Forbidden" }, { status: 403 });
   }
   if (submission.status !== "draft") {
@@ -118,14 +118,14 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
 // that failed and they'd rather scrap than retry. Once it's actually
 // "submitted" this is refused: that's real review history, not scratch
 // work, and isn't this route's business to remove.
-export const DELETE = withDonkeyAuth(async (request, context: RouteContext) => {
+export const DELETE = withDepCutAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
   const submission = await prisma.submission.findUnique({
     include: { assets: true },
     where: { id },
   });
   if (!submission) return notFoundResponse();
-  if (submission.userId !== request.donkey.userId) {
+  if (submission.userId !== request.depcut.userId) {
     return NextResponse.json({ error: "Forbidden", message: "Forbidden" }, { status: 403 });
   }
   if (submission.status !== "draft" && submission.status !== "failed") {

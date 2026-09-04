@@ -1,6 +1,6 @@
 // Cut's client reaches its engine two ways. Served locally (cut.localhost,
 // localhost) the page and the engine share an origin, so paths stay relative.
-// Served from the hosted domain (donkeycut.com) the page is just static
+// Served from the hosted domain (depcut.com) the page is just static
 // html/js — the Cut APIs are switched off on that host — so every API call
 // targets the engine running on this Mac instead. Loopback is a trustworthy
 // origin, so the https page may call it; the engine grants the hosted origin
@@ -9,8 +9,8 @@
 // The mapping is fixed, with no fallback. A hosted page reaches exactly one
 // engine — the release app's, on its loopback port — by health-probing that
 // single origin; it never tries another port. A local page stays same-origin,
-// so its own dev server answers in-process. A dev Donkey app runs its engine on
-// its own port (DonkeyCutEnginePort) for that local surface, never reached from
+// so its own dev server answers in-process. A dev DepCut app runs its engine on
+// its own port (DepCutEnginePort) for that local surface, never reached from
 // the hosted page. The resolved origin is remembered for the session.
 import { DEFAULT_ENGINE_PORT } from "./ports";
 
@@ -109,7 +109,7 @@ export function engineProbe(): Promise<string> {
       resolvedOrigin = RELEASE_ENGINE_ORIGIN;
       return RELEASE_ENGINE_ORIGIN;
     }
-    throw new Error("No Depcut engine is reachable on this Mac.");
+    throw new Error("No DepCut engine is reachable on this Mac.");
   })().finally(() => {
     resolving = null;
   });
@@ -129,7 +129,7 @@ export function engineOrigin(): string {
   return resolvedOrigin ?? "";
 }
 
-// The signed-in Donkey account, set by RequireSession before the app renders.
+// The signed-in DepCut account, set by RequireSession before the app renders.
 // Every engine URL carries it (the `u` param) — headers can't, because media
 // loads as plain <video>/<img> src — and the engine keeps each account's
 // projects and library in that user's own folder. The engine refuses data
@@ -167,7 +167,7 @@ export async function apiFetch(path: string, init?: RequestInit) {
  * so a non-JSON body folds into an `error` message instead of throwing a
  * SyntaxError at the caller's parse. The 404/405 case is the hosted page
  * driving an out-of-date engine: the page updates on deploy, the engine only
- * when the user updates the Donkey app. */
+ * when the user updates the DepCut app. */
 export async function apiJson<T>(res: Response): Promise<T & { error?: string }> {
   const text = await res.text();
   try {
@@ -176,7 +176,7 @@ export async function apiJson<T>(res: Response): Promise<T & { error?: string }>
     const stale = res.status === 404 || res.status === 405;
     return {
       error: stale
-        ? "The Depcut app on this Mac doesn't support this yet — update Depcut and try again."
+        ? "The DepCut app on this Mac doesn't support this yet — update DepCut and try again."
         : text.trim() || `The engine replied ${res.status}.`,
     } as T & { error?: string };
   }

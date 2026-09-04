@@ -54,7 +54,7 @@ export async function composeGenPrompt(
     const { parts, visuals } = await refsToParts(refs);
     if (parts.length === 0) return null;
     const res = await hostedPost("/api/inference/responses", {
-      donkeyProvider: "gemini",
+      depcutProvider: "gemini",
       model: geminiModelRoles.chat,
       instructions: target === "video" ? VIDEO_INSTRUCTIONS : IMAGE_INSTRUCTIONS,
       response_format: { type: "json_object" },
@@ -91,7 +91,7 @@ export async function composeMusicPrompt(
     const { parts } = await refsToParts(refs);
     if (parts.length === 0) return null;
     const res = await hostedPost("/api/inference/responses", {
-      donkeyProvider: "gemini",
+      depcutProvider: "gemini",
       model: geminiModelRoles.chat,
       instructions: MUSIC_INSTRUCTIONS,
       response_format: { type: "json_object" },

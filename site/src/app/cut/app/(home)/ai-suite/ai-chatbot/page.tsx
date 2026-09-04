@@ -11,7 +11,7 @@ type ChatMessage = { role: "user" | "assistant"; content: string };
 type ChatCompletion = { choices: { message: { content: string } }[] };
 
 async function readError(res: Response, fallback: string): Promise<string> {
-  if (res.status === 401) return "Sign in to Depcut to chat.";
+  if (res.status === 401) return "Sign in to DepCut to chat.";
   if (res.status === 402) return NO_CREDITS_MESSAGE;
   const body = (await res.json().catch(() => null)) as {
     error?: unknown;
@@ -29,7 +29,7 @@ async function readError(res: Response, fallback: string): Promise<string> {
   return message ?? fallback;
 }
 
-// A plain multi-turn chat over Donkey's hosted inference route — the same
+// A plain multi-turn chat over DepCut's hosted inference route — the same
 // /api/inference/chat/completions the Submit Project page's "Generate" buttons
 // call for a single turn, here fed the whole running history each send.
 export default function AiChatbotPage() {
@@ -76,7 +76,7 @@ export default function AiChatbotPage() {
       <div>
         <h1 className="text-lg font-semibold">AI Chatbot</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Chat with Depcut's AI assistant — brainstorm ideas, ask questions, get a second opinion.
+          Chat with DepCut's AI assistant — brainstorm ideas, ask questions, get a second opinion.
         </p>
       </div>
 
@@ -145,7 +145,7 @@ export default function AiChatbotPage() {
 
           {signedOut ? (
             <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Chatting runs on your Depcut account.{" "}
+              Chatting runs on your DepCut account.{" "}
               <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
                 Sign in
               </a>{" "}

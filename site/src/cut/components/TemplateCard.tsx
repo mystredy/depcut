@@ -32,7 +32,7 @@ import { MEDIA_CORS } from "@/cut/lib/mediaCors";
 import { useAssetDrop, type AssetRef } from "@/cut/lib/assetRef";
 import { cardIconButton } from "@/cut/components/iconButton";
 import { formatTime } from "@/cut/lib/time";
-import { EFFECT_LABELS } from "@donkeycut/effects-kit";
+import { EFFECT_LABELS } from "@depcut/effects-kit";
 import { SHAPE_LABELS } from "@/cut/lib/types";
 import type { LibraryTemplate, TemplateMedia } from "@/cut/lib/types";
 import { cn } from "@/lib/utils";

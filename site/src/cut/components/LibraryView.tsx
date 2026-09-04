@@ -98,7 +98,7 @@ export function ShelfBadge({
   const Icon = residency === "cloud" ? Cloud : Laptop;
   return (
     <span
-      title={offline ? "On this Mac — open the Depcut app to use it" : RESIDENCY_LABEL[residency]}
+      title={offline ? "On this Mac — open the DepCut app to use it" : RESIDENCY_LABEL[residency]}
       className={className}
     >
       <Icon className="size-3" />
@@ -111,7 +111,7 @@ export function LibraryView() {
   const base = useCutBase();
   const client = useQueryClient();
   // The listing is cached (lib/queries.ts): coming back to the library paints
-  // the shelf it painted last time and revalidates behind it. With the Donkey
+  // the shelf it painted last time and revalidates behind it. With the DepCut
   // app closed that cache is the Mac's half outright — those files are still
   // on that disk, so they still list, badged and read-only until the app is
   // back. Clicking one raises the gate's banner, which is where the way out
@@ -742,7 +742,7 @@ export function LibraryCard({
                 {bothShelves && (
                   <div className="flex items-center gap-2 px-1.5 py-1 text-xs text-muted-foreground">
                     {a.residency === "cloud" ? <Cloud className="size-3.5" /> : <Laptop className="size-3.5" />}
-                    {offline ? "On this Mac — open the Depcut app to use it" : RESIDENCY_LABEL[a.residency]}
+                    {offline ? "On this Mac — open the DepCut app to use it" : RESIDENCY_LABEL[a.residency]}
                   </div>
                 )}
                 {onRename && (

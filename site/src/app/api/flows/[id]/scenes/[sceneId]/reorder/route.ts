@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { ownedFlow, ownedScene, reorderSceneClips } from "@/lib/flows/db";
 import { prisma } from "@/lib/prisma";
 
@@ -12,9 +12,9 @@ type RouteContext = { params: Promise<{ id: string; sceneId: string }> };
 const reorderSchema = z.object({ clipIds: z.array(z.string().min(1)).min(1) }).strict();
 
 // Drag-to-reorder — the whole new sequence at once.
-export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
+export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   const { id, sceneId } = await context.params;
-  const flow = await ownedFlow(request.donkey.userId, id);
+  const flow = await ownedFlow(request.depcut.userId, id);
   if (!flow) return notFoundResponse();
   const scene = await ownedScene(id, sceneId);
   if (!scene) return notFoundResponse();

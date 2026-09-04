@@ -1,6 +1,6 @@
-# Third-Party Tools Bundled in Donkey
+# Third-Party Tools Bundled in DepCut
 
-Bundled in `donkey-tools/` (built by `scripts/fetch-bundled-tools.sh`).
+Bundled in `depcut-tools/` (built by `scripts/fetch-bundled-tools.sh`).
 
 | Tool | License | Notes |
 |---|---|---|

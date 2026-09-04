@@ -221,7 +221,7 @@ type ChatCompletion = { choices: { message: { content: string } }[] };
 async function generateText(prompt: string, clientId: string): Promise<string> {
   const data = await apiFetch<ChatCompletion>("/api/inference/chat/completions", {
     method: "POST",
-    headers: { "x-donkey-client-id": clientId },
+    headers: { "x-depcut-client-id": clientId },
     body: JSON.stringify({ messages: [{ role: "user", content: prompt }] }),
   });
   return data.choices[0]?.message.content?.trim() ?? "";

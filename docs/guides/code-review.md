@@ -3,7 +3,7 @@
 We review code so the next person can read it. A change is good when a
 teammate can open the file, follow the logic top to bottom, and understand why
 it is correct without chasing it across the codebase. This guide is what we
-look for, in Swift (`apps/Donkey`) and TypeScript (`site`) alike.
+look for, in Swift (`apps/DepCut`) and TypeScript (`site`) alike.
 
 **The one rule:** every change must reduce the total complexity a reader holds
 in their head. Adding code that does this is progress. Adding code that hides

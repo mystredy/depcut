@@ -2,7 +2,7 @@
 
 /**
  * The judgment roles — script, breakdown, style — as one-shot structured LLM
- * calls through Donkey's hosted Gemini (the same `/api/inference/responses`
+ * calls through DepCut's hosted Gemini (the same `/api/inference/responses`
  * json_object path prompt composition already uses). Each returns plain JSON we
  * validate in code; nothing here enforces a provider-side schema, matching how
  * the planner runs.
@@ -45,7 +45,7 @@ async function llmJson<T>(
     let res: Response;
     try {
       res = await hostedPost("/api/inference/responses", {
-        donkeyProvider: "gemini",
+        depcutProvider: "gemini",
         model: geminiModelRoles.chat,
         instructions,
         response_format: { type: "json_object" },
@@ -64,7 +64,7 @@ async function llmJson<T>(
     }
     if (!res.ok) {
       if (res.status === 402) throw new Error(NO_CREDITS_MESSAGE);
-      if (res.status === 401) throw new Error("Sign in to Depcut to generate a video.");
+      if (res.status === 401) throw new Error("Sign in to DepCut to generate a video.");
       const reason = await providerReason(res);
       lastError = new Error(reason ?? "The planning model is unavailable — try again.");
       // Any other 4xx is deterministic — the same request fails the same way —

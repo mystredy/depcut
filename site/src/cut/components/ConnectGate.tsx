@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 
-import { DONKEY_DOWNLOAD_URL } from "@/app/_components/landing/data";
+import { DEPCUT_DOWNLOAD_URL } from "@/app/_components/landing/data";
 import { track } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,7 +29,7 @@ import { engineSeen, markEngineSeen } from "@/cut/lib/residency";
 
 // Which backend the app starts on, decided once per load. Chrome gates a
 // public https page's first fetch to 127.0.0.1 behind its Local Network Access
-// prompt — "donkeycut.com wants to access other apps and services on this
+// prompt — "depcut.com wants to access other apps and services on this
 // device" — so the engine is probed only when that costs nothing: the page is
 // served by the engine itself, or the permission is already granted.
 // Otherwise the app starts in the cloud. The api.ts latch keeps app code off
@@ -41,7 +41,7 @@ import { engineSeen, markEngineSeen } from "@/cut/lib/residency";
 // need it. The projects home keeps listing the Mac's shelf from what it last
 // saw there, and the banner rises when one of those projects is open: that is
 // the moment something is actually blocked, and the banner opens the recovery
-// steps in a dialog. The gate keeps probing behind it, so starting the Donkey
+// steps in a dialog. The gate keeps probing behind it, so starting the DepCut
 // app clears the banner and the project loads. Engine loss mid-session
 // (api.ts's engineLost) lands in the same state.
 const ACK_KEY = "cut-engine-connect-acked";
@@ -196,8 +196,8 @@ export function ConnectGate({ children }: { children: ReactNode }) {
           <span className="min-w-0 truncate">
             This project is stored on this Mac, and{" "}
             {blocked
-              ? "your browser is blocking this page from reaching the Depcut app."
-              : "Depcut can’t reach the Depcut app."}
+              ? "your browser is blocking this page from reaching the DepCut app."
+              : "DepCut can’t reach the DepCut app."}
           </span>
           <button
             className="shrink-0 underline underline-offset-2"
@@ -216,7 +216,7 @@ export function ConnectGate({ children }: { children: ReactNode }) {
               {blocked
                 ? "Connection blocked"
                 : needsAsk
-                  ? "Connect to the Depcut app"
+                  ? "Connect to the DepCut app"
                   : "This project is stored on this Mac"}
             </DialogTitle>
           </DialogHeader>
@@ -225,14 +225,14 @@ export function ConnectGate({ children }: { children: ReactNode }) {
               <>
                 This is a local project — its video and its edits live on this
                 Mac, and your browser is blocking this page from reaching the
-                Depcut app that opens them. Open the site settings from the icon
+                DepCut app that opens them. Open the site settings from the icon
                 next to the address bar, turn on{" "}
                 <span className="font-medium text-foreground">Apps on device</span>,
                 then try again.
               </>
             ) : needsAsk ? (
               <>
-                This is a local project — it lives in the Depcut app on this
+                This is a local project — it lives in the DepCut app on this
                 Mac. Your browser will ask for permission to connect to apps on
                 this device — choose{" "}
                 <span className="font-medium text-foreground">Allow</span>.
@@ -240,7 +240,7 @@ export function ConnectGate({ children }: { children: ReactNode }) {
             ) : (
               <>
                 This is a local project: its video and its edits live on this
-                Mac, and the Depcut app is what opens them. Install Depcut, or
+                Mac, and the DepCut app is what opens them. Install DepCut, or
                 open it if it&rsquo;s already installed — this page connects
                 automatically.
               </>
@@ -262,7 +262,7 @@ export function ConnectGate({ children }: { children: ReactNode }) {
                 variant="outline"
                 onClick={() => {
                   track("app_install_clicked", { source: "connect_gate_button" });
-                  window.location.href = DONKEY_DOWNLOAD_URL;
+                  window.location.href = DEPCUT_DOWNLOAD_URL;
                 }}
               >
                 Download for Mac

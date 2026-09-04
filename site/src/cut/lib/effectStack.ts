@@ -11,7 +11,7 @@
  * The math is here, apart from React, because both exports walk the same stack.
  */
 
-import type { EffectPreviewState } from "@donkeycut/effects-kit";
+import type { EffectPreviewState } from "@depcut/effects-kit";
 
 /** One effect live at a moment, with the lane that places it in the stack. */
 export interface LiveEffect {

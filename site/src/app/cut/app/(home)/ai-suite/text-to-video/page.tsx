@@ -39,7 +39,7 @@ const REFRESH_MS = 8000;
 const VIDEO_DEADLINE_MS = 12 * 60_000;
 
 async function readError(res: Response, fallback: string): Promise<string> {
-  if (res.status === 401) return "Sign in to Depcut to generate videos.";
+  if (res.status === 401) return "Sign in to DepCut to generate videos.";
   if (res.status === 402) return NO_CREDITS_MESSAGE;
   const body = (await res.json().catch(() => null)) as {
     error?: unknown;
@@ -380,7 +380,7 @@ export default function TextToVideoPage() {
       <div>
         <h1 className="text-lg font-semibold">Text to Video</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Describe a clip and Depcut&apos;s AI model will render it.
+          Describe a clip and DepCut&apos;s AI model will render it.
         </p>
       </div>
 
@@ -493,7 +493,7 @@ export default function TextToVideoPage() {
 
         {signedOut ? (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Generating runs on your Depcut account.{" "}
+            Generating runs on your DepCut account.{" "}
             <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
               Sign in
             </a>{" "}

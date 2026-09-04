@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install local runtime packages for `scripts/run-donkey-dev.sh`."""
+"""Install local runtime packages for `scripts/run-depcut-dev.sh`."""
 
 from __future__ import annotations
 
@@ -17,22 +17,22 @@ from typing import Any
 
 
 RUNTIME_ENV_NAMES = {
-    "local-llm": "DONKEY_LOCAL_LLM_RUNTIME_MANIFEST_URL",
-    "parakeet-transcriber": "DONKEY_PARAKEET_RUNTIME_MANIFEST_URL",
-    "ui-understander": "DONKEY_UI_UNDERSTANDER_RUNTIME_MANIFEST_URL",
+    "local-llm": "DEPCUT_LOCAL_LLM_RUNTIME_MANIFEST_URL",
+    "parakeet-transcriber": "DEPCUT_PARAKEET_RUNTIME_MANIFEST_URL",
+    "ui-understander": "DEPCUT_UI_UNDERSTANDER_RUNTIME_MANIFEST_URL",
 }
 
 RUNTIME_EXECUTABLE_ENV_NAMES = {
-    "local-llm": "DONKEY_LOCAL_LLM_RUNNER",
-    "parakeet-transcriber": "DONKEY_PARAKEET_TRANSCRIBER",
-    "ui-understander": "DONKEY_UI_UNDERSTANDER",
+    "local-llm": "DEPCUT_LOCAL_LLM_RUNNER",
+    "parakeet-transcriber": "DEPCUT_PARAKEET_TRANSCRIBER",
+    "ui-understander": "DEPCUT_UI_UNDERSTANDER",
 }
 
 DEFAULT_BASE_DIR = (
     Path.home()
     / "Library"
     / "Application Support"
-    / "Donkey"
+    / "DepCut"
     / "LocalModelRuntimes"
 )
 
@@ -43,7 +43,7 @@ def main() -> int:
         print("No local runtime manifest URLs are configured; skipping dev runtime setup.")
         return 0
 
-    base_dir = Path(os.environ.get("DONKEY_DEV_RUNTIME_BASE_DIR", DEFAULT_BASE_DIR)).expanduser()
+    base_dir = Path(os.environ.get("DEPCUT_DEV_RUNTIME_BASE_DIR", DEFAULT_BASE_DIR)).expanduser()
     registry = load_registry(base_dir)
     changed = False
     prepared_any = False
@@ -66,7 +66,7 @@ def main() -> int:
         changed = True
         print(f"runtime {runtime_id}: installed {installation['runtimeVersion']}")
 
-        if os.environ.get("DONKEY_DEV_RUNTIME_PREPARE", "1") != "0":
+        if os.environ.get("DEPCUT_DEV_RUNTIME_PREPARE", "1") != "0":
             prepared_any = True
             prepare_and_check(base_dir, installation, manifest)
 
@@ -81,7 +81,7 @@ def main() -> int:
 
 def configured_manifest_urls() -> dict[str, str]:
     urls: dict[str, str] = {}
-    combined = os.environ.get("DONKEY_RUNTIME_PACKAGE_MANIFEST_URLS", "")
+    combined = os.environ.get("DEPCUT_RUNTIME_PACKAGE_MANIFEST_URLS", "")
     for pair in combined.split(","):
         if not pair or "=" not in pair:
             continue
@@ -133,7 +133,7 @@ def installation_is_current(
     installation: dict[str, Any] | None,
     manifest: dict[str, Any],
 ) -> bool:
-    if os.environ.get("DONKEY_DEV_RUNTIME_FORCE_SETUP", "0") == "1":
+    if os.environ.get("DEPCUT_DEV_RUNTIME_FORCE_SETUP", "0") == "1":
         return False
     if not isinstance(installation, dict):
         return False
@@ -195,7 +195,7 @@ def install_runtime(base_dir: Path, manifest: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError(f"installed executable missing or not executable: {executable_path}")
 
     metadata = {
-        "installedBy": "donkey-dev-runtime-setup",
+        "installedBy": "depcut-dev-runtime-setup",
         "manifest.platform": str(manifest.get("platform") or ""),
         "manifest.architecture": str(manifest.get("architecture") or ""),
         "manifest.minimumDonkeyVersion": str(manifest.get("minimumDonkeyVersion") or ""),
@@ -246,13 +246,13 @@ def prepare_and_check(base_dir: Path, installation: dict[str, Any], manifest: di
         "metadata": metadata_for_sidecar(installation, manifest),
     }
     print(f"runtime {runtime_id}: preparing model weights and backend...", flush=True)
-    prepare = run_sidecar(installation, request, timeout_seconds=dev_timeout("DONKEY_DEV_RUNTIME_PREPARE_TIMEOUT_SECONDS", 600))
+    prepare = run_sidecar(installation, request, timeout_seconds=dev_timeout("DEPCUT_DEV_RUNTIME_PREPARE_TIMEOUT_SECONDS", 600))
     print_sidecar_status(runtime_id, "prepare", prepare)
 
     health_request = dict(request)
     health_request["operation"] = "healthCheck"
     print(f"runtime {runtime_id}: checking health...", flush=True)
-    health = run_sidecar(installation, health_request, timeout_seconds=dev_timeout("DONKEY_DEV_RUNTIME_HEALTH_TIMEOUT_SECONDS", 15))
+    health = run_sidecar(installation, health_request, timeout_seconds=dev_timeout("DEPCUT_DEV_RUNTIME_HEALTH_TIMEOUT_SECONDS", 15))
     print_sidecar_status(runtime_id, "health", health)
 
 

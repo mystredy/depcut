@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import {
   requireInferenceClientId,
   validationErrorResponse,
@@ -18,8 +18,8 @@ const webFetchRequestSchema = z.object({
 // public http(s)) and returns just the main content as clean markdown — nav, ads, and boilerplate
 // removed — so the model gets the article instead of raw HTML. Provider-neutral: a URL in, a title
 // plus markdown out.
-export const POST = withDonkeyAuth(async (request) => {
-  const client = requireInferenceClientId(request.donkey.clientId);
+export const POST = withDepCutAuth(async (request) => {
+  const client = requireInferenceClientId(request.depcut.clientId);
   if (!client.ok) {
     return client.response;
   }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -12,10 +12,10 @@ const UNLINK_CODE_TTL_MS = 10 * 60 * 1000;
 // response; it only reaches whoever controls that chat, so unlinking proves
 // the request came from them, not just from whoever's signed into the
 // browser right now.
-export const POST = withDonkeyAuth(async (request) => {
+export const POST = withDepCutAuth(async (request) => {
   const user = await prisma.user.findUnique({
     select: { telegramChatId: true },
-    where: { id: request.donkey.userId },
+    where: { id: request.depcut.userId },
   });
   if (!user?.telegramChatId) {
     return NextResponse.json({ error: "Not linked", message: "No Telegram account is linked." }, { status: 400 });
@@ -34,7 +34,7 @@ export const POST = withDonkeyAuth(async (request) => {
   const code = String(Math.floor(100000 + Math.random() * 900000));
   await prisma.user.update({
     data: { telegramUnlinkCode: code, telegramUnlinkCodeExpiresAt: new Date(Date.now() + UNLINK_CODE_TTL_MS) },
-    where: { id: request.donkey.userId },
+    where: { id: request.depcut.userId },
   });
 
   await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -44,7 +44,7 @@ export const POST = withDonkeyAuth(async (request) => {
       // or over-the-shoulder glance at the chat, same as the code itself
       // being the thing that proves you control this chat.
       parse_mode: "HTML",
-      text: `Your Depcut unlink code: <tg-spoiler>${code}</tg-spoiler>\n\nEnter this in Preferences to confirm unlinking this Telegram account. Expires in 10 minutes.`,
+      text: `Your DepCut unlink code: <tg-spoiler>${code}</tg-spoiler>\n\nEnter this in Preferences to confirm unlinking this Telegram account. Expires in 10 minutes.`,
     }),
     headers: { "Content-Type": "application/json" },
     method: "POST",

@@ -1,7 +1,7 @@
 import { Link, Text } from "react-email";
 
 export const DISCORD_URL = "https://discord.gg/Xv6qGax7sT";
-export const GITHUB_URL = "https://github.com/DonkeyUseCorp/Donkey";
+export const GITHUB_URL = "https://github.com/mystredy/depcut";
 
 // The community links as a P.S. under the sign-off of a personal note.
 export function CommunityPs() {

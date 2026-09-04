@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 
 import {
-  isDonkeySuperUser,
+  isDepCutSuperUser,
   notFoundResponse,
-  withDonkeyAuth,
-} from "@/lib/donkey-api-auth";
+  withDepCutAuth,
+} from "@/lib/depcut-api-auth";
 import { presignGet } from "@/cut/server/cloud/r2";
 import { prisma } from "@/lib/prisma";
 
@@ -17,7 +17,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 // Viewable by the submission's owner or a super user (admin review too).
 // Works at any lifecycle stage — draft, submitting, or submitted — since it
 // reads the asset row directly rather than a post-promotion field.
-export const GET = withDonkeyAuth(async (request, context: RouteContext) => {
+export const GET = withDepCutAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
   const submission = await prisma.submission.findUnique({
     select: { userId: true },
@@ -25,8 +25,8 @@ export const GET = withDonkeyAuth(async (request, context: RouteContext) => {
   });
   if (!submission) return notFoundResponse();
 
-  const userId = request.donkey.userId;
-  if (submission.userId !== userId && !(await isDonkeySuperUser(userId))) {
+  const userId = request.depcut.userId;
+  if (submission.userId !== userId && !(await isDepCutSuperUser(userId))) {
     return NextResponse.json({ error: "Forbidden", message: "Forbidden" }, { status: 403 });
   }
 
