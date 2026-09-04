@@ -99,9 +99,13 @@ export function TransformHandles({
               title={rotateTitle}
               onPointerDown={onRotate}
               style={{ cursor: rotateCursor ?? "grab" }}
-              className="pointer-events-auto touch-none grid size-[22px] place-items-center rounded-full bg-white text-neutral-700 shadow-[0_1px_4px_rgba(0,0,0,0.4)]"
+              // The visible button is small; the hit zone is a fingertip-sized
+              // touch target centered on it.
+              className="pointer-events-auto grid size-9 touch-none place-items-center"
             >
-              <RefreshCw className="size-3" strokeWidth={2.25} />
+              <span className="grid size-[22px] place-items-center rounded-full bg-white text-neutral-700 shadow-[0_1px_4px_rgba(0,0,0,0.4)]">
+                <RefreshCw className="size-3" strokeWidth={2.25} />
+              </span>
             </span>
           </div>
         </div>
@@ -115,19 +119,27 @@ export function TransformHandles({
               key={h}
               title={resizeTitle}
               onPointerDown={(e) => onResize(h, e)}
-              className={cn(
-                "pointer-events-auto absolute touch-none rounded-full border-[2.5px] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.4)]",
-                !side && "size-[13px]",
-                side && (a.x === 0 ? "h-[9px] w-[20px]" : "h-[20px] w-[9px]")
-              )}
+              // Same hit-slop trick as the rotate button: the grip a finger
+              // actually has to land on is much smaller than a finger is, so
+              // the touch target is a comfortable square centered on it, not
+              // the 13px dot (or 9px-thin edge grip) itself.
+              className="pointer-events-auto absolute grid size-8 touch-none place-items-center"
               style={{
                 left: `${(a.x + 1) * 50}%`,
                 top: `${(a.y + 1) * 50}%`,
                 transform: "translate(-50%, -50%)",
-                borderColor: color,
                 cursor: resizeCursor(h, rotation),
               }}
-            />
+            >
+              <span
+                className={cn(
+                  "rounded-full border-[2.5px] bg-white shadow-[0_1px_4px_rgba(0,0,0,0.4)]",
+                  !side && "size-[13px]",
+                  side && (a.x === 0 ? "h-[9px] w-[20px]" : "h-[20px] w-[9px]")
+                )}
+                style={{ borderColor: color }}
+              />
+            </span>
           );
         })}
     </div>
