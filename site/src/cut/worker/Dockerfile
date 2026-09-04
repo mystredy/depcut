@@ -1,6 +1,6 @@
-# Donkey Cut cloud render worker. Build the bundle first (npm run worker:build),
+# DepCut cloud render worker. Build the bundle first (npm run worker:build),
 # then build this image from site/:
-#   docker build -f src/cut/worker/Dockerfile -t donkey-cut-worker .
+#   docker build -f src/cut/worker/Dockerfile -t depcut-worker .
 #
 # The Debian release picks the ffmpeg, so it is part of the contract: the
 # export's final pass passes -display_rotation, which ffmpeg gained in 6.0.

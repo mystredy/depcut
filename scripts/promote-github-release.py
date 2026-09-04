@@ -15,7 +15,7 @@ from xml.sax.saxutils import escape
 
 
 SEMVER_RE = re.compile(r"^v?(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)$")
-LATEST_VERSION_RE = re.compile(r'export const DONKEY_LATEST_VERSION = "[^"]+";')
+LATEST_VERSION_RE = re.compile(r'export const DEPCUT_LATEST_VERSION = "[^"]+";')
 
 
 @dataclass(frozen=True, order=True)
@@ -190,12 +190,12 @@ def release_pub_date(published_at: str) -> str:
 
 def write_release_constants(path: Path, version: Version) -> None:
     source = path.read_text(encoding="utf-8")
-    replacement = f'export const DONKEY_LATEST_VERSION = "{version.bare}";'
+    replacement = f'export const DEPCUT_LATEST_VERSION = "{version.bare}";'
 
     if LATEST_VERSION_RE.search(source):
         next_source = LATEST_VERSION_RE.sub(replacement, source, count=1)
     else:
-        anchor = 'export const GITHUB_REPO_URL = "https://github.com/DonkeyUseCorp/Donkey";'
+        anchor = 'export const GITHUB_REPO_URL = "https://github.com/mystredy/depcut";'
         next_source = source.replace(anchor, f"{anchor}\n{replacement}", 1)
 
     path.write_text(next_source, encoding="utf-8")
@@ -205,9 +205,9 @@ def write_appcast(path: Path, version: Version, build: str, signature: str, rele
     appcast = f'''<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
-    <title>Donkey Updates</title>
-    <link>https://donkeycut.com/appcast.xml</link>
-    <description>Donkey macOS app updates.</description>
+    <title>DepCut Updates</title>
+    <link>https://depcut.com/appcast.xml</link>
+    <description>DepCut macOS app updates.</description>
     <language>en</language>
     <item>
       <title>Version {escape(version.bare)}</title>
@@ -250,7 +250,7 @@ def commit_promoted_files(paths: Sequence[Path], version: Version, dry_run: bool
     string_paths = [str(path) for path in paths]
     if dry_run:
         print(f"dry-run: git add {' '.join(string_paths)}")
-        print(f"dry-run: git commit -m Promote Donkey {version.tag}")
+        print(f"dry-run: git commit -m Promote DepCut {version.tag}")
         push_current_branch(current_branch(), dry_run=True)
         return
 
@@ -262,7 +262,7 @@ def commit_promoted_files(paths: Sequence[Path], version: Version, dry_run: bool
     if diff.returncode != 1:
         diff.check_returncode()
 
-    run(["git", "commit", "-m", f"Promote Donkey {version.tag}"])
+    run(["git", "commit", "-m", f"Promote DepCut {version.tag}"])
     push_current_branch(current_branch(), dry_run=False)
 
 
@@ -313,12 +313,12 @@ def prune_old_releases(repo: str, keep_releases: int, dry_run: bool) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Promote a numeric Donkey GitHub Release for site downloads and Sparkle.")
+    parser = argparse.ArgumentParser(description="Promote a numeric DepCut GitHub Release for site downloads and Sparkle.")
     parser.add_argument("--repo", required=True, help="GitHub repository in owner/name form.")
     parser.add_argument("--version", required=True, help="Numeric release version, for example 0.1.0 or v0.1.0.")
     parser.add_argument("--build", required=True, help="CFBundleVersion build number used by Sparkle.")
     parser.add_argument("--sparkle-ed-signature", required=True, help="Sparkle EdDSA signature for the release asset.")
-    parser.add_argument("--asset-name", default="Donkey.dmg", help="Release asset to use for downloads and Sparkle.")
+    parser.add_argument("--asset-name", default="DepCut.dmg", help="Release asset to use for downloads and Sparkle.")
     parser.add_argument("--release-constants", default="site/src/app/_components/landing/data.ts")
     parser.add_argument("--appcast", default="site/public/appcast.xml")
     parser.add_argument("--promote-major", action=argparse.BooleanOptionalAction, default=True)
