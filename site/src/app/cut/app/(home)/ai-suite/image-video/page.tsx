@@ -67,7 +67,7 @@ function relativeTime(iso: string): string {
   return `${day}d ago`;
 }
 
-// The Image & Video gallery: every Flow (a server-persisted creative thread —
+// The Flow gallery: every Flow (a server-persisted creative thread —
 // see prisma/GenerationFlows.prisma) this account owns, most recently
 // updated first. Opening one goes to its thread; "New Flow" starts a blank
 // one and jumps straight there.
@@ -98,7 +98,7 @@ export default function ImageVideoGalleryPage() {
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Image & Video</h1>
+          <h1 className="text-lg font-semibold">Flow</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Your Flows — every creative thread, images and videos together.
           </p>
