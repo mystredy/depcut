@@ -15,9 +15,17 @@ const SINGLETON_ID = "singleton";
 const MAX_BYTES = 1024 * 1024;
 const ALLOWED_TYPES = new Set(["image/svg+xml", "image/png", "image/webp"]);
 
-function columnsFor(theme: string): { data: "logoLight" | "logoDark"; type: "logoLightContentType" | "logoDarkContentType" } | null {
+type LogoColumns =
+  | { data: "logoLight"; type: "logoLightContentType" }
+  | { data: "logoDark"; type: "logoDarkContentType" }
+  | { data: "logoCompact"; type: "logoCompactContentType" };
+
+function columnsFor(theme: string): LogoColumns | null {
   if (theme === "light") return { data: "logoLight", type: "logoLightContentType" };
   if (theme === "dark") return { data: "logoDark", type: "logoDarkContentType" };
+  // The collapsed-sidebar / mobile mark: no light/dark split of its own —
+  // SiteLogo falls back to the theme pair when nothing's uploaded here.
+  if (theme === "compact") return { data: "logoCompact", type: "logoCompactContentType" };
   return null;
 }
 

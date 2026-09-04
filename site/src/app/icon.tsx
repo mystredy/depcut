@@ -9,7 +9,7 @@ import { iconSource } from "./_icon-source";
 export const dynamic = "force-dynamic";
 
 export default async function Icon() {
-  const { data, contentType } = await iconSource("default-favicon.ico");
+  const { data, contentType } = await iconSource("favicon", "default-favicon.ico");
   return new NextResponse(new Uint8Array(data), {
     headers: {
       "Cache-Control": "public, max-age=300",

@@ -5,21 +5,33 @@ import { prisma } from "@/lib/prisma";
 
 const SINGLETON_ID = "singleton";
 
+type IconSlot = "favicon" | "appleTouchIcon";
+
+const COLUMNS: Record<IconSlot, { data: "favicon" | "appleTouchIcon"; type: "faviconContentType" | "appleTouchIconContentType" }> = {
+  appleTouchIcon: { data: "appleTouchIcon", type: "appleTouchIconContentType" },
+  favicon: { data: "favicon", type: "faviconContentType" },
+};
+
 /** The bytes and content type an icon route should serve: the admin-uploaded
- * favicon (admin/settings/general) if one is set, else the bundled default
- * for that slot. Both /icon and /apple-icon share the same uploaded favicon
- * — the upload is PNG-only, which either route can serve — but each keeps
- * its own default file, since only one of the two bundled defaults is a
- * format iOS actually reads. */
-export async function iconSource(defaultFile: string): Promise<{ data: Buffer; contentType: string }> {
+ * asset (admin/settings/general) for `slot` if one is set, else the bundled
+ * default for that slot. The favicon and apple touch icon are independent
+ * uploads — one is never derived from the other — because iOS doesn't read
+ * an .ico as a touch icon, and a browser tab icon has no reason to carry the
+ * apple touch icon's larger, background-filled shape. */
+export async function iconSource(
+  slot: IconSlot,
+  defaultFile: string
+): Promise<{ data: Buffer; contentType: string }> {
+  const columns = COLUMNS[slot];
   const settings = await prisma.appSettings.findUnique({
-    select: { favicon: true, faviconContentType: true },
+    select: { [columns.data]: true, [columns.type]: true },
     where: { id: SINGLETON_ID },
   });
-  if (settings?.favicon && settings.faviconContentType) {
-    return { contentType: settings.faviconContentType, data: Buffer.from(settings.favicon) };
+  const data = settings?.[columns.data];
+  const contentType = settings?.[columns.type];
+  if (data && contentType) {
+    return { contentType, data: Buffer.from(data) };
   }
-  const data = await readFile(join(process.cwd(), "public", defaultFile));
-  const contentType = defaultFile.endsWith(".ico") ? "image/x-icon" : "image/png";
-  return { contentType, data };
+  const fallback = await readFile(join(process.cwd(), "public", defaultFile));
+  return { contentType: defaultFile.endsWith(".ico") ? "image/x-icon" : "image/png", data: fallback };
 }

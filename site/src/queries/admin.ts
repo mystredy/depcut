@@ -375,16 +375,46 @@ export type AdminOnboardingSlide = {
   updatedAt: string;
 };
 
+export type SiteSocialLinks = {
+  discord?: string;
+  facebook?: string;
+  instagram?: string;
+  linkedin?: string;
+  tiktok?: string;
+  x?: string;
+  youtube?: string;
+};
+
 export type AdminSettings = {
   id: string;
   appName: string;
+  tagline: string | null;
+  description: string | null;
+  websiteUrl: string | null;
+  supportEmail: string | null;
+  contactEmail: string | null;
   adminEmail: string | null;
   defaultLocale: string;
   timezone: string;
+  dateFormat: string;
+  timeFormat: string;
+  defaultTheme: string;
+  accentColor: string | null;
+  copyrightText: string | null;
+  footerText: string | null;
   maintenanceMode: boolean;
   maintenanceHeader: string | null;
   maintenanceParagraph: string | null;
   maintenanceFooter: string | null;
+  allowRegistration: boolean;
+  requireEmailVerification: boolean;
+  defaultUserRole: string;
+  termsUrl: string | null;
+  privacyUrl: string | null;
+  cookiePolicyUrl: string | null;
+  helpCenterUrl: string | null;
+  socialLinks: SiteSocialLinks | null;
+  betaMode: boolean;
   updatedAt: string;
 };
 
@@ -843,21 +873,7 @@ export function useAdminSettings() {
 export function useUpdateAdminSettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (
-      input: Partial<
-        Pick<
-          AdminSettings,
-          | "appName"
-          | "adminEmail"
-          | "defaultLocale"
-          | "timezone"
-          | "maintenanceMode"
-          | "maintenanceHeader"
-          | "maintenanceParagraph"
-          | "maintenanceFooter"
-        >
-      >
-    ) =>
+    mutationFn: (input: Partial<Omit<AdminSettings, "id" | "updatedAt">>) =>
       apiFetch<{ settings: AdminSettings }>("/api/admin/settings", {
         body: JSON.stringify(input),
         method: "PATCH",
@@ -866,13 +882,15 @@ export function useUpdateAdminSettings() {
   });
 }
 
-// Site branding (admin/settings/general): a logo per theme, plus the
-// favicon. Each lives on its own route (/api/site/logo/[theme] is public —
-// SiteLogo reads it from every surface, signed in or not — the favicon backs
-// the /icon and /apple-icon conventions instead), so uploading or removing
-// one never touches the general settings payload — callers refetch their own
-// preview image rather than invalidating adminSettingsQueryKey.
-export function useUploadSiteLogo(theme: "light" | "dark") {
+// Site branding (admin/settings/general): a logo per theme (plus the
+// collapsed-sidebar compact mark), the favicon, the apple touch icon, and
+// the social share image. Each lives on its own route — the logo family is
+// public (/api/site/logo/[theme]; SiteLogo reads it from every surface,
+// signed in or not) while the rest write-only admin routes back the /icon,
+// /apple-icon, and /opengraph-image conventions instead — so uploading or
+// removing one never touches the general settings payload; callers refetch
+// their own preview image rather than invalidating adminSettingsQueryKey.
+export function useUploadSiteLogo(theme: "light" | "dark" | "compact") {
   return useMutation({
     mutationFn: (file: File) =>
       apiFetch<{ ok: true }>(`/api/site/logo/${theme}`, {
@@ -883,16 +901,16 @@ export function useUploadSiteLogo(theme: "light" | "dark") {
   });
 }
 
-export function useRemoveSiteLogo(theme: "light" | "dark") {
+export function useRemoveSiteLogo(theme: "light" | "dark" | "compact") {
   return useMutation({
     mutationFn: () => apiFetch<{ ok: true }>(`/api/site/logo/${theme}`, { method: "DELETE" }),
   });
 }
 
-export function useUploadFavicon() {
+function useUploadBrandingImage(path: string) {
   return useMutation({
     mutationFn: (file: File) =>
-      apiFetch<{ ok: true }>("/api/admin/settings/favicon", {
+      apiFetch<{ ok: true }>(path, {
         body: file,
         headers: { "Content-Type": file.type },
         method: "PUT",
@@ -900,11 +918,24 @@ export function useUploadFavicon() {
   });
 }
 
-export function useRemoveFavicon() {
+function useRemoveBrandingImage(path: string) {
   return useMutation({
-    mutationFn: () => apiFetch<{ ok: true }>("/api/admin/settings/favicon", { method: "DELETE" }),
+    mutationFn: () => apiFetch<{ ok: true }>(path, { method: "DELETE" }),
   });
 }
+
+export const useUploadFavicon = () => useUploadBrandingImage("/api/admin/settings/favicon");
+export const useRemoveFavicon = () => useRemoveBrandingImage("/api/admin/settings/favicon");
+
+export const useUploadAppleTouchIcon = () =>
+  useUploadBrandingImage("/api/admin/settings/apple-touch-icon");
+export const useRemoveAppleTouchIcon = () =>
+  useRemoveBrandingImage("/api/admin/settings/apple-touch-icon");
+
+export const useUploadSocialShareImage = () =>
+  useUploadBrandingImage("/api/admin/settings/social-share-image");
+export const useRemoveSocialShareImage = () =>
+  useRemoveBrandingImage("/api/admin/settings/social-share-image");
 
 export function useAdminSocialApps() {
   return useQuery({
