@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAdminSettings, useUpdateAdminSettings } from "@/queries/admin";
+import { BrandingSection } from "./BrandingSection";
 
 const LOCALES = ["en-US", "es-ES", "fr-FR", "de-DE"];
 const TIMEZONES = ["America/Los_Angeles", "UTC", "Europe/London", "Asia/Tokyo"];
@@ -100,6 +101,8 @@ export default function AdminGeneralSettingsPage() {
           </div>
         </div>
       )}
+
+      <BrandingSection />
     </div>
   );
 }

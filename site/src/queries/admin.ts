@@ -866,6 +866,46 @@ export function useUpdateAdminSettings() {
   });
 }
 
+// Site branding (admin/settings/general): a logo per theme, plus the
+// favicon. Each lives on its own route (/api/site/logo/[theme] is public —
+// SiteLogo reads it from every surface, signed in or not — the favicon backs
+// the /icon and /apple-icon conventions instead), so uploading or removing
+// one never touches the general settings payload — callers refetch their own
+// preview image rather than invalidating adminSettingsQueryKey.
+export function useUploadSiteLogo(theme: "light" | "dark") {
+  return useMutation({
+    mutationFn: (file: File) =>
+      apiFetch<{ ok: true }>(`/api/site/logo/${theme}`, {
+        body: file,
+        headers: { "Content-Type": file.type },
+        method: "PUT",
+      }),
+  });
+}
+
+export function useRemoveSiteLogo(theme: "light" | "dark") {
+  return useMutation({
+    mutationFn: () => apiFetch<{ ok: true }>(`/api/site/logo/${theme}`, { method: "DELETE" }),
+  });
+}
+
+export function useUploadFavicon() {
+  return useMutation({
+    mutationFn: (file: File) =>
+      apiFetch<{ ok: true }>("/api/admin/settings/favicon", {
+        body: file,
+        headers: { "Content-Type": file.type },
+        method: "PUT",
+      }),
+  });
+}
+
+export function useRemoveFavicon() {
+  return useMutation({
+    mutationFn: () => apiFetch<{ ok: true }>("/api/admin/settings/favicon", { method: "DELETE" }),
+  });
+}
+
 export function useAdminSocialApps() {
   return useQuery({
     queryFn: () => apiFetch<{ socialApps: AdminSocialApp[] }>("/api/admin/social-apps"),

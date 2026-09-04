@@ -8,6 +8,20 @@ export const dynamic = "force-dynamic";
 
 const SINGLETON_ID = "singleton";
 
+// The uploaded branding bytes never belong in this JSON payload — they're
+// served as images from their own routes (/api/site/logo/[theme], the /icon
+// and /apple-icon conventions), and Bytes fields don't serialize usefully
+// here anyway. Shared by GET and PATCH so neither can drift and start
+// returning them.
+const OMIT_BRANDING_BYTES = {
+  favicon: true,
+  faviconContentType: true,
+  logoDark: true,
+  logoDarkContentType: true,
+  logoLight: true,
+  logoLightContentType: true,
+} as const;
+
 // Super-user only. General app identity + maintenance-mode copy, one row.
 export const GET = withDepCutAuth(async (request) => {
   if (!(await isDepCutSuperUser(request.depcut.userId))) {
@@ -19,6 +33,7 @@ export const GET = withDepCutAuth(async (request) => {
 
   const settings = await prisma.appSettings.upsert({
     create: { id: SINGLETON_ID },
+    omit: OMIT_BRANDING_BYTES,
     update: {},
     where: { id: SINGLETON_ID },
   });
@@ -63,6 +78,7 @@ export const PATCH = withDepCutAuth(async (request) => {
 
   const settings = await prisma.appSettings.upsert({
     create: { id: SINGLETON_ID, ...parsed.data },
+    omit: OMIT_BRANDING_BYTES,
     update: parsed.data,
     where: { id: SINGLETON_ID },
   });
