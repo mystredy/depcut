@@ -38,6 +38,7 @@ import { useOnboardingCover } from "@/cut/lib/onboarding";
 import { requestSidePanel } from "@/cut/lib/panelRequest";
 import { resolveProjectPlacement } from "@/cut/lib/residency";
 import {
+  clipLen,
   docAudioClips,
   docClips,
   docOverlays,
@@ -772,6 +773,35 @@ export function Editor({
         s.splitAtPlayhead(s.skimTime ?? undefined);
       } else if (e.key.toLowerCase() === "t" && !e.metaKey && !e.ctrlKey) {
         s.addOverlay();
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "x") {
+        if (s.copySelection()) {
+          e.preventDefault();
+          s.deleteSelection();
+        }
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
+        // Duplicate: same clipboard path as copy/paste, so it lands wherever
+        // paste already knows to put it — at the playhead, past whatever
+        // else occupies that spot on the same lane.
+        if (s.copySelection()) {
+          e.preventDefault();
+          s.paste();
+        }
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "g" && !e.shiftKey) {
+        e.preventDefault();
+        s.groupSelectedOverlays();
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "g" && e.shiftKey) {
+        e.preventDefault();
+        const sel = s.selection;
+        const o = sel?.kind === "overlay" ? s.overlays.find((x) => x.id === sel.id) : undefined;
+        if (o?.groupId) s.ungroupOverlays(o.groupId);
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "e") {
+        // Same gate as the toolbar's own Export button's simplest case — an
+        // empty timeline has nothing to export. A keyboard open still lands
+        // on the dialog's own upload/failed-import checks from there.
+        if (s.clips.length > 0) {
+          e.preventDefault();
+          s.setExportOpen(true);
+        }
       } else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !controlFocused) {
         e.preventDefault();
         // While playing, arrows skip in 1s jumps and playback rolls on (seek
@@ -779,8 +809,29 @@ export function Editor({
         // precise editing.
         const step = s.playing ? 1 : e.shiftKey ? 1 : 1 / 30;
         s.seek(s.currentTime + (e.key === "ArrowLeft" ? -step : step));
+      } else if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !controlFocused) {
+        // Jump to the next/previous clip boundary on any track — the
+        // timeline's own "edit points" — rather than a fixed time step.
+        e.preventDefault();
+        const points = new Set<number>([0, projectDuration(s)]);
+        for (const c of [...s.clips, ...s.audioClips]) {
+          points.add(c.start);
+          points.add(c.start + clipLen(c));
+        }
+        const sorted = [...points].sort((a, b) => a - b);
+        const eps = 0.01;
+        const next =
+          e.key === "ArrowDown"
+            ? sorted.find((p) => p > s.currentTime + eps)
+            : [...sorted].reverse().find((p) => p < s.currentTime - eps);
+        if (next !== undefined) s.seek(next);
       } else if (e.key === "Escape") {
+        if (s.playing) s.setPlaying(false);
         s.select(null);
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        // The project autosaves continuously — nothing to trigger — but the
+        // browser's own save-page dialog still needs stopping.
+        e.preventDefault();
       }
     };
     window.addEventListener("keydown", onKey);
