@@ -391,6 +391,17 @@ function OverlayPipHandle({
   const clips = useEditor((s) => s.clips);
   const currentTime = useEditor((s) => s.currentTime);
   const [turning, setTurning] = useState<number | null>(null);
+  // Live positions of every pointer currently down on the box, and what the
+  // gesture they're driving is — a single-finger move (with a cancel, so a
+  // second finger can take over) or a two-finger pinch (baseline distance
+  // and rect, to scale from as the fingers spread or close). Refs rather
+  // than state: this updates every pointermove and never needs a render.
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef<
+    | { kind: "drag"; cancel: () => void }
+    | { kind: "pinch"; startDist: number; startRect: FrameRect }
+    | null
+  >(null);
 
   // Resolve the selected, live clip (any track) plus how to patch its rect. A
   // clip's own footprint equals its span length, so one path serves every
@@ -417,24 +428,67 @@ function OverlayPipHandle({
   const patch = apply;
   const setRotation = applyRotation;
 
-  const onMove = (e: React.PointerEvent) => {
-    // A pannable clip (filling, or zoomed) drags its crop window instead —
-    // repositioning the frame rect would be a no-op on a full-frame box, and
-    // panDrag already checks pannability itself (fit/zoom, actual overflow).
-    if (panDrag(e)) return;
-    e.stopPropagation();
-    useEditor.getState().pushHistory();
-    startDrag(e, {
-      // Free to drag anywhere from fully on-frame to fully off past either
-      // edge — not clamped to stay inside the visible frame, since parking a
-      // clip off to one side (ready to slide in, say) is a real use.
-      onMove: (dx, dy) =>
-        patch({
-          ...r,
-          x: Math.max(-r.w, Math.min(1, r.x + dx / stage.w)),
-          y: Math.max(-r.h, Math.min(1, r.y + dy / stage.h)),
-        }),
-    });
+  // A second finger landing on the box while the first is already dragging it
+  // hands off to a pinch — cancels the single-finger drag and scales the box
+  // from its own center instead of two drags fighting over the same rect.
+  const onBoxPointerDown = (e: React.PointerEvent) => {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointers.current.size === 1) {
+      // A pannable clip (filling, or zoomed) drags its crop window instead —
+      // repositioning the frame rect would be a no-op on a full-frame box,
+      // and panDrag already checks pannability itself (fit/zoom, overflow).
+      // It owns that pointer's whole gesture, pinch handoff included — this
+      // box doesn't get a rect to pinch until it's an actual regioned clip.
+      if (panDrag(e)) return;
+      e.stopPropagation();
+      useEditor.getState().pushHistory();
+      const cancel = startDrag(e, {
+        // Free to drag anywhere from fully on-frame to fully off past either
+        // edge — not clamped to stay inside the visible frame, since parking
+        // a clip off to one side (ready to slide in, say) is a real use.
+        onMove: (dx, dy) =>
+          patch({
+            ...r,
+            x: Math.max(-r.w, Math.min(1, r.x + dx / stage.w)),
+            y: Math.max(-r.h, Math.min(1, r.y + dy / stage.h)),
+          }),
+        onUp: () => {
+          gesture.current = null;
+        },
+      });
+      gesture.current = { kind: "drag", cancel };
+      return;
+    }
+
+    if (pointers.current.size === 2) {
+      e.stopPropagation();
+      // The single-finger drag already pushed history for this gesture; only
+      // push again if a pinch starts fresh (e.g. both fingers land at once).
+      if (gesture.current?.kind === "drag") gesture.current.cancel();
+      else useEditor.getState().pushHistory();
+      const [a, b] = [...pointers.current.values()];
+      gesture.current = { kind: "pinch", startDist: Math.hypot(a.x - b.x, a.y - b.y), startRect: r };
+    }
+  };
+
+  const onBoxPointerMove = (e: React.PointerEvent) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (gesture.current?.kind !== "pinch" || pointers.current.size < 2) return;
+    const [a, b] = [...pointers.current.values()];
+    const scale = Math.hypot(a.x - b.x, a.y - b.y) / gesture.current.startDist;
+    const sr = gesture.current.startRect;
+    const w = Math.max(0.05, sr.w * scale);
+    const h = Math.max(0.05, sr.h * scale);
+    patch({ x: sr.x - (w - sr.w) / 2, y: sr.y - (h - sr.h) / 2, w, h });
+  };
+
+  const onBoxPointerUp = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId);
+    if (gesture.current?.kind === "pinch" && pointers.current.size < 2) {
+      gesture.current = null;
+    }
   };
 
   // A grip drags its own edge and leaves the opposite one planted: the box
@@ -445,11 +499,14 @@ function OverlayPipHandle({
     e.stopPropagation();
     useEditor.getState().pushHistory();
     const a = HANDLE_AXIS[handle];
+    // Free to grow past the frame edge, same as dragging the whole box past
+    // it — only a floor on how small it can shrink to, no ceiling on how
+    // large it can grow.
     const pull = (dir: -1 | 0 | 1, pos: number, size: number, delta: number) => {
       if (!dir) return { pos, size };
-      if (dir > 0) return { pos, size: Math.max(0.1, Math.min(1 - pos, size + delta)) };
+      if (dir > 0) return { pos, size: Math.max(0.1, size + delta) };
       const far = pos + size;
-      const next = Math.max(0.1, Math.min(far, size - delta));
+      const next = Math.max(0.1, size - delta);
       return { pos: far - next, size: next };
     };
     startDrag(e, {
@@ -500,7 +557,10 @@ function OverlayPipHandle({
       <div
         className="pointer-events-auto absolute inset-0 touch-none cursor-move rounded-[3px] border-2 border-dashed border-[#0a84ff]"
         style={rotation ? { transform: `rotate(${rotation}deg)` } : undefined}
-        onPointerDown={onMove}
+        onPointerDown={onBoxPointerDown}
+        onPointerMove={onBoxPointerMove}
+        onPointerUp={onBoxPointerUp}
+        onPointerCancel={onBoxPointerUp}
       >
         <TransformHandles
           color="#0a84ff"

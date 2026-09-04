@@ -26,7 +26,11 @@ function ScrollArea({
     >
       <ScrollAreaPrimitive.Viewport
         data-slot="scroll-area-viewport"
-        className="size-full rounded-[inherit] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        // Contained so scrolling past this area's own top or bottom stops
+        // here instead of chaining into whatever scrolls behind it — on
+        // touch, without this, hitting the end of a short rail (the side
+        // panel's icon tabs, a clip's action list) bounces the whole page.
+        className="size-full overscroll-contain rounded-[inherit] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
         <ScrollAreaPrimitive.Content
           data-slot="scroll-area-content"
