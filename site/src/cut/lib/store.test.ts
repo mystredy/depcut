@@ -1,15 +1,18 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { groupRemap } from "@donkeycut/effects-kit";
-import { adoptTransitionFields, clipLen, deriveTransitionFields, docOverlays, getClipSpans, liftClipLooks, moveOverlayGroup, overlayLaneOrder, normalizeElementLanes, placeInRun, projectDuration, separateOverlaps, serializeDoc, useEditor } from "./store";
-import { emptySubtitles } from "./types";
+import { adoptTransitionFields, clipLen, deriveTransitionFields, docOverlays, getClipSpans, liftClipLooks, moveOverlayGroup, overlayLaneOrder, normalizeElementLanes, placeInRun, projectDuration, separateOverlaps, serializeDoc, totalDuration, useEditor } from "./store";
+import { emptySubtitles, TRANSITION_MAX } from "./types";
+import { foldClips } from "./audioMix";
 import type { AudioClip, MediaAsset, SubtitleCue, TextOverlay, VideoClip } from "./types";
 
 /**
- * The lane invariant: segments never overlap, with no exceptions. Every
- * placement and committed update — user drops, AI-chat tools, inspector
- * edits — must land items on a free stretch of their lane (video per track,
- * audio/title/cue per lane). A transition is a render-time blend at the cut,
- * never a physical overlap.
+ * The lane invariant: segments never overlap beyond what a live transition
+ * declares. Every placement and committed update — user drops, AI-chat
+ * tools, inspector edits — must land items on a free stretch of their lane
+ * (video per track, audio/title/cue per lane), or, on track 0, at exactly
+ * the overlap a transition riding that cut asks for. A transition is a
+ * genuine overlap there — both clips play across it — and stays a
+ * render-time blend at the cut on every other lane and track.
  */
 
 let n = 0;
@@ -278,11 +281,11 @@ describe("committed video updates (AI chat / inspector)", () => {
     expect(clipById(c2.id).start).toBeCloseTo(2);
   });
 
-  test("separateOverlaps pulls an old physically-overlapped doc apart", () => {
-    // A doc saved when a transition slid clips into each other: b starts
-    // inside a, c rides 1s behind b across a gap.
+  test("separateOverlaps holds a transitioned pair at exactly its live overlap", () => {
+    // b sits 2s deep into a — more than the 1s blend calls for — so it
+    // settles back out to the correct overlap, not to full contact.
     const a = vclip({ track: 0, start: 0, out: 4, transition: 1 });
-    const b = vclip({ track: 0, start: 3, out: 4 });
+    const b = vclip({ track: 0, start: 2, out: 4 });
     const c = vclip({ track: 0, start: 8, out: 2 });
     const other = vclip({ track: 1, start: 3, out: 2 });
     const out = separateOverlaps({
@@ -292,27 +295,33 @@ describe("committed video updates (AI chat / inspector)", () => {
       cues: [],
     });
     const by = (id: string) => out.clips.find((x) => x.id === id)!;
-    expect(by(b.id).start).toBeCloseTo(4); // pushed out to the cut
-    expect(by(c.id).start).toBeCloseTo(9); // the run keeps its gap
+    expect(by(b.id).start).toBeCloseTo(3); // prevEnd(4) - overlap(1)
+    expect(by(c.id).start).toBeCloseTo(9); // the run keeps its own gap behind b
     expect(by(other.id).start).toBeCloseTo(3); // other tracks untouched
-    // A doc with nothing intruding passes through untouched.
-    const clean = { clips: [vclip({ start: 0, out: 2 }), vclip({ start: 2, out: 2 })], audioClips: [], overlays: [], cues: [] };
-    expect(separateOverlaps(clean)).toBe(clean);
+    // A doc already sitting at the right overlap passes through untouched.
+    const settled = {
+      clips: [vclip({ track: 0, start: 0, out: 4, transition: 1 }), vclip({ track: 0, start: 3, out: 2 })],
+      audioClips: [],
+      overlays: [],
+      cues: [],
+    };
+    expect(separateOverlaps(settled)).toBe(settled);
   });
 
   test("the cut getting longer carries the sound, titles and captions with it", () => {
     // Same doc, now annotated: a voiceover, a title and a caption timed
-    // against the shorter overlapped timeline.
+    // against the row as it sat before settling closed b's extra 1s.
     const a = vclip({ track: 0, start: 0, out: 4, transition: 1 });
-    const b = vclip({ track: 0, start: 3, out: 4 });
+    const b = vclip({ track: 0, start: 2, out: 4 });
     const out = separateOverlaps({
       clips: [a, b],
       audioClips: [aclip({ start: 0, out: 2 }), aclip({ start: 5, out: 2 })],
       overlays: [title({ start: 1, end: 2 }), title({ start: 4, end: 6 })],
       cues: [cue({ start: 5, end: 6, words: [{ w: "hi", t0: 5, t1: 6 }] })],
     });
-    expect(out.clips.find((c) => c.id === b.id)!.start).toBeCloseTo(4);
-    // Before the joint nothing moves; after it, everything moves with b.
+    expect(out.clips.find((c) => c.id === b.id)!.start).toBeCloseTo(3);
+    // Before the joint nothing moves; after it, everything shifts by the
+    // same 1s the settle closed.
     expect(out.audioClips[0].start).toBeCloseTo(0);
     expect(out.audioClips[1].start).toBeCloseTo(6);
     expect(out.overlays[0].start).toBeCloseTo(1);
@@ -321,15 +330,20 @@ describe("committed video updates (AI chat / inspector)", () => {
     expect(out.cues[0].words![0].t0).toBeCloseTo(6);
   });
 
-  test("clips never overlap, transition or not", () => {
+  test("dragging a clip doesn't get to claim a transition's overlap on its own", () => {
+    // A track-0 pair genuinely overlaps now, but only by the amount a live
+    // transition declares — a plain drag isn't that: landing inside the
+    // leading clip doesn't line up with the bar's own fixed geometry, so it
+    // settles back out to full contact instead of intruding.
     const a = vclip({ track: 0, start: 0, out: 4, transition: 1 });
     const b = vclip({ track: 0, start: 4, out: 4 });
     useEditor.setState({ clips: [a, b] });
     // Re-committing the abutting start moves nothing.
     s().updateClip(b.id, { start: 4 });
     expect(clipById(b.id).start).toBeCloseTo(4);
-    // A move into the leading clip settles back out to contact — a
-    // transition is a blend at the cut, never a licence to intrude.
+    // A move into the leading clip settles back out to contact — dragging
+    // isn't how a transition's overlap is set (that's `setClipTransition`
+    // or the timeline's own drag handle on the bar).
     s().updateClip(b.id, { start: 1 });
     expect(clipById(b.id).start).toBeCloseTo(4);
   });
@@ -606,8 +620,13 @@ describe("delete ripple and gaps", () => {
     useEditor.setState({ assets: [av], clips: [a, b, c] });
     s().setClipTransition(a.id, 0.5);
     s().setClipTransition(b.id, 0.5);
-    s().updateClip(a.id, { out: 3 }); // a grows by 1s, pushing b and c right
-    expect(clipById(b.id).start).toBeCloseTo(3);
+    // Both bars already settled the row to its live overlap: b sits at
+    // 2 - 0.5 = 1.5, and c follows at 1.5 + 2 - 0.5 = 3.
+    expect(clipById(b.id).start).toBeCloseTo(1.5);
+    expect(clipById(c.id).start).toBeCloseTo(3);
+    s().updateClip(a.id, { out: 3 }); // a grows by 1s, pushing b and c right by the same 1s
+    expect(clipById(b.id).start).toBeCloseTo(2.5);
+    expect(clipById(c.id).start).toBeCloseTo(4);
     expect(clipById(a.id).transition).toBeCloseTo(0.5);
     expect(clipById(b.id).transition).toBeCloseTo(0.5);
   });
@@ -813,7 +832,7 @@ describe("bars and clip edges", () => {
     const b = vclip({ track: 0, start: 4, out: 4, assetId: av.id });
     useEditor.setState({ assets: [av], clips: [a, b] });
     s().setClipTransition(a.id, 0.8, "pushdown");
-    expect(clipById(b.id).start).toBeCloseTo(4); // layout never moves
+    expect(clipById(b.id).start).toBeCloseTo(3.2); // b overlaps a by the transition's 0.8s
     s().setClipAnim(b.id, "in", { style: "slideleft", seconds: 0.5 });
     // b's head is a cut, so there is no entrance to make: the bar sits on the
     // row inert and the joint's transition plays on.
@@ -835,7 +854,7 @@ describe("bars and clip edges", () => {
     expect(clipById(a.id).transitionStyle).toBeUndefined();
     expect(clipById(a.id).animOut).toBeUndefined();
     expect(s().transitions.length).toBe(1);
-    expect(clipById(b.id).start).toBeCloseTo(4);
+    expect(clipById(b.id).start).toBeCloseTo(3.6); // b overlaps a by the retuned 0.4s
   });
 
   test("a pre-bar doc's clip fields become bars once, and derive back unchanged", () => {
@@ -920,6 +939,123 @@ describe("bars and clip edges", () => {
     expect(clipById(a.id).transition).toBeCloseTo(0.8);
     expect(clipById(a.id).animIn).toEqual({ style: "fade", seconds: 0.5 });
     expect(clipById(b.id).animOut).toEqual({ style: "fade", seconds: 0.5 });
+  });
+});
+
+describe("CapCut-style transition timing", () => {
+  test("adding a transition ripples every downstream clip left by its overlap", () => {
+    const a = vclip({ track: 0, start: 0, out: 4 });
+    const b = vclip({ track: 0, start: 4, out: 4 });
+    const c = vclip({ track: 0, start: 8, out: 4 });
+    useEditor.setState({ clips: [a, b, c] });
+    s().setClipTransition(a.id, 1);
+    // b closes the 1s the transition claims; c, a fixed 4s behind b before
+    // the edit, follows by the same 1s to keep that spacing.
+    expect(clipById(b.id).start).toBeCloseTo(3);
+    expect(clipById(c.id).start).toBeCloseTo(7);
+    // Lengthening it ripples left again, by the extra amount alone.
+    s().setClipTransition(a.id, 2);
+    expect(clipById(b.id).start).toBeCloseTo(2);
+    expect(clipById(c.id).start).toBeCloseTo(6);
+  });
+
+  test("removing or shortening a transition ripples every downstream clip back right", () => {
+    const a = vclip({ track: 0, start: 0, out: 4 });
+    const b = vclip({ track: 0, start: 4, out: 4 });
+    const c = vclip({ track: 0, start: 8, out: 4 });
+    useEditor.setState({ clips: [a, b, c] });
+    s().setClipTransition(a.id, 2);
+    expect(clipById(b.id).start).toBeCloseTo(2);
+    // Shortening it opens back up by exactly the amount it shrank.
+    s().setClipTransition(a.id, 0.5);
+    expect(clipById(b.id).start).toBeCloseTo(3.5);
+    expect(clipById(c.id).start).toBeCloseTo(7.5);
+    // Removing it outright returns the row to plain contact.
+    s().setClipTransition(a.id, 0);
+    expect(clipById(a.id).transition).toBeUndefined();
+    expect(clipById(b.id).start).toBeCloseTo(4);
+    expect(clipById(c.id).start).toBeCloseTo(8);
+  });
+
+  test("two independent transitions in the same chain don't interfere", () => {
+    const a = vclip({ track: 0, start: 0, out: 4 });
+    const b = vclip({ track: 0, start: 4, out: 4 });
+    const c = vclip({ track: 0, start: 8, out: 4 });
+    useEditor.setState({ clips: [a, b, c] });
+    s().setClipTransition(a.id, 1.5);
+    s().setClipTransition(b.id, 0.5);
+    expect(clipById(b.id).start).toBeCloseTo(2.5); // 4 - 1.5
+    expect(clipById(c.id).start).toBeCloseTo(6); // 2.5 + 4 - 0.5
+    // Retiming the first alone doesn't touch the second's own duration —
+    // only its position, carried by the ripple.
+    s().setClipTransition(a.id, 1);
+    expect(clipById(a.id).transition).toBeCloseTo(1);
+    expect(clipById(b.id).transition).toBeCloseTo(0.5);
+    expect(clipById(b.id).start).toBeCloseTo(3); // 4 - 1
+    expect(clipById(c.id).start).toBeCloseTo(6.5); // 3 + 4 - 0.5
+  });
+
+  test("a transition's live overlap clamps to the usable length of both neighbors", () => {
+    // Two 1s clips: neither can give up more than 90% of itself, so the
+    // TRANSITION_MAX-capped declared duration still can't push b's actual
+    // overlap past 0.9s — the layout clamp (clampCutOverlap) bites tighter
+    // than the bar's own [0.1, TRANSITION_MAX] range.
+    const a = vclip({ track: 0, start: 0, out: 1 });
+    const b = vclip({ track: 0, start: 1, out: 1 });
+    useEditor.setState({ clips: [a, b] });
+    s().setClipTransition(a.id, TRANSITION_MAX);
+    const overlap = 1 - clipById(b.id).start;
+    expect(overlap).toBeLessThanOrEqual(0.9 + 1e-6);
+    expect(overlap).toBeGreaterThan(0.5); // genuinely clamped, not collapsed to ~0
+    // A longer neighbor doesn't relax the shorter one's own 90% ceiling.
+    const c = vclip({ track: 0, start: 0, out: 1 });
+    const d = vclip({ track: 0, start: 1, out: 10 });
+    useEditor.setState({ clips: [c, d] });
+    s().setClipTransition(c.id, TRANSITION_MAX);
+    expect(1 - clipById(d.id).start).toBeCloseTo(0.9);
+  });
+
+  test("the project's own duration is the sum of clip lengths minus every overlap", () => {
+    const a = vclip({ track: 0, start: 0, out: 4 });
+    const b = vclip({ track: 0, start: 4, out: 4 });
+    const c = vclip({ track: 0, start: 8, out: 4 });
+    useEditor.setState({ clips: [a, b, c] });
+    expect(totalDuration(s().clips)).toBeCloseTo(12);
+    expect(projectDuration({ clips: s().clips, audioClips: [], overlays: [] })).toBeCloseTo(12);
+    s().setClipTransition(a.id, 1);
+    s().setClipTransition(b.id, 0.5);
+    // 12 total footage, minus the two overlaps.
+    expect(totalDuration(s().clips)).toBeCloseTo(12 - 1 - 0.5);
+    expect(projectDuration({ clips: s().clips, audioClips: [], overlays: [] })).toBeCloseTo(10.5);
+    // Shortening a transition gives the duration back immediately.
+    s().setClipTransition(a.id, 0.2);
+    expect(totalDuration(s().clips)).toBeCloseTo(12 - 0.2 - 0.5);
+  });
+
+  test("the timeline's own layout and the exported audio's fold agree on every cut's overlap", () => {
+    // Same three clips, same two transitions (one clamped short by a tight
+    // neighbor), read two ways: the timeline's own clip positions
+    // (separateOverlaps, live in store.ts) and the audio mixdown's
+    // sequential fold (foldClips, the export's own audio timing). Both
+    // trace back to the same clampCutOverlap — this is what keeps a preview
+    // and its export from disagreeing about where a cut actually lands.
+    const a = vclip({ track: 0, start: 0, out: 4 });
+    const b = vclip({ track: 0, start: 4, out: 1 }); // short — clamps its own overlaps
+    const c = vclip({ track: 0, start: 5, out: 4 });
+    useEditor.setState({ clips: [a, b, c] });
+    s().setClipTransition(a.id, 1); // fits: min(1, 4*.9, 1*.9) = 0.9
+    s().setClipTransition(b.id, 1); // fits: min(1, 1*.9, 4*.9) = 0.9
+    const overlapAB = 4 - clipById(b.id).start;
+    const overlapBC = clipById(b.id).start + clipLen(clipById(b.id)) - clipById(c.id).start;
+    expect(overlapAB).toBeCloseTo(0.9);
+    expect(overlapBC).toBeCloseTo(0.9);
+    const geo = foldClips([
+      { file: "a.mp4", in: 0, out: 4, muted: false, transition: 1 },
+      { file: "b.mp4", in: 0, out: 1, muted: false, transition: 1 },
+      { file: "c.mp4", in: 0, out: 4, muted: false },
+    ]);
+    expect(4 - geo[1].at).toBeCloseTo(overlapAB);
+    expect(geo[1].at + geo[1].dur - geo[2].at).toBeCloseTo(overlapBC);
   });
 });
 

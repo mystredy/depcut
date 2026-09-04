@@ -585,18 +585,21 @@ let laneEpoch = 0;
 const touches = (patch: object, keys: readonly string[]) => keys.some((k) => k in patch);
 
 /**
- * Committed patches keep the lane invariant: segments never overlap. Each
- * settle runs after a committed update lands, scoped to the item's own lane.
- * A move (start / track / lane) re-places the item at the first spot where it
- * intrudes into no resident; a resize (in / out / speed / end) keeps its start
- * and pushes the following same-lane run right by the overflow. Video clips
- * never overlap — a transition is a render-time blend at the cut, not layout.
- * Writes are transient: the committed action that calls this owns the history
+ * Committed patches keep the lane invariant: segments never overlap beyond
+ * whatever a live transition allows. Runs after a committed update lands,
+ * scoped to the item's own lane. Only a move (start / track / lane) needs
+ * doing here — it re-places the item at the first spot where it intrudes
+ * into no resident. A resize (in / out / speed / end) needs nothing of its
+ * own: the wrapped `set()` this patch already went through settles the whole
+ * row's spacing itself (`separateOverlaps`, via `settledTrackZero`), the one
+ * place that math lives — anything this function did on top of it would be
+ * either redundant or, against a transitioned neighbor, wrong (the overlap a
+ * transition wants isn't zero, and only that pass knows how much). Writes
+ * are transient: the committed action that calls this owns the history
  * entry, so the patch and its settle undo as one step.
  */
 function settleClipFootprint(id: string, patch: Partial<VideoClip>) {
-  const moved = touches(patch, ["start", "track"]);
-  if (!moved && !touches(patch, ["in", "out", "speed"])) return;
+  if (!touches(patch, ["start", "track"])) return;
   const st = useEditor.getState();
   const clip = st.clips.find((c) => c.id === id);
   if (!clip) return;
@@ -604,31 +607,15 @@ function settleClipFootprint(id: string, patch: Partial<VideoClip>) {
     .filter((c) => c.id !== id && c.track === clip.track)
     .sort((a, b) => a.start - b.start);
   const len = clipLen(clip);
-  if (moved) {
-    let at = clip.start;
-    for (const c of others) {
-      const blockEnd = c.start + clipLen(c);
-      if (blockEnd <= at + 1e-3) continue;
-      if (c.start >= at + len - 1e-3) break;
-      at = blockEnd;
-    }
-    if (Math.abs(at - clip.start) > 1e-9) st.updateClipTransient(id, { start: at });
-    st.sortClips();
-    return;
+  let at = clip.start;
+  for (const c of others) {
+    const blockEnd = c.start + clipLen(c);
+    if (blockEnd <= at + 1e-3) continue;
+    if (c.start >= at + len - 1e-3) break;
+    at = blockEnd;
   }
-  const next = others.find((c) => c.start >= clip.start - 1e-9);
-  if (!next) return;
-  const delta = clip.start + len - next.start;
-  if (delta <= 1e-9) return;
-  useEditor.setState((s) => ({
-    clips: s.clips
-      .map((c) =>
-        c.id !== id && c.track === clip.track && c.start >= next.start - 1e-9
-          ? { ...c, start: c.start + delta }
-          : c
-      )
-      .sort((a, b) => a.start - b.start),
-  }));
+  if (Math.abs(at - clip.start) > 1e-9) st.updateClipTransient(id, { start: at });
+  st.sortClips();
 }
 
 function settleAudioFootprint(id: string, patch: Partial<AudioClip>) {
@@ -773,46 +760,19 @@ function pushOverlaysClearOf(ids: Set<string>) {
   }));
 }
 
-/** Resize a clip's footprint to `newLen` (a trim or speed change), keeping its
- * own track sound: a cut the clip transitions over stays a cut (the run
- * follows the resize so the pair keeps its contact); otherwise a longer
- * footprint pushes the run right by the overflow and a shorter one just opens
- * a gap. Everything is scoped to the clip's track — resizing a track-0 clip
- * never drags the composited layers (or vice versa), so each track's
- * annotations keep the timing they were placed at. One undo step. */
-function resizeClipFootprint(clip: VideoClip, patch: Partial<VideoClip>, newLen: number) {
+/** Resize a clip's footprint (a trim or speed change), keeping its own track
+ * sound: a cut the clip transitions over stays a cut (the pair keeps its
+ * exact overlap through the resize); otherwise a longer footprint pushes the
+ * run right by the overflow and a shorter one just opens a gap. That's all
+ * the wrapped `set()` a plain `updateClipTransient` already goes through —
+ * reanchoring whatever bar was riding the old edge onto wherever it moved to,
+ * then settling the row (`separateOverlaps`) to match. Everything is scoped
+ * to the clip's track — resizing a track-0 clip never drags the composited
+ * layers (or vice versa), so each track's annotations keep the timing they
+ * were placed at. One undo step. */
+function resizeClipFootprint(clip: VideoClip, patch: Partial<VideoClip>) {
   useEditor.getState().pushHistory();
-  const before = useEditor.getState().clips;
-  const next = useEditor
-    .getState()
-    .clips.filter((c) => c.id !== clip.id && c.track === clip.track && c.start >= clip.start)
-    .reduce<VideoClip | null>((m, c) => (!m || c.start < m.start ? c : m), null);
   useEditor.getState().updateClipTransient(clip.id, patch);
-  const nextStart = next?.start ?? Infinity;
-  const delta = Math.max(0, clip.start + newLen - nextStart);
-  if (Math.abs(delta) > 1e-6) {
-    useEditor.setState((st) => ({
-      clips: st.clips
-        .map((c) =>
-          c.id !== clip.id && c.track === clip.track && c.start >= clip.start
-            ? { ...c, start: Math.max(0, c.start + delta) }
-            : c
-        )
-        .sort((a, b) => a.start - b.start),
-    }));
-  }
-  // The resized clip's own edge moved, and the run behind it with it, so the
-  // bars playing those cuts follow.
-  if (useEditor.getState().transitions.length)
-    useEditor.setState((st) => ({
-      transitions: reanchorTransitions(before, st.clips, st.transitions),
-    }));
-  // The shifts above only ever grow the gap to the run behind this clip; a
-  // shrink (or a transition riding this cut, now possibly too long for the
-  // resized clip to still support) needs the same settle every other write
-  // gets — this function's own shifts bypass the wrapped `set()` that would
-  // otherwise apply it for free.
-  useEditor.setState((st) => settledTrackZero(st) ?? {});
 }
 const staleLaneError = {
   subtitleStatus: "error" as const,
@@ -999,42 +959,41 @@ export const useEditor = create<EditorState>((baseSet, get) => {
       // can never disagree.
       if (next.clips || next.transitions) {
         const clips = next.clips ?? prev.clips;
-        let transitions = next.transitions ?? prev.transitions;
-        // A transition belongs to the cut or open edge it lines up with. Two
-        // ways it can lose that: nothing lines up with it at all, or — the
-        // one `resolveTransitions` alone wouldn't catch — the pair it cut
-        // between came apart and its position now merely lines up with the
-        // open edge that leaves behind, which reads as the same bar quietly
-        // turning into an unrelated exit fade. A cut is only ever a cut; drop
-        // it instead of letting it re-home as something the user never asked
-        // for. Nothing drags a bar back into place anymore, so there is
-        // nothing to preserve it for.
-        const prevRoles = resolveTransitions(prev.clips, prev.transitions);
-        const roles = resolveTransitions(clips, transitions);
-        const orphaned = (t: TimelineTransition) => {
-          const now = roles.get(t.id);
-          if (!now) return true;
-          const was = prevRoles.get(t.id);
-          return was?.kind === "cut" && now.kind !== "cut";
-        };
-        if (transitions.some(orphaned)) {
-          transitions = transitions.filter((t) => !orphaned(t));
-          next = { ...next, transitions };
-        }
-        const derived = deriveTransitionFields(clips, transitions);
-        if (derived !== clips) next = { ...next, clips: derived };
-        // Track 0 holds every transitioned pair at exactly its live overlap:
-        // a shorter/longer/new/removed transition, or a clip that moved out
-        // from behind one, needs the run behind it to follow — the same
-        // carry-audio/overlays/cues remap a legacy overlapped doc gets pulled
-        // apart by on load, just able to go either direction now.
+        // A clip edit alone (a resize, a footprint change) moves a boundary
+        // out from under whatever bar was ending on it — reanchor every bar
+        // to whichever boundary it already played, wherever that boundary
+        // moved to, before anything downstream reads its role. A bar aligned
+        // with nothing simply plays nothing; it is never dropped for that —
+        // it sits inert on the row until something lines up with it again,
+        // same as one placed on a bare clip that later gains a neighbor.
+        const preSettle =
+          next.clips && !next.transitions
+            ? reanchorTransitions(prev.clips, clips, prev.transitions)
+            : next.transitions ?? prev.transitions;
+        // Deriving needs each cut's live seconds (to know how much overlap
+        // settling owes it); settling needs those to place the row, and can
+        // itself drag a clip whose own open edge carries an unrelated bar —
+        // an entrance or exit, not the cut riding through — out from under
+        // it exactly like a resize does. So: derive for the overlaps, settle
+        // the row against them, reanchor once more against whatever the
+        // settle actually moved, then derive again on where things landed.
+        const pass1 = deriveTransitionFields(clips, preSettle);
         const settled = settledTrackZero({
-          clips: derived,
+          clips: pass1,
           audioClips: next.audioClips ?? prev.audioClips,
           overlays: next.overlays ?? prev.overlays,
           subtitles: next.subtitles ?? prev.subtitles,
         });
-        if (settled) next = { ...next, ...settled };
+        const settledClips = settled?.clips ?? pass1;
+        const transitions = settled
+          ? reanchorTransitions(pass1, settledClips, preSettle)
+          : preSettle;
+        next = {
+          ...next,
+          ...(settled ?? {}),
+          clips: deriveTransitionFields(settledClips, transitions),
+          transitions,
+        };
       }
       // The playhead cannot outlive the timeline. Deleting the last of a long
       // row shortens the project under a playhead standing past the new end,
@@ -2002,20 +1961,13 @@ export const useEditor = create<EditorState>((baseSet, get) => {
     },
 
     // The non-transient updaters are just a checkpoint plus the live update.
+    // `updateClipTransient` alone already reanchors and settles a resize (the
+    // wrapped `set()` does that for every clips write); `settleClipFootprint`
+    // covers what it doesn't — placing a moved clip clear of its neighbors.
     updateClip: (id, patch) => {
       push();
-      const before = get().clips;
       get().updateClipTransient(id, patch);
       settleClipFootprint(id, patch);
-      // A resize moves the clip's own edge and pushes the run behind it, so
-      // the bars playing those cuts follow. A move is the user placing the
-      // clip somewhere, and a bar stays exactly where it was left.
-      if (
-        get().transitions.length &&
-        !touches(patch, ["start", "track"]) &&
-        touches(patch, ["in", "out", "speed"])
-      )
-        set((s) => ({ transitions: reanchorTransitions(before, s.clips, s.transitions) }));
     },
 
     setClipSpeed: (id, speed) => {
@@ -2023,14 +1975,14 @@ export const useEditor = create<EditorState>((baseSet, get) => {
       if (!clip) return;
       const clamped = Math.max(SPEED_FLOOR, speed);
       if (Math.abs(clamped - clipSpeed(clip)) < 1e-4) return;
-      resizeClipFootprint(clip, { speed: clamped }, Math.max(MIN_LEN, (clip.out - clip.in) / clamped));
+      resizeClipFootprint(clip, { speed: clamped });
     },
 
     setClipTrim: (id, nextIn, nextOut) => {
       const clip = get().clips.find((c) => c.id === id);
       if (!clip) return;
       if (Math.abs(nextIn - clip.in) < 1e-6 && Math.abs(nextOut - clip.out) < 1e-6) return;
-      resizeClipFootprint(clip, { in: nextIn, out: nextOut }, (nextOut - nextIn) / clipSpeed(clip));
+      resizeClipFootprint(clip, { in: nextIn, out: nextOut });
     },
 
     setClipTransition: (id, seconds, style) => {
@@ -2565,7 +2517,14 @@ export const useEditor = create<EditorState>((baseSet, get) => {
               const idx = s.clips.findIndex((x) => x.id === c.id);
               const next = [...s.clips];
               next.splice(idx, 1, left, right);
-              return { clips: next, ...sole({ kind: "clip", id: right.id }) };
+              // Left keeps the original id, so on its own this clips-only
+              // write would read as that same clip's tail sliding from its
+              // old edge to the new mid-footage cut — and drag the bar
+              // playing it along. It stays on the far edge instead, now the
+              // right half's tail: passing today's `transitions` through
+              // unchanged (nothing here actually retimes a bar) opts out of
+              // that reanchor.
+              return { clips: next, transitions: s.transitions, ...sole({ kind: "clip", id: right.id }) };
             });
           }
           return;
@@ -2640,7 +2599,10 @@ export const useEditor = create<EditorState>((baseSet, get) => {
         const idx = s.clips.findIndex((c) => c.id === span.clip.id);
         const next = [...s.clips];
         next.splice(idx, 1, left, right);
-        return { clips: next, ...sole({ kind: "clip", id: right.id }) };
+        // See the layer-clip split above: left inherits the original id, so
+        // pass `transitions` through unchanged to opt this clips-only write
+        // out of the reanchor a plain resize wants.
+        return { clips: next, transitions: s.transitions, ...sole({ kind: "clip", id: right.id }) };
       });
     },
 
@@ -4220,6 +4182,7 @@ export function deriveTransitionFields(
     const cut = byBoundary.get(`cut:${c.id}`);
     const transition = cut ? clampBarSeconds(cut.seconds) : undefined;
     const transitionStyle = cut && cut.style !== "crossfade" ? cut.style : undefined;
+    const transitionAudioCrossfade = cut?.audioCrossfade ? true : undefined;
     const animOf = (t: TimelineTransition | undefined): ClipAnim | undefined => {
       if (!t) return undefined;
       const style = animStyleOfTransition(t.style);
@@ -4235,12 +4198,13 @@ export function deriveTransitionFields(
     if (
       c.transition === transition &&
       c.transitionStyle === transitionStyle &&
+      c.transitionAudioCrossfade === transitionAudioCrossfade &&
       sameAnim(c.animIn, animIn) &&
       sameAnim(c.animOut, animOut)
     )
       return c;
     changed = true;
-    return { ...c, transition, transitionStyle, animIn, animOut };
+    return { ...c, transition, transitionStyle, transitionAudioCrossfade, animIn, animOut };
   });
   return changed ? next : clips;
 }
@@ -4370,7 +4334,13 @@ export function separateOverlaps<
             ? clampCutOverlap(prev.transition, clipLen(prev), clipLen(row[i]))
             : 0;
         const target = prevEnd - overlap;
-        if (Math.abs(start - target) > 1e-3) shift += target - start;
+        // An active transition is a locked spacing — pull the pair together
+        // when it grows, same as pushing apart when it shrinks — but with no
+        // transition here a gap is the user's own choice: only ever push
+        // apart an actual intrusion, never close a plain gap onto contact.
+        const needsPush = start < target - 1e-3;
+        const needsPull = overlap > 0 && start > target + 1e-3;
+        if (needsPush || needsPull) shift += target - start;
       }
       moved.set(row[i].id, row[i].start + shift);
       steps.push({ at: row[i].start, shift });
