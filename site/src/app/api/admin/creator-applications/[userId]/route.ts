@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { isDonkeySuperUser, notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { notifyUser } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
 
@@ -22,8 +22,8 @@ const NOTIFY_BODY: Record<"Approved" | "Rejected", string> = {
 // CreatorRateAccount (see Finance.prisma) so the new creator can earn and
 // cash out immediately — otherwise the account stays admin-grantable-only,
 // which would leave an approved applicant with nowhere to receive Rates.
-export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json({ error: "Forbidden", message: "Only super users can do this." }, { status: 403 });
   }
 
@@ -41,7 +41,7 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
 
   const [application] = await prisma.$transaction([
     prisma.creatorApplication.update({
-      data: { reviewedAt: new Date(), reviewedBy: request.donkey.userId, reviewNote: reviewNote || null, status },
+      data: { reviewedAt: new Date(), reviewedBy: request.depcut.userId, reviewNote: reviewNote || null, status },
       where: { userId },
     }),
     ...(status === "Approved"

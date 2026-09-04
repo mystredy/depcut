@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateWebhookSecret } from "@/lib/telegram/webhook-secret";
 
@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
 // setWebhook, so incoming messages actually start reaching
 // /api/telegram/webhook. Requires a real public HTTPS origin — Telegram
 // rejects localhost, so this only succeeds once deployed.
-export const POST = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const POST = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can do this." },
       { status: 403 },

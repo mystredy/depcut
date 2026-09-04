@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import {
-  isDonkeySuperUser,
+  isDepCutSuperUser,
   notFoundResponse,
-  withDonkeyAuth,
-} from "@/lib/donkey-api-auth";
+  withDepCutAuth,
+} from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -34,8 +34,8 @@ const createPostSchema = z
 // Super-user only: record a new per-platform post under an Upload — the
 // manual stand-in for an actual publish integration. Starts "scheduled";
 // PATCH /api/admin/posts/[id] moves it to published or failed.
-export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const POST = withDepCutAuth(async (request, context: RouteContext) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can do this." },
       { status: 403 },

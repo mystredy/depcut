@@ -1,5 +1,5 @@
 import { getActiveProSubscription } from "@/lib/billing/pro-subscription";
-import { isDonkeySuperUser } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 // Cut web mode's cost ceilings by account tier. Storage bounds R2; the daily
@@ -25,7 +25,7 @@ const PRO: CutLimits = { storageBytes: 50 * 1024 ** 3, renderJobsPerDay: 200 };
 const UNLIMITED: CutLimits = { storageBytes: null, renderJobsPerDay: null };
 
 export async function cutLimitsFor(userId: string): Promise<CutLimits> {
-  if (await isDonkeySuperUser(userId)) return UNLIMITED;
+  if (await isDepCutSuperUser(userId)) return UNLIMITED;
   return (await getActiveProSubscription(userId)) ? PRO : FREE;
 }
 

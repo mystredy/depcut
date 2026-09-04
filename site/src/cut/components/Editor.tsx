@@ -116,7 +116,7 @@ export function Editor({
   useEffect(() => syncFontAssets(assetsForFonts), [assetsForFonts]);
   const [conflictReloaded, setConflictReloaded] = useState(false);
   const [shareGone, setShareGone] = useState(false);
-  // This project lives on this Mac and the Donkey app isn't answering. Nothing
+  // This project lives on this Mac and the DepCut app isn't answering. Nothing
   // to load, and nothing to guess at either: say where it is and wait.
   const [needsApp, setNeedsApp] = useState(false);
   const dragDepth = useRef(0);
@@ -847,7 +847,7 @@ export function Editor({
         <div className="flex max-w-sm flex-col items-center gap-3 text-center">
           <Laptop className="size-7 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            This is a local project — it lives on this Mac. Open the Depcut app and it opens
+            This is a local project — it lives on this Mac. Open the DepCut app and it opens
             here.
           </p>
           <Button

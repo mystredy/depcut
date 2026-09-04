@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import {
-  withDonkeyAuth,
-  type DonkeyAuthenticatedRequest,
-} from "@/lib/donkey-api-auth";
+  withDepCutAuth,
+  type DepCutAuthenticatedRequest,
+} from "@/lib/depcut-api-auth";
 import {
   isMarketingUnsubscribed,
   setMarketingUnsubscribed,
@@ -12,18 +12,18 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export const GET = withDonkeyAuth(
-  async (request: DonkeyAuthenticatedRequest) => {
+export const GET = withDepCutAuth(
+  async (request: DepCutAuthenticatedRequest) => {
     return NextResponse.json({
-      marketingEmails: !(await isMarketingUnsubscribed(request.donkey.userId)),
+      marketingEmails: !(await isMarketingUnsubscribed(request.depcut.userId)),
     });
   },
 );
 
 const updateSchema = z.object({ marketingEmails: z.boolean() });
 
-export const PUT = withDonkeyAuth(
-  async (request: DonkeyAuthenticatedRequest) => {
+export const PUT = withDepCutAuth(
+  async (request: DepCutAuthenticatedRequest) => {
     const parsed = updateSchema.safeParse(
       await request.json().catch(() => null),
     );
@@ -31,7 +31,7 @@ export const PUT = withDonkeyAuth(
       return NextResponse.json({ error: "Invalid request." }, { status: 400 });
     }
     await setMarketingUnsubscribed(
-      request.donkey.userId,
+      request.depcut.userId,
       !parsed.data.marketingEmails,
     );
     return NextResponse.json({ marketingEmails: parsed.data.marketingEmails });

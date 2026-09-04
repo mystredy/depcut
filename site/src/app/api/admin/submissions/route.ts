@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 // resubmitted, none of which are admin's business yet. "submitted" and
 // whatever the review action below advances it to ("Approved"/"Rejected")
 // both show, newest first.
-export const GET = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const GET = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can view this." },
       { status: 403 },

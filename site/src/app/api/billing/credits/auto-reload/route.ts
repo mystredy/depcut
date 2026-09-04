@@ -6,7 +6,7 @@ import {
   creditTopUpMaxDollars,
   creditTopUpMinDollars,
 } from "@/lib/credits/top-up";
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -41,9 +41,9 @@ function serialize(config: AutoReloadRow | null) {
   };
 }
 
-export const GET = withDonkeyAuth(async (request) => {
+export const GET = withDepCutAuth(async (request) => {
   const config = await prisma.creditAutoReload.findUnique({
-    where: { userId: request.donkey.userId },
+    where: { userId: request.depcut.userId },
   });
   return NextResponse.json(serialize(config));
 });
@@ -60,7 +60,7 @@ const updateSchema = z
   })
   .strict();
 
-export const PUT = withDonkeyAuth(async (request) => {
+export const PUT = withDepCutAuth(async (request) => {
   const parsed = updateSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return NextResponse.json(
@@ -73,7 +73,7 @@ export const PUT = withDonkeyAuth(async (request) => {
   }
 
   const existing = await prisma.creditAutoReload.findUnique({
-    where: { userId: request.donkey.userId },
+    where: { userId: request.depcut.userId },
   });
 
   // Enabling needs a saved card, which is captured the first time the user buys
@@ -98,14 +98,14 @@ export const PUT = withDonkeyAuth(async (request) => {
       amountMicros,
       enabled: parsed.data.enabled,
       thresholdMicros,
-      userId: request.donkey.userId,
+      userId: request.depcut.userId,
     },
     update: {
       amountMicros,
       enabled: parsed.data.enabled,
       thresholdMicros,
     },
-    where: { userId: request.donkey.userId },
+    where: { userId: request.depcut.userId },
   });
 
   // Re-enabling clears a prior failure so the saved card is retried promptly.
@@ -114,12 +114,12 @@ export const PUT = withDonkeyAuth(async (request) => {
   if (parsed.data.enabled) {
     await prisma.creditAutoReload.updateMany({
       data: { chargingPaymentIntentId: null, lastError: null, status: "idle" },
-      where: { status: "failed", userId: request.donkey.userId },
+      where: { status: "failed", userId: request.depcut.userId },
     });
   }
 
   const config = await prisma.creditAutoReload.findUnique({
-    where: { userId: request.donkey.userId },
+    where: { userId: request.depcut.userId },
   });
   return NextResponse.json(serialize(config));
 });

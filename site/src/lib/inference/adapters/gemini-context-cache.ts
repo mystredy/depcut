@@ -27,7 +27,7 @@ const MEMO_TTL_MS = (TTL_SECONDS - 120) * 1000;
 const NEGATIVE_TTL_MS = 60_000;
 // Below ~1K tokens caching isn't worth a round-trip and the provider rejects it; gate on a char proxy.
 const MIN_CACHEABLE_CHARS = 4_096;
-const DISPLAY_NAME_PREFIX = "donkey-ctx-";
+const DISPLAY_NAME_PREFIX = "depcut-ctx-";
 // Bound the registry scan so a long cache list can't stall a request.
 const MAX_LIST_SCAN = 300;
 

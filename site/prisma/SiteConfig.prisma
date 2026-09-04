@@ -6,7 +6,7 @@
 // maintenance-mode copy. GET creates it on first read if missing.
 model AppSettings {
   id                   String   @id @default("singleton")
-  appName              String   @default("Depcut")
+  appName              String   @default("DepCut")
   adminEmail           String?
   defaultLocale        String   @default("en-US")
   timezone             String   @default("UTC")

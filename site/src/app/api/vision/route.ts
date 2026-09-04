@@ -17,10 +17,10 @@ import {
   reserveVisionCallGrant,
 } from "@/lib/credits/vision-grants";
 import {
-  type DonkeyAuthenticatedRequest,
-  shouldBypassDonkeyInferenceCredits,
-  withDonkeyAuth,
-} from "@/lib/donkey-api-auth";
+  type DepCutAuthenticatedRequest,
+  shouldBypassDepCutInferenceCredits,
+  withDepCutAuth,
+} from "@/lib/depcut-api-auth";
 import { InferenceProviderError } from "@/lib/inference/providers";
 import {
   checkInMemoryRateLimit,
@@ -64,7 +64,7 @@ type VisionReservation =
   | { kind: "grant"; grantId: string; remaining: number };
 
 // This route accepts third-party API keys in addition to app sessions.
-export const POST = withDonkeyAuth(visionParseHandler, { allowApiKey: true });
+export const POST = withDepCutAuth(visionParseHandler, { allowApiKey: true });
 
 // B2B vision API: parse a screenshot into UI elements, and optionally ground a
 // natural-language instruction to a click target. Single-shot only.
@@ -73,20 +73,20 @@ export const POST = withDonkeyAuth(visionParseHandler, { allowApiKey: true });
 //   - api-key: third-party developers, gated by an active Vision API
 //     subscription + monthly call quota (no money-credit charge).
 //   - session-cookie / dev-bypass: the Mac app, gated by the credit balance.
-async function visionParseHandler(request: DonkeyAuthenticatedRequest) {
-  const isApiKey = request.donkey.method === "api-key";
+async function visionParseHandler(request: DepCutAuthenticatedRequest) {
+  const isApiKey = request.depcut.method === "api-key";
 
-  const client = requireInferenceClientId(request.donkey.clientId);
+  const client = requireInferenceClientId(request.depcut.clientId);
   if (!client.ok) {
     return client.response;
   }
 
   // Bucket API-key callers by their key id, not the client-supplied
-  // x-donkey-client-id header — otherwise a caller could rotate the header to
+  // x-depcut-client-id header — otherwise a caller could rotate the header to
   // get a fresh burst bucket per request and defeat the limit.
   const rateLimitKey = isApiKey
-    ? `apikey:${request.donkey.apiKeyId}`
-    : `${request.donkey.userId}:${client.clientId}`;
+    ? `apikey:${request.depcut.apiKeyId}`
+    : `${request.depcut.userId}:${client.clientId}`;
   const rateLimit = checkInMemoryRateLimit({
     key: rateLimitKey,
     ...(isApiKey ? visionApiKeyRateLimit : visionRateLimit),
@@ -109,13 +109,13 @@ async function visionParseHandler(request: DonkeyAuthenticatedRequest) {
 
   // The dev-bypass user has no real account, so skip the credit preflight and
   // usage recording (both reference a real user row) when bypassing auth.
-  const bypassCredits = shouldBypassDonkeyInferenceCredits(request.donkey);
+  const bypassCredits = shouldBypassDepCutInferenceCredits(request.depcut);
   // For the api-key path, the reserved call is released if the request later
   // fails, so a failed parse doesn't burn the developer's subscription quota or
   // their grant allotment.
   let visionReservation: VisionReservation | null = null;
   if (isApiKey) {
-    const userId = request.donkey.userId;
+    const userId = request.depcut.userId;
     // Spend the subscription's monthly quota first (it resets each period), then
     // fall back to one-time vision-call grants.
     const subscription = await getActiveVisionSubscription(userId);
@@ -158,7 +158,7 @@ async function visionParseHandler(request: DonkeyAuthenticatedRequest) {
       model: billedModel,
       provider: inferenceProvider,
       route: inferenceUsageRoutes.vision,
-      userId: request.donkey.userId,
+      userId: request.depcut.userId,
     });
     if (!credits.ok) {
       return credits.response;
@@ -183,25 +183,25 @@ async function visionParseHandler(request: DonkeyAuthenticatedRequest) {
 
     let usageHeaders: Record<string, string> = {};
     if (bypassCredits) {
-      usageHeaders["X-Donkey-Dev-Auth-Bypass"] = "true";
+      usageHeaders["X-DepCut-Dev-Auth-Bypass"] = "true";
     } else {
       const recordedUsage = await recordInferenceUsage({
         billingMode: isApiKey ? "included" : "credits",
         clientId: client.clientId,
-        conversationId: request.donkey.conversationId,
+        conversationId: request.depcut.conversationId,
         metadata: { grounded: String(instruction !== undefined) },
         model: billedModel,
         provider: inferenceProvider,
         requestKind: "vision_parse",
         route: inferenceUsageRoutes.vision,
         status: "succeeded",
-        userId: request.donkey.userId,
+        userId: request.depcut.userId,
       });
       usageHeaders = visionReservation
         ? {
-            "X-Donkey-Calls-Remaining": String(visionReservation.remaining),
+            "X-DepCut-Calls-Remaining": String(visionReservation.remaining),
             ...(visionReservation.kind === "subscription"
-              ? { "X-Donkey-Calls-Limit": String(visionReservation.limit) }
+              ? { "X-DepCut-Calls-Limit": String(visionReservation.limit) }
               : {}),
           }
         : creditUsageHeaders(recordedUsage);
@@ -214,7 +214,7 @@ async function visionParseHandler(request: DonkeyAuthenticatedRequest) {
     // Give the reserved call back — a failed parse shouldn't be billed.
     if (visionReservation) {
       if (visionReservation.kind === "subscription") {
-        await releaseVisionApiCall(request.donkey.userId);
+        await releaseVisionApiCall(request.depcut.userId);
       } else {
         await releaseVisionCallGrant(visionReservation.grantId);
       }
@@ -223,14 +223,14 @@ async function visionParseHandler(request: DonkeyAuthenticatedRequest) {
       await recordFailedInferenceUsage({
         billingMode: isApiKey ? "included" : "credits",
         clientId: client.clientId,
-        conversationId: request.donkey.conversationId,
+        conversationId: request.depcut.conversationId,
         errorCode: inferenceErrorCode(error),
         metadata: { grounded: String(instruction !== undefined) },
         model: billedModel,
         provider: inferenceProvider,
         requestKind: "vision_parse",
         route: inferenceUsageRoutes.vision,
-        userId: request.donkey.userId,
+        userId: request.depcut.userId,
       });
     }
     if (error instanceof InferenceProviderError) {

@@ -47,7 +47,7 @@ const ONLY = arg("--only");
 const BUCKET = arg("--bucket");
 const ENFORCE = has("--enforce-budgets");
 /** The dev-only account the API bypass authenticates as. */
-const DEV_USER = "donkey-dev-auth-bypass";
+const DEV_USER = "depcut-dev-auth-bypass";
 
 // ── The gate ────────────────────────────────────────────────────────────────
 //
@@ -513,7 +513,7 @@ async function launch(): Promise<{ browser: Browser; page: Page }> {
     args: ["--autoplay-policy=no-user-gesture-required"],
   });
   const context = await browser.newContext({
-    extraHTTPHeaders: { "x-donkey-dev-auth-bypass": "1" },
+    extraHTTPHeaders: { "x-depcut-dev-auth-bypass": "1" },
     viewport: { width: 1600, height: 1000 },
   });
   // The editor's session gate is a client-side cookie read, and the only sign-in

@@ -1,6 +1,6 @@
 "use client";
 
-// The user reached for something that lives on this Mac while the Donkey app
+// The user reached for something that lives on this Mac while the DepCut app
 // isn't answering. The ConnectGate turns this into its banner; the surfaces
 // that know what was reached for are the ones that raise it — the library when
 // a recalled item is clicked, and the editor by pinning a local project's

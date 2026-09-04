@@ -17,10 +17,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-VENDOR_DIR="$ROOT_DIR/vendor/donkey-tools"
-MANIFEST="$ROOT_DIR/apps/Donkey/Sources/DonkeyRuntime/Resources/bundled-tools.json"
+VENDOR_DIR="$ROOT_DIR/vendor/depcut-tools"
+MANIFEST="$ROOT_DIR/apps/DepCut/Sources/DepCutRuntime/Resources/bundled-tools.json"
 
-REPO="${DONKEY_TOOLS_REPO:-DonkeyUseCorp/Donkey}"
+REPO="${DEPCUT_TOOLS_REPO:-DepCutUseCorp/DepCut}"
 ARCH="arm64"
 
 # True when that release already carries that asset — i.e. the version is already published and frozen.
@@ -32,7 +32,7 @@ asset_published() { # tag asset-name
 # overwrite frozen bytes. Bumps <base> -> <base>.1 -> <base>.2 … (matching the existing .N convention).
 choose_immutable_version() {
   local base="$1" v="$1" n=1
-  while asset_published "bundled-tools-$v" "donkey-tools-$v-$ARCH.tar.gz"; do
+  while asset_published "bundled-tools-$v" "depcut-tools-$v-$ARCH.tar.gz"; do
     v="$base.$n"; n=$((n + 1))
   done
   [ "$v" = "$base" ] || echo "Version $base already published; using $v to keep bundles immutable." >&2
@@ -41,7 +41,7 @@ choose_immutable_version() {
 
 VERSION="$(choose_immutable_version "${1:-$(date +%Y.%m.%d)}")"
 TAG="bundled-tools-$VERSION"
-ASSET="donkey-tools-$VERSION-$ARCH.tar.gz"
+ASSET="depcut-tools-$VERSION-$ARCH.tar.gz"
 URL="https://github.com/$REPO/releases/download/$TAG/$ASSET"
 OUT="/tmp/$ASSET"
 
@@ -55,31 +55,31 @@ for t in "${MANDATORY_TOOLS[@]}"; do
 done
 
 # Developer ID signing happened inside the build (fetch-bundled-tools.sh runs sign-bundled-tools.sh with
-# whatever DONKEY_TOOLS_SIGN_IDENTITY is set). Notarize those signed binaries so Apple validates them and
+# whatever DEPCUT_TOOLS_SIGN_IDENTITY is set). Notarize those signed binaries so Apple validates them and
 # Gatekeeper trusts them. Bare CLI binaries can't be stapled (only .app/.dmg/.pkg can), so Gatekeeper does
 # an online check; for the app-downloaded, un-quarantined tools the Developer ID signature is what counts,
 # and notarization is the proof that signature is good. Skipped (with a warning) when only ad-hoc signed.
 notarize_bundle() {
-  if [ "${DONKEY_TOOLS_SIGN_IDENTITY:--}" = "-" ]; then
-    echo "Warning: tools are only ad-hoc signed (no DONKEY_TOOLS_SIGN_IDENTITY); NOT for public distribution." >&2
+  if [ "${DEPCUT_TOOLS_SIGN_IDENTITY:--}" = "-" ]; then
+    echo "Warning: tools are only ad-hoc signed (no DEPCUT_TOOLS_SIGN_IDENTITY); NOT for public distribution." >&2
     return 0
   fi
-  local zip="$RUNNER_TEMP_DIR/donkey-tools-notarize.zip"
+  local zip="$RUNNER_TEMP_DIR/depcut-tools-notarize.zip"
   rm -f "$zip"
   /usr/bin/ditto -c -k --keepParent "$VENDOR_DIR" "$zip"
-  if [ -f "${DONKEY_NOTARY_KEY_P8:-/nonexistent}" ] && [ -n "${DONKEY_NOTARY_KEY_ID:-}" ] && [ -n "${DONKEY_NOTARY_ISSUER_ID:-}" ]; then
+  if [ -f "${DEPCUT_NOTARY_KEY_P8:-/nonexistent}" ] && [ -n "${DEPCUT_NOTARY_KEY_ID:-}" ] && [ -n "${DEPCUT_NOTARY_ISSUER_ID:-}" ]; then
     echo "==> Notarizing with App Store Connect API key"
     xcrun notarytool submit "$zip" \
-      --key "$DONKEY_NOTARY_KEY_P8" --key-id "$DONKEY_NOTARY_KEY_ID" --issuer "$DONKEY_NOTARY_ISSUER_ID" --wait
-  elif [ -n "${DONKEY_NOTARY_PROFILE:-}" ]; then
-    echo "==> Notarizing with keychain profile $DONKEY_NOTARY_PROFILE"
-    xcrun notarytool submit "$zip" --keychain-profile "$DONKEY_NOTARY_PROFILE" --wait
-  elif [ -n "${DONKEY_NOTARY_APPLE_ID:-}" ] && [ -n "${DONKEY_NOTARY_TEAM_ID:-}" ] && [ -n "${DONKEY_NOTARY_PASSWORD:-}" ]; then
-    echo "==> Notarizing with Apple ID $DONKEY_NOTARY_APPLE_ID"
+      --key "$DEPCUT_NOTARY_KEY_P8" --key-id "$DEPCUT_NOTARY_KEY_ID" --issuer "$DEPCUT_NOTARY_ISSUER_ID" --wait
+  elif [ -n "${DEPCUT_NOTARY_PROFILE:-}" ]; then
+    echo "==> Notarizing with keychain profile $DEPCUT_NOTARY_PROFILE"
+    xcrun notarytool submit "$zip" --keychain-profile "$DEPCUT_NOTARY_PROFILE" --wait
+  elif [ -n "${DEPCUT_NOTARY_APPLE_ID:-}" ] && [ -n "${DEPCUT_NOTARY_TEAM_ID:-}" ] && [ -n "${DEPCUT_NOTARY_PASSWORD:-}" ]; then
+    echo "==> Notarizing with Apple ID $DEPCUT_NOTARY_APPLE_ID"
     xcrun notarytool submit "$zip" \
-      --apple-id "$DONKEY_NOTARY_APPLE_ID" --team-id "$DONKEY_NOTARY_TEAM_ID" --password "$DONKEY_NOTARY_PASSWORD" --wait
+      --apple-id "$DEPCUT_NOTARY_APPLE_ID" --team-id "$DEPCUT_NOTARY_TEAM_ID" --password "$DEPCUT_NOTARY_PASSWORD" --wait
   else
-    echo "FATAL: DONKEY_TOOLS_SIGN_IDENTITY is set but no notary credentials were provided." >&2
+    echo "FATAL: DEPCUT_TOOLS_SIGN_IDENTITY is set but no notary credentials were provided." >&2
     exit 1
   fi
   rm -f "$zip"
@@ -111,7 +111,7 @@ PY
 echo "==> Publishing to GitHub release $TAG ($REPO)"
 if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
   gh release create "$TAG" --repo "$REPO" --title "$TAG" \
-    --notes "Prebuilt Donkey CLI tools ($ARCH) — $VERSION."
+    --notes "Prebuilt DepCut CLI tools ($ARCH) — $VERSION."
 fi
 # No --clobber: choose_immutable_version guaranteed this asset isn't published yet, so this only ever
 # uploads fresh bytes and never overwrites a version a shipped app already pinned.

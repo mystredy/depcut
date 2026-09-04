@@ -1,7 +1,7 @@
 import { Check, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 
-import { DonkeyCursor } from '@/app/prototype/_components/DonkeyCursor';
+import { DepCutCursor } from '@/app/prototype/_components/DepCutCursor';
 import { ALL_TASK_IDS, TASKS } from '@/app/prototype/_components/tasks';
 import type { NotchState, NotchVariant, TaskId } from '@/app/prototype/_components/types';
 
@@ -199,7 +199,7 @@ export function DemoControls({
               }}
               aria-label={task.label}
             >
-              {active ? <Check size={14} color={task.color} /> : <DonkeyCursor color={task.color} size={15} />}
+              {active ? <Check size={14} color={task.color} /> : <DepCutCursor color={task.color} size={15} />}
             </button>
           );
         })}

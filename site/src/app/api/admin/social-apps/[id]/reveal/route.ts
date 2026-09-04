@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 
 import {
-  isDonkeySuperUser,
+  isDepCutSuperUser,
   notFoundResponse,
-  withDonkeyAuth,
-} from "@/lib/donkey-api-auth";
+  withDepCutAuth,
+} from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +15,8 @@ type RouteContext = { params: Promise<{ id: string }> };
 // request only — the list route (GET /api/admin/social-apps) never includes
 // secret values, so this is the only path a secret can leave the server on,
 // and only when an admin deliberately clicks "reveal" for that one field.
-export const GET = withDonkeyAuth(async (request, context: RouteContext) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const GET = withDepCutAuth(async (request, context: RouteContext) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can do this." },
       { status: 403 },

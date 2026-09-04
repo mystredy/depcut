@@ -47,7 +47,7 @@ export default function AdminOverviewPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-lg font-semibold tracking-tight">Overview</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Site management for Depcut.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Site management for DepCut.</p>
       </div>
 
       <div className="flex flex-wrap gap-x-10 gap-y-5 rounded-2xl border bg-card p-6">

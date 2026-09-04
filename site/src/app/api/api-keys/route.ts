@@ -3,9 +3,9 @@ import { z } from "zod";
 
 import { auth, visionApiKeyPrefix } from "@/lib/auth";
 import {
-  donkeySessionUserId,
-  withDonkeyAuth,
-} from "@/lib/donkey-api-auth";
+  depcutSessionUserId,
+  withDepCutAuth,
+} from "@/lib/depcut-api-auth";
 import { validationErrorResponse } from "@/lib/inference/responses";
 
 export const dynamic = "force-dynamic";
@@ -47,8 +47,8 @@ function toSafeApiKey(key: ApiKeyRecord) {
 // List the signed-in user's Vision API keys (secrets never returned). The
 // referenceId filter is defense-in-depth: the plugin already scopes by session,
 // but we never return a key the session user does not own.
-export const GET = withDonkeyAuth(async (request) => {
-  const userId = donkeySessionUserId(request);
+export const GET = withDepCutAuth(async (request) => {
+  const userId = depcutSessionUserId(request);
   if (!userId) {
     return unauthorized();
   }
@@ -66,8 +66,8 @@ export const GET = withDonkeyAuth(async (request) => {
 // when the user has capacity (an active subscription or remaining vision-call
 // grants), which the Vision API route enforces per call. The full secret is
 // returned exactly once here and never again.
-export const POST = withDonkeyAuth(async (request) => {
-  const userId = donkeySessionUserId(request);
+export const POST = withDepCutAuth(async (request) => {
+  const userId = depcutSessionUserId(request);
   if (!userId) {
     return unauthorized();
   }

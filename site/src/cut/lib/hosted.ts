@@ -5,11 +5,11 @@ import { create } from "zustand";
 
 import { offloadHostedMedia } from "./hostedBlobs";
 
-// Donkey's hosted inference routes, called from the page with the user's
+// DepCut's hosted inference routes, called from the page with the user's
 // session and credits (the one hosted carve-out on the otherwise local-only
 // Cut page). Shared by media generation, prompt composition, and AI chat.
 
-const CLIENT_ID = "donkey-cut";
+const CLIENT_ID = "depcut-cut";
 
 const OUT_KEY = "cut-credits-out";
 
@@ -95,7 +95,7 @@ export function useCreditsRecheck(): void {
 const OFFLOAD_ABOVE_BYTES = 1024 * 1024;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
-/** POST one of Donkey's hosted inference routes with the user's session. */
+/** POST one of DepCut's hosted inference routes with the user's session. */
 export const hostedPost = async (path: string, body: unknown, signal?: AbortSignal) => {
   let payload = JSON.stringify(body);
   if (payload.length > OFFLOAD_ABOVE_BYTES) {
@@ -106,7 +106,7 @@ export const hostedPost = async (path: string, body: unknown, signal?: AbortSign
   }
   const res = await fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-donkey-client-id": CLIENT_ID },
+    headers: { "Content-Type": "application/json", "x-depcut-client-id": CLIENT_ID },
     body: payload,
     signal,
   });

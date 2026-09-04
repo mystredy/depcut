@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 
 import {
-  isDonkeySuperUser,
+  isDepCutSuperUser,
   notFoundResponse,
-  withDonkeyAuth,
-} from "@/lib/donkey-api-auth";
+  withDepCutAuth,
+} from "@/lib/depcut-api-auth";
 import { jobStatusResponse } from "@/lib/jobs/queue";
 import { prisma } from "@/lib/prisma";
 
@@ -13,8 +13,8 @@ export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ jobId: string }> };
 
 // Poll one background job for its outcome.
-export const GET = withDonkeyAuth(async (request, context: RouteContext) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const GET = withDepCutAuth(async (request, context: RouteContext) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can view this." },
       { status: 403 },

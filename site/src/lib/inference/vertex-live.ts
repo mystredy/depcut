@@ -13,7 +13,7 @@ const defaultLiveModel = "gemini-live-2.5-flash";
 type AdapterEnvironment = Record<string, string | undefined>;
 
 /**
- * Connection details a Donkey client needs to open a Gemini Live (Vertex AI)
+ * Connection details a DepCut client needs to open a Gemini Live (Vertex AI)
  * websocket directly: a short-lived OAuth access token plus the endpoint and
  * fully-qualified model path. The long-lived service-account credential never
  * leaves the backend.

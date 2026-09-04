@@ -13,7 +13,7 @@ import {
   type OverlayAnim,
   type OverlayAnimStyle,
   type OverlayLoopStyle,
-} from "@donkeycut/effects-kit";
+} from "@depcut/effects-kit";
 import type { AiPanelToolName } from "@/cut/components/AiPanel.tools";
 import type { OverlayAnimationToolName } from "@/cut/components/AnimationTiles.tools";
 import type { AudioToolName } from "@/cut/components/AudioPanel.tools";
@@ -1167,7 +1167,7 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       // caught here — an unprobed session (null) resolves before we claim
       // success. Deeper errors surface in the panel's job list.
       const signedIn = gen.signedIn ?? (await gen.probeNow());
-      if (!signedIn) throw new ToolError("Sign in to Depcut to generate video.");
+      if (!signedIn) throw new ToolError("Sign in to DepCut to generate video.");
 
       // Video renders can outrun the assistant tool bridge's 2-minute cap, so
       // don't block: start the job and let its completion place the clip.
@@ -1319,7 +1319,7 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       if (!line) throw new ToolError("line is required — what should they say?");
       const gen = useGenerate.getState();
       const signedIn = gen.signedIn ?? (await gen.probeNow());
-      if (!signedIn) throw new ToolError("Sign in to Depcut to generate video.");
+      if (!signedIn) throw new ToolError("Sign in to DepCut to generate video.");
       return launchVideoJob(
         projectId,
         input,
@@ -1345,7 +1345,7 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       if (!projectId) throw new ToolError("No project open.");
       const gen = useGenerate.getState();
       const signedIn = gen.signedIn ?? (await gen.probeNow());
-      if (!signedIn) throw new ToolError("Sign in to Depcut to generate a video.");
+      if (!signedIn) throw new ToolError("Sign in to DepCut to generate a video.");
       const brief = String(input.brief ?? "").trim();
       const fromAudio =
         input.from_audio_asset_id !== undefined ? String(input.from_audio_asset_id) : undefined;
@@ -1885,7 +1885,7 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       const gen = useGenerate.getState();
       // An unprobed session (null) resolves before we spend the user's credits.
       const signedIn = gen.signedIn ?? (await gen.probeNow());
-      if (!signedIn) throw new ToolError("Sign in to Depcut to generate music.");
+      if (!signedIn) throw new ToolError("Sign in to DepCut to generate music.");
       const variant = input.length === "song" ? "song" : "clip";
       // Default to a vocal-free bed; the model opts into a sung song explicitly.
       const instrumental = input.instrumental !== false;
@@ -2150,7 +2150,7 @@ export async function runAiTool(
   return run(s, input);
 }
 
-/** Synthesize speech segments with hosted Gemini voices (the user's Donkey
+/** Synthesize speech segments with hosted Gemini voices (the user's DepCut
  * sign-in and credits), register the media, and drop one soundtrack clip
  * (voiceovers duck other audio by default). Shared by voiceover_generate and
  * read_subtitles_aloud. */

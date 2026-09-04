@@ -20,7 +20,7 @@ import {
   validationErrorResponse,
 } from "@/lib/inference/responses";
 import { assetGenerationRequestSchema } from "@/lib/inference/schemas";
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { resolveInferenceBlobs } from "@/lib/inference/blobs";
 import { InferenceProviderError, type JsonObject } from "@/lib/inference/providers";
 import { toJsonObject, toJsonValue } from "@/lib/inference/json";
@@ -36,8 +36,8 @@ export const dynamic = "force-dynamic";
 // function count ceiling — a stray distinct value here is its own function.
 export const maxDuration = 300;
 
-export const POST = withDonkeyAuth(async (request) => {
-  const client = requireInferenceClientId(request.donkey.clientId);
+export const POST = withDepCutAuth(async (request) => {
+  const client = requireInferenceClientId(request.depcut.clientId);
   if (!client.ok) {
     return client.response;
   }
@@ -64,7 +64,7 @@ export const POST = withDonkeyAuth(async (request) => {
     model: parsed.data.model,
     provider: provider.id,
     route: inferenceUsageRoutes.assets,
-    userId: request.donkey.userId,
+    userId: request.depcut.userId,
     // Asset generation bills the requested model, so reject an unpriced one before the provider
     // runs and bills upstream — never produce a generation we can't charge for.
     enforceModelPrice: true,
@@ -87,7 +87,7 @@ export const POST = withDonkeyAuth(async (request) => {
       ? toJsonObject(
           await resolveInferenceBlobs(
             toJsonValue(parsed.data.inputs),
-            request.donkey.userId,
+            request.depcut.userId,
           ),
         )
       : undefined;
@@ -99,7 +99,7 @@ export const POST = withDonkeyAuth(async (request) => {
     if (!result) {
       await recordFailedInferenceUsage({
         clientId: client.clientId,
-        conversationId: request.donkey.conversationId,
+        conversationId: request.depcut.conversationId,
         errorCode: "asset_generation_unavailable",
         metadata: {
           assetKind: parsed.data.kind,
@@ -108,7 +108,7 @@ export const POST = withDonkeyAuth(async (request) => {
         provider: failedUsageProvider,
         requestKind: "asset_generation",
         route: inferenceUsageRoutes.assets,
-        userId: request.donkey.userId,
+        userId: request.depcut.userId,
       });
 
       return NextResponse.json(
@@ -125,7 +125,7 @@ export const POST = withDonkeyAuth(async (request) => {
     if (result.status === "failed") {
       await recordFailedInferenceUsage({
         clientId: client.clientId,
-        conversationId: request.donkey.conversationId,
+        conversationId: request.depcut.conversationId,
         errorCode: "provider_error",
         metadata: {
           assetKind: parsed.data.kind,
@@ -138,7 +138,7 @@ export const POST = withDonkeyAuth(async (request) => {
         provider: result.provider,
         requestKind: "asset_generation",
         route: inferenceUsageRoutes.assets,
-        userId: request.donkey.userId,
+        userId: request.depcut.userId,
       });
       return NextResponse.json(assetGenerationResponse({ generation, result }), {
         status: 201,
@@ -152,7 +152,7 @@ export const POST = withDonkeyAuth(async (request) => {
     // follow (assets/refresh) are free.
     const recordedUsage = await recordInferenceUsage({
       clientId: client.clientId,
-      conversationId: request.donkey.conversationId,
+      conversationId: request.depcut.conversationId,
       metadata: {
         assetKind: parsed.data.kind,
         generationId,
@@ -163,7 +163,7 @@ export const POST = withDonkeyAuth(async (request) => {
       route: inferenceUsageRoutes.assets,
       status: "succeeded",
       usage: result.usage,
-      userId: request.donkey.userId,
+      userId: request.depcut.userId,
     });
 
     return NextResponse.json(assetGenerationResponse({ generation, result }), {
@@ -173,7 +173,7 @@ export const POST = withDonkeyAuth(async (request) => {
   } catch (error) {
     await recordFailedInferenceUsage({
       clientId: client.clientId,
-      conversationId: request.donkey.conversationId,
+      conversationId: request.depcut.conversationId,
       errorCode: inferenceErrorCode(error),
       metadata: {
         assetKind: parsed.data.kind,
@@ -182,7 +182,7 @@ export const POST = withDonkeyAuth(async (request) => {
       provider: failedUsageProvider,
       requestKind: "asset_generation",
       route: inferenceUsageRoutes.assets,
-      userId: request.donkey.userId,
+      userId: request.depcut.userId,
     });
     const creditResponse = creditErrorResponse(error);
     if (creditResponse) {

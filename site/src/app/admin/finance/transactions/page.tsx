@@ -43,7 +43,7 @@ export default function AdminFinanceTransactionsPage() {
           variant="outline"
           disabled={!transactions.data?.transactions.length}
           onClick={() =>
-            transactions.data && downloadCsv(transactions.data.transactions, "donkey_finance_ledger_export")
+            transactions.data && downloadCsv(transactions.data.transactions, "depcut_finance_ledger_export")
           }
         >
           <Download className="size-3.5" data-icon="inline-start" /> Export CSV

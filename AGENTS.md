@@ -1,6 +1,6 @@
 # Agent Guide
 
-Donkey is a video editor. Donkey Cut runs in the browser; the Mac app is a menu bar app
+DepCut is a video editor that runs in the browser; the Mac app is a menu bar app
 whose only job is to let that page use the Mac's hardware — the local Cut engine (encoding,
 storage, speech-to-text) and screen recording.
 

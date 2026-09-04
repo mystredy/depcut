@@ -12,7 +12,7 @@ import {
 } from "react-email";
 
 import { CommunityPs } from "./_components/CommunityPs";
-import { DonkeyMark } from "./_components/DonkeyMark";
+import { DepCutMark } from "./_components/DepCutMark";
 
 // The one email a new account gets: a personal note from David. Sent by
 // src/lib/email/send-welcome.ts; preview with `npm run email:dev`. The credit
@@ -36,19 +36,19 @@ export default function WelcomeEmail({
     <Html>
       <Head />
       <Preview>
-        I built Depcut because I wanted a video editor that was simple and
+        I built DepCut because I wanted a video editor that was simple and
         open source.
       </Preview>
       <Tailwind config={{ presets: [pixelBasedPreset] }}>
         <Body className="bg-white font-sans text-[#0F0E0D]">
           <Container className="mx-auto max-w-[520px] px-6 py-12">
-            <DonkeyMark />
+            <DepCutMark />
             <Text className="text-[15px] leading-relaxed">Hey {name},</Text>
             <Text className="text-[15px] leading-relaxed">
               Thanks for signing up.
             </Text>
             <Text className="text-[15px] leading-relaxed">
-              I&apos;m David, and I built Depcut because I wanted a video
+              I&apos;m David, and I built DepCut because I wanted a video
               editor that was simple and open source.
             </Text>
             <Text className="text-[15px] leading-relaxed">
@@ -65,7 +65,7 @@ export default function WelcomeEmail({
               try AI Chat or generate videos, images, audio, and more.
             </Text>
             <Text className="text-[15px] leading-relaxed">
-              If you enjoy using Depcut, I&apos;d really appreciate a ⭐ on
+              If you enjoy using DepCut, I&apos;d really appreciate a ⭐ on
               GitHub. If you have questions, feedback, or just want to say hi,
               join the Discord. I&apos;m there every day.
             </Text>
@@ -74,7 +74,7 @@ export default function WelcomeEmail({
               reply anytime. I read every email.
             </Text>
             <Text className="text-[15px] leading-relaxed">
-              Thanks again for giving Depcut a try.
+              Thanks again for giving DepCut a try.
             </Text>
             <Text className="text-[15px] leading-relaxed">
               Have a great day!
@@ -83,7 +83,7 @@ export default function WelcomeEmail({
             <CommunityPs />
             <Hr className="mt-6 border-[#0F0E0D]/15" />
             <Text className="text-[12px] leading-relaxed text-[#0F0E0D]/60">
-              You&apos;re receiving this because you created a Depcut
+              You&apos;re receiving this because you created a DepCut
               account.{" "}
               <Link
                 href={unsubscribeUrl}
@@ -103,5 +103,5 @@ export default function WelcomeEmail({
 WelcomeEmail.PreviewProps = {
   name: "Ada",
   credits: "3",
-  unsubscribeUrl: "https://donkeycut.com/unsubscribe?token=preview",
+  unsubscribeUrl: "https://depcut.com/unsubscribe?token=preview",
 } satisfies WelcomeEmailProps;

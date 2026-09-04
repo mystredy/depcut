@@ -8,7 +8,7 @@ import {
   upsertKey,
   type EffectId,
   type OverlayKey,
-} from "@donkeycut/effects-kit";
+} from "@depcut/effects-kit";
 import { create } from "zustand";
 import type {
   Aspect,

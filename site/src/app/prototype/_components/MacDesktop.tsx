@@ -103,7 +103,7 @@ export function MacDesktop({
           backdropFilter: 'blur(14px)',
         }}
       >
-        <span className="font-medium text-white/[0.88]">Depcut</span>
+        <span className="font-medium text-white/[0.88]">DepCut</span>
         <span>File</span>
         <span>Edit</span>
         <span>View</span>
@@ -136,7 +136,7 @@ export function MacDesktop({
       />
 
       <section
-        aria-label="Depcut prompt"
+        aria-label="DepCut prompt"
         className="absolute left-1/2 top-1/2 z-20"
         style={{
           width: LAYOUT.contentWidth,
@@ -159,16 +159,16 @@ export function MacDesktop({
             boxShadow: '0 5px 12px rgba(0,0,0,0.2), inset 0 0 0 1px rgba(255,255,255,0.34)',
           }}
         >
-          <label className="sr-only" htmlFor="donkey-prompt-input">
+          <label className="sr-only" htmlFor="depcut-prompt-input">
             Prompt
           </label>
           <textarea
-            id="donkey-prompt-input"
+            id="depcut-prompt-input"
             ref={promptInputRef}
             rows={1}
             value={promptText}
             onChange={(event) => setPromptText(event.target.value)}
-            placeholder="What can Depcut do for you?"
+            placeholder="What can DepCut do for you?"
             className="flex-1 resize-none border-0 bg-transparent p-0 pr-[84px] text-[16px] font-light leading-[19.2px] text-white outline-none placeholder:text-white/[0.58]"
             style={{
               height: promptTextHeight,

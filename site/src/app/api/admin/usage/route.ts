@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { creditMicrosToString, zeroCreditMicros } from "@/lib/credits/amounts";
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 // Super-user only: site-wide usage and credit totals for the admin panel's
 // Usage page. Mirrors the shape of the per-user recentUsageTotals in
 // lib/credits/inference.ts, but aggregated across every account.
-export const GET = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const GET = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can view this." },
       { status: 403 },

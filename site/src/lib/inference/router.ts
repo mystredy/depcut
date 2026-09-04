@@ -79,11 +79,11 @@ export class ProviderRegistry {
   }
 
   public responsesProvider(request?: ResponseCreateRequest) {
-    if (request?.donkeyProvider) {
+    if (request?.depcutProvider) {
       const provider = this.providers.find((candidate) => {
         return (
           Boolean(candidate.createResponse) &&
-          Boolean(candidate.responseProviderIDs?.includes(request.donkeyProvider ?? "")) &&
+          Boolean(candidate.responseProviderIDs?.includes(request.depcutProvider ?? "")) &&
           candidate.canCreateResponse?.(request) !== false
         );
       });
@@ -92,7 +92,7 @@ export class ProviderRegistry {
         throw new InferenceProviderError("Requested Responses provider is unavailable.", {
           statusCode: 404,
           code: "provider_not_found",
-          details: { provider: request.donkeyProvider },
+          details: { provider: request.depcutProvider },
         });
       }
 
@@ -100,7 +100,7 @@ export class ProviderRegistry {
         throw new InferenceProviderError("Requested Responses provider is not configured.", {
           statusCode: 503,
           code: "missing_provider_credentials",
-          details: { provider: request.donkeyProvider },
+          details: { provider: request.depcutProvider },
         });
       }
 

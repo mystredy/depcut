@@ -1,6 +1,6 @@
 # Local Compute
 
-A project the engine does not store — one in the cloud, or one in the browser's own origin-private storage — still uses the Mac when there is one. Speech is the case that matters today: transcription and dictation run on device whenever the Donkey app is running, even for media the engine has never seen. The user pays nothing for that work, gets it faster, and gets better timings out of it.
+A project the engine does not store — one in the cloud, or one in the browser's own origin-private storage — still uses the Mac when there is one. Speech is the case that matters today: transcription and dictation run on device whenever the DepCut app is running, even for media the engine has never seen. The user pays nothing for that work, gets it faster, and gets better timings out of it.
 
 **The one rule:** compute never decides where data lands. Whoever does the work, the result goes back to the project's own backend — cues into the project's document, a render into the storage that project uses. A locally run job that finishes in a folder on the Mac and leaves the project none the wiser breaks the rule.
 

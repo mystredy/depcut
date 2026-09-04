@@ -5,7 +5,7 @@ import {
   Headline,
   PillButton,
 } from "@/app/_components/landing/LandingPrimitives";
-import { DONKEY_DOWNLOAD_URL } from "@/app/_components/landing/data";
+import { DEPCUT_DOWNLOAD_URL } from "@/app/_components/landing/data";
 import { BG, BLACK } from "@/app/_components/landing/theme";
 
 type InstallStep = {
@@ -20,22 +20,22 @@ const installSteps = [
   {
     eyebrow: "Step 1",
     title: "Open",
-    body: "Open the Donkey.dmg file from your downloads.",
-    imageAlt: "Donkey disk image download complete in a browser download tray.",
+    body: "Open the DepCut.dmg file from your downloads.",
+    imageAlt: "DepCut disk image download complete in a browser download tray.",
     imageSrc: "/install/install-open.png",
   },
   {
     eyebrow: "Step 2",
     title: "Install",
-    body: "Drag and drop the Depcut app into your Applications folder.",
-    imageAlt: "Depcut app icon being dragged into the Applications folder.",
+    body: "Drag and drop the DepCut app into your Applications folder.",
+    imageAlt: "DepCut app icon being dragged into the Applications folder.",
     imageSrc: "/install/install-drag.png",
   },
   {
     eyebrow: "Step 3",
     title: "Launch",
-    body: "Open Donkey from your Applications folder or Launchpad.",
-    imageAlt: "Depcut app icon in the macOS Dock.",
+    body: "Open DepCut from your Applications folder or Launchpad.",
+    imageAlt: "DepCut app icon in the macOS Dock.",
     imageSrc: "/install/install-launch.png",
   },
 ] satisfies InstallStep[];
@@ -51,7 +51,7 @@ export function InstallInstructions() {
     >
       <div style={{ margin: "0 auto", maxWidth: 1280 }}>
         <Headline>
-          Install Donkey
+          Install DepCut
           <br />
           <span style={{ fontStyle: "italic" }}>on your Mac.</span>
         </Headline>
@@ -68,7 +68,7 @@ export function InstallInstructions() {
           locally, so your files never leave your computer until you&rsquo;re
           ready to share them.
         </p>
-        <PillButton href={DONKEY_DOWNLOAD_URL} variant="primary" size="lg">
+        <PillButton href={DEPCUT_DOWNLOAD_URL} variant="primary" size="lg">
           Download for Mac
         </PillButton>
 

@@ -36,7 +36,7 @@ import {
   type OverlayAnim,
   type OverlayAnimStyle,
   type OverlayLoopStyle,
-} from "@donkeycut/effects-kit";
+} from "@depcut/effects-kit";
 import { clipLen, clipWindow, footprints, nextFreeStart, useEditor, type EditorState } from "@/cut/lib/store";
 import { extractClipAudio } from "@/cut/lib/extractAudio";
 import { AnimationTiles } from "@/cut/components/AnimationTiles";
@@ -88,7 +88,7 @@ import {
   type TextOverlay,
   type VideoClip,
 } from "@/cut/lib/types";
-import { autoGradeFromImageData, isNeutralGrade, normalizeGrade } from "@donkeycut/effects-kit";
+import { autoGradeFromImageData, isNeutralGrade, normalizeGrade } from "@depcut/effects-kit";
 import { getPreviewCanvas, sampleClipFrameData } from "@/cut/lib/previewCanvas";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";

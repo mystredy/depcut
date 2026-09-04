@@ -10,7 +10,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { JobFailure, jobKinds } from "@/lib/jobs/registry";
 import { prisma } from "@/lib/prisma";
 
-const JOBS_QUEUE_NAME = "donkey-jobs";
+const JOBS_QUEUE_NAME = "depcut-jobs";
 // A queued job untouched this long has likely lost its message (a failed
 // publish, a dropped delivery) — the status poll re-publishes. Double delivery
 // is safe: execution claims the row atomically.

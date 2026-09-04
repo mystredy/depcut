@@ -11,7 +11,7 @@ import { hostedPost } from "./hosted";
 import { refsToParts } from "./refMedia";
 import { parseTurnIntent, TURN_INTENT_PROMPT, turnIntentInput, type TurnIntent } from "./turnIntent";
 
-// Gemini chat runs from the page through Donkey's hosted Responses route with
+// Gemini chat runs from the page through DepCut's hosted Responses route with
 // the user's sign-in and credits — the local engine is not involved (same
 // carve-out as AI media generation). Each round the model answers or asks for
 // editor tools; tools execute right here against the live store via runAiTool,
@@ -158,7 +158,7 @@ async function emitStepLimitSummary({
       },
     ];
     const body = await postRound(
-      { donkeyProvider: "gemini", model, instructions: systemPrompt(), input: summaryInput },
+      { depcutProvider: "gemini", model, instructions: systemPrompt(), input: summaryInput },
       abortSignal
     );
     const summary = (body.output_text ?? "").trim();
@@ -196,7 +196,7 @@ async function classifyTurnIntent(
     const res = await hostedPost(
       "/api/inference/responses",
       {
-        donkeyProvider: "gemini",
+        depcutProvider: "gemini",
         model: geminiModelRoles.fastDecision,
         instructions: TURN_INTENT_PROMPT,
         input: turnIntentInput(turns),
@@ -283,7 +283,7 @@ async function requestError(res: Response): Promise<string> {
   if (res.status === 401) {
     // Refresh the sign-in probe so the composer note (with its sign-in link) appears.
     useGenerate.getState().probe();
-    return "Sign in to Depcut to chat with Gemini.";
+    return "Sign in to DepCut to chat with Gemini.";
   }
   const body = (await res.json().catch(() => null)) as {
     error?: unknown;
@@ -419,7 +419,7 @@ export function streamGeminiChat({
           let body: ResponseBody;
           try {
             body = await postRound(
-              { donkeyProvider: "gemini", model, instructions: systemPrompt(), input, ...(tools ? { tools } : {}) },
+              { depcutProvider: "gemini", model, instructions: systemPrompt(), input, ...(tools ? { tools } : {}) },
               abortSignal,
               (delta) => {
                 if (!textId) {

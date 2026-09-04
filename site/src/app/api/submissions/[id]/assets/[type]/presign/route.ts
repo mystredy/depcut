@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import {
   presignPut,
   submissionThumbnailKey,
@@ -33,7 +33,7 @@ const bodySchema = z
 // Mints a presigned PUT for one asset slot on a submission — the row already
 // exists by the time this is ever called (see POST /api/submissions).
 // Callable while drafting, and again to retry a failed asset after Submit.
-export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
+export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   const { id, type: rawType } = await context.params;
   if (!ASSET_TYPES.includes(rawType as AssetType)) {
     return NextResponse.json(
@@ -48,7 +48,7 @@ export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
     where: { id },
   });
   if (!submission) return notFoundResponse();
-  if (submission.userId !== request.donkey.userId) {
+  if (submission.userId !== request.depcut.userId) {
     return NextResponse.json({ error: "Forbidden", message: "Forbidden" }, { status: 403 });
   }
   if (submission.status === "submitted") {

@@ -32,7 +32,7 @@ import { overlayPlan, trackZeroPlan } from "./framePlan";
 import { frameSink, openMedia, videoTrackOf } from "./mediaRead";
 import { getClipSpans, overlayLayers, projectDuration, spanSequence } from "./store";
 import { captionStyle, cueOverlay, cueWordWindows, laneCues, laneHidden, subtitleLaneCount, trackPos } from "./subtitles";
-import { applyEffectToCanvas, evalOverlayFrame, grainTile, isOverlayAnimated, planAnimatedLayers, type LottieHandle, type OverlayAnim } from "@donkeycut/effects-kit";
+import { applyEffectToCanvas, evalOverlayFrame, grainTile, isOverlayAnimated, planAnimatedLayers, type LottieHandle, type OverlayAnim } from "@depcut/effects-kit";
 import { BehindCompositor, hasBehindOverlays } from "./behindPass";
 import { renderElementPng } from "./textRender";
 import { frameOf, isEffectOverlay, isFullRect, isTextOverlay, laneOf, overlayAnimStyle, projectFadeSeconds, rectOf } from "./types";

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { listAudioGenerationsForAdmin, type AudioTool } from "@/lib/audioGenerations/db";
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { lookupOwners } from "@/lib/admin/ownerLookup";
 
 export const dynamic = "force-dynamic";
@@ -10,8 +10,8 @@ const TOOLS: readonly AudioTool[] = ["text-to-speech", "dubbing"];
 
 // Super-user only: the admin Content → Audio list — every Text to Speech and
 // Dubbing render across every account, most recent first.
-export const GET = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const GET = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json({ error: "Forbidden", message: "Only super users can view this." }, { status: 403 });
   }
 

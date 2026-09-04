@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { CATEGORY_SEED } from "@/lib/marketplace/categories-seed";
 import { prisma } from "@/lib/prisma";
 
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // CATEGORY_SEED if it's empty, then every read (this one included) serves
 // straight from the database. Submit Project and Inspiration both call this
 // instead of keeping their own hardcoded category list.
-export const GET = withDonkeyAuth(async () => {
+export const GET = withDepCutAuth(async () => {
   const existing = await prisma.category.count();
   if (existing === 0) {
     await prisma.category.createMany({

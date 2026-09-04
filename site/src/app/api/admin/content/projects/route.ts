@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { listCutProjectsForAdmin } from "@/lib/admin/content";
 import { lookupOwners } from "@/lib/admin/ownerLookup";
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +13,8 @@ const exportedValues = ["yes", "no"] as const;
 // project name, ?owner by the account's name/display name/email, ?exported
 // (yes|no) by whether it's ever been rendered, ?from/?to (ISO dates) by
 // last-edited range.
-export const GET = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const GET = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json({ error: "Forbidden", message: "Only super users can view this." }, { status: 403 });
   }
 

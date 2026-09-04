@@ -10,7 +10,7 @@ import {
   leakGradient,
   streakGradient,
   type EffectId,
-} from "@donkeycut/effects-kit";
+} from "@depcut/effects-kit";
 import { PICKED_RING, pickGridNav, useAssetPick } from "@/cut/lib/assetPick";
 import { clearElementDrag, setElementDragData } from "@/cut/lib/assetDrag";
 import { SubTabs } from "@/cut/components/SubTabs";

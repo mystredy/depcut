@@ -8,7 +8,7 @@
  * textStyle.ts stays what it was: the implicit "last used" style.
  */
 
-import { pickTextStyle } from "@donkeycut/effects-kit";
+import { pickTextStyle } from "@depcut/effects-kit";
 import { deleteTemplate, fetchLibrary, saveTemplate } from "./library";
 import type { Residency } from "./residency";
 import type { TextStyle } from "./textStyle";

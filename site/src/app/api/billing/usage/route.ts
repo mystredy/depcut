@@ -6,10 +6,10 @@ import { creditMicrosToString } from "@/lib/credits/amounts";
 import { readInferenceUsageBreakdown } from "@/lib/credits/inference";
 import { visionCallGrantRemaining } from "@/lib/credits/vision-grants";
 import {
-  donkeySessionUserId,
+  depcutSessionUserId,
   unauthorizedResponse,
-  withDonkeyAuth,
-} from "@/lib/donkey-api-auth";
+  withDepCutAuth,
+} from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -59,8 +59,8 @@ function toRecentCall(event: RecentEvent, product: "app" | "vision") {
 // product; everything else is app usage billed to the user's credits — including
 // the app's own vision_parse calls on the same route. Fetching the two products
 // separately keeps each tab's history independent.
-export const GET = withDonkeyAuth(async (request) => {
-  const userId = donkeySessionUserId(request);
+export const GET = withDepCutAuth(async (request) => {
+  const userId = depcutSessionUserId(request);
   if (!userId) {
     return unauthorizedResponse();
   }

@@ -10,7 +10,7 @@ import { ThemeProvider } from "@/cut/components/ThemeProvider";
 import { ThemeScript } from "@/cut/components/ThemeScript";
 
 // The Cut app (projects home, library, editor) renders on the same white
-// product surface as Donkey's /app, not the cream marketing background of the
+// product surface as DepCut's /app, not the cream marketing background of the
 // landing page that lives one segment up. AppSurfaceBackground paints the root
 // html white so the cream does not show through the overscroll area, and
 // font-system matches the /app system font stack. RequireSession gates the

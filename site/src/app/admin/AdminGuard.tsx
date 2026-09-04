@@ -13,7 +13,7 @@ import { useAccount } from "@/queries/credits";
 // ordinary 404 rather than a page that confirms /admin exists and is merely
 // off-limits — with real users on the site, that distinction is worth
 // hiding. The real enforcement lives server-side (every /api/admin/* route
-// re-checks isDonkeySuperUser) — this only decides what renders.
+// re-checks isDepCutSuperUser) — this only decides what renders.
 export function AdminGuard({ children }: { children: ReactNode }) {
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const account = useAccount();

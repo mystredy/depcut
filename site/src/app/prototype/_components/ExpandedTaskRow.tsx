@@ -1,7 +1,7 @@
 import { MessageSquareReply, Play, Square, X } from 'lucide-react';
 import type { MouseEvent } from 'react';
 
-import { DonkeyCursor } from '@/app/prototype/_components/DonkeyCursor';
+import { DepCutCursor } from '@/app/prototype/_components/DepCutCursor';
 import type { LiveTaskStatus } from '@/app/prototype/_components/types';
 
 type Props = {
@@ -87,7 +87,7 @@ export function ExpandedTaskRow({
           animation: waiting ? 'notchArrowPulse 1.6s ease-in-out infinite' : undefined,
         }}
       >
-        <DonkeyCursor color={color} size={14} silhouette={!pointerActive} className="mt-0.5" />
+        <DepCutCursor color={color} size={14} silhouette={!pointerActive} className="mt-0.5" />
       </div>
       <div className="min-w-0 flex-1" style={{ opacity: contentOpacity }}>
         <h2 className="truncate text-[13px] font-normal leading-4 text-white/[0.9]" style={{ paddingRight: controlsReserve }}>

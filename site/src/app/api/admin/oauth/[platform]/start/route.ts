@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { getOAuthProvider } from "@/lib/marketplace/oauth-providers";
 import { generatePkcePair, signOAuthState } from "@/lib/marketplace/oauth-state";
 import { prisma } from "@/lib/prisma";
@@ -15,8 +15,8 @@ type RouteContext = { params: Promise<{ platform: string }> };
 // ID/Secret stored in Settings > OAuth App (SocialAppConfig) — this route
 // never asks for or sees the user's platform password, same as any OAuth
 // flow.
-export const GET = withDonkeyAuth(async (request, context: RouteContext) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const GET = withDepCutAuth(async (request, context: RouteContext) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return oauthPopupHtml({
       message: "Only super users can connect a social account.",
       success: false,

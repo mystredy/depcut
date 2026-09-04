@@ -4,9 +4,9 @@ import type { Message, UserMessage } from "@earendil-works/pi-ai";
 import { AI_TOOLS, attachedAssetsBlock, systemPrompt } from "@/cut/server/ai/catalog";
 import { parseTurnIntent, turnIntentInput, turnIntentPrompt, type TurnIntent } from "../turnIntent";
 import { enforceContextBudget } from "./contextBudget";
-import { donkeyModel } from "./donkeyModel";
+import { depcutModel } from "./depcutModel";
 import { ledgerText, recordCall, type LedgerRecord } from "./mutationLedger";
-import { makeDonkeyStream, type DonkeyToolDetails, type PostFn, type WireCarrier, type WirePart } from "./donkeyStream";
+import { makeDepCutStream, type DepCutToolDetails, type PostFn, type WireCarrier, type WirePart } from "./depcutStream";
 import { toAgentTools, type ExecTool } from "./tools";
 import { subscribeUiChunks } from "./uiChunks";
 
@@ -139,7 +139,7 @@ function pruneStaleMedia(messages: AgentMessage[]): AgentMessage[] {
       } as AgentMessage;
     }
     if (msg.role === "toolResult") {
-      const details = msg.details as DonkeyToolDetails | undefined;
+      const details = msg.details as DepCutToolDetails | undefined;
       if (!details?.mediaParts?.length) return m;
       return { ...msg, details: { ...details, mediaParts: undefined } };
     }
@@ -211,8 +211,8 @@ function legacySession(history: UIMessage[]): AgentMessage[] {
       out.push({
         role: "assistant",
         content: [{ type: "text", text }],
-        api: "donkey-responses",
-        provider: "donkey",
+        api: "depcut-responses",
+        provider: "depcut",
         model: "",
         usage: {
           input: 0,
@@ -306,7 +306,7 @@ async function classifyTurnIntent(
   try {
     const res = await deps.post(
       {
-        donkeyProvider: "gemini",
+        depcutProvider: "gemini",
         model: deps.models.gate,
         instructions: GATE_PROMPT,
         input: turnIntentInput(turns),
@@ -405,11 +405,11 @@ export function streamCutChat({
           const agent = new Agent({
             initialState: {
               systemPrompt: systemPrompt(),
-              model: donkeyModel(roundModel),
+              model: depcutModel(roundModel),
               messages: sessionFor(threadId, messages.filter((m) => m !== lastUser)),
               tools: withTools ? toAgentTools(AI_TOOLS, deps.execTool) : [],
             },
-            streamFn: makeDonkeyStream({
+            streamFn: makeDepCutStream({
               post: deps.post,
               onAuthFail: deps.onAuthFail,
               noCreditsMessage: deps.noCreditsMessage,
@@ -451,7 +451,7 @@ export function streamCutChat({
             },
             afterToolCall: async ({ toolCall, result, isError }) => {
               if (toolCall.name === "generate_scene" && !isError) scenePlannedThisTurn = true;
-              const details = result.details as DonkeyToolDetails | undefined;
+              const details = result.details as DepCutToolDetails | undefined;
               const errorText = isError
                 ? (result.content.find((c) => c.type === "text") as { text?: string } | undefined)
                     ?.text || "failed"

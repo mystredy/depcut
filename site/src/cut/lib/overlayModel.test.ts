@@ -5,7 +5,7 @@ import {
   loopPeriod,
   shapeMetrics,
   type OverlayAnim,
-} from "@donkeycut/effects-kit";
+} from "@depcut/effects-kit";
 import {
   stampOverlayKinds,
   stripDefaultOverlayKinds,

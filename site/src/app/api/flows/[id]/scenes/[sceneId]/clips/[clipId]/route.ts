@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { ownedFlow, ownedScene, removeSceneClip, updateSceneClipTrim } from "@/lib/flows/db";
 import { prisma } from "@/lib/prisma";
 
@@ -20,9 +20,9 @@ const trimSchema = z
   });
 
 // Trim handles — clip start/end within the scene.
-export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
+export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
   const { id, sceneId, clipId } = await context.params;
-  const flow = await ownedFlow(request.donkey.userId, id);
+  const flow = await ownedFlow(request.depcut.userId, id);
   if (!flow) return notFoundResponse();
   const scene = await ownedScene(id, sceneId);
   if (!scene) return notFoundResponse();
@@ -42,9 +42,9 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
 });
 
 // Remove clip — the scene only, never the generation itself.
-export const DELETE = withDonkeyAuth(async (request, context: RouteContext) => {
+export const DELETE = withDepCutAuth(async (request, context: RouteContext) => {
   const { id, sceneId, clipId } = await context.params;
-  const flow = await ownedFlow(request.donkey.userId, id);
+  const flow = await ownedFlow(request.depcut.userId, id);
   if (!flow) return notFoundResponse();
   const scene = await ownedScene(id, sceneId);
   if (!scene) return notFoundResponse();

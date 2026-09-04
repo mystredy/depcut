@@ -1,6 +1,6 @@
 # Brief to Video
 
-The brief-to-video pipeline is Donkey Cut's director: one request ("make me a video
+The brief-to-video pipeline is DepCut's director: one request ("make me a video
 about…") becomes a finished cut — script, narration, reference images, shots —
 assembled on the timeline, with subtitles and any other post step one
 assistant tool call away. The target: one prompt becomes a coherent short

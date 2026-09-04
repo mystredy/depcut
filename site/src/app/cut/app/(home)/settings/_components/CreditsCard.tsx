@@ -52,7 +52,7 @@ export function CreditsCard() {
       <CardHeader>
         <CardTitle>Credits</CardTitle>
         <CardDescription>
-          Pay-as-you-go balance for the Depcut app. Buy more any time.
+          Pay-as-you-go balance for the DepCut app. Buy more any time.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

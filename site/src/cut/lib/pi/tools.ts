@@ -1,7 +1,7 @@
 import type { TSchema } from "typebox";
 import type { AgentTool, AgentToolResult } from "@earendil-works/pi-agent-core";
 import type { AiToolDef } from "../aiToolDef";
-import type { DonkeyToolDetails, WirePart } from "./donkeyStream";
+import type { DepCutToolDetails, WirePart } from "./depcutStream";
 
 // The tool bridge: the shared AiToolDef catalog as pi AgentTools. Execution is
 // injected — production serves skills locally and runs everything else on the
@@ -16,7 +16,7 @@ const DATA_URL = /^data:([^;,]+);base64,(.+)$/;
  * own following user turn — Gemini degenerates when media shares a turn with a
  * functionResponse — and megabyte payloads stay out of the JSON the model and
  * the UI transcript carry. */
-export function toToolResult(name: string, output: unknown): AgentToolResult<DonkeyToolDetails> {
+export function toToolResult(name: string, output: unknown): AgentToolResult<DepCutToolDetails> {
   if (output && typeof output === "object" && "audio" in output) {
     const { audio, ...rest } = output as { audio?: unknown; name?: unknown };
     const m = typeof audio === "string" ? DATA_URL.exec(audio) : null;

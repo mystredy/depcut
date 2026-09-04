@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-import { DONKEYCUT_CANONICAL } from "@/cut/lib/hosts";
+import { DEPCUT_CANONICAL } from "@/cut/lib/hosts";
 import { getResend, isResendConfigured } from "@/lib/email/resend";
 import { prisma } from "@/lib/prisma";
 
@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 // domain-separated derivation of the auth secret — possession of a valid token
 // is the authorization. Tokens never expire: the link in an old email keeps
 // working for as long as the account exists.
-const TOKEN_DOMAIN = "donkey-email-unsubscribe-v1";
+const TOKEN_DOMAIN = "depcut-email-unsubscribe-v1";
 
 function signature(userId: string): Buffer {
   const secret = process.env.BETTER_AUTH_SECRET;
@@ -40,12 +40,12 @@ export function verifyUnsubscribeToken(token: string): string | null {
 
 // The page a human opens from an email footer.
 export function unsubscribePageUrl(userId: string): string {
-  return `${DONKEYCUT_CANONICAL}/unsubscribe?token=${unsubscribeToken(userId)}`;
+  return `${DEPCUT_CANONICAL}/unsubscribe?token=${unsubscribeToken(userId)}`;
 }
 
 // The endpoint mail providers POST to for RFC 8058 one-click unsubscribe.
 export function unsubscribeActionUrl(userId: string): string {
-  return `${DONKEYCUT_CANONICAL}/api/email/unsubscribe?token=${unsubscribeToken(userId)}`;
+  return `${DEPCUT_CANONICAL}/api/email/unsubscribe?token=${unsubscribeToken(userId)}`;
 }
 
 type SetUnsubscribedOptions = {

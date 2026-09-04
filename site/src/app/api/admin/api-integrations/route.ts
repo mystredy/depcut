@@ -7,7 +7,7 @@ import {
   API_INTEGRATION_WIRED,
   type ApiIntegrationProvider,
 } from "@/lib/marketplace/api-integrations-seed";
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +18,8 @@ export const dynamic = "force-dynamic";
 // adapter reads it at all — this table's own apiKey is storage/reference
 // only (see the module doc comment), so hasApiKey alone would be
 // misleading about what's really in effect.
-export const GET = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const GET = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can view this." },
       { status: 403 },

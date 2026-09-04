@@ -114,7 +114,7 @@ export function placeholderCard(name: string): ImageResponse {
         }}
       >
         <div style={{ display: "flex", fontSize: 30, letterSpacing: 2, opacity: 0.6 }}>
-          DONKEY CUT
+          DEPCUT CUT
         </div>
         <div
           style={{

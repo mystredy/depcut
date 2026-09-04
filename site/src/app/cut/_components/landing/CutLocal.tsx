@@ -17,7 +17,7 @@ export function CutLocal() {
       <div className="grid grid-cols-1 items-center gap-10 md:grid-cols-2 md:gap-16">
         <div>
           <Headline size="lg">
-            Run Depcut <span className="italic">on your Mac.</span>
+            Run DepCut <span className="italic">on your Mac.</span>
           </Headline>
           <p className="mt-6 max-w-[560px] text-[17px] leading-[1.55] text-[#454545]">
             Edit videos locally on your Mac. The app uses your own storage and
@@ -30,7 +30,7 @@ export function CutLocal() {
           </div>
         </div>
         <Image
-          alt="Depcut app icon being dragged into the Applications folder."
+          alt="DepCut app icon being dragged into the Applications folder."
           className="h-auto w-full rounded-2xl"
           height={413}
           src="/install/install-drag.png"

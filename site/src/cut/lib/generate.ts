@@ -29,7 +29,7 @@ import { walkLadder, type VideoAttempt } from "./videoLadder";
 // AI generation jobs, held outside the panels so a tab switch (which unmounts
 // them) doesn't orphan a running generation — video renders take minutes.
 //
-// Generation runs on Donkey's hosted inference routes with the user's Donkey
+// Generation runs on DepCut's hosted inference routes with the user's DepCut
 // sign-in and credits. The cut hosts serve the same Next app and the auth
 // cookie rides the registrable domain, so these are plain same-origin calls.
 // Finished media lands back in the project through the local engine: videos
@@ -88,7 +88,7 @@ export interface GenerateJob {
 export type VideoSubmitOutcome = { ok: true } | { ok: false; error: string };
 
 interface GenerateState {
-  /** Whether a Donkey session exists; null = not probed yet. */
+  /** Whether a DepCut session exists; null = not probed yet. */
   signedIn: boolean | null;
   jobs: GenerateJob[];
   probe: () => void;
@@ -221,8 +221,8 @@ const promptName = (prompt: string) => {
   return line.length > 60 ? `${line.slice(0, 57)}…` : line;
 };
 
-/** The Donkey sign-in URL, same-host, returning to the Cut page the user
- * started from. Image, video, and voiceover all run on the user's Donkey
+/** The DepCut sign-in URL, same-host, returning to the Cut page the user
+ * started from. Image, video, and voiceover all run on the user's DepCut
  * account, so every generation surface links here when signed out. */
 export function signInUrl(): string {
   if (typeof window === "undefined") return "/sign-in";
@@ -274,7 +274,7 @@ interface GenerationResponse {
 }
 
 async function readError(res: Response, fallback: string): Promise<string> {
-  if (res.status === 401) return "Sign in to Depcut to generate media.";
+  if (res.status === 401) return "Sign in to DepCut to generate media.";
   const body = (await res.json().catch(() => null)) as {
     error?: unknown;
     message?: unknown;
@@ -1003,7 +1003,7 @@ if (typeof window !== "undefined") {
   setInterval(() => useGenerate.getState().resumeRunningJobs(), LEASE_TTL_MS);
 }
 
-/** Donkey sign-in state for the generation surfaces. Probes on mount and again
+/** DepCut sign-in state for the generation surfaces. Probes on mount and again
  * whenever the tab regains focus, so signing in — in this tab's round trip or a
  * separate tab — flips the UI without a manual reload. Null until first known. */
 export function useSignedIn(): boolean | null {

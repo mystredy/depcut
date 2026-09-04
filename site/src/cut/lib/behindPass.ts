@@ -8,7 +8,7 @@
  * the effect degrades to a normal front title instead of hiding words.
  */
 
-import { evalOverlayFrame } from "@donkeycut/effects-kit";
+import { evalOverlayFrame } from "@depcut/effects-kit";
 import { personSegmenter, segmentSubjectAlpha } from "./cutout";
 import { renderElementPng } from "./textRender";
 import { isTextOverlay, type MediaAsset, type Overlay, type TextOverlay } from "./types";

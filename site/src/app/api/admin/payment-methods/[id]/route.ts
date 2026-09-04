@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import {
-  isDonkeySuperUser,
+  isDepCutSuperUser,
   notFoundResponse,
-  withDonkeyAuth,
-} from "@/lib/donkey-api-auth";
+  withDepCutAuth,
+} from "@/lib/depcut-api-auth";
 import { setEnvVars } from "@/lib/env-file";
 import {
   PAYMENT_METHOD_ENV_VARS,
@@ -33,8 +33,8 @@ const updateSchema = z
 // only update when a non-empty value is sent — leaving the input blank in
 // the UI means "don't touch this", not "clear it". merchantId/notes clear on
 // an empty string like a normal field.
-export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can do this." },
       { status: 403 },

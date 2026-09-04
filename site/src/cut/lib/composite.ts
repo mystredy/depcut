@@ -19,7 +19,7 @@
  * it was reached by playing there or by rendering the 135th frame.
  */
 
-import { gradeTint, gradeToCssFilter, grainTile, isNeutralGrade, lookCssFilter, lookPost } from "@donkeycut/effects-kit";
+import { gradeTint, gradeToCssFilter, grainTile, isNeutralGrade, lookCssFilter, lookPost } from "@depcut/effects-kit";
 import { isFullRect, rectOf } from "./types";
 import type { FrameRect, TransitionStyle, VideoClip } from "./types";
 

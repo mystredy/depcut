@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Message, UserMessage } from "@earendil-works/pi-ai";
-import type { DonkeyToolDetails, WireCarrier, WirePart } from "./donkeyStream";
+import type { DepCutToolDetails, WireCarrier, WirePart } from "./depcutStream";
 
 // A chat turn replays its whole session on every model call, and media —
 // listen_audio sound, watch_video contact sheets, attachment payloads — rides
@@ -39,7 +39,7 @@ const messageBytes = (m: AgentMessage): number => {
   }
   if (msg.role === "toolResult") {
     let bytes = 0;
-    const details = msg.details as DonkeyToolDetails | undefined;
+    const details = msg.details as DepCutToolDetails | undefined;
     for (const p of details?.mediaParts ?? []) bytes += partBytes(p);
     return bytes;
   }
@@ -91,7 +91,7 @@ export function enforceContextBudget(
     }
     // toolResult (assistant messages carry no media by construction)
     const t = msg as Extract<Message, { role: "toolResult" }>;
-    const details = t.details as DonkeyToolDetails;
+    const details = t.details as DepCutToolDetails;
     let dropped = 0;
     const keptMedia = (details.mediaParts ?? []).filter((p) => {
       if (keep(partBytes(p))) return true;

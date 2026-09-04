@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createAudioGeneration } from "@/lib/audioGenerations/db";
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,7 @@ const createSchema = z
 // caller's side: a failure here never blocks the user from hearing or
 // downloading their own clip, it just means that render won't show up in the
 // admin's Content → Audio list.
-export const POST = withDonkeyAuth(async (request) => {
+export const POST = withDepCutAuth(async (request) => {
   const parsed = createSchema.safeParse(await request.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
@@ -39,7 +39,7 @@ export const POST = withDonkeyAuth(async (request) => {
   }
 
   const row = await createAudioGeneration({
-    userId: request.donkey.userId,
+    userId: request.depcut.userId,
     tool: body.tool,
     script: body.script,
     direction: body.direction,

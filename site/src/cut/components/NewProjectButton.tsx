@@ -38,7 +38,7 @@ const RESIDENCY_SCOPE: Record<Residency, { tail: string; place: string }> = {
  * The chevron is that switch, and it appears once, in the sidebar: it sets the
  * shelf for everything this browser creates, so every other New project button
  * follows it rather than asking again. It appears only when there is a choice
- * to make. Without the Donkey app running this Mac has no shelf, so every
+ * to make. Without the DepCut app running this Mac has no shelf, so every
  * project is a cloud project. A folder pins its own residency, since a project
  * files only into a folder beside it.
  */

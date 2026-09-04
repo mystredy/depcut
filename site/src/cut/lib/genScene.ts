@@ -265,7 +265,7 @@ function newProject(projectId: string, params: StartSceneParams): VideoProject {
     // another open project's aspect later.
     aspect: nearestAspect(useEditor.getState().aspect, defaultVideoAspects()),
     style: params.style?.trim() ?? "",
-    suiteLabel: "donkey-hosted",
+    suiteLabel: "depcut-hosted",
     ...(params.chatId ? { chatId: params.chatId } : {}),
     characters: [],
     locations: [],

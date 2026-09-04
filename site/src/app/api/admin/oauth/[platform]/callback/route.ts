@@ -1,4 +1,4 @@
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { oauthPopupHtml } from "@/lib/marketplace/oauth-popup-html";
 import { getOAuthProvider } from "@/lib/marketplace/oauth-providers";
 import { verifyOAuthState } from "@/lib/marketplace/oauth-state";
@@ -57,8 +57,8 @@ async function exchangeCode(opts: {
 // Super-user only, but reached via a top-level browser navigation from the
 // platform's own domain — normal OAuth redirect, not a fetch, so our
 // first-party session cookie still rides along.
-export const GET = withDonkeyAuth(async (request, context: RouteContext) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const GET = withDepCutAuth(async (request, context: RouteContext) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return oauthPopupHtml({ message: "Only super users can do this.", success: false, title: "Forbidden" });
   }
 

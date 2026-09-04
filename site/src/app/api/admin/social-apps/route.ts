@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 import { SOCIAL_APP_ENV_VARS, SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
 
@@ -13,8 +13,8 @@ export const dynamic = "force-dynamic";
 // which ones are set (configuredFields). Non-secret ("text") fields like a
 // Telegram username aren't credentials, so their actual saved value comes
 // back in `values` for the admin form to show and edit.
-export const GET = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const GET = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can view this." },
       { status: 403 },

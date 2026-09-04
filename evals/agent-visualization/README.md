@@ -1,6 +1,6 @@
 # Agent Visualization Eval Fixtures
 
-This directory contains deterministic e2e fixtures for Donkey's agent action
+This directory contains deterministic e2e fixtures for DepCut's agent action
 visualization layer. These cases validate the feedback-loop shape without
 launching real apps or moving the real macOS pointer.
 

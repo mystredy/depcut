@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -12,10 +12,10 @@ const LINK_TOKEN_TTL_MS = 15 * 60 * 1000;
 
 // Current link status — Preferences reads this to show "Linked as @x" vs a
 // "Link bot" button.
-export const GET = withDonkeyAuth(async (request) => {
+export const GET = withDepCutAuth(async (request) => {
   const user = await prisma.user.findUnique({
     select: { telegramChatId: true, telegramUsername: true },
-    where: { id: request.donkey.userId },
+    where: { id: request.depcut.userId },
   });
   return NextResponse.json({
     linked: Boolean(user?.telegramChatId),
@@ -33,7 +33,7 @@ function randomPin(): string {
 // fallback for whoever the deep link doesn't cleanly open Telegram for. A
 // stale, unredeemed credential from an earlier click is replaced, not
 // stacked; expired rows from any user get swept opportunistically here too.
-export const POST = withDonkeyAuth(async (request) => {
+export const POST = withDepCutAuth(async (request) => {
   const bot = await prisma.socialAppConfig.findUnique({ where: { platform: "telegram" } });
   const credentials = (bot?.credentials as Record<string, string> | null) ?? {};
   const botUsername = process.env.TELEGRAM_BOT_USERNAME?.trim() || credentials.botUsername;
@@ -47,13 +47,13 @@ export const POST = withDonkeyAuth(async (request) => {
   await prisma.telegramLinkToken.deleteMany({
     where: { createdAt: { lt: new Date(Date.now() - LINK_TOKEN_TTL_MS) } },
   });
-  await prisma.telegramLinkToken.deleteMany({ where: { userId: request.donkey.userId } });
+  await prisma.telegramLinkToken.deleteMany({ where: { userId: request.depcut.userId } });
 
   let pin = randomPin();
   while (await prisma.telegramLinkToken.findUnique({ select: { token: true }, where: { pin } })) {
     pin = randomPin();
   }
-  const link = await prisma.telegramLinkToken.create({ data: { pin, userId: request.donkey.userId } });
+  const link = await prisma.telegramLinkToken.create({ data: { pin, userId: request.depcut.userId } });
 
   return NextResponse.json({
     botUsername,
@@ -69,7 +69,7 @@ const unlinkSchema = z.object({ code: z.string().trim().min(1) }).strict();
 // removing the link proves control of that chat rather than just the
 // browser session. Clears the chat id/username so no more DMs go out and
 // the Preferences card falls back to showing "Link bot" again.
-export const DELETE = withDonkeyAuth(async (request) => {
+export const DELETE = withDepCutAuth(async (request) => {
   const parsed = unlinkSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request", message: "A confirmation code is required." }, { status: 400 });
@@ -77,7 +77,7 @@ export const DELETE = withDonkeyAuth(async (request) => {
 
   const user = await prisma.user.findUnique({
     select: { telegramUnlinkCode: true, telegramUnlinkCodeExpiresAt: true },
-    where: { id: request.donkey.userId },
+    where: { id: request.depcut.userId },
   });
   const valid =
     user?.telegramUnlinkCode === parsed.data.code &&
@@ -97,7 +97,7 @@ export const DELETE = withDonkeyAuth(async (request) => {
       telegramUnlinkCodeExpiresAt: null,
       telegramUsername: null,
     },
-    where: { id: request.donkey.userId },
+    where: { id: request.depcut.userId },
   });
   return NextResponse.json({ ok: true });
 });

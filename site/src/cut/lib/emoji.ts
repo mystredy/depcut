@@ -600,7 +600,7 @@ export const EMOJI_CATEGORIES: EmojiCategory[] = [
       ["🐆","leopard","leopard animal mammal"],
       ["🐴","horse face","horse face animal mammal"],
       ["🫎","moose","moose animal mammal"],
-      ["🫏","donkey","donkey animal mammal"],
+      ["🫏","depcut","depcut animal mammal"],
       ["🐎","horse","horse animal mammal"],
       ["🦄","unicorn","unicorn animal mammal"],
       ["🦓","zebra","zebra animal mammal"],

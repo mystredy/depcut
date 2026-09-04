@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { failSubmissionAsset } from "@/lib/marketplace/submission-promotion";
 import { prisma } from "@/lib/prisma";
 
@@ -15,7 +15,7 @@ const bodySchema = z.object({ error: z.string().trim().max(500).optional() }).st
 // The client-side upload itself failed (network error, non-2xx PUT) before
 // it ever got to /complete. Marks the asset failed and, if the creator had
 // already asked to submit, fails the submission too.
-export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
+export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   const { id, type: rawType } = await context.params;
   if (!ASSET_TYPES.includes(rawType as (typeof ASSET_TYPES)[number])) {
     return NextResponse.json(
@@ -29,7 +29,7 @@ export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
     where: { id },
   });
   if (!submission) return notFoundResponse();
-  if (submission.userId !== request.donkey.userId) {
+  if (submission.userId !== request.depcut.userId) {
     return NextResponse.json({ error: "Forbidden", message: "Forbidden" }, { status: 403 });
   }
 

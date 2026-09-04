@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The real model suite: every genvideo role bound to Donkey's hosted models,
+ * The real model suite: every genvideo role bound to DepCut's hosted models,
  * built for one open project. This is the production counterpart to
  * `fakeRegistry()` — the orchestrator depends only on the role interfaces, so
  * swapping fakes for this is the whole wiring.
@@ -31,7 +31,7 @@ import { makeTranscribeRole } from "./transcribe";
  * single-asset chat generation tools. */
 export function realSuite(projectId: string, chatId?: string): ModelSuite {
   return {
-    label: "donkey-hosted",
+    label: "depcut-hosted",
     script: makeScriptRole(),
     breakdown: makeBreakdownRole(),
     style: makeStyleRole(projectId),

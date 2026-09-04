@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { deleteProjectCascade } from "@/cut/server/cloud/projects";
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +15,8 @@ type RouteContext = { params: Promise<{ id: string }> };
 // owner delete does) — it already takes userId as a real parameter rather
 // than reading it from the session, so the only change here is looking the
 // project up without an ownership constraint before calling it.
-export const DELETE = withDonkeyAuth(async (request, context: RouteContext) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const DELETE = withDepCutAuth(async (request, context: RouteContext) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json({ error: "Forbidden", message: "Only super users can do this." }, { status: 403 });
   }
   const { id } = await context.params;

@@ -29,7 +29,7 @@ async function tryRedeemLinkToken(
   await prisma.telegramLinkToken.delete({ where: { token: link.token } }).catch(() => {});
   if (Date.now() - link.createdAt.getTime() > LINK_TOKEN_TTL_MS) return "expired";
 
-  // One Telegram identity may never sit on two Depcut accounts — a chat
+  // One Telegram identity may never sit on two DepCut accounts — a chat
   // already linked elsewhere is rejected outright, not silently
   // reassigned, so the original account never loses its link without
   // deciding to.
@@ -88,9 +88,9 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
       if (botToken) {
         const replies: Record<RedeemResult, string> = {
           "already-taken":
-            "This Telegram account is already linked to a different Depcut account — unlink it there first, then try again.",
+            "This Telegram account is already linked to a different DepCut account — unlink it there first, then try again.",
           expired: "That code expired or wasn't recognized — generate a new one from Preferences and try again.",
-          linked: "✅ Your Depcut account is now linked — real-time alerts you've opted into will DM here.",
+          linked: "✅ Your DepCut account is now linked — real-time alerts you've opted into will DM here.",
         };
         await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           body: JSON.stringify({ chat_id: chatId, text: replies[result] }),

@@ -19,7 +19,7 @@ import {
   keepLargestSubject,
   removeFlatBackdrop,
   withOutline,
-} from "@donkeycut/effects-kit";
+} from "@depcut/effects-kit";
 import { hostedPost } from "./hosted";
 import { geminiModelRoles } from "@/lib/inference/gemini-models";
 
@@ -209,7 +209,7 @@ export async function hostedCutout(blob: Blob): Promise<HTMLCanvasElement | null
   sctx.drawImage(img, 0, 0, small.width, small.height);
   const dataUrl = small.toDataURL("image/jpeg", 0.85);
   const res = await hostedPost("/api/inference/responses", {
-    donkeyProvider: "gemini",
+    depcutProvider: "gemini",
     model: geminiModelRoles.chat,
     instructions:
       "You segment images. Output a JSON object {\"masks\": [...]} where each entry has \"box_2d\" ([y0, x0, y1, x1], normalized 0-1000), \"mask\" (a data: URI PNG probability mask for that box), and \"label\". Segment only the single main foreground subject.",

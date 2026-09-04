@@ -4,7 +4,7 @@ import { executeJob } from "@/lib/jobs/queue";
 
 // Execution callback for queued async jobs: the Cut worker's Cloudflare Queue
 // consumer POSTs one job id at a time (see src/lib/jobs/queue.ts).
-// Deliberately not wrapped in withDonkeyAuth — the caller is a machine, not a
+// Deliberately not wrapped in withDepCutAuth — the caller is a machine, not a
 // session — and gated by the shared secret instead, like the copy worker's
 // callback beside it.
 export const runtime = "nodejs";

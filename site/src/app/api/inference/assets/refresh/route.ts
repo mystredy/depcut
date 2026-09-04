@@ -15,13 +15,13 @@ import {
   validationErrorResponse,
 } from "@/lib/inference/responses";
 import { storedGenerationForProviderSchema } from "@/lib/inference/schemas";
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { InferenceProviderError } from "@/lib/inference/providers";
 
 export const dynamic = "force-dynamic";
 
-export const POST = withDonkeyAuth(async (request) => {
-  const client = requireInferenceClientId(request.donkey.clientId);
+export const POST = withDepCutAuth(async (request) => {
+  const client = requireInferenceClientId(request.depcut.clientId);
   if (!client.ok) {
     return client.response;
   }
@@ -44,7 +44,7 @@ export const POST = withDonkeyAuth(async (request) => {
     // assets route), so a failure discovered only now still needs its original charge undone.
     if (result.status === "failed") {
       const originalCharge = await findChargedUsageEventByGenerationId(
-        request.donkey.userId,
+        request.depcut.userId,
         inferenceUsageRoutes.assets,
         parsed.data.id,
       );
@@ -53,7 +53,7 @@ export const POST = withDonkeyAuth(async (request) => {
       }
       await recordFailedInferenceUsage({
         clientId: client.clientId,
-        conversationId: request.donkey.conversationId,
+        conversationId: request.depcut.conversationId,
         errorCode: "provider_error",
         metadata: {
           assetKind: parsed.data.kind,
@@ -66,7 +66,7 @@ export const POST = withDonkeyAuth(async (request) => {
         provider: result.provider,
         requestKind: "asset_generation",
         route: inferenceUsageRoutes.assets,
-        userId: request.donkey.userId,
+        userId: request.depcut.userId,
       });
     }
 
@@ -79,7 +79,7 @@ export const POST = withDonkeyAuth(async (request) => {
   } catch (error) {
     await recordFailedInferenceUsage({
       clientId: client.clientId,
-      conversationId: request.donkey.conversationId,
+      conversationId: request.depcut.conversationId,
       errorCode: inferenceErrorCode(error),
       metadata: {
         assetKind: parsed.data.kind,
@@ -88,7 +88,7 @@ export const POST = withDonkeyAuth(async (request) => {
       provider: parsed.data.provider,
       requestKind: "asset_refresh",
       route: inferenceUsageRoutes.assetsRefresh,
-      userId: request.donkey.userId,
+      userId: request.depcut.userId,
     });
     if (error instanceof InferenceProviderError) {
       return inferenceProviderErrorResponse(error);

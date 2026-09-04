@@ -135,7 +135,7 @@ export default function TextToSpeechPage() {
       <div>
         <h1 className="text-lg font-semibold">Text to Speech</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Turn a script into a spoken audio clip with one of Depcut's AI voices.
+          Turn a script into a spoken audio clip with one of DepCut's AI voices.
         </p>
       </div>
 
@@ -223,7 +223,7 @@ export default function TextToSpeechPage() {
 
         {signedOut ? (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            Voiceovers run on your Depcut account.{" "}
+            Voiceovers run on your DepCut account.{" "}
             <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
               Sign in
             </a>{" "}

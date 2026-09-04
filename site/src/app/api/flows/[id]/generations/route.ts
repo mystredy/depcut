@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { ownedFlow, renameFlow } from "@/lib/flows/db";
 import { submitFlowGeneration } from "@/lib/flows/submit";
 import { prisma } from "@/lib/prisma";
@@ -53,9 +53,9 @@ function autoName(prompt: string): string {
 // Generate — one image or video inside this Flow's thread. Billed the same
 // as the standalone tool pages (see submit.ts): this route wraps the real
 // inference-gateway call, it doesn't reimplement it.
-export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
+export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
-  const flow = await ownedFlow(request.donkey.userId, id);
+  const flow = await ownedFlow(request.depcut.userId, id);
   if (!flow) return notFoundResponse();
 
   const parsed = createSchema.safeParse(await request.json());
@@ -91,7 +91,7 @@ export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
   try {
     const outcome = await submitFlowGeneration(request.headers, {
       flowId: id,
-      userId: request.donkey.userId,
+      userId: request.depcut.userId,
       kind: body.kind,
       prompt: body.prompt,
       provider: body.provider,

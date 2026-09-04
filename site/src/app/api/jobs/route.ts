@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import type { Prisma } from "@/generated/prisma/client";
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { enqueueJob, healJob } from "@/lib/jobs/queue";
 import { jobKinds } from "@/lib/jobs/registry";
 import { prisma } from "@/lib/prisma";
@@ -15,8 +15,8 @@ export const maxDuration = 300;
 // The most recent jobs, newest first, each self-healed on the way out so a
 // lost message republishes and a crashed execution reads as an error rather
 // than running forever.
-export const GET = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const GET = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can view this." },
       { status: 403 },
@@ -50,8 +50,8 @@ const jobRequestSchema = z
 // Start a background job. The kind names an executor in the registry, and the
 // payload must match that kind's schema. The caller polls /api/jobs/[jobId]
 // for the outcome.
-export const POST = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const POST = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can view this." },
       { status: 403 },
@@ -98,7 +98,7 @@ export const POST = withDonkeyAuth(async (request) => {
   const { jobId } = await enqueueJob(
     parsed.data.kind,
     payload.data as Prisma.InputJsonValue,
-    request.donkey.userId,
+    request.depcut.userId,
   );
   return NextResponse.json({ jobId });
 });

@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-import { DONKEYCUT_CANONICAL } from "@/cut/lib/hosts";
+import { DEPCUT_CANONICAL } from "@/cut/lib/hosts";
 
 export const metadata: Metadata = {
   alternates: {
-    canonical: `${DONKEYCUT_CANONICAL}/terms`,
+    canonical: `${DEPCUT_CANONICAL}/terms`,
   },
-  description: "Read the Depcut terms of use.",
-  title: "Terms of Use | Depcut",
+  description: "Read the DepCut terms of use.",
+  title: "Terms of Use | DepCut",
 };
 
 type Props = {

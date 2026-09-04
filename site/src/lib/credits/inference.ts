@@ -675,8 +675,8 @@ export async function getCreditBalance(userId: string) {
 
 export function creditUsageHeaders(recorded: RecordedInferenceUsage) {
   return {
-    "X-Donkey-Credits-Charged": creditMicrosToString(recorded.creditCostMicros),
-    "X-Donkey-Credits-Remaining": creditMicrosToString(recorded.remainingBalanceMicros),
+    "X-DepCut-Credits-Charged": creditMicrosToString(recorded.creditCostMicros),
+    "X-DepCut-Credits-Remaining": creditMicrosToString(recorded.remainingBalanceMicros),
   };
 }
 

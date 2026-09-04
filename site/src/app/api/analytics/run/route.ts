@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { isVercelCron, notFoundResponse } from "@/lib/donkey-api-auth";
+import { isVercelCron, notFoundResponse } from "@/lib/depcut-api-auth";
 import { enqueueJob } from "@/lib/jobs/queue";
 
 export const dynamic = "force-dynamic";

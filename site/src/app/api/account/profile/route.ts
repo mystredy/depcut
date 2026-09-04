@@ -4,9 +4,9 @@ import { z } from "zod";
 import { accountProfile } from "@/lib/account-profile";
 import {
   notFoundResponse,
-  withDonkeyAuth,
-  type DonkeyAuthenticatedRequest,
-} from "@/lib/donkey-api-auth";
+  withDepCutAuth,
+  type DepCutAuthenticatedRequest,
+} from "@/lib/depcut-api-auth";
 import { validationErrorResponse } from "@/lib/inference/responses";
 import { prisma } from "@/lib/prisma";
 
@@ -20,17 +20,17 @@ const updateProfileSchema = z.object({
   displayName: z.string().trim().max(60).nullable(),
 });
 
-export const GET = withDonkeyAuth(async (request: DonkeyAuthenticatedRequest) => {
-  const profile = await accountProfile(request.donkey.userId);
+export const GET = withDepCutAuth(async (request: DepCutAuthenticatedRequest) => {
+  const profile = await accountProfile(request.depcut.userId);
   if (!profile) return notFoundResponse();
   return NextResponse.json(profile);
 });
 
-export const PUT = withDonkeyAuth(async (request: DonkeyAuthenticatedRequest) => {
+export const PUT = withDepCutAuth(async (request: DepCutAuthenticatedRequest) => {
   const parsed = updateProfileSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return validationErrorResponse(parsed.error);
 
-  const userId = request.donkey.userId;
+  const userId = request.depcut.userId;
   await prisma.user.update({
     data: { displayName: parsed.data.displayName || null },
     where: { id: userId },

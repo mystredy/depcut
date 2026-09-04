@@ -26,7 +26,7 @@ export function Footer() {
     {
       title: "Product",
       links: [
-        { href: "/donkeyvision", label: "Depcut Vision API" },
+        { href: "/depcutvision", label: "DepCut Vision API" },
         { href: GITHUB_REPO_URL, label: "GitHub" },
       ],
     },
@@ -46,10 +46,10 @@ export function Footer() {
           <div className="mb-6 flex flex-wrap items-center gap-4">
             <Link
               href="/"
-              aria-label="Depcut home"
+              aria-label="DepCut home"
               className="text-[40px] font-semibold text-ink no-underline md:text-[48px]"
             >
-              Depcut
+              DepCut
             </Link>
             {socialLinks.map((link) => {
               const Icon = link.icon;
@@ -69,14 +69,14 @@ export function Footer() {
           <p className="text-[15px] font-semibold text-ink">
             Need help? Email us at{" "}
             <a
-              href="mailto:david@donkeyuse.com"
+              href="mailto:david@depcutuse.com"
               className="underline underline-offset-2"
             >
-              david@donkeyuse.com
+              david@depcutuse.com
             </a>
           </p>
           <p className="mt-6 text-[13px] text-[#666]">
-            2026 Depcut, Inc. Made for Macs.
+            2026 DepCut, Inc. Made for Macs.
           </p>
         </div>
         <div className="flex flex-1 flex-col gap-10 sm:flex-row sm:flex-wrap sm:gap-x-16 sm:gap-y-12 md:gap-x-20">

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { addToCollection, ownedCollection, ownedFlow } from "@/lib/flows/db";
 import { prisma } from "@/lib/prisma";
 
@@ -12,9 +12,9 @@ type RouteContext = { params: Promise<{ id: string; collectionId: string }> };
 const addSchema = z.object({ generationId: z.string().min(1) }).strict();
 
 // Add to Collection.
-export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
+export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   const { id, collectionId } = await context.params;
-  const flow = await ownedFlow(request.donkey.userId, id);
+  const flow = await ownedFlow(request.depcut.userId, id);
   if (!flow) return notFoundResponse();
   const collection = await ownedCollection(id, collectionId);
   if (!collection) return notFoundResponse();

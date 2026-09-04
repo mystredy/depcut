@@ -21,14 +21,14 @@ import { InferenceProviderError } from "@/lib/inference/providers";
 import type { JsonObject, JsonValue } from "@/lib/inference/providers";
 import { responseCreateRequestSchema } from "@/lib/inference/schemas";
 import {
-  shouldBypassDonkeyInferenceCredits,
-  withDonkeyAuth,
-} from "@/lib/donkey-api-auth";
+  shouldBypassDepCutInferenceCredits,
+  withDepCutAuth,
+} from "@/lib/depcut-api-auth";
 
 export const dynamic = "force-dynamic";
 
-export const POST = withDonkeyAuth(async (request) => {
-  const client = requireInferenceClientId(request.donkey.clientId);
+export const POST = withDepCutAuth(async (request) => {
+  const client = requireInferenceClientId(request.depcut.clientId);
   if (!client.ok) {
     return client.response;
   }
@@ -42,13 +42,13 @@ export const POST = withDonkeyAuth(async (request) => {
     typeof parsed.data.body.model === "string" && parsed.data.body.model.trim()
       ? parsed.data.body.model.trim()
       : "unknown";
-  const bypassCredits = shouldBypassDonkeyInferenceCredits(request.donkey);
+  const bypassCredits = shouldBypassDepCutInferenceCredits(request.depcut);
   if (!bypassCredits) {
     const credits = await requireInferenceCredits({
       model: requestedModel,
-      provider: parsed.data.donkeyProvider,
+      provider: parsed.data.depcutProvider,
       route: inferenceUsageRoutes.responses,
-      userId: request.donkey.userId,
+      userId: request.depcut.userId,
     });
     if (!credits.ok) {
       return credits.response;
@@ -62,13 +62,13 @@ export const POST = withDonkeyAuth(async (request) => {
       [
         "[debug-ui-inspection] start",
         `at=${new Date().toISOString()}`,
-        `provider=${parsed.data.donkeyProvider ?? "default"}`,
+        `provider=${parsed.data.depcutProvider ?? "default"}`,
         `requestedModel=${requestedModel}`,
       ].join(" "),
     );
   }
 
-  let failedUsageProvider = parsed.data.donkeyProvider ?? "default";
+  let failedUsageProvider = parsed.data.depcutProvider ?? "default";
 
   try {
     // Attached pictures and sound ride storage, not the request body — they
@@ -76,7 +76,7 @@ export const POST = withDonkeyAuth(async (request) => {
     const data = {
       ...parsed.data,
       body: toJsonObject(
-        await resolveInferenceBlobs(parsed.data.body, request.donkey.userId),
+        await resolveInferenceBlobs(parsed.data.body, request.depcut.userId),
       ),
     };
     const registry = createProviderRegistry();
@@ -89,13 +89,13 @@ export const POST = withDonkeyAuth(async (request) => {
         if (!bypassCredits) {
           await recordFailedInferenceUsage({
             clientId: client.clientId,
-            conversationId: request.donkey.conversationId,
+            conversationId: request.depcut.conversationId,
             errorCode: "streaming_unavailable",
             model: requestedModel,
             provider: failedUsageProvider,
             requestKind: "responses",
             route: inferenceUsageRoutes.responses,
-            userId: request.donkey.userId,
+            userId: request.depcut.userId,
           });
         }
 
@@ -126,14 +126,14 @@ export const POST = withDonkeyAuth(async (request) => {
               if (!bypassCredits) {
                 await recordInferenceUsage({
                   clientId: client.clientId,
-                  conversationId: request.donkey.conversationId,
+                  conversationId: request.depcut.conversationId,
                   model: streamed.model,
                   provider: streamed.provider,
                   requestKind: "responses",
                   route: inferenceUsageRoutes.responses,
                   status: "succeeded",
                   usage: event.usage,
-                  userId: request.donkey.userId,
+                  userId: request.depcut.userId,
                 });
               }
               send({ type: "response.completed", response: event.body });
@@ -143,13 +143,13 @@ export const POST = withDonkeyAuth(async (request) => {
             if (!bypassCredits) {
               await recordFailedInferenceUsage({
                 clientId: client.clientId,
-                conversationId: request.donkey.conversationId,
+                conversationId: request.depcut.conversationId,
                 errorCode: inferenceErrorCode(error),
                 model: streamed.model,
                 provider: streamed.provider,
                 requestKind: "responses",
                 route: inferenceUsageRoutes.responses,
-                userId: request.donkey.userId,
+                userId: request.depcut.userId,
               }).catch(() => {});
             }
             // A mid-stream failure surfaces as a terminal SSE error event so
@@ -168,15 +168,15 @@ export const POST = withDonkeyAuth(async (request) => {
       });
 
       const bypassHeaders: Record<string, string> = bypassCredits
-        ? { "X-Donkey-Dev-Auth-Bypass": "true" }
+        ? { "X-DepCut-Dev-Auth-Bypass": "true" }
         : {};
       return new Response(stream, {
         headers: {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
           Connection: "keep-alive",
-          "X-Donkey-Inference-Provider": streamed.provider,
-          "X-Donkey-Inference-Model": streamed.model,
+          "X-DepCut-Inference-Provider": streamed.provider,
+          "X-DepCut-Inference-Model": streamed.model,
           ...bypassHeaders,
         },
       });
@@ -188,13 +188,13 @@ export const POST = withDonkeyAuth(async (request) => {
       if (!bypassCredits) {
         await recordFailedInferenceUsage({
           clientId: client.clientId,
-          conversationId: request.donkey.conversationId,
+          conversationId: request.depcut.conversationId,
           errorCode: "responses_unavailable",
           model: requestedModel,
           provider: failedUsageProvider,
           requestKind: "responses",
           route: inferenceUsageRoutes.responses,
-          userId: request.donkey.userId,
+          userId: request.depcut.userId,
         });
       }
 
@@ -208,18 +208,18 @@ export const POST = withDonkeyAuth(async (request) => {
 
     let usageHeaders: Record<string, string> = {};
     if (bypassCredits) {
-      usageHeaders["X-Donkey-Dev-Auth-Bypass"] = "true";
+      usageHeaders["X-DepCut-Dev-Auth-Bypass"] = "true";
     } else {
       const recordedUsage = await recordInferenceUsage({
         clientId: client.clientId,
-        conversationId: request.donkey.conversationId,
+        conversationId: request.depcut.conversationId,
         model: result.model,
         provider: result.provider,
         requestKind: "responses",
         route: inferenceUsageRoutes.responses,
         status: "succeeded",
         usage: result.usage,
-        userId: request.donkey.userId,
+        userId: request.depcut.userId,
       });
       usageHeaders = creditUsageHeaders(recordedUsage);
     }
@@ -241,8 +241,8 @@ export const POST = withDonkeyAuth(async (request) => {
 
     return NextResponse.json(result.body, {
       headers: {
-        "X-Donkey-Inference-Provider": result.provider,
-        "X-Donkey-Inference-Model": result.model,
+        "X-DepCut-Inference-Provider": result.provider,
+        "X-DepCut-Inference-Model": result.model,
         ...usageHeaders,
       },
     });
@@ -250,13 +250,13 @@ export const POST = withDonkeyAuth(async (request) => {
     if (!bypassCredits) {
       await recordFailedInferenceUsage({
         clientId: client.clientId,
-        conversationId: request.donkey.conversationId,
+        conversationId: request.depcut.conversationId,
         errorCode: inferenceErrorCode(error),
         model: requestedModel,
         provider: failedUsageProvider,
         requestKind: "responses",
         route: inferenceUsageRoutes.responses,
-        userId: request.donkey.userId,
+        userId: request.depcut.userId,
       });
     }
     const creditResponse = creditErrorResponse(error);
@@ -277,7 +277,7 @@ function isDebugUIInspectionRequest(body: JsonObject) {
   }
 
   return body.tools.some((tool) => {
-    return isJsonObject(tool) && tool.type === "donkey_debug_ui_inspection";
+    return isJsonObject(tool) && tool.type === "depcut_debug_ui_inspection";
   });
 }
 

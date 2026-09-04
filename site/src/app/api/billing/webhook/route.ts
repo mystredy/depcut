@@ -16,7 +16,7 @@ import {
   stripeId,
   syncVisionSubscription,
 } from "@/lib/billing/stripe";
-import { notFoundResponse } from "@/lib/donkey-api-auth";
+import { notFoundResponse } from "@/lib/depcut-api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +31,8 @@ async function syncSubscription(subscription: Stripe.Subscription) {
 }
 
 // Public, signature-verified Stripe webhook. This is an intentional exception to
-// the "wrap every route with withDonkeyAuth" rule (see docs/guides/backend-apis):
-// Stripe authenticates via the webhook signature, not a Donkey session.
+// the "wrap every route with withDepCutAuth" rule (see docs/guides/backend-apis):
+// Stripe authenticates via the webhook signature, not a DepCut session.
 export async function POST(request: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret) {

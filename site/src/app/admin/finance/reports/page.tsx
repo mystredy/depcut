@@ -23,31 +23,31 @@ export default function AdminFinanceReportsPage() {
     {
       data: rates.data?.accounts,
       desc: "Every creator's pending, available, referral, and lifetime Rates balance.",
-      name: "donkey_creator_rates_summary",
+      name: "depcut_creator_rates_summary",
       title: "Creator Rates Summary",
     },
     {
       data: withdrawals.data?.withdrawals,
       desc: "Every requested, approved, and completed creator cashout.",
-      name: "donkey_withdrawals_ledger",
+      name: "depcut_withdrawals_ledger",
       title: "Withdrawals Ledger",
     },
     {
       data: referrals.data?.referrals,
       desc: "Referral counts and commission balances per user.",
-      name: "donkey_referral_commissions",
+      name: "depcut_referral_commissions",
       title: "Referral Commission Logs",
     },
     {
       data: giveaways.data?.giveaways,
       desc: "Recorded giveaway prize winners and payout status.",
-      name: "donkey_giveaway_payouts",
+      name: "depcut_giveaway_payouts",
       title: "Giveaway Payouts",
     },
     {
       data: transactions.data?.transactions,
       desc: "The full balance-affecting finance event ledger.",
-      name: "donkey_finance_transactions",
+      name: "depcut_finance_transactions",
       title: "Finance Transactions",
     },
   ];

@@ -5,18 +5,18 @@
 # and the Apple Silicon kernel kills an unsigned/invalidly-signed Mach-O on exec. So the vendored tools
 # must be (re)signed or they won't run on the user's Mac.
 #
-# Identity comes from DONKEY_TOOLS_SIGN_IDENTITY:
+# Identity comes from DEPCUT_TOOLS_SIGN_IDENTITY:
 #   "-" (default)         ad-hoc — runs locally and on any arm64 Mac for non-quarantined files (dev).
 #   "Developer ID ..."    real identity + hardened runtime + secure timestamp (production); pair with
 #                         notarization (see publish-bundled-tools.sh) for distribution.
 #
-# Usage: scripts/sign-bundled-tools.sh [vendor-dir]   (default: vendor/donkey-tools)
+# Usage: scripts/sign-bundled-tools.sh [vendor-dir]   (default: vendor/depcut-tools)
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-VENDOR_DIR="${1:-$ROOT_DIR/vendor/donkey-tools}"
-IDENTITY="${DONKEY_TOOLS_SIGN_IDENTITY:--}"
+VENDOR_DIR="${1:-$ROOT_DIR/vendor/depcut-tools}"
+IDENTITY="${DEPCUT_TOOLS_SIGN_IDENTITY:--}"
 
 if [ ! -d "$VENDOR_DIR" ]; then
   echo "sign-bundled-tools: $VENDOR_DIR does not exist" >&2
@@ -32,7 +32,7 @@ if [ "$IDENTITY" != "-" ]; then
 fi
 # Target the signing keychain explicitly when the caller points us at one: in CI the keychain is
 # imported in a separate step and the search-list state doesn't dependably reach codesign here.
-[ -n "${DONKEY_SIGN_KEYCHAIN:-}" ] && sign_opts+=(--keychain "$DONKEY_SIGN_KEYCHAIN")
+[ -n "${DEPCUT_SIGN_KEYCHAIN:-}" ] && sign_opts+=(--keychain "$DEPCUT_SIGN_KEYCHAIN")
 
 # A PyInstaller onefile tool (yt-dlp) unpacks a private Python.framework to a temp dir at launch and
 # dlopen()s it. Under the hardened runtime, library validation rejects that load ("mapping process and
@@ -48,7 +48,7 @@ needs_library_validation_exception() {
     *) return 1 ;;
   esac
 }
-ENTITLEMENTS="$(mktemp -t donkey-tools-entitlements)"
+ENTITLEMENTS="$(mktemp -t depcut-tools-entitlements)"
 trap 'rm -f "$ENTITLEMENTS"' EXIT
 cat > "$ENTITLEMENTS" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

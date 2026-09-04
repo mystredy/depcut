@@ -4,7 +4,7 @@
 // browser's local-network ask can't fire — is asked whether it owns the id,
 // and a miss means the project is cloud-resident. With no engine connected
 // there is nothing to ask, so the listing this browser last stored answers
-// instead: a project it saw on this Mac stays a local project, one the Donkey
+// instead: a project it saw on this Mac stays a local project, one the DepCut
 // app has to come back for.
 //
 // A project opens into one residency. The library is the other way around: it
@@ -49,7 +49,7 @@ export function availableResidencies(): Residency[] {
 }
 
 /** Set the first time an engine answers in this browser (by the ConnectGate).
- * It separates a browser that never had the Donkey app from one whose app
+ * It separates a browser that never had the DepCut app from one whose app
  * isn't running — the second has projects on this Mac and the first doesn't. */
 const SEEN_KEY = "cut-engine-seen";
 
@@ -79,7 +79,7 @@ export const libraryShelfKey = (r: Residency) => snapshotKey(r, "library", "shel
 /**
  * The residencies the projects home lists.
  *
- * Closing the Donkey app doesn't delete the projects on this Mac, so the shelf
+ * Closing the DepCut app doesn't delete the projects on this Mac, so the shelf
  * doesn't vanish with it: a browser that has reached an engine here lists that
  * shelf from the listing it stored, whether or not the app is answering now.
  * The cards are read-only until it is, and opening one says where the project

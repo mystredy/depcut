@@ -106,10 +106,10 @@ export default {
       }
       return Response.json({ ok: true, started });
     }
-    return new Response("donkey-cut-worker", { status: 200 });
+    return new Response("depcut-cut-worker", { status: 200 });
   },
 
-  // Share-copy queue consumer (donkey-cut-copy, wrangler.jsonc): one message
+  // Share-copy queue consumer (depcut-cut-copy, wrangler.jsonc): one message
   // per batch, one batch at a time, so copies drain serially no matter how
   // many viewers ask at once. The copy itself runs on the hosted API — this
   // handler only paces it and carries the queue's retry semantics: 2xx acks,

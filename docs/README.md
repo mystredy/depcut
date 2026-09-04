@@ -1,9 +1,9 @@
-# Donkey Docs
+# DepCut Docs
 
 This folder is the product and engineering source of truth for capabilities that are already supported.
 
-Donkey is a video editor. Donkey Cut runs in the browser; the Mac app is a menu bar
-app that lets that page use the Mac's hardware — the local Donkey Cut engine for encoding,
+DepCut is a video editor that runs in the browser; the Mac app is a menu bar
+app that lets that page use the Mac's hardware — the local DepCut engine for encoding,
 storage, and speech-to-text, plus screen recording.
 
 ## Guides
@@ -12,8 +12,8 @@ Supported product and engineering guides live in `docs/guides/`. This list is th
 
 **The product**
 
-- [Donkey Cut](guides/cut/README.md) — the video editor: what runs in the browser, what runs on the Mac, and the local resources behind it.
-- [Donkey Cut's AI Assistant](guides/cut/ai-assistant.md) — how a chat turn runs: the providers, the tool bridge into the editor, what the model knows, and the context budgets.
+- [DepCut](guides/cut/README.md) — the video editor: what runs in the browser, what runs on the Mac, and the local resources behind it.
+- [DepCut's AI Assistant](guides/cut/ai-assistant.md) — how a chat turn runs: the providers, the tool bridge into the editor, what the model knows, and the context budgets.
 - [Brief to Video](guides/cut/brief-to-video.md) — the director pipeline's strategy: story planning, the identity ladder that keeps a cast consistent, and where audio goes next.
 - [Local Compute](guides/cut/local-compute.md) — why a project the engine doesn't store still uses the Mac when there is one, and the rule that keeps its data where it lives regardless.
 
@@ -24,8 +24,8 @@ Supported product and engineering guides live in `docs/guides/`. This list is th
 
 **Operations**
 
-- [Install Donkey Locally](guides/install-donkey.md) — building the app bundle and disk image for local testing.
-- [Releasing Donkey](guides/releasing-donkey.md) — how production releases are built and shipped, including the tools that ship inside the app.
+- [Install DepCut Locally](guides/install-depcut.md) — building the app bundle and disk image for local testing.
+- [Releasing DepCut](guides/releasing-depcut.md) — how production releases are built and shipped, including the tools that ship inside the app.
 - [Vercel Function Budget](guides/vercel-function-budget.md) — how the hosted site's route handlers bundle into Vercel functions, the current Hobby-plan ceiling, and the options for getting headroom.
 
 **Working in this repo**

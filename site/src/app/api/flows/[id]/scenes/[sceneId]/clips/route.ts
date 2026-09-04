@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { addSceneClip, ownedFlow, ownedScene } from "@/lib/flows/db";
 import { prisma } from "@/lib/prisma";
 
@@ -15,9 +15,9 @@ const addSchema = z.object({ generationId: z.string().min(1) }).strict();
 // to still be rendering (a Continue Scene submission adds itself the
 // moment it's created, before the render lands) so the Scene Builder can
 // show it as a processing slot rather than making the user come back.
-export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
+export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   const { id, sceneId } = await context.params;
-  const flow = await ownedFlow(request.donkey.userId, id);
+  const flow = await ownedFlow(request.depcut.userId, id);
   if (!flow) return notFoundResponse();
   const scene = await ownedScene(id, sceneId);
   if (!scene) return notFoundResponse();

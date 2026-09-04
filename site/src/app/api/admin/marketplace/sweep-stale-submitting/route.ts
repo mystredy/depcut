@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { isDonkeySuperUser, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -42,8 +42,8 @@ async function failStale(ids: string[]): Promise<void> {
 // Super-user only, and not on any schedule yet — this repo has no cron
 // infrastructure, so run it by hand from the admin panel or wire it to an
 // external scheduler later. GET previews what a sweep would fail.
-export const GET = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const GET = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can view this." },
       { status: 403 },
@@ -59,8 +59,8 @@ export const GET = withDonkeyAuth(async (request) => {
 const sweepSchema = z.object({ graceMinutes: z.number().positive().max(24 * 60).optional() }).strict();
 
 // Actually fails whatever GET would have previewed.
-export const POST = withDonkeyAuth(async (request) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const POST = withDepCutAuth(async (request) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can do this." },
       { status: 403 },

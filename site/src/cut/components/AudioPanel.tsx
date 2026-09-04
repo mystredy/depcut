@@ -188,7 +188,7 @@ function MusicGenerator({ projectId }: { projectId: string }) {
         ? { text: e.message, credits: e instanceof NoCreditsError }
         : { text: fallback }
     );
-  // Music runs on the user's Donkey account, like image/video/voiceover.
+  // Music runs on the user's DepCut account, like image/video/voiceover.
   const signedOut = useSignedIn() === false;
 
   /** Generate `takes` tracks at once; each registers as a generated audio asset
@@ -329,7 +329,7 @@ function MusicGenerator({ projectId }: { projectId: string }) {
 
       {signedOut ? (
         <p className="music-signin text-[11px] leading-relaxed text-muted-foreground">
-          Music runs on your Depcut account.{" "}
+          Music runs on your DepCut account.{" "}
           <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
             Sign in
           </a>{" "}
@@ -377,7 +377,7 @@ function VoiceGenerator({ projectId }: { projectId: string }) {
         : { text: fallback }
     );
   const directionInput = useRef<HTMLTextAreaElement>(null);
-  // Voiceovers run on the user's Donkey account, like image/video generation.
+  // Voiceovers run on the user's DepCut account, like image/video generation.
   const signedOut = useSignedIn() === false;
 
   /** Synthesize the script, register the media asset, and drop one clip on the
@@ -531,7 +531,7 @@ function VoiceGenerator({ projectId }: { projectId: string }) {
 
       {signedOut ? (
         <p className="voice-signin text-[11px] leading-relaxed text-muted-foreground">
-          Voiceovers run on your Depcut account.{" "}
+          Voiceovers run on your DepCut account.{" "}
           <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
             Sign in
           </a>{" "}

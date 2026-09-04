@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { flowMediaUrl } from "@/lib/flows/media";
 import { ownedFlow, ownedScene, setSceneExport } from "@/lib/flows/db";
 import { prisma } from "@/lib/prisma";
@@ -26,9 +26,9 @@ type RouteContext = { params: Promise<{ id: string; sceneId: string }> };
 // stored under this Flow's own R2 prefix. Re-running overwrites the
 // previous export; the scene's exportKey is cleared by any clip/trim/order
 // change (see db.ts's invalidateExport) so a stale render is never served.
-export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
+export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   const { id, sceneId } = await context.params;
-  const flow = await ownedFlow(request.donkey.userId, id);
+  const flow = await ownedFlow(request.depcut.userId, id);
   if (!flow) return notFoundResponse();
   const scene = await ownedScene(id, sceneId);
   if (!scene) return notFoundResponse();
@@ -58,7 +58,7 @@ export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
       }),
     );
     const merged = await concatVideoClips(sources);
-    const key = flowMediaKey(request.donkey.userId, id, `scene-${sceneId}-${Date.now()}.mp4`);
+    const key = flowMediaKey(request.depcut.userId, id, `scene-${sceneId}-${Date.now()}.mp4`);
     await putObject(key, merged, "video/mp4");
     await setSceneExport(sceneId, key);
     return NextResponse.json({ exportUrl: await flowMediaUrl(key) });

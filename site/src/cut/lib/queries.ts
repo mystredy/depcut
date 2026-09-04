@@ -87,7 +87,7 @@ async function fetchProjectsSection(r: Residency): Promise<ProjectsSection> {
  * than an empty list, so one backend failing never blanks the other's cards.
  *
  * Listing a shelf and reading it are separate: the Mac's shelf lists with the
- * Donkey app closed, off the snapshot alone, because those projects still
+ * DepCut app closed, off the snapshot alone, because those projects still
  * exist and the user is entitled to see them. `live` is what asks the backend
  * for a fresh answer, and it turns on by itself the moment the app connects.
  */

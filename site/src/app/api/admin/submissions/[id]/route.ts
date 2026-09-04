@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import {
-  isDonkeySuperUser,
+  isDepCutSuperUser,
   notFoundResponse,
-  withDonkeyAuth,
-} from "@/lib/donkey-api-auth";
+  withDepCutAuth,
+} from "@/lib/depcut-api-auth";
 import { notifyUser } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
 
@@ -31,8 +31,8 @@ const actionSchema = z.discriminatedUnion("action", [
 // Pending -> InReview -> Qualified/Disqualified. Approving computes
 // earnedRates from the linked Task's maxRates (or the submission's own
 // maxRates) scaled by the assigned score out of 10.
-export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
-  if (!(await isDonkeySuperUser(request.donkey.userId))) {
+export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Only super users can do this." },
       { status: 403 },
@@ -63,7 +63,7 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
   }
 
   const input = parsed.data;
-  const reviewerId = request.donkey.userId;
+  const reviewerId = request.depcut.userId;
   const reviewer = await prisma.user.findUnique({
     select: { displayName: true, name: true },
     where: { id: reviewerId },

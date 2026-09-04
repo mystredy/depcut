@@ -53,9 +53,9 @@ const defaultDecisionResponsesModel = geminiModelRoles.fastDecision;
 const defaultVertexResponsesModel = geminiModelRoles.chat;
 const defaultComputerUseModel = geminiModelRoles.computerUse;
 
-export const geminiBrowserInteractionToolType = "donkey_gemini_browser_interaction";
-export const geminiMacDesktopInteractionToolType = "donkey_gemini_mac_desktop_interaction";
-export const debugUIInspectionToolType = "donkey_debug_ui_inspection";
+export const geminiBrowserInteractionToolType = "depcut_gemini_browser_interaction";
+export const geminiMacDesktopInteractionToolType = "depcut_gemini_mac_desktop_interaction";
+export const debugUIInspectionToolType = "depcut_debug_ui_inspection";
 
 // Note: `generic_harness_planning` is deliberately NOT fast-decision. Planning is the most
 // reasoning-heavy step (routing, plan steps, applying loaded skill guidance, and the act-vs-confirm
@@ -112,7 +112,7 @@ export function createGeminiComputerUseProvider(
   function responseRequestSetup(request: ResponseCreateRequest) {
     // Caller-defined function tools are honored only when the caller explicitly
     // asked for Gemini; the default Responses route keeps sending them elsewhere.
-    const allowFunctionTools = request.donkeyProvider === geminiProviderID;
+    const allowFunctionTools = request.depcutProvider === geminiProviderID;
     const registeredTools = registeredToolTypes(request.body.tools);
     if (hasExplicitUnsupportedTools(request.body.tools, allowFunctionTools)) {
       throw new InferenceProviderError("Gemini Responses received unsupported tool declarations.", {
@@ -332,7 +332,7 @@ export function createGeminiComputerUseProvider(
     canCreateResponse: (request) => {
       return !hasExplicitUnsupportedTools(
         request.body.tools,
-        request.donkeyProvider === geminiProviderID,
+        request.depcutProvider === geminiProviderID,
       );
     },
     // This adapter renders input_audio/input_video parts (see mediaPart); declare it so the router

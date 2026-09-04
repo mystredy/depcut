@@ -4,7 +4,7 @@
 // one point where the user gets a say — and the say sticks: the choice is
 // remembered on this browser until they change it. What they can choose from
 // is not up to them. The cloud needs a signed-in account, this Mac needs the
-// Donkey app running, and with only one of those reachable there is nothing to
+// DepCut app running, and with only one of those reachable there is nothing to
 // pick.
 //
 // The choice lives in a module-level store rather than component state because

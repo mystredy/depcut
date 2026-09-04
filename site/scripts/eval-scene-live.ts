@@ -70,7 +70,7 @@ function printShots(tag: string): void {
 async function main(): Promise<void> {
   const browser = await chromium.launch({ channel: "chrome", headless: true });
   const context = await browser.newContext({
-    extraHTTPHeaders: { "x-donkey-dev-auth-bypass": "1" },
+    extraHTTPHeaders: { "x-depcut-dev-auth-bypass": "1" },
     viewport: { width: 1440, height: 900 },
   });
   const page = await context.newPage();
@@ -81,7 +81,7 @@ async function main(): Promise<void> {
 
   if (ACTION === "fresh") {
     const name = arg("--name") ?? `eval ${new Date().toISOString().slice(0, 16)}`;
-    const res = await fetch(`${BASE}/api/cut/projects?u=donkey-dev-auth-bypass`, {
+    const res = await fetch(`${BASE}/api/cut/projects?u=depcut-dev-auth-bypass`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),

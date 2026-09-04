@@ -17,8 +17,8 @@ import {
 // the build script); re-exported here so existing importers keep working.
 export { DEFAULT_VOICE, resolveVoice, SPEECH_VOICES, type SpeechVoice };
 
-// Client side of AI voiceovers: Gemini speech generation on Donkey's hosted
-// inference routes, with the user's Donkey sign-in and credits (same-origin on
+// Client side of AI voiceovers: Gemini speech generation on DepCut's hosted
+// inference routes, with the user's DepCut sign-in and credits (same-origin on
 // the cut hosts, like image/video generation). Each segment comes back as raw
 // PCM; the browser lays the segments out at their timeline offsets, encodes
 // one WAV, and saves it into the project through the local engine like any
@@ -133,7 +133,7 @@ export async function planVoiceover(
   if (!direction) return passthrough;
   try {
     const res = await hostedPost("/api/inference/responses", {
-      donkeyProvider: "gemini",
+      depcutProvider: "gemini",
       model: geminiModels.flash,
       instructions: PLAN_INSTRUCTIONS,
       input: [{ role: "user", content: [{ text: JSON.stringify({ direction, lines: texts }) }] }],
@@ -189,7 +189,7 @@ interface PcmClip {
 export class NoCreditsError extends Error {}
 
 async function readError(res: Response, fallback: string): Promise<string> {
-  if (res.status === 401) return "Sign in to Depcut to generate voiceovers.";
+  if (res.status === 401) return "Sign in to DepCut to generate voiceovers.";
   const body = (await res.json().catch(() => null)) as {
     error?: unknown;
     message?: unknown;
@@ -198,7 +198,7 @@ async function readError(res: Response, fallback: string): Promise<string> {
   const message = [body?.message, body?.error].find(
     (v): v is string => typeof v === "string" && v.length > 0
   );
-  if (res.status === 402) return message ?? "Not enough Depcut credits — top up to continue.";
+  if (res.status === 402) return message ?? "Not enough DepCut credits — top up to continue.";
   // The provider's own error (`details.message`) names the actual rejection
   // ("input too long", a rate limit, …); the top-level message is generic.
   const detail = body?.details?.message;

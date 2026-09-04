@@ -21,7 +21,7 @@ on:
 
 permissions:
   contents: write
-  # Dispatching Release Donkey once the new manifest lands.
+  # Dispatching Release DepCut once the new manifest lands.
   actions: write
 
 concurrency:
@@ -55,8 +55,8 @@ jobs:
         id: tools-cache
         uses: actions/cache@v4
         with:
-          path: vendor/donkey-tools
-          key: donkey-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/fetch-bundled-tools.sh', 'tools/**') }}
+          path: vendor/depcut-tools
+          key: depcut-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/fetch-bundled-tools.sh', 'tools/**') }}
 
       # Import the Developer ID cert into a throwaway keychain and stage the notary API key, so the tools
       # are production-signed + notarized. Absent the secrets this no-ops to ad-hoc signing (still runnable,
@@ -64,17 +64,17 @@ jobs:
       - name: Set up Developer ID signing
         id: signing
         env:
-          CERT_P12: ${{ secrets.DONKEY_DEVELOPER_ID_CERT_P12 }}
-          CERT_PASSWORD: ${{ secrets.DONKEY_DEVELOPER_ID_CERT_PASSWORD }}
-          SIGN_IDENTITY: ${{ secrets.DONKEY_TOOLS_SIGN_IDENTITY }}
-          NOTARY_KEY_P8: ${{ secrets.DONKEY_NOTARY_KEY_P8 }}
+          CERT_P12: ${{ secrets.DEPCUT_DEVELOPER_ID_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.DEPCUT_DEVELOPER_ID_CERT_PASSWORD }}
+          SIGN_IDENTITY: ${{ secrets.DEPCUT_TOOLS_SIGN_IDENTITY }}
+          NOTARY_KEY_P8: ${{ secrets.DEPCUT_NOTARY_KEY_P8 }}
         run: |
           if [ -z "$CERT_P12" ] || [ -z "$SIGN_IDENTITY" ]; then
             echo "::warning::No Developer ID secrets; bundled tools will be ad-hoc signed (not for public distribution)."
             echo "identity=-" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          keychain="$RUNNER_TEMP/donkey-signing.keychain-db"
+          keychain="$RUNNER_TEMP/depcut-signing.keychain-db"
           kpw="$(uuidgen)"
           security create-keychain -p "$kpw" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
@@ -92,16 +92,16 @@ jobs:
       - name: Build and publish the tools bundle
         env:
           GH_TOKEN: ${{ github.token }}
-          DONKEY_TOOLS_SIGN_IDENTITY: ${{ steps.signing.outputs.identity }}
-          DONKEY_NOTARY_KEY_P8: ${{ runner.temp }}/notary.p8
-          DONKEY_NOTARY_KEY_ID: ${{ secrets.DONKEY_NOTARY_KEY_ID }}
-          DONKEY_NOTARY_ISSUER_ID: ${{ secrets.DONKEY_NOTARY_ISSUER_ID }}
+          DEPCUT_TOOLS_SIGN_IDENTITY: ${{ steps.signing.outputs.identity }}
+          DEPCUT_NOTARY_KEY_P8: ${{ runner.temp }}/notary.p8
+          DEPCUT_NOTARY_KEY_ID: ${{ secrets.DEPCUT_NOTARY_KEY_ID }}
+          DEPCUT_NOTARY_ISSUER_ID: ${{ secrets.DEPCUT_NOTARY_ISSUER_ID }}
         run: ./scripts/publish-bundled-tools.sh "${{ steps.ver.outputs.version }}"
 
       - name: Commit the refreshed manifest
         id: manifest
         run: |
-          manifest="apps/Donkey/Sources/DonkeyRuntime/Resources/bundled-tools.json"
+          manifest="apps/DepCut/Sources/DepCutRuntime/Resources/bundled-tools.json"
           if git diff --quiet -- "$manifest"; then
             echo "Manifest unchanged; nothing to commit."
             echo "committed=false" >> "$GITHUB_OUTPUT"
@@ -125,6 +125,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          gh workflow run promote-donkey-release.yml \
+          gh workflow run promote-depcut-release.yml \
             --ref "$DEFAULT_BRANCH" \
             --field bump=patch

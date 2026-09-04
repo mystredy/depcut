@@ -10,7 +10,7 @@ import {
   OVERLAY_LOOP_STYLE_LABELS,
   type OverlayAnimStyle,
   type OverlayLoopStyle,
-} from "@donkeycut/effects-kit";
+} from "@depcut/effects-kit";
 import { Tile } from "@/cut/components/PanelTile";
 
 /**

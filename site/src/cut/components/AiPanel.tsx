@@ -206,7 +206,7 @@ function writeThreads(projectId: string, list: ChatThread[]) {
 
 const MODEL_KEY = "cut-ai-model";
 const FAVS_KEY = "cut-ai-favs";
-// A fresh user starts on Gemini — it runs on their signed-in Donkey account, so
+// A fresh user starts on Gemini — it runs on their signed-in DepCut account, so
 // it works without a local CLI. Claude/Codex show up automatically once the
 // engine probes them installed. The choice persists, so this is first-run only.
 const DEFAULT_MODEL =
@@ -343,13 +343,13 @@ export function AiPanel({
     localStorage.setItem(MODEL_KEY, id);
   };
 
-  // Gemini runs on the user's Donkey account, so its availability is the
+  // Gemini runs on the user's DepCut account, so its availability is the
   // sign-in probe, not the engine's CLI checks. Signed-in state (or a probe
   // still in flight) leaves it usable; a definite signed-out disables it.
   const mergedInfo = useMemo<ModelsInfo | null>(() => {
     const gemini =
       signedIn === false
-        ? { available: false, note: "sign in to Depcut to chat", installed: true }
+        ? { available: false, note: "sign in to DepCut to chat", installed: true }
         : (info?.providers.gemini ?? { available: true, note: "", installed: true });
     // With no engine on this Mac the CLI providers don't exist: their groups
     // hide, and the saved-model fallback effect moves a CLI selection over to
@@ -689,7 +689,7 @@ function ChatSession({
     });
     return {
       // Claude/Codex chat through the local engine; Gemini goes straight from
-      // the page to Donkey's hosted inference with the user's session.
+      // the page to DepCut's hosted inference with the user's session.
       sendMessages: async (options) => {
         if (provider(modelRef.current) === "gemini") {
           clientToolsRef.current = true;
@@ -927,7 +927,7 @@ function ChatSession({
     : true;
   const unavailableMessage = (): string => {
     const p = provider(model);
-    if (p === "gemini") return "Sign in to your Depcut account to chat with Gemini.";
+    if (p === "gemini") return "Sign in to your DepCut account to chat with Gemini.";
     const note = info?.providers[p]?.note?.trim();
     return note ? `${PROVIDER_LABEL[p]}: ${note}` : `${PROVIDER_LABEL[p]} isn't available.`;
   };

@@ -76,11 +76,11 @@ export async function judgeReply({
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-donkey-client-id": "donkey-cut-eval",
-        "x-donkey-dev-auth-bypass": "1",
+        "x-depcut-client-id": "depcut-cut-eval",
+        "x-depcut-dev-auth-bypass": "1",
       },
       body: JSON.stringify({
-        donkeyProvider: "gemini",
+        depcutProvider: "gemini",
         model,
         instructions: JUDGE_PROMPT,
         input: [

@@ -24,7 +24,7 @@ model VisionApiSubscription {
   updatedAt            DateTime  @updatedAt
 }
 
-// Donkey Pro: the Mac app subscription. Kept entirely separate from the Vision
+// DepCut Pro: the Mac app subscription. Kept entirely separate from the Vision
 // API product above. While active it includes a monthly inference allowance
 // equal to the plan price, granted into the user's credit balance as an
 // expiring grant (source "pro_subscription") so it is drawn down before

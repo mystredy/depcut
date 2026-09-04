@@ -6,7 +6,7 @@
  * removed or renamed tool breaks the build until every side catches up.
  */
 
-import { EFFECT_IDS, LOOK_EFFECTS } from "@donkeycut/effects-kit";
+import { EFFECT_IDS, LOOK_EFFECTS } from "@depcut/effects-kit";
 import { num, obj, type AiToolDef } from "@/cut/lib/aiToolDef";
 
 /** The effects with a treatment recipe of their own; the rest of the list is

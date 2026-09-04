@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import {
-  withDonkeyAuth,
-  type DonkeyAuthenticatedRequest,
-} from "@/lib/donkey-api-auth";
+  withDepCutAuth,
+  type DepCutAuthenticatedRequest,
+} from "@/lib/depcut-api-auth";
 import {
   ONBOARDING_VERSION,
   REFERRAL_SOURCES,
@@ -30,9 +30,9 @@ const UNSTARTED: OnboardingState = {
   referralSources: [],
 };
 
-export const GET = withDonkeyAuth(async (request: DonkeyAuthenticatedRequest) => {
+export const GET = withDepCutAuth(async (request: DepCutAuthenticatedRequest) => {
   const row = await prisma.userOnboarding.findUnique({
-    where: { userId: request.donkey.userId },
+    where: { userId: request.depcut.userId },
   });
   return NextResponse.json(row ? toState(row) : UNSTARTED);
 });
@@ -47,13 +47,13 @@ const updateSchema = z
 
 // One write for both things the sequence records: the referral answer when it's
 // given, and the run's end. Either is the account's first row, so both upsert.
-export const PUT = withDonkeyAuth(async (request: DonkeyAuthenticatedRequest) => {
+export const PUT = withDepCutAuth(async (request: DepCutAuthenticatedRequest) => {
   const parsed = updateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   }
 
-  const userId = request.donkey.userId;
+  const userId = request.depcut.userId;
   const data =
     "referralSources" in parsed.data
       ? {

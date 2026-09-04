@@ -23,7 +23,7 @@ type AdapterEnvironment = Record<string, string | undefined>;
 const providerID = "hosted-responses";
 const openAIProviderID = "openai";
 const openAIBaseURL = "https://api.openai.com/v1";
-const debugUIInspectionToolType = "donkey_debug_ui_inspection";
+const debugUIInspectionToolType = "depcut_debug_ui_inspection";
 const defaultOpenAIDebugInspectionModel = openaiModels.debugInspection;
 const unsupportedOpenAIComputerUseParameters = ["temperature", "top_p", "topP"];
 

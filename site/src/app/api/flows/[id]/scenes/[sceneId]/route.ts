@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { deleteScene, ownedFlow, ownedScene, renameScene } from "@/lib/flows/db";
 
 export const dynamic = "force-dynamic";
@@ -10,9 +10,9 @@ type RouteContext = { params: Promise<{ id: string; sceneId: string }> };
 
 const updateSchema = z.object({ name: z.string().trim().min(1).max(100) }).strict();
 
-export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
+export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
   const { id, sceneId } = await context.params;
-  const flow = await ownedFlow(request.donkey.userId, id);
+  const flow = await ownedFlow(request.depcut.userId, id);
   if (!flow) return notFoundResponse();
   const scene = await ownedScene(id, sceneId);
   if (!scene) return notFoundResponse();
@@ -25,9 +25,9 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
   return NextResponse.json({ ok: true });
 });
 
-export const DELETE = withDonkeyAuth(async (request, context: RouteContext) => {
+export const DELETE = withDepCutAuth(async (request, context: RouteContext) => {
   const { id, sceneId } = await context.params;
-  const flow = await ownedFlow(request.donkey.userId, id);
+  const flow = await ownedFlow(request.depcut.userId, id);
   if (!flow) return notFoundResponse();
   const scene = await ownedScene(id, sceneId);
   if (!scene) return notFoundResponse();

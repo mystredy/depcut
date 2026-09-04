@@ -6,7 +6,7 @@ import {
   type OverlayFrameSet,
   type RenderEnv,
   type StickerImage,
-} from "@donkeycut/effects-kit";
+} from "@depcut/effects-kit";
 import { fontStack, type MediaAsset, type Overlay } from "./types";
 
 // The shared text metrics and painters live in the effects kit; these
@@ -21,7 +21,7 @@ export {
   PLATE_RADIUS,
   plateFill,
   SHADOW,
-} from "@donkeycut/effects-kit";
+} from "@depcut/effects-kit";
 
 /** Decoded sticker images by asset id, shared across one page's renders. An
  * <img> decode handles SVG too (createImageBitmap on an SVG blob does not). */

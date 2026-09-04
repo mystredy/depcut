@@ -1,11 +1,11 @@
 # Swift MVC Guide
 
-Donkey Swift code keeps product state, UI rendering, and AppKit orchestration
+DepCut Swift code keeps product state, UI rendering, and AppKit orchestration
 separate, so the app's UI stays easy to change without coupling it to runtime
 work. Views render and emit typed intents; models own state;
 controllers own AppKit.
 
-**The one rule:** `DonkeyUI` never imports `DonkeyRuntime`.
+**The one rule:** `DepCutUI` never imports `DepCutRuntime`.
 Runtime work reaches a view only as data its model passes in, never through
 view internals.
 
@@ -27,25 +27,25 @@ view internals.
   screen and event geometry, monitor double-Command activation, own `NSPanel`,
   and translate geometry into model state.
 - Keep app entry files small: `@main`, delegate adaptation, and little else.
-- Prefer target-level separation for reusable UI and runtime work: `DonkeyUI`
-  holds views, `DonkeyRuntime` holds the engine supervisor, bundled tools, and
+- Prefer target-level separation for reusable UI and runtime work: `DepCutUI`
+  holds views, `DepCutRuntime` holds the engine supervisor, bundled tools, and
   the recorder.
 - Name files after their MVC role when a feature grows past one screen:
   `FeatureModel.swift`, `FeatureRootView.swift`, `FeatureController.swift`.
 
-## Current Donkey Shape
+## Current DepCut Shape
 
 Screen recording follows this split: `ScreenRecorder` and its destination types
 hold the capture state; `RecordingControlBarView` renders it; the controllers own
 AppKit-only work such as the control bar panel, the region and window pickers, and
-screen positioning; `DonkeyAppDelegate` bootstraps the feature and the menu bar
+screen positioning; `DepCutAppDelegate` bootstraps the feature and the menu bar
 without owning product behavior.
 
 ## Review Checklist
 
 - A SwiftUI view does not call `NSEvent.mouseLocation`, create an `NSPanel`,
-  start a `Timer`, or import `DonkeyRuntime`.
-- A model does not import `DonkeyUI`.
+  start a `Timer`, or import `DepCutRuntime`.
+- A model does not import `DepCutUI`.
 - A model does not know about frames, screens, windows, or animation timing.
 - A controller does not store business text or decide model-provider behavior
   beyond presenting existing model state.

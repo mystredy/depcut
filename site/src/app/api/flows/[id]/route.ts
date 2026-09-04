@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import {
   deleteFlow,
   flowGenerationKeys,
@@ -18,9 +18,9 @@ export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ id: string }> };
 
 // The Flow thread — its own row plus every generation in it, oldest first.
-export const GET = withDonkeyAuth(async (request, context: RouteContext) => {
+export const GET = withDepCutAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
-  const flow = await ownedFlow(request.donkey.userId, id);
+  const flow = await ownedFlow(request.depcut.userId, id);
   if (!flow) return notFoundResponse();
   const generations = await listFlowGenerations(id);
   return NextResponse.json({ flow, generations });
@@ -39,9 +39,9 @@ const updateSchema = z
 // here, the same boundary listFlowGenerations already keeps for read (the
 // key itself never reaches the client). setFlowCover flips coverIsAuto off
 // so a later generation never silently replaces the pick.
-export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
+export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
-  const flow = await ownedFlow(request.donkey.userId, id);
+  const flow = await ownedFlow(request.depcut.userId, id);
   if (!flow) return notFoundResponse();
 
   const parsed = updateSchema.safeParse(await request.json());
@@ -79,9 +79,9 @@ export const PATCH = withDonkeyAuth(async (request, context: RouteContext) => {
 // cascade with it) is only removed once every object is confirmed gone.
 // A failure here leaves the row in place, so the same DELETE is safely
 // retryable: redeleting an already-gone key is a no-op, not an error.
-export const DELETE = withDonkeyAuth(async (request, context: RouteContext) => {
+export const DELETE = withDepCutAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
-  const flow = await ownedFlow(request.donkey.userId, id);
+  const flow = await ownedFlow(request.depcut.userId, id);
   if (!flow) return notFoundResponse();
 
   const keys = await flowGenerationKeys(id);

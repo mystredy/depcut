@@ -5,7 +5,7 @@ import { clearRefDrag, refFromAsset, refFromLibrary, setRefDragData } from "./as
 import type { LibraryAsset, LibraryTemplateItem } from "./library";
 import { useEditor } from "./store";
 import type { LibraryTemplate, ShapeKind, TransitionStyle } from "./types";
-import type { EffectId } from "@donkeycut/effects-kit";
+import type { EffectId } from "@depcut/effects-kit";
 
 /** Internal HTML5 drag payload for project media assets. The custom MIME
  * keeps these drags invisible to the window-level OS-file import overlay,

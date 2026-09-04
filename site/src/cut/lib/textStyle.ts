@@ -1,7 +1,7 @@
 // What a title's look is made of lives with the element model; this module is
 // about remembering one across clips and projects so repeated titles share it.
-export type { TextStyle } from "@donkeycut/effects-kit";
-import type { TextStyle } from "@donkeycut/effects-kit";
+export type { TextStyle } from "@depcut/effects-kit";
+import type { TextStyle } from "@depcut/effects-kit";
 
 const KEY = "cut-text-style";
 

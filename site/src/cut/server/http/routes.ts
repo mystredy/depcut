@@ -21,7 +21,7 @@ interface CutRoute {
 
 /**
  * The whole Cut API surface in one table, namespaced under /api/cut/* to keep it
- * clear of Donkey's own APIs. Both mounts dispatch through it — the Next
+ * clear of DepCut's own APIs. Both mounts dispatch through it — the Next
  * catch-all route and the packaged engine — so the two surfaces cannot drift.
  */
 export const CUT_ROUTES: CutRoute[] = [
@@ -117,7 +117,7 @@ export async function runCutRoute(
   const user = new URL(req.url).searchParams.get("u");
   if (!user || !isValidCutUser(user)) {
     return new Response(
-      JSON.stringify({ error: "This page is out of date with the Depcut app — reload the tab." }),
+      JSON.stringify({ error: "This page is out of date with the DepCut app — reload the tab." }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }

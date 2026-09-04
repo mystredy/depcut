@@ -36,7 +36,7 @@ import { StockImagesPanel } from "./StockImagesPanel";
 // The generate-image panel: the Image tab's whole column — the generate form,
 // then (in the same scroll) the stock-image browser below it. Clicking a
 // stock tile loads its saved prompt into the form above. The user picks a
-// size, edits the prompt, generates on their Donkey account, and the results
+// size, edits the prompt, generates on their DepCut account, and the results
 // stack below as big tiles.
 //
 // References ride along as input images: drag any image or video in (stock
@@ -184,7 +184,7 @@ export function ImageGenPanel({ projectId }: { projectId: string }) {
 
         {signedIn === false && (
           <p className="shrink-0 text-[11px] leading-relaxed text-muted-foreground">
-            Generating runs on your Depcut account.{" "}
+            Generating runs on your DepCut account.{" "}
             <a className="font-medium text-blue-600 hover:underline dark:text-blue-400" href={signInUrl()}>
               Sign in
             </a>{" "}

@@ -8,7 +8,7 @@ import {
   recordInferenceUsage,
   requireInferenceCredits,
 } from "@/lib/credits/inference";
-import { withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { InferenceProviderError } from "@/lib/inference/providers";
 import {
   checkInMemoryRateLimit,
@@ -37,14 +37,14 @@ const screenshotParseRateLimit = {
   windowMs: 3_000,
 };
 
-export const POST = withDonkeyAuth(async (request) => {
-  const client = requireInferenceClientId(request.donkey.clientId);
+export const POST = withDepCutAuth(async (request) => {
+  const client = requireInferenceClientId(request.depcut.clientId);
   if (!client.ok) {
     return client.response;
   }
 
   const rateLimit = checkInMemoryRateLimit({
-    key: `${request.donkey.userId}:${client.clientId}`,
+    key: `${request.depcut.userId}:${client.clientId}`,
     ...screenshotParseRateLimit,
   });
   if (!rateLimit.ok) {
@@ -76,7 +76,7 @@ export const POST = withDonkeyAuth(async (request) => {
     model,
     provider: parserProvider.inferenceProvider,
     route: inferenceUsageRoutes.screenshotParse,
-    userId: request.donkey.userId,
+    userId: request.depcut.userId,
   });
   if (!credits.ok) {
     return credits.response;
@@ -85,11 +85,11 @@ export const POST = withDonkeyAuth(async (request) => {
   if (parsed.data.stream) {
     return streamScreenshotParseResponse({
       clientId: client.clientId,
-      conversationId: request.donkey.conversationId,
+      conversationId: request.depcut.conversationId,
       model,
       parserProvider,
       request: parsed.data,
-      userId: request.donkey.userId,
+      userId: request.depcut.userId,
     });
   }
 
@@ -97,7 +97,7 @@ export const POST = withDonkeyAuth(async (request) => {
     const result = await parseScreenshot(parsed.data, parserProvider);
     const recordedUsage = await recordInferenceUsage({
       clientId: client.clientId,
-      conversationId: request.donkey.conversationId,
+      conversationId: request.depcut.conversationId,
       metadata: {
         parserProvider: parserProvider.id,
       },
@@ -107,20 +107,20 @@ export const POST = withDonkeyAuth(async (request) => {
       route: inferenceUsageRoutes.screenshotParse,
       status: "succeeded",
       usage: result.usage,
-      userId: request.donkey.userId,
+      userId: request.depcut.userId,
     });
 
     return NextResponse.json(result.result, {
       headers: {
-        "X-Donkey-Inference-Provider": result.provider,
-        "X-Donkey-Inference-Model": result.model,
+        "X-DepCut-Inference-Provider": result.provider,
+        "X-DepCut-Inference-Model": result.model,
         ...creditUsageHeaders(recordedUsage),
       },
     });
   } catch (error) {
     await recordFailedInferenceUsage({
       clientId: client.clientId,
-      conversationId: request.donkey.conversationId,
+      conversationId: request.depcut.conversationId,
       errorCode: inferenceErrorCode(error),
       metadata: {
         parserProvider: parserProvider.id,
@@ -129,7 +129,7 @@ export const POST = withDonkeyAuth(async (request) => {
       provider: parserProvider.inferenceProvider,
       requestKind: "screenshot_parse",
       route: inferenceUsageRoutes.screenshotParse,
-      userId: request.donkey.userId,
+      userId: request.depcut.userId,
     });
     const creditResponse = creditErrorResponse(error);
     if (creditResponse) {
@@ -224,8 +224,8 @@ function streamScreenshotParseResponse(input: {
       "Connection": "keep-alive",
       "Content-Type": "text/event-stream; charset=utf-8",
       "X-Accel-Buffering": "no",
-      "X-Donkey-Inference-Model": input.model,
-      "X-Donkey-Inference-Provider": input.parserProvider.inferenceProvider,
+      "X-DepCut-Inference-Model": input.model,
+      "X-DepCut-Inference-Provider": input.parserProvider.inferenceProvider,
     },
   });
 }

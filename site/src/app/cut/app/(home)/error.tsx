@@ -47,7 +47,7 @@ export default function AppError({
       <p className="text-sm font-medium text-red-600 dark:text-red-400">Something went wrong</p>
       <p className="max-w-md text-xs text-muted-foreground">
         {chunkError
-          ? "A new version of Depcut is available."
+          ? "A new version of DepCut is available."
           : error.message || "An unexpected error occurred."}
       </p>
       {error.digest && <p className="text-[11px] text-muted-foreground">Error ID: {error.digest}</p>}

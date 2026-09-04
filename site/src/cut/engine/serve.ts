@@ -6,7 +6,7 @@ import { matchCutRoute, runCutRoute } from "../server/http/routes";
 import { ensureToolPath, resolveOnPath } from "../server/tool-path";
 import { enginePort } from "./config";
 
-// Throws (and exits with a clear message) on a bad DONKEY_CUT_PORT rather than
+// Throws (and exits with a clear message) on a bad DEPCUT_CUT_PORT rather than
 // binding a random port the client would never find.
 const PORT = enginePort();
 
@@ -59,7 +59,7 @@ async function writeResponse(
  * the port and serve a stale build after an app update. The app passes its
  * pid; when that process is gone, exit so the new app's spawn takes over. */
 function exitWithParent() {
-  const parent = Number(process.env.DONKEY_CUT_PARENT_PID);
+  const parent = Number(process.env.DEPCUT_CUT_PARENT_PID);
   if (!Number.isInteger(parent) || parent <= 1) return;
   setInterval(() => {
     try {
@@ -78,9 +78,9 @@ async function start() {
   // The Agent SDK can't resolve its built-in CLI from inside a compiled
   // binary; point it at the user's own Claude Code install (their login is
   // the whole point). Missing is fine — the models probe reports it.
-  if (!process.env.DONKEY_CUT_CLAUDE) {
+  if (!process.env.DEPCUT_CUT_CLAUDE) {
     const claude = await resolveOnPath("claude");
-    if (claude) process.env.DONKEY_CUT_CLAUDE = claude;
+    if (claude) process.env.DEPCUT_CUT_CLAUDE = claude;
   }
 
   const server = createServer((req, res) => {
@@ -147,7 +147,7 @@ async function start() {
   });
 
   server.listen(PORT, "127.0.0.1", () => {
-    console.log(`donkey-cut-engine listening on http://127.0.0.1:${PORT}`);
+    console.log(`depcut-cut-engine listening on http://127.0.0.1:${PORT}`);
   });
 }
 

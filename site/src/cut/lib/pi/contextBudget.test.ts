@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { enforceContextBudget } from "./contextBudget";
-import type { DonkeyToolDetails, WireCarrier, WirePart } from "./donkeyStream";
+import type { DepCutToolDetails, WireCarrier, WirePart } from "./depcutStream";
 
 /** A wire media part whose payload decodes to `bytes`. */
 const media = (bytes: number): WirePart => ({
@@ -21,7 +21,7 @@ const userWithMedia = (text: string, bytes: number): AgentMessage =>
 const totalBytes = (msgs: AgentMessage[]): number =>
   msgs.reduce((n, m) => {
     const wire = ((m as WireCarrier).wireParts ?? []) as WirePart[];
-    const details = (m as { details?: DonkeyToolDetails }).details;
+    const details = (m as { details?: DepCutToolDetails }).details;
     const parts = [...wire, ...(details?.mediaParts ?? [])];
     return (
       n +
@@ -83,7 +83,7 @@ describe("enforceContextBudget", () => {
       timestamp: 0,
     } as AgentMessage;
     const out = enforceContextBudget([toolMsg, userWithMedia("new:", 600)], 700);
-    const details = (out[0] as { details: DonkeyToolDetails }).details;
+    const details = (out[0] as { details: DepCutToolDetails }).details;
     expect(details.response).toEqual({ ok: true });
     expect(String(details.mediaParts?.[0]?.text)).toContain("dropped");
     expect(totalBytes(out)).toBeLessThanOrEqual(700);
@@ -93,8 +93,8 @@ describe("enforceContextBudget", () => {
     const call = {
       role: "assistant",
       content: [{ type: "toolCall", id: "x", name: "seek", arguments: {}, thoughtSignature: "sig" }],
-      api: "donkey-responses",
-      provider: "donkey",
+      api: "depcut-responses",
+      provider: "depcut",
       model: "m",
       usage: {
         input: 0,

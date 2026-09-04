@@ -3,7 +3,7 @@ import { stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { atempoChain, hasStream, num, videoColorInfo } from "./util";
 import { clampCutOverlap, projectFadeSeconds, TRANSITION_XFADE, TRANSITION_ZOOM, type ColorGrade, type TransitionStyle } from "../lib/types";
-import { effectFilterLines, gradeToFfmpegFilter, lookFilterLines } from "@donkeycut/effects-kit";
+import { effectFilterLines, gradeToFfmpegFilter, lookFilterLines } from "@depcut/effects-kit";
 
 // The render pipeline itself: spec in, finished mp4 out. Shared by the local
 // engine's job registry (jobs.ts) and the cloud render worker, which stage

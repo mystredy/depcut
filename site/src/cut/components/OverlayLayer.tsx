@@ -14,7 +14,7 @@ import {
   subtitleLaneCount,
   trackPos,
 } from "@/cut/lib/subtitles";
-import { evalOverlayFrame, hasOverlayKeys, isOverlayAnimated, resolveShadow, shapeMetrics, type LottieHandle } from "@donkeycut/effects-kit";
+import { evalOverlayFrame, hasOverlayKeys, isOverlayAnimated, resolveShadow, shapeMetrics, type LottieHandle } from "@depcut/effects-kit";
 import {
   LINE_HEIGHT,
   PLATE_PAD_X,

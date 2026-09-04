@@ -8,8 +8,8 @@ type FooterColumn = { title: string; links: FooterLink[] };
 const DISCORD_URL = "https://discord.gg/CPQu5XXmw";
 
 // Cut's own footer, in the shared landing Footer's grouped-column design. The
-// shared Footer links routes that don't exist on donkeycut.com (/sign-in,
-// /use-cases, /donkeyvision), so this one carries only links that resolve on
+// shared Footer links routes that don't exist on depcut.com (/sign-in,
+// /use-cases, /depcutvision), so this one carries only links that resolve on
 // both hosts.
 export function CutFooter() {
   const linkGroups: FooterColumn[] = [
@@ -32,10 +32,10 @@ export function CutFooter() {
         <div className="min-w-[240px] max-w-sm flex-1">
           <Link
             href="/"
-            aria-label="Depcut home"
+            aria-label="DepCut home"
             className="text-[40px] font-semibold text-ink no-underline md:text-[48px]"
           >
-            Depcut
+            DepCut
           </Link>
           <p className="mt-6 text-[15px] font-semibold text-ink">
             Need help? Join us on{" "}
@@ -47,7 +47,7 @@ export function CutFooter() {
             </a>
           </p>
           <p className="mt-6 text-[13px] text-[#666]">
-            2026 Depcut, Inc. Made for Macs.
+            2026 DepCut, Inc. Made for Macs.
           </p>
         </div>
         <div className="flex flex-1 flex-col gap-10 sm:flex-row sm:flex-wrap sm:gap-x-16 sm:gap-y-12 md:gap-x-20">

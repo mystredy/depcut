@@ -1,4 +1,4 @@
-// Admin-configured defaults for Donkey's AI chat assistant: model/sampling
+// Admin-configured defaults for DepCut's AI chat assistant: model/sampling
 // defaults, prompt categories and templates, and provider routing priority.
 // None of this is read by the real inference call path yet (the editor's
 // assistant and generateText() call a fixed model directly — see

@@ -124,8 +124,8 @@ export async function runCase(c: EvalCase, cfg: RunConfig): Promise<CaseResult> 
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-donkey-client-id": "donkey-cut-eval",
-          "x-donkey-dev-auth-bypass": "1",
+          "x-depcut-client-id": "depcut-cut-eval",
+          "x-depcut-dev-auth-bypass": "1",
         },
         body: JSON.stringify(payload),
         signal,

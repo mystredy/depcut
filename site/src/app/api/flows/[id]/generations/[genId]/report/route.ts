@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { notFoundResponse, withDonkeyAuth } from "@/lib/donkey-api-auth";
+import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { ownedFlow } from "@/lib/flows/db";
 import { prisma } from "@/lib/prisma";
 
@@ -21,9 +21,9 @@ const reportSchema = z
 // generation/flow endpoint, so a report is never visible to any user,
 // including the one who filed it; a moderation queue reads FlowGenerationReport
 // directly.
-export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
+export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   const { id, genId } = await context.params;
-  const flow = await ownedFlow(request.donkey.userId, id);
+  const flow = await ownedFlow(request.depcut.userId, id);
   if (!flow) return notFoundResponse();
 
   const generation = await prisma.flowGeneration.findFirst({ where: { id: genId, flowId: id }, select: { id: true } });
@@ -37,7 +37,7 @@ export const POST = withDonkeyAuth(async (request, context: RouteContext) => {
     data: {
       generationId: genId,
       flowId: id,
-      userId: request.donkey.userId,
+      userId: request.depcut.userId,
       reason: parsed.data.reason,
       ...(parsed.data.details ? { details: parsed.data.details } : {}),
     },

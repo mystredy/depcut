@@ -1,29 +1,29 @@
 <p align="center">
-  <img src="site/public/donkey-app-icon.png" alt="Donkey Cut" width="128" height="128" />
+  <img src="site/public/depcut-app-icon.png" alt="DepCut" width="128" height="128" />
 </p>
 
-<h1 align="center">Donkey Cut</h1>
+<h1 align="center">DepCut</h1>
 
 <p align="center"><i>A free, open source CapCut alternative. Edit with chat. Generate video, images, voiceovers, and music.</i></p>
 
 <p align="center">
-  <a href="https://github.com/DonkeyCut/Donkey/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/DonkeyCut/Donkey?label=release&color=EC7868" /></a>
+  <a href="https://github.com/mystredy/depcut/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/mystredy/depcut?label=release&color=EC7868" /></a>
   <a href="LICENSE"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" /></a>
   <img alt="Platform: macOS" src="https://img.shields.io/badge/Platform-macOS-black.svg" />
 </p>
 
-Donkey Cut is a free video editor that runs in your browser.
+DepCut is a free video editor that runs in your browser.
 
 You can save projects in the cloud and open them anywhere. You can also keep projects on your computer so your video files stay local.
 
 ---
 
-## Donkey Cut
+## DepCut
 
-Donkey Cut is a simple video editor with a multi-track timeline, captions, music, effects, and an AI assistant that can help you edit.
+DepCut is a simple video editor with a multi-track timeline, captions, music, effects, and an AI assistant that can help you edit.
 
 <p align="center">
-  <img src=".github/cut-editor-railway.gif" alt="The Donkey Cut editor with The Railway Mystery open: generated shots in the side panel, clips and score on the timeline" width="960" />
+  <img src=".github/cut-editor-railway.gif" alt="The DepCut editor with The Railway Mystery open: generated shots in the side panel, clips and score on the timeline" width="960" />
   <br />
   <sub><i>The editor with "The Railway Mystery" open. Generated shots in the side panel, with clips and music on the timeline.</i></sub>
 </p>
@@ -42,7 +42,7 @@ The AI assistant works with both. You can generate images, video, voiceovers, an
 
 ### For Mac users
 
-Install the [Donkey Cut companion app](https://github.com/DonkeyCut/Donkey/releases/latest) to connect the editor to your Mac.
+Install the [DepCut companion app](https://github.com/mystredy/depcut/releases/latest) to connect the editor to your Mac.
 
 * Projects are saved in `~/Movies`, so you can see and manage them directly in Finder.
 * Captions and transcription run locally on your Mac.
@@ -55,7 +55,7 @@ When the app is running, cloud projects can also use your Mac for transcription.
 
 Describe a shot in chat and keep iterating until you get what you want.
 
-These are the two example projects from the [landing page](https://donkeycut.com). The prompts are included below.
+These are the two example projects from the [landing page](https://depcut.com). The prompts are included below.
 
 **The Railway Mystery** is a 1920s comic-style chase. It uses three generated shots with a brass-and-strings score.
 
@@ -74,7 +74,7 @@ These are the two example projects from the [landing page](https://donkeycut.com
 | ![Paris travel poster](site/public/cut/landing/poster-paris.jpg) | ![New York travel poster](site/public/cut/landing/poster-newyork.jpg) |
 
 <p align="center">
-  <img src=".github/cut-editor-travel-posters.gif" alt="The Donkey Cut editor with the City poster series open: both posters generated in the side panel, animated clips with captions and a waltz on the timeline" width="960" />
+  <img src=".github/cut-editor-travel-posters.gif" alt="The DepCut editor with the City poster series open: both posters generated in the side panel, animated clips with captions and a waltz on the timeline" width="960" />
   <br />
   <sub><i>The poster series in the editor. Both posters are animated into clips with captions and a waltz.</i></sub>
 </p>
@@ -110,7 +110,7 @@ We only charge for cloud storage and AI content generation.
 
 | Path | What's there |
 | --- | --- |
-| [`apps/Donkey`](apps/Donkey) | The macOS companion app. It runs the Cut engine and handles screen recording. |
+| [`apps/DepCut`](apps/DepCut) | The macOS companion app. It runs the Cut engine and handles screen recording. |
 | [`site`](site) | The Next.js site, Cut editor, engine, cloud backend, and hosted API routes. |
 | [`docs`](docs/README.md) | Product documentation and engineering guides. |
 
@@ -130,15 +130,15 @@ Then open `http://localhost:3000/cut`.
 Run the macOS app in development:
 
 ```sh
-cd apps/Donkey
-swift run Donkey
+cd apps/DepCut
+swift run DepCut
 ```
 
 Build the packaged app and installer disk image:
 
 ```sh
-./scripts/package-donkey-app.sh
-open dist/Donkey.app
+./scripts/package-depcut-app.sh
+open dist/DepCut.app
 ```
 
 The site uses Supabase Postgres through Prisma. Keep local credentials in `.env`. Never commit them.
@@ -150,7 +150,7 @@ The site uses Supabase Postgres through Prisma. Keep local credentials in `.env`
 Good places to start:
 
 * [Cut](docs/guides/cut/README.md) for the editor, local engine, and cloud projects.
-* [Install Donkey Locally](docs/guides/install-donkey.md) for building the app bundle.
+* [Install DepCut Locally](docs/guides/install-depcut.md) for building the app bundle.
 
 ## License
 

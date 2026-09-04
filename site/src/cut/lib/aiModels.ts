@@ -12,7 +12,7 @@ export interface AiModel {
  * chat passes the chosen id straight to the provider CLI or hosted route, so
  * new models work against older installed engines too.
  * Claude ids verified against the local CLI; GPT ids are Codex's naming.
- * Gemini runs through Donkey's hosted inference (sign-in + credits), not a local CLI. */
+ * Gemini runs through DepCut's hosted inference (sign-in + credits), not a local CLI. */
 export const AI_MODELS: AiModel[] = [
   { id: "claude-fable-5", label: "Fable 5", provider: "claude" },
   { id: "claude-opus-5", label: "Opus 5", provider: "claude" },
