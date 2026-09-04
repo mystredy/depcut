@@ -289,6 +289,14 @@ export const TRANSITION_MAX = 2;
 /** What a transition runs for when one is placed on a bare cut. */
 export const TRANSITION_DEFAULT_SECONDS = 0.5;
 
+/** How much of a track-0 "cut" transition's declared length can actually
+ * play, given each clip's own length — clamped so it can never swallow
+ * either clip whole. The one clamp the timeline layout, the server export,
+ * and the audio mixdown all need to agree on. */
+export function clampCutOverlap(declaredSeconds: number, lenA: number, lenB: number): number {
+  return Math.max(0, Math.min(declaredSeconds, lenA * 0.9, lenB * 0.9));
+}
+
 /** A transition as a timeline object of its own: a bar at an absolute time,
  * belonging to no clip directly, but only ever placed where it lines up with
  * a place that has a handover to make — a cut it ends on, an open head it
@@ -844,10 +852,10 @@ export interface ClipSpan {
   asset: MediaAsset;
   start: number; // timeline start
   len: number; // own timeline footprint (source length / speed)
-  /** Blend length into the next span, in timeline seconds: the window
-   * `[end - transitionOut, end]` where the next clip's first frame arrives
-   * over this clip's live tail. Spans never intersect — the next one starts
-   * exactly at this one's end, and plays from its head there. */
+  /** Live overlap with the next span, in timeline seconds, on track 0: the
+   * next span's `start` already sits this many seconds before this one's own
+   * `start + len`, and both genuinely play across `[next.start, end]` —
+   * upper tracks keep the older render-only blend, claiming no overlap. */
   transitionOut: number;
 }
 

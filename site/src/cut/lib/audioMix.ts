@@ -19,6 +19,7 @@
 
 import { decodeAudioSpan } from "./mediaRead";
 import { timeStretch } from "./timeStretch";
+import { clampCutOverlap } from "./types";
 
 /** One track-0 clip's audio in the sequential fold. A spacer (no file) only
  * shapes time. */
@@ -79,18 +80,25 @@ const itemDur = (a: MixItem) => Math.max(0, (a.out - a.in) / speedOf(a.speed));
 
 /**
  * Where the sequential fold puts each track-0 clip, and how long its
- * transition edges are. Clips abut — a transition claims no layout — and its
- * sound is the outgoing clip fading across the blend window while the next
- * enters clean at the cut, exactly like the engine's tail-fade + hard join.
+ * transition edges are. A live transition genuinely overlaps the pair — the
+ * next clip's `at` lands that many seconds before it otherwise would — with
+ * the outgoing clip fading out and the incoming one fading in across the same
+ * window, a real crossfade rather than a fade-to-hard-cut.
  */
 export function foldClips(clips: MixClip[]) {
   const geo = clips.map((clip) => ({ clip, at: 0, dur: clipDur(clip), fadeIn: 0, fadeOut: 0 }));
   let acc = 0;
   geo.forEach((g, j) => {
     g.at = acc;
-    acc += g.dur;
-    const fade = geo[j + 1] ? Math.min(g.clip.transition ?? 0, g.dur * 0.9) : 0;
-    if (fade > 0.01) g.fadeOut = fade;
+    const next = geo[j + 1];
+    const fade = next ? clampCutOverlap(g.clip.transition ?? 0, g.dur, next.dur) : 0;
+    if (fade > 0.01) {
+      g.fadeOut = fade;
+      next!.fadeIn = fade;
+      acc += g.dur - fade;
+    } else {
+      acc += g.dur;
+    }
   });
   return geo;
 }

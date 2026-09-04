@@ -221,6 +221,10 @@ export interface TrackZeroPlan {
   veil: number;
   /** What the master clip's audio is scaled by, before volume and ducking. */
   gain: number;
+  /** What the incoming clip's audio is scaled by, before volume and ducking —
+   * 0 with no transition live, ramping to 1 across the blend so it fades in
+   * as the master fades out. */
+  incGain: number;
   /** A neighbour's held frame to draw behind a live edge animation. */
   backdrop: { span: ClipSpan; at: number } | null;
   /** The next clip, when it is close enough to be worth warming. */
@@ -262,12 +266,13 @@ export function trackZeroPlan(master: ClipSpan, spans: ClipSpan[], t: number): T
   let incZoom = 1;
   let incoming: ClipSpan | null = null;
   const rel = t - master.start;
-  // The blend window is the master's last `transitionOut` seconds: the next
-  // clip's held first frame arrives over the live tail, fully there at the
-  // cut, where the next clip starts playing. Clips never intersect — the
-  // window claims no layout.
-  if (master.transitionOut > 0 && next && t >= next.start - master.transitionOut) {
-    p = Math.min(1, (t - (next.start - master.transitionOut)) / master.transitionOut);
+  // The blend window is `next`'s own first `transitionOut` seconds: track 0's
+  // layout already holds the pair overlapped by exactly that much, so `next`
+  // has been live and genuinely playing since `next.start`, blending in over
+  // the master's real tail until the window closes and the master's footage
+  // ends alongside it.
+  if (master.transitionOut > 0 && next && t >= next.start) {
+    p = Math.min(1, (t - next.start) / master.transitionOut);
     incAlpha = p;
     incoming = next;
     if (style === "crosszoom") {
@@ -325,10 +330,11 @@ export function trackZeroPlan(master: ClipSpan, spans: ClipSpan[], t: number): T
     incAlpha,
     incZoom,
     veil: anim.veil,
-    // The outgoing sound leaves with the picture: it fades across the blend
-    // window and the incoming clip enters clean at the cut, matching the
-    // export's tail fade + hard join.
+    // The outgoing sound leaves with the picture and the incoming one arrives
+    // with its own, both ramping across the same blend window — a genuine
+    // audio crossfade, matching the export's mix.
     gain: anim.gain * (1 - p),
+    incGain: p,
     backdrop,
     upcoming: next && t < next.start && t >= next.start - PREROLL_LEAD_S ? next : null,
   };

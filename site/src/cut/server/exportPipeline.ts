@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { atempoChain, hasStream, num, videoColorInfo } from "./util";
-import { projectFadeSeconds, TRANSITION_XFADE, TRANSITION_ZOOM, type ColorGrade, type TransitionStyle } from "../lib/types";
+import { clampCutOverlap, projectFadeSeconds, TRANSITION_XFADE, TRANSITION_ZOOM, type ColorGrade, type TransitionStyle } from "../lib/types";
 import { effectFilterLines, gradeToFfmpegFilter, lookFilterLines } from "@donkeycut/effects-kit";
 
 // The render pipeline itself: spec in, finished mp4 out. Shared by the local
@@ -667,9 +667,7 @@ export async function runExport(
     // Cross zoom renders as the fade join plus zoom ramps riding the overlap
     // window on both segments (clamped like the join clamps its overlap).
     const czOverlap = (a: (typeof spec.clips)[number], aDur: number, bDur: number) =>
-      a.transitionStyle === "crosszoom"
-        ? Math.min(a.transition ?? 0, aDur * 0.9, bDur * 0.9)
-        : 0;
+      a.transitionStyle === "crosszoom" ? clampCutOverlap(a.transition ?? 0, aDur, bDur) : 0;
     const czHead = prevC ? czOverlap(prevC, clipDur(prevC), dur) : 0;
     const czTail = nextC ? czOverlap(c, dur, clipDur(nextC)) : 0;
     // A transitioned joint owns its edges: with a live overlap into or out of
@@ -899,21 +897,24 @@ export async function runExport(
     }
   });
 
-  // Join the segments. Clips abut — a transition claims no layout — so every
-  // join keeps the accumulator's full length. A transitioned join pads the
-  // incoming segment's head with its cloned first frame and runs the xfade
-  // across the outgoing clip's last blend-window seconds: the held frame
-  // arrives over the live tail, and the real segment starts exactly at the
-  // cut. Its sound is a tail fade on the outgoing side and a hard join. The
-  // rest hard-cut (concat). Fold left so mixed sequences chain correctly.
+  // Join the segments. A transitioned join genuinely overlaps the pair — the
+  // xfade blends the outgoing clip's real tail against the incoming
+  // segment's own real head (no rebuild: `segLabel[j]` is exactly the
+  // segment already built above), so the joined length shrinks by the blend
+  // — matching the editor's own layout — instead of holding it. Its sound is
+  // a tail fade on the outgoing side crossed with a head fade on the
+  // incoming one. The rest hard-cut (concat). Fold left so mixed sequences
+  // chain correctly.
   let vAcc = segLabel[0];
   let aAcc = "a0";
   let acc = clipDur(spec.clips[0]); // running timeline length of the accumulator
   for (let j = 1; j < spec.clips.length; j++) {
     const prev = spec.clips[j - 1];
+    const durPrev = clipDur(prev);
     const durJ = clipDur(spec.clips[j]);
-    // The blend can't exceed most of either clip, matching the editor clamp.
-    const d = Math.min(prev.transition ?? 0, acc * 0.9, durJ * 0.9);
+    // The blend can't exceed most of either clip, matching the editor clamp
+    // — against the outgoing clip's own length, not everything before it.
+    const d = clampCutOverlap(prev.transition ?? 0, durPrev, durJ);
     const vOut = `vj${j}`;
     const aOut = `aj${j}`;
     if (d > 0.01) {
@@ -921,15 +922,17 @@ export async function runExport(
       // The style id resolves through the allowlist map; anything unknown
       // (or an old spec without a style) renders as a plain fade.
       const kind = TRANSITION_XFADE[prev.transitionStyle as TransitionStyle] ?? "fade";
-      filters.push(`[${segLabel[j]}]tpad=start_duration=${num(d)}:start_mode=clone[vh${j}]`);
-      filters.push(`[${vAcc}][vh${j}]xfade=transition=${kind}:duration=${num(d)}:offset=${num(offset)}[${vOut}]`);
-      filters.push(`[${aAcc}]afade=t=out:st=${num(offset)}:d=${num(d)}[ah${j}]`);
-      filters.push(`[ah${j}][a${j}]concat=n=2:v=0:a=1[${aOut}]`);
+      filters.push(`[${vAcc}][${segLabel[j]}]xfade=transition=${kind}:duration=${num(d)}:offset=${num(offset)}[${vOut}]`);
+      // acrossfade blends the accumulator's tail against this clip's own
+      // head over `d` seconds and concatenates the rest itself — the audio
+      // analog of xfade, and needs no offset since it always crosses at the
+      // join.
+      filters.push(`[${aAcc}][a${j}]acrossfade=d=${num(d)}:c1=tri:c2=tri[${aOut}]`);
     } else {
       filters.push(`[${vAcc}][${segLabel[j]}]concat=n=2:v=1:a=0[${vOut}]`);
       filters.push(`[${aAcc}][a${j}]concat=n=2:v=0:a=1[${aOut}]`);
     }
-    acc = acc + durJ;
+    acc = acc + durJ - d;
     vAcc = vOut;
     aAcc = aOut;
   }

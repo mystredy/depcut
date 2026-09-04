@@ -54,7 +54,7 @@ import { alignCues } from "./cueAlign";
 import { useGenNotify } from "./genNotify";
 import { engineTranscribeSamples } from "./localStt";
 import { trackLocale } from "./subtitles";
-import { ANIM_STYLE_IDS, animStyleOfTransition, emptySubtitles, frameOf, IMAGE_CLIP_SECONDS, isEffectOverlay, isStickerOverlay, MAX_SUBTITLE_LANES, mediaUrl, migrateLegacyTransitions, normalizeAspect, overlayAnimStyle, SPEED_FLOOR, SPEED_MIN, stampOverlayKinds, stripDefaultOverlayKinds, TRANSITION_MAX, TRANSITION_STYLE_IDS, transitionStyleOfAnim } from "./types";
+import { ANIM_STYLE_IDS, animStyleOfTransition, clampCutOverlap, emptySubtitles, frameOf, IMAGE_CLIP_SECONDS, isEffectOverlay, isStickerOverlay, MAX_SUBTITLE_LANES, mediaUrl, migrateLegacyTransitions, normalizeAspect, overlayAnimStyle, SPEED_FLOOR, SPEED_MIN, stampOverlayKinds, stripDefaultOverlayKinds, TRANSITION_MAX, TRANSITION_STYLE_IDS, transitionStyleOfAnim } from "./types";
 import { readTextStyle } from "./textStyle";
 import { loadUiState, saveUiState, type ProjectUiState } from "./uiState";
 import { captureTimelineFrames } from "./visualFrames";
@@ -787,14 +787,9 @@ function resizeClipFootprint(clip: VideoClip, patch: Partial<VideoClip>, newLen:
     .getState()
     .clips.filter((c) => c.id !== clip.id && c.track === clip.track && c.start >= clip.start)
     .reduce<VideoClip | null>((m, c) => (!m || c.start < m.start ? c : m), null);
-  // Whether the pair makes the cut this clip's transition lives on, measured
-  // before the resize lands.
-  const keepContact = !!next && transitionOverlap(clip, next) > 1e-6;
   useEditor.getState().updateClipTransient(clip.id, patch);
   const nextStart = next?.start ?? Infinity;
-  const delta = keepContact
-    ? clip.start + newLen - nextStart
-    : Math.max(0, clip.start + newLen - nextStart);
+  const delta = Math.max(0, clip.start + newLen - nextStart);
   if (Math.abs(delta) > 1e-6) {
     useEditor.setState((st) => ({
       clips: st.clips
@@ -812,6 +807,12 @@ function resizeClipFootprint(clip: VideoClip, patch: Partial<VideoClip>, newLen:
     useEditor.setState((st) => ({
       transitions: reanchorTransitions(before, st.clips, st.transitions),
     }));
+  // The shifts above only ever grow the gap to the run behind this clip; a
+  // shrink (or a transition riding this cut, now possibly too long for the
+  // resized clip to still support) needs the same settle every other write
+  // gets — this function's own shifts bypass the wrapped `set()` that would
+  // otherwise apply it for free.
+  useEditor.setState((st) => settledTrackZero(st) ?? {});
 }
 const staleLaneError = {
   subtitleStatus: "error" as const,
@@ -1022,6 +1023,18 @@ export const useEditor = create<EditorState>((baseSet, get) => {
         }
         const derived = deriveTransitionFields(clips, transitions);
         if (derived !== clips) next = { ...next, clips: derived };
+        // Track 0 holds every transitioned pair at exactly its live overlap:
+        // a shorter/longer/new/removed transition, or a clip that moved out
+        // from behind one, needs the run behind it to follow — the same
+        // carry-audio/overlays/cues remap a legacy overlapped doc gets pulled
+        // apart by on load, just able to go either direction now.
+        const settled = settledTrackZero({
+          clips: derived,
+          audioClips: next.audioClips ?? prev.audioClips,
+          overlays: next.overlays ?? prev.overlays,
+          subtitles: next.subtitles ?? prev.subtitles,
+        });
+        if (settled) next = { ...next, ...settled };
       }
       // The playhead cannot outlive the timeline. Deleting the last of a long
       // row shortens the project under a playhead standing past the new end,
@@ -4067,19 +4080,24 @@ const TOUCH_EPS = 0.02;
 /**
  * The live blend length (timeline seconds) of `a`'s transition into `b`.
  *
- * A transition is a render-time blend at the cut: during the last blend
- * seconds of `a`, the incoming clip's first frame arrives over `a`'s live
- * tail, and at the cut `b` plays from its head. Clips never intersect in
- * time — the blend claims no layout, moves nothing, and resizes nothing.
- * It is live only while the pair actually touches; clips dragged apart
- * keep the declared length and the blend comes back when they meet again.
- * Clamped so it can never swallow either clip whole.
+ * On track 0 the two genuinely overlap: `b` starts this many seconds before
+ * `a` ends, both play their own real footage across the overlap, and the
+ * settle pass every clips/transitions write runs (`settledTrackZero`) holds
+ * every transitioned pair at exactly this geometry — so it's read straight
+ * off their positions here rather than re-derived. It is live only while the
+ * pair actually touches; clips dragged apart keep the declared length and
+ * the blend comes back when they meet again.
+ *
+ * Upper tracks keep the older, render-only model: a transition there is a
+ * blend at the cut that claims no layout, clamped so it can never swallow
+ * either clip whole.
  */
 export function transitionOverlap(a: VideoClip, b: VideoClip | undefined): number {
   const d = a.transition ?? 0;
   if (!b || d <= 0) return 0;
+  if (a.track === 0) return Math.max(0, a.start + clipLen(a) - b.start);
   if (Math.abs(a.start + clipLen(a) - b.start) > TOUCH_EPS) return 0;
-  return Math.min(d, clipLen(a) * 0.9, clipLen(b) * 0.9);
+  return clampCutOverlap(d, clipLen(a), clipLen(b));
 }
 
 /** Clamp a bar's blend length to the range every consumer expects. */
@@ -4342,17 +4360,25 @@ export function separateOverlaps<
     for (let i = 0; i < row.length; i++) {
       const start = row[i].start + shift;
       if (i > 0) {
-        const prevEnd = moved.get(row[i - 1].id)! + clipLen(row[i - 1]);
-        if (start < prevEnd - 1e-3) shift += prevEnd - start;
+        const prev = row[i - 1];
+        const prevEnd = moved.get(prev.id)! + clipLen(prev);
+        // Track 0 holds a transitioned pair at exactly its live overlap —
+        // everything else (a gap, a plain touch, any upper track) settles to
+        // none, same as when this function only ever pulled clips apart.
+        const overlap =
+          track === 0 && prev.transition
+            ? clampCutOverlap(prev.transition, clipLen(prev), clipLen(row[i]))
+            : 0;
+        const target = prevEnd - overlap;
+        if (Math.abs(start - target) > 1e-3) shift += target - start;
       }
       moved.set(row[i].id, row[i].start + shift);
       steps.push({ at: row[i].start, shift });
     }
-    if (shift > 0) {
+    const trackMoved = row.some((c) => Math.abs(moved.get(c.id)! - c.start) > 1e-9);
+    if (trackMoved) {
       out = out.map((c) =>
-        c.track === track && moved.get(c.id) !== c.start
-          ? { ...c, start: moved.get(c.id)! }
-          : c
+        c.track === track && moved.has(c.id) ? { ...c, start: moved.get(c.id)! } : c
       );
       if (track === 0) spine = steps;
     }
@@ -4378,6 +4404,27 @@ export function separateOverlaps<
       end: at(c.end),
       words: c.words?.map((w) => ({ ...w, t0: at(w.t0), t1: at(w.t1) })),
     })),
+  };
+}
+
+/** Run `separateOverlaps` against a slice of committed state and, if anything
+ * moved, the partial patch that carries it back through `set`/`setState` —
+ * `null` when the row is already sitting at every pair's correct overlap, so
+ * a caller mid-write can skip an empty one. */
+function settledTrackZero(s: {
+  clips: VideoClip[];
+  audioClips: AudioClip[];
+  overlays: Overlay[];
+  subtitles: SubtitlesBlock;
+}): Partial<EditorState> | null {
+  const doc = { clips: s.clips, audioClips: s.audioClips, overlays: s.overlays, cues: s.subtitles.cues };
+  const out = separateOverlaps(doc);
+  if (out === doc) return null;
+  return {
+    clips: out.clips,
+    audioClips: out.audioClips,
+    overlays: out.overlays,
+    subtitles: { ...s.subtitles, cues: out.cues },
   };
 }
 
