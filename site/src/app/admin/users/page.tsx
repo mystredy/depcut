@@ -25,10 +25,13 @@ import {
 } from "@/components/ui/table";
 import { formatUsd } from "@/lib/credits/format-usd";
 import { creditTopUpPresetsDollars, maxCreditGrantDollars } from "@/lib/credits/top-up";
+import { useSiteDateFormat } from "@/lib/siteDateFormat";
 import { type AdminUser, useAdminUsers } from "@/queries/admin";
 import { useGrantCredits } from "@/queries/credits";
 
-function timeAgo(iso: string) {
+// admin/settings/general's Date Format decides the fallback once an activity
+// timestamp is old enough to stop reading as a relative "N days ago".
+function timeAgo(iso: string, formatDate: (value: string) => string) {
   const ms = Date.now() - new Date(iso).getTime();
   const minutes = Math.floor(ms / 60000);
   if (minutes < 1) return "just now";
@@ -37,13 +40,14 @@ function timeAgo(iso: string) {
   if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
-  return new Date(iso).toLocaleDateString();
+  return formatDate(iso);
 }
 
 export default function AdminUsersPage() {
   const [query, setQuery] = useState("");
   const users = useAdminUsers(query);
   const [grantTarget, setGrantTarget] = useState<AdminUser | null>(null);
+  const { formatDate } = useSiteDateFormat();
 
   return (
     <div className="space-y-6">
@@ -97,10 +101,10 @@ export default function AdminUsersPage() {
                   </TableCell>
                   <TableCell className="font-mono text-sm">{formatUsd(u.balance)}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {u.lastActiveAt ? timeAgo(u.lastActiveAt) : "Never"}
+                    {u.lastActiveAt ? timeAgo(u.lastActiveAt, formatDate) : "Never"}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {new Date(u.createdAt).toLocaleDateString()}
+                    {formatDate(u.createdAt)}
                   </TableCell>
                   <TableCell className="font-mono text-sm text-muted-foreground">
                     {formatUsd(u.lifetimeCharged)}

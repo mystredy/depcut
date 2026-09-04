@@ -6,6 +6,7 @@ import { CheckCircle2, ClipboardCheck, Clock, FileText, Loader2, XCircle } from 
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSiteDateFormat } from "@/lib/siteDateFormat";
 import { cn } from "@/lib/utils";
 import {
   type AdminSubmission,
@@ -222,6 +223,7 @@ function SubmissionCard({
   onReject: () => void;
 }) {
   const review = useReviewSubmission();
+  const { formatDateTime } = useSiteDateFormat();
   const [decision, setDecision] = useState<"approve" | "reject" | null>(null);
   const [score, setScore] = useState(8);
   const [creatorSplit, setCreatorSplit] = useState(50);
@@ -467,7 +469,7 @@ function SubmissionCard({
               <div>
                 <p className="text-muted-foreground">Reviewed at</p>
                 <p className="font-medium">
-                  {item.reviewedAt ? new Date(item.reviewedAt).toLocaleString() : "—"}
+                  {item.reviewedAt ? formatDateTime(item.reviewedAt) : "—"}
                 </p>
               </div>
               <div>
