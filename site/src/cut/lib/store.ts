@@ -42,6 +42,7 @@ import { fillSlot } from "./genvideo/fillSlot";
 import { apiFetch, apiJson, getBackend, hasLocalCompute, reportClientError } from "./backend";
 import { fetchSignedMediaUrls, pinDocBase } from "./backend/cloud";
 import { markSignedBatch } from "./mediaLinks";
+import { prefetchCloudMedia } from "./mediaSync";
 import {
   dropCachedDoc,
   readCachedDoc,
@@ -1429,6 +1430,31 @@ export const useEditor = create<EditorState>((baseSet, get) => {
           for (const a of assets) a.url = signed.urls.get(a.fileName) ?? a.url;
           markSignedBatch(id, signed.expiresAt);
           writeCachedMediaLinks(id, signed.urls, signed.expiresAt);
+          // Warm this browser's local cache of the project's media: nearest
+          // timeline use first, each file swapping the playing asset onto its
+          // local bytes as it lands, so playback that started streaming over
+          // the signed URL above goes local as the queue drains and the next
+          // open plays entirely from disk. A no-op wherever the browser can't
+          // hold a store, and for the shared-viewer backend (a different route
+          // shape entirely) — cloud only.
+          if (getBackend().kind === "cloud") {
+            const spans = getClipSpans(doc.clips ?? [], assets);
+            const order = [...assets].sort((x, y) => {
+              const ax = spans.find((s) => s.clip.assetId === x.id)?.start ?? Infinity;
+              const ay = spans.find((s) => s.clip.assetId === y.id)?.start ?? Infinity;
+              return ax - ay;
+            });
+            prefetchCloudMedia(
+              id,
+              order.map((a) => ({ fileName: a.fileName, url: a.url })),
+              (fileName, blobUrl) => {
+                if (!blobUrl) return;
+                const st = get();
+                if (st.projectId !== id) return; // navigated away mid-fetch
+                st.applyMediaUrls(new Map([[fileName, blobUrl]]));
+              }
+            );
+          }
         } else {
           markSignedBatch(id, null);
         }
