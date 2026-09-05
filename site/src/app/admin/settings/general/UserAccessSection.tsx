@@ -29,6 +29,11 @@ export function UserAccessSection() {
   const save = () => {
     update.mutate({ allowRegistration, defaultUserRole, requireEmailVerification });
   };
+  const dirty =
+    !!settings.data &&
+    (allowRegistration !== settings.data.settings.allowRegistration ||
+      requireEmailVerification !== settings.data.settings.requireEmailVerification ||
+      defaultUserRole !== settings.data.settings.defaultUserRole);
 
   if (settings.isLoading) return <Skeleton className="h-64 w-full max-w-2xl" />;
   if (settings.isError) {
@@ -79,7 +84,7 @@ export function UserAccessSection() {
         <Input value={defaultUserRole} onChange={(e) => setDefaultUserRole(e.target.value)} />
       </div>
       <div className="flex justify-end pt-2">
-        <Button disabled={update.isPending} onClick={save}>
+        <Button disabled={update.isPending || !dirty} onClick={save}>
           {update.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
           Save
         </Button>

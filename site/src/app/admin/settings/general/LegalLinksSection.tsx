@@ -48,6 +48,15 @@ export function LegalLinksSection() {
     );
     update.mutate({ cookiePolicyUrl, helpCenterUrl, privacyUrl, socialLinks: links, termsUrl });
   };
+  const dirty =
+    !!settings.data &&
+    (termsUrl !== (settings.data.settings.termsUrl ?? "") ||
+      privacyUrl !== (settings.data.settings.privacyUrl ?? "") ||
+      cookiePolicyUrl !== (settings.data.settings.cookiePolicyUrl ?? "") ||
+      helpCenterUrl !== (settings.data.settings.helpCenterUrl ?? "") ||
+      SOCIAL_PLATFORMS.some(
+        ({ key }) => (socialLinks[key] ?? "") !== (settings.data!.settings.socialLinks?.[key] ?? "")
+      ));
 
   if (settings.isLoading) return <Skeleton className="h-96 w-full max-w-2xl" />;
   if (settings.isError) {
@@ -101,7 +110,7 @@ export function LegalLinksSection() {
         </div>
       </div>
       <div className="flex justify-end pt-2">
-        <Button disabled={update.isPending} onClick={save}>
+        <Button disabled={update.isPending || !dirty} onClick={save}>
           {update.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
           Save
         </Button>
