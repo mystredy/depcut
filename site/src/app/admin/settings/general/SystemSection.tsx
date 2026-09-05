@@ -30,6 +30,11 @@ export function SystemSection() {
   const save = () => {
     update.mutate({ copyrightText, footerText, maintenanceMode });
   };
+  const dirty =
+    !!settings.data &&
+    (maintenanceMode !== settings.data.settings.maintenanceMode ||
+      copyrightText !== (settings.data.settings.copyrightText ?? "") ||
+      footerText !== (settings.data.settings.footerText ?? ""));
 
   if (settings.isLoading) return <Skeleton className="h-64 w-full max-w-2xl" />;
   if (settings.isError) {
@@ -73,7 +78,7 @@ export function SystemSection() {
         <Input value={footerText} onChange={(e) => setFooterText(e.target.value)} />
       </div>
       <div className="flex justify-end pt-2">
-        <Button disabled={update.isPending} onClick={save}>
+        <Button disabled={update.isPending || !dirty} onClick={save}>
           {update.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
           Save
         </Button>

@@ -49,6 +49,12 @@ export function LocalizationSection() {
       timezone,
     });
   };
+  const dirty =
+    !!settings.data &&
+    (defaultLocale !== settings.data.settings.defaultLocale ||
+      timezone !== settings.data.settings.timezone ||
+      dateFormat !== settings.data.settings.dateFormat ||
+      timeFormat !== settings.data.settings.timeFormat);
 
   if (settings.isLoading) return <Skeleton className="h-64 w-full max-w-2xl" />;
   if (settings.isError) {
@@ -127,7 +133,7 @@ export function LocalizationSection() {
         </div>
       </div>
       <div className="flex justify-end pt-2">
-        <Button disabled={update.isPending} onClick={save}>
+        <Button disabled={update.isPending || !dirty} onClick={save}>
           {update.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
           Save
         </Button>

@@ -28,6 +28,7 @@ export function AppearanceSection() {
   const save = () => {
     update.mutate({ defaultTheme: defaultTheme as "light" | "dark" | "system" });
   };
+  const dirty = !!settings.data && defaultTheme !== settings.data.settings.defaultTheme;
 
   if (settings.isLoading) return <Skeleton className="h-40 w-full max-w-2xl" />;
   if (settings.isError) {
@@ -58,7 +59,7 @@ export function AppearanceSection() {
         </select>
       </div>
       <div className="flex justify-end pt-2">
-        <Button disabled={update.isPending} onClick={save}>
+        <Button disabled={update.isPending || !dirty} onClick={save}>
           {update.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
           Save
         </Button>
