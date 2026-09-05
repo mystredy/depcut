@@ -1,0 +1,7 @@
+{
+  "name": "@anthropic-ai/claude-agent-sdk-linux-x64-musl",
+  "version": "0.0.0",
+  "description": "Empty stand-in for the real platform package — see site/package.json's \"overrides\".",
+  "os": ["linux"],
+  "cpu": ["x64"]
+}

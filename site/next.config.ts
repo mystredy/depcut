@@ -30,6 +30,21 @@ const nextConfig: NextConfig = {
   // under Turbopack builds.) On hosted builds only, alias the engine entry to a
   // 404 stub so the engine graph is never traced; local builds keep the real
   // router, so `next dev`/`next start` serve Cut normally.
+  //
+  // That alias only keeps the binary out of the traced function — npm still
+  // installs it into node_modules on every install, hosted or not, since it's
+  // an ordinary dependency. On Vercel that alone was enough to run a build out
+  // of disk during output packaging (deleting it post-install doesn't help:
+  // Vercel's build layer is a squashfs snapshot taken from the installed tree,
+  // and removing a file from a running container doesn't reclaim the read-only
+  // layer underneath it). package.json's "overrides" swaps the two Linux
+  // platform packages for empty local stubs (scripts/stubs/) so the real
+  // ~240MB-each binaries are never installed in the first place, anywhere —
+  // safe because nothing reachable in the hosted build imports this package at
+  // all (this alias, plus the hosted caption/subtitle routes running on Gemini
+  // instead), and the override only targets the Linux variants, so macOS
+  // installs (where the engine's local AI one-shots actually run) are
+  // untouched.
   turbopack: process.env.VERCEL
     ? {
         resolveAlias: {

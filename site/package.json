@@ -12,7 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate && node scripts/copy-mediapipe-assets.mjs && node scripts/prune-unused-native-deps.mjs",
+    "postinstall": "prisma generate && node scripts/copy-mediapipe-assets.mjs",
     "db:generate": "prisma generate",
     "db:pull": "prisma db pull",
     "prisma:dev": "dotenv -e .env.development -- npx prisma migrate dev",
@@ -103,5 +103,9 @@
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "@anthropic-ai/claude-agent-sdk-linux-x64": "file:../../../scripts/stubs/claude-agent-sdk-linux-x64",
+    "@anthropic-ai/claude-agent-sdk-linux-x64-musl": "file:../../../scripts/stubs/claude-agent-sdk-linux-x64-musl"
   }
 }
