@@ -1,4 +1,5 @@
 {
+  "installCommand": "npm ci",
   "crons": [
     { "path": "/api/cut-cloud/gc", "schedule": "0 4 * * *" },
     { "path": "/api/analytics/run", "schedule": "0 1 * * *" }
