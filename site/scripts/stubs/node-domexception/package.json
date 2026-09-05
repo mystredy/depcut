@@ -1,0 +1,6 @@
+{
+  "name": "node-domexception",
+  "version": "1.0.0",
+  "description": "Replacement for the deprecated real package — see site/package.json's \"overrides\".",
+  "main": "index.js"
+}
