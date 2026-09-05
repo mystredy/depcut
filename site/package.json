@@ -106,6 +106,12 @@
   },
   "overrides": {
     "@anthropic-ai/claude-agent-sdk-linux-x64": "file:../../../scripts/stubs/claude-agent-sdk-linux-x64",
-    "@anthropic-ai/claude-agent-sdk-linux-x64-musl": "file:../../../scripts/stubs/claude-agent-sdk-linux-x64-musl"
+    "@anthropic-ai/claude-agent-sdk-linux-x64-musl": "file:../../../scripts/stubs/claude-agent-sdk-linux-x64-musl",
+    "@img/sharp-libvips-linuxmusl-x64": "file:../../../scripts/stubs/sharp-libvips-linuxmusl-x64",
+    "@img/sharp-linuxmusl-x64": "file:../../../scripts/stubs/sharp-linuxmusl-x64",
+    "@next/swc-linux-x64-musl": "file:../../../scripts/stubs/swc-linux-x64-musl",
+    "@oven/bun-linux-x64-baseline": "file:../../../scripts/stubs/bun-linux-x64-baseline",
+    "@oven/bun-linux-x64-musl": "file:../../../scripts/stubs/bun-linux-x64-musl",
+    "@oven/bun-linux-x64-musl-baseline": "file:../../../scripts/stubs/bun-linux-x64-musl-baseline"
   }
 }
