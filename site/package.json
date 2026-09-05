@@ -112,8 +112,7 @@
     "@next/swc-linux-x64-musl": "file:../../../scripts/stubs/swc-linux-x64-musl",
     "@oven/bun-linux-x64-baseline": "file:../../../scripts/stubs/bun-linux-x64-baseline",
     "@oven/bun-linux-x64-musl": "file:../../../scripts/stubs/bun-linux-x64-musl",
-    "@oven/bun-linux-x64-musl-baseline": "file:../../../scripts/stubs/bun-linux-x64-musl-baseline",
-    "node-domexception": "file:../../../scripts/stubs/node-domexception"
+    "@oven/bun-linux-x64-musl-baseline": "file:../../../scripts/stubs/bun-linux-x64-musl-baseline"
   },
   "allowScripts": {
     "@google/genai@1.52.0": true,
