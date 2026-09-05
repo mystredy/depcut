@@ -113,5 +113,19 @@
     "@oven/bun-linux-x64-baseline": "file:../../../scripts/stubs/bun-linux-x64-baseline",
     "@oven/bun-linux-x64-musl": "file:../../../scripts/stubs/bun-linux-x64-musl",
     "@oven/bun-linux-x64-musl-baseline": "file:../../../scripts/stubs/bun-linux-x64-musl-baseline"
+  },
+  "allowScripts": {
+    "@google/genai@1.52.0": true,
+    "@google/genai@2.6.0": true,
+    "@prisma/engines@7.8.0": true,
+    "bun@1.3.14": true,
+    "core-js@3.49.0": true,
+    "esbuild@0.28.1": true,
+    "msw@2.14.6": true,
+    "prisma@7.8.0": true,
+    "protobufjs@7.6.1": true,
+    "sharp@0.34.5": true,
+    "skia-canvas@3.0.8": true,
+    "unrs-resolver@1.11.1": true
   }
 }
