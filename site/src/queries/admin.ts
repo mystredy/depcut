@@ -924,18 +924,23 @@ function useRemoveBrandingImage(path: string) {
   });
 }
 
-export const useUploadFavicon = () => useUploadBrandingImage("/api/admin/settings/favicon");
-export const useRemoveFavicon = () => useRemoveBrandingImage("/api/admin/settings/favicon");
+// One dynamic route (branding-image/[asset]) backs all three — see that
+// route's own comment for why (the Hobby-plan serverless function ceiling,
+// docs/guides/vercel-function-budget.md).
+export const useUploadFavicon = () =>
+  useUploadBrandingImage("/api/admin/settings/branding-image/favicon");
+export const useRemoveFavicon = () =>
+  useRemoveBrandingImage("/api/admin/settings/branding-image/favicon");
 
 export const useUploadAppleTouchIcon = () =>
-  useUploadBrandingImage("/api/admin/settings/apple-touch-icon");
+  useUploadBrandingImage("/api/admin/settings/branding-image/apple-touch-icon");
 export const useRemoveAppleTouchIcon = () =>
-  useRemoveBrandingImage("/api/admin/settings/apple-touch-icon");
+  useRemoveBrandingImage("/api/admin/settings/branding-image/apple-touch-icon");
 
 export const useUploadSocialShareImage = () =>
-  useUploadBrandingImage("/api/admin/settings/social-share-image");
+  useUploadBrandingImage("/api/admin/settings/branding-image/social-share-image");
 export const useRemoveSocialShareImage = () =>
-  useRemoveBrandingImage("/api/admin/settings/social-share-image");
+  useRemoveBrandingImage("/api/admin/settings/branding-image/social-share-image");
 
 export function useAdminSocialApps() {
   return useQuery({
