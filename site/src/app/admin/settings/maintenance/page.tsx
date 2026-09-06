@@ -36,6 +36,12 @@ export default function AdminMaintenancePage() {
       maintenanceParagraph: paragraph,
     });
   };
+  const dirty =
+    !!settings.data &&
+    (maintenanceMode !== settings.data.settings.maintenanceMode ||
+      header !== (settings.data.settings.maintenanceHeader ?? "") ||
+      paragraph !== (settings.data.settings.maintenanceParagraph ?? "") ||
+      footer !== (settings.data.settings.maintenanceFooter ?? ""));
 
   return (
     <div className="space-y-6">
@@ -83,7 +89,7 @@ export default function AdminMaintenancePage() {
           </div>
 
           <div className="flex justify-end pt-2">
-            <Button disabled={update.isPending} onClick={save}>
+            <Button disabled={update.isPending || !dirty} onClick={save}>
               {update.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
               Save Changes
             </Button>
