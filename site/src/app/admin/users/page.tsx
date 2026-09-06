@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { UserAvatar } from "@/cut/components/UserAvatar";
 import { formatUsd } from "@/lib/credits/format-usd";
 import { creditTopUpPresetsDollars, maxCreditGrantDollars } from "@/lib/credits/top-up";
 import { useSiteDateFormat } from "@/lib/siteDateFormat";
@@ -94,9 +95,16 @@ export default function AdminUsersPage() {
               {users.data?.users.map((u) => (
                 <TableRow key={u.id}>
                   <TableCell className="overflow-hidden">
-                    <div className="min-w-0 overflow-hidden">
-                      <p className="truncate text-sm font-medium">{u.displayName || u.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                    <div className="flex min-w-0 items-center gap-2.5 overflow-hidden">
+                      <UserAvatar
+                        className="size-8 shrink-0"
+                        name={u.displayName || u.name}
+                        image={u.image}
+                      />
+                      <div className="min-w-0 overflow-hidden">
+                        <p className="truncate text-sm font-medium">{u.displayName || u.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell className="font-mono text-sm">{formatUsd(u.balance)}</TableCell>
