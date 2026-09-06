@@ -87,7 +87,7 @@ const SECTIONS: NavSection[] = [
       { label: "Users Activities", href: soon("User Management — Users Activities"), icon: Activity, color: "text-emerald-500" },
       { label: "Users Dashboard", href: soon("User Management — Users Dashboard"), icon: LayoutDashboard, color: "text-amber-500" },
       { label: "User Deletion Requests", href: soon("User Management — Deletion Requests"), icon: ShieldAlert, color: "text-red-500" },
-      { label: "User Permissions", href: "/admin/users", icon: ShieldAlert, color: "text-pink-600" },
+      { label: "User Permissions", href: soon("User Management — User Permissions"), icon: ShieldAlert, color: "text-pink-600" },
     ],
   },
   {
