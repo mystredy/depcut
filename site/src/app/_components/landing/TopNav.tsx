@@ -1,11 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { PillButton } from "@/app/_components/landing/LandingPrimitives";
 import { BetaBadge } from "@/cut/components/BetaBadge";
+import { SiteLogo } from "@/cut/components/SiteLogo";
 import { useHydrationSafeSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
@@ -69,15 +69,7 @@ export function TopNav({
           className="flex items-center gap-0 text-ink no-underline"
         >
           <div className="flex h-[59px] w-[59px] items-center justify-center overflow-hidden rounded-[10px]">
-            <Image
-              src="/deepw-logo.svg"
-              alt=""
-              width={NAV_ICON_SIZE}
-              height={NAV_ICON_SIZE}
-              sizes={`${NAV_ICON_SIZE}px`}
-              className="block h-full w-full object-contain"
-              unoptimized
-            />
+            <SiteLogo width={NAV_ICON_SIZE} height={NAV_ICON_SIZE} compact />
           </div>
           <span className="text-2xl font-semibold">{wordmark}</span>
           <BetaBadge className="ml-2" />
