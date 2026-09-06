@@ -142,6 +142,38 @@ export async function head(
   }
 }
 
+/** A public object served through our own route (see stock-media's GET) rather
+ * than presigned — presigned GETs expire in an hour, too short for a stock
+ * asset a project can reference indefinitely. Streams instead of buffering,
+ * and forwards a byte-range so video scrubbing/seeking works, matching what a
+ * direct static-file response would support. */
+export async function getObjectRange(
+  key: string,
+  range: string | null
+): Promise<{
+  body: ReadableStream;
+  contentType: string;
+  contentLength: number;
+  contentRange: string | null;
+  status: 200 | 206;
+} | null> {
+  try {
+    const res = await r2().send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key, Range: range ?? undefined }));
+    const body = res.Body?.transformToWebStream();
+    if (!body) return null;
+    return {
+      body,
+      contentType: res.ContentType ?? "application/octet-stream",
+      contentLength: Number(res.ContentLength ?? 0),
+      contentRange: res.ContentRange ?? null,
+      status: res.ContentRange ? 206 : 200,
+    };
+  } catch (e) {
+    if (e instanceof R2NotConfiguredError) throw e;
+    return null;
+  }
+}
+
 /** An object's bytes, or null when it does not exist. */
 export async function getObject(key: string): Promise<{ bytes: Buffer; mime: string } | null> {
   try {
