@@ -10,7 +10,7 @@ export default function HomeLayout({ children }: { children: React.ReactNode }) 
         <AppSidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <AppHeader />
-          <main className="min-w-0 flex-1 overflow-y-auto">{children}</main>
+          <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</main>
         </div>
         {/* Every home surface uploads — projects, library — so the quota wall
             answers from the layout rather than from each page. */}
