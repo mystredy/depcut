@@ -24,8 +24,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "grey panels"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/character-studio-host.mp4",
-    "thumb": "/cut-stock-video/character-studio-host.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-studio-host.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-studio-host.thumb.webp",
     "duration": 8
   },
   {
@@ -52,8 +52,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "white headphones"
     ],
     "aspect": "9:16",
-    "file": "/cut-stock-video/character-loft-creator.mp4",
-    "thumb": "/cut-stock-video/character-loft-creator.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-loft-creator.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-loft-creator.thumb.webp",
     "duration": 8
   },
   {
@@ -84,8 +84,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "happy"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/character-office-mentor.mp4",
-    "thumb": "/cut-stock-video/character-office-mentor.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-office-mentor.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-office-mentor.thumb.webp",
     "duration": 8
   },
   {
@@ -112,8 +112,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "candid"
     ],
     "aspect": "9:16",
-    "file": "/cut-stock-video/character-kitchen-vlogger.mp4",
-    "thumb": "/cut-stock-video/character-kitchen-vlogger.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-kitchen-vlogger.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-kitchen-vlogger.thumb.webp",
     "duration": 8
   },
   {
@@ -137,8 +137,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "selfie"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/character-cafe-analyst.mp4",
-    "thumb": "/cut-stock-video/character-cafe-analyst.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-cafe-analyst.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-cafe-analyst.thumb.webp",
     "duration": 8
   },
   {
@@ -164,8 +164,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "afternoon"
     ],
     "aspect": "9:16",
-    "file": "/cut-stock-video/character-outdoor-coach.mp4",
-    "thumb": "/cut-stock-video/character-outdoor-coach.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-outdoor-coach.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-outdoor-coach.thumb.webp",
     "duration": 8
   },
   {
@@ -194,8 +194,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "diy"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/character-workshop-maker.mp4",
-    "thumb": "/cut-stock-video/character-workshop-maker.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-workshop-maker.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-workshop-maker.thumb.webp",
     "duration": 8
   },
   {
@@ -222,8 +222,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "warm lighting"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/character-lounge-storyteller.mp4",
-    "thumb": "/cut-stock-video/character-lounge-storyteller.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-lounge-storyteller.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-lounge-storyteller.thumb.webp",
     "duration": 8
   },
   {
@@ -254,8 +254,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "active"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/character-gym-trainer.mp4",
-    "thumb": "/cut-stock-video/character-gym-trainer.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-gym-trainer.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-gym-trainer.thumb.webp",
     "duration": 8
   },
   {
@@ -282,8 +282,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "camera view"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/character-startup-founder.mp4",
-    "thumb": "/cut-stock-video/character-startup-founder.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-startup-founder.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-startup-founder.thumb.webp",
     "duration": 8
   },
   {
@@ -314,8 +314,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "retail environment"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/character-bookshop-owner.mp4",
-    "thumb": "/cut-stock-video/character-bookshop-owner.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-bookshop-owner.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-bookshop-owner.thumb.webp",
     "duration": 8
   },
   {
@@ -341,8 +341,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "greenhouse"
     ],
     "aspect": "9:16",
-    "file": "/cut-stock-video/character-garden-guide.mp4",
-    "thumb": "/cut-stock-video/character-garden-guide.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-garden-guide.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-garden-guide.thumb.webp",
     "duration": 8
   },
   {
@@ -372,8 +372,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "vlogging"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/character-music-producer.mp4",
-    "thumb": "/cut-stock-video/character-music-producer.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-music-producer.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-music-producer.thumb.webp",
     "duration": 8
   },
   {
@@ -399,8 +399,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "street"
     ],
     "aspect": "9:16",
-    "file": "/cut-stock-video/character-street-reporter.mp4",
-    "thumb": "/cut-stock-video/character-street-reporter.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-street-reporter.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-street-reporter.thumb.webp",
     "duration": 8
   },
   {
@@ -431,8 +431,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "cook"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/character-chef-pass.mp4",
-    "thumb": "/cut-stock-video/character-chef-pass.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-chef-pass.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-chef-pass.thumb.webp",
     "duration": 8
   },
   {
@@ -459,8 +459,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "science class"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/character-science-teacher.mp4",
-    "thumb": "/cut-stock-video/character-science-teacher.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-science-teacher.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-science-teacher.thumb.webp",
     "duration": 8
   },
   {
@@ -491,8 +491,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "close up"
     ],
     "aspect": "9:16",
-    "file": "/cut-stock-video/character-travel-blogger.mp4",
-    "thumb": "/cut-stock-video/character-travel-blogger.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-travel-blogger.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-travel-blogger.thumb.webp",
     "duration": 8
   },
   {
@@ -518,8 +518,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "beard"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/character-finance-coach.mp4",
-    "thumb": "/cut-stock-video/character-finance-coach.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-finance-coach.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-finance-coach.thumb.webp",
     "duration": 8
   },
   {
@@ -550,8 +550,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "bright"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/character-nurse-educator.mp4",
-    "thumb": "/cut-stock-video/character-nurse-educator.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-nurse-educator.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-nurse-educator.thumb.webp",
     "duration": 8
   },
   {
@@ -579,8 +579,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "speaking"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/character-grandpa-gamer.mp4",
-    "thumb": "/cut-stock-video/character-grandpa-gamer.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-grandpa-gamer.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-grandpa-gamer.thumb.webp",
     "duration": 8
   },
   {
@@ -606,8 +606,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "smile"
     ],
     "aspect": "9:16",
-    "file": "/cut-stock-video/character-cafe-hopper.mp4",
-    "thumb": "/cut-stock-video/character-cafe-hopper.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-cafe-hopper.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-cafe-hopper.thumb.webp",
     "duration": 8
   },
   {
@@ -631,8 +631,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "warm light"
     ],
     "aspect": "9:16",
-    "file": "/cut-stock-video/character-study-buddy.mp4",
-    "thumb": "/cut-stock-video/character-study-buddy.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-study-buddy.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-study-buddy.thumb.webp",
     "duration": 8
   },
   {
@@ -659,8 +659,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "background"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/character-business-lead.mp4",
-    "thumb": "/cut-stock-video/character-business-lead.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/character-business-lead.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/character-business-lead.thumb.webp",
     "duration": 8
   },
   {
@@ -690,8 +690,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "professional"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/business-team-walkthrough.mp4",
-    "thumb": "/cut-stock-video/business-team-walkthrough.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/business-team-walkthrough.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/business-team-walkthrough.thumb.webp",
     "duration": 6
   },
   {
@@ -717,8 +717,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "study"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/business-typing-macro.mp4",
-    "thumb": "/cut-stock-video/business-typing-macro.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/business-typing-macro.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/business-typing-macro.thumb.webp",
     "duration": 6
   },
   {
@@ -748,8 +748,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "nature"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/nature-coast-aerial.mp4",
-    "thumb": "/cut-stock-video/nature-coast-aerial.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/nature-coast-aerial.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/nature-coast-aerial.thumb.webp",
     "duration": 6
   },
   {
@@ -774,8 +774,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "outdoors"
     ],
     "aspect": "9:16",
-    "file": "/cut-stock-video/nature-forest-rays.mp4",
-    "thumb": "/cut-stock-video/nature-forest-rays.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/nature-forest-rays.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/nature-forest-rays.thumb.webp",
     "duration": 6
   },
   {
@@ -804,8 +804,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "cobblestone"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/travel-market-walk.mp4",
-    "thumb": "/cut-stock-video/travel-market-walk.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/travel-market-walk.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/travel-market-walk.thumb.webp",
     "duration": 6
   },
   {
@@ -835,8 +835,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "outdoor"
     ],
     "aspect": "9:16",
-    "file": "/cut-stock-video/travel-beach-stroll.mp4",
-    "thumb": "/cut-stock-video/travel-beach-stroll.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/travel-beach-stroll.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/travel-beach-stroll.thumb.webp",
     "duration": 6
   },
   {
@@ -862,8 +862,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "streetlights"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/city-night-traffic.mp4",
-    "thumb": "/cut-stock-video/city-night-traffic.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/city-night-traffic.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/city-night-traffic.thumb.webp",
     "duration": 6
   },
   {
@@ -891,8 +891,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "shop fronts"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/city-crosswalk-rush.mp4",
-    "thumb": "/cut-stock-video/city-crosswalk-rush.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/city-crosswalk-rush.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/city-crosswalk-rush.thumb.webp",
     "duration": 6
   },
   {
@@ -922,8 +922,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "computer setup"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/tech-code-glow.mp4",
-    "thumb": "/cut-stock-video/tech-code-glow.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/tech-code-glow.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/tech-code-glow.thumb.webp",
     "duration": 6
   },
   {
@@ -950,8 +950,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "modern factory"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/tech-robot-assembly.mp4",
-    "thumb": "/cut-stock-video/tech-robot-assembly.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/tech-robot-assembly.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/tech-robot-assembly.thumb.webp",
     "duration": 6
   },
   {
@@ -980,8 +980,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "manga style"
     ],
     "aspect": "9:16",
-    "file": "/cut-stock-video/anime-rain-walk.mp4",
-    "thumb": "/cut-stock-video/anime-rain-walk.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/anime-rain-walk.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/anime-rain-walk.thumb.webp",
     "duration": 6
   },
   {
@@ -1009,8 +1009,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "waterfront"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/anime-cloud-drift.mp4",
-    "thumb": "/cut-stock-video/anime-cloud-drift.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/anime-cloud-drift.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/anime-cloud-drift.thumb.webp",
     "duration": 6
   },
   {
@@ -1037,8 +1037,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "golden light"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/animal-dog-sprint.mp4",
-    "thumb": "/cut-stock-video/animal-dog-sprint.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/animal-dog-sprint.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/animal-dog-sprint.thumb.webp",
     "duration": 6
   },
   {
@@ -1066,8 +1066,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "trees"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/animal-flock-sky.mp4",
-    "thumb": "/cut-stock-video/animal-flock-sky.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/animal-flock-sky.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/animal-flock-sky.thumb.webp",
     "duration": 6
   },
   {
@@ -1093,8 +1093,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "cafe"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/food-coffee-pour.mp4",
-    "thumb": "/cut-stock-video/food-coffee-pour.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/food-coffee-pour.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/food-coffee-pour.thumb.webp",
     "duration": 6
   },
   {
@@ -1121,8 +1121,8 @@ export const STOCK_VIDEOS: StockVideo[] = [
       "chinese cooking"
     ],
     "aspect": "16:9",
-    "file": "/cut-stock-video/food-pan-sizzle.mp4",
-    "thumb": "/cut-stock-video/food-pan-sizzle.thumb.webp",
+    "file": "/api/stock-media/cut-stock-video/food-pan-sizzle.mp4",
+    "thumb": "/api/stock-media/cut-stock-video/food-pan-sizzle.thumb.webp",
     "duration": 6
   }
 ];

@@ -14,7 +14,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "guitar",
       "cheerful"
     ],
-    "file": "/cut-stock-music/songs-sunny-folk.mp3",
+    "file": "/api/stock-media/cut-stock-music/songs-sunny-folk.mp3",
     "duration": 30.8,
     "peaks": [
       0.78,
@@ -87,7 +87,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "upbeat",
       "guitar"
     ],
-    "file": "/cut-stock-music/songs-indie-dream.mp3",
+    "file": "/api/stock-media/cut-stock-music/songs-indie-dream.mp3",
     "duration": 30.8,
     "peaks": [
       1,
@@ -160,7 +160,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "emotional",
       "slow"
     ],
-    "file": "/cut-stock-music/songs-soft-ballad.mp3",
+    "file": "/api/stock-media/cut-stock-music/songs-soft-ballad.mp3",
     "duration": 30.8,
     "peaks": [
       0.79,
@@ -233,7 +233,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "energetic",
       "fun"
     ],
-    "file": "/cut-stock-music/songs-summer-night.mp3",
+    "file": "/api/stock-media/cut-stock-music/songs-summer-night.mp3",
     "duration": 30.8,
     "peaks": [
       0.79,
@@ -306,7 +306,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "guitar",
       "laidback"
     ],
-    "file": "/cut-stock-music/songs-open-road.mp3",
+    "file": "/api/stock-media/cut-stock-music/songs-open-road.mp3",
     "duration": 30.8,
     "peaks": [
       0.9,
@@ -379,7 +379,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "keys",
       "night"
     ],
-    "file": "/cut-stock-music/songs-city-lights.mp3",
+    "file": "/api/stock-media/cut-stock-music/songs-city-lights.mp3",
     "duration": 30.6,
     "peaks": [
       0.84,
@@ -452,7 +452,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "piano",
       "hopeful"
     ],
-    "file": "/cut-stock-music/songs-new-morning.mp3",
+    "file": "/api/stock-media/cut-stock-music/songs-new-morning.mp3",
     "duration": 30.7,
     "peaks": [
       0.57,
@@ -525,7 +525,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "guitar",
       "tender"
     ],
-    "file": "/cut-stock-music/songs-quiet-evening.mp3",
+    "file": "/api/stock-media/cut-stock-music/songs-quiet-evening.mp3",
     "duration": 30.8,
     "peaks": [
       0.7,
@@ -598,7 +598,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "trailer",
       "dramatic"
     ],
-    "file": "/cut-stock-music/cinematic-rising-strings.mp3",
+    "file": "/api/stock-media/cut-stock-music/cinematic-rising-strings.mp3",
     "duration": 30,
     "peaks": [
       0.39,
@@ -671,7 +671,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "drums",
       "dramatic"
     ],
-    "file": "/cut-stock-music/cinematic-tension.mp3",
+    "file": "/api/stock-media/cut-stock-music/cinematic-tension.mp3",
     "duration": 30.8,
     "peaks": [
       0.83,
@@ -744,7 +744,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "inspiring",
       "warm"
     ],
-    "file": "/cut-stock-music/cinematic-hopeful-piano.mp3",
+    "file": "/api/stock-media/cut-stock-music/cinematic-hopeful-piano.mp3",
     "duration": 30.8,
     "peaks": [
       0.57,
@@ -817,7 +817,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "grand",
       "trailer"
     ],
-    "file": "/cut-stock-music/cinematic-heroic-brass.mp3",
+    "file": "/api/stock-media/cut-stock-music/cinematic-heroic-brass.mp3",
     "duration": 30.8,
     "peaks": [
       0.81,
@@ -890,7 +890,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "reflective",
       "emotional"
     ],
-    "file": "/cut-stock-music/cinematic-melancholy-cello.mp3",
+    "file": "/api/stock-media/cut-stock-music/cinematic-melancholy-cello.mp3",
     "duration": 30.8,
     "peaks": [
       0.69,
@@ -963,7 +963,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "drone",
       "soft"
     ],
-    "file": "/cut-stock-music/ambient-warm-pad.mp3",
+    "file": "/api/stock-media/cut-stock-music/ambient-warm-pad.mp3",
     "duration": 30.8,
     "peaks": [
       0.48,
@@ -1036,7 +1036,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "shimmer",
       "airy"
     ],
-    "file": "/cut-stock-music/ambient-ethereal.mp3",
+    "file": "/api/stock-media/cut-stock-music/ambient-ethereal.mp3",
     "duration": 28.4,
     "peaks": [
       0.56,
@@ -1109,7 +1109,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "space",
       "calm"
     ],
-    "file": "/cut-stock-music/ambient-deep-space.mp3",
+    "file": "/api/stock-media/cut-stock-music/ambient-deep-space.mp3",
     "duration": 30.8,
     "peaks": [
       0.48,
@@ -1182,7 +1182,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "pads",
       "calm"
     ],
-    "file": "/cut-stock-music/ambient-soothing.mp3",
+    "file": "/api/stock-media/cut-stock-music/ambient-soothing.mp3",
     "duration": 22.3,
     "peaks": [
       0.94,
@@ -1255,7 +1255,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "fingerpicked",
       "gentle"
     ],
-    "file": "/cut-stock-music/acoustic-guitar-calm.mp3",
+    "file": "/api/stock-media/cut-stock-music/acoustic-guitar-calm.mp3",
     "duration": 30.8,
     "peaks": [
       0.78,
@@ -1328,7 +1328,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "cozy",
       "folk"
     ],
-    "file": "/cut-stock-music/acoustic-folk-warm.mp3",
+    "file": "/api/stock-media/cut-stock-music/acoustic-folk-warm.mp3",
     "duration": 30.8,
     "peaks": [
       0.63,
@@ -1401,7 +1401,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "sunny",
       "fresh"
     ],
-    "file": "/cut-stock-music/acoustic-sunny-morning.mp3",
+    "file": "/api/stock-media/cut-stock-music/acoustic-sunny-morning.mp3",
     "duration": 29.6,
     "peaks": [
       0.91,
@@ -1474,7 +1474,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "playful",
       "light"
     ],
-    "file": "/cut-stock-music/acoustic-ukulele-happy.mp3",
+    "file": "/api/stock-media/cut-stock-music/acoustic-ukulele-happy.mp3",
     "duration": 30.8,
     "peaks": [
       0.87,
@@ -1547,7 +1547,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "beat",
       "driving"
     ],
-    "file": "/cut-stock-music/electronic-driving-synth.mp3",
+    "file": "/api/stock-media/cut-stock-music/electronic-driving-synth.mp3",
     "duration": 30.8,
     "peaks": [
       0.73,
@@ -1620,7 +1620,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "smooth",
       "pulse"
     ],
-    "file": "/cut-stock-music/electronic-glow.mp3",
+    "file": "/api/stock-media/cut-stock-music/electronic-glow.mp3",
     "duration": 30.4,
     "peaks": [
       0.95,
@@ -1693,7 +1693,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "beat",
       "mellow"
     ],
-    "file": "/cut-stock-music/electronic-downtempo.mp3",
+    "file": "/api/stock-media/cut-stock-music/electronic-downtempo.mp3",
     "duration": 30.8,
     "peaks": [
       0.96,
@@ -1766,7 +1766,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "dreamy",
       "groove"
     ],
-    "file": "/cut-stock-music/electronic-retro-wave.mp3",
+    "file": "/api/stock-media/cut-stock-music/electronic-retro-wave.mp3",
     "duration": 30.7,
     "peaks": [
       0.81,
@@ -1839,7 +1839,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "bright",
       "synth"
     ],
-    "file": "/cut-stock-music/upbeat-claps-pop.mp3",
+    "file": "/api/stock-media/cut-stock-music/upbeat-claps-pop.mp3",
     "duration": 30.8,
     "peaks": [
       0.71,
@@ -1912,7 +1912,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "fun",
       "rhythmic"
     ],
-    "file": "/cut-stock-music/upbeat-funky-bass.mp3",
+    "file": "/api/stock-media/cut-stock-music/upbeat-funky-bass.mp3",
     "duration": 30.8,
     "peaks": [
       1,
@@ -1985,7 +1985,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "lively",
       "happy"
     ],
-    "file": "/cut-stock-music/upbeat-summer.mp3",
+    "file": "/api/stock-media/cut-stock-music/upbeat-summer.mp3",
     "duration": 30.7,
     "peaks": [
       0.96,
@@ -2058,7 +2058,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "energetic",
       "bright"
     ],
-    "file": "/cut-stock-music/upbeat-motivational.mp3",
+    "file": "/api/stock-media/cut-stock-music/upbeat-motivational.mp3",
     "duration": 30.8,
     "peaks": [
       0.89,
@@ -2131,7 +2131,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "laidback",
       "beat"
     ],
-    "file": "/cut-stock-music/chill-mellow-keys.mp3",
+    "file": "/api/stock-media/cut-stock-music/chill-mellow-keys.mp3",
     "duration": 30.8,
     "peaks": [
       0.27,
@@ -2204,7 +2204,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "calm",
       "smooth"
     ],
-    "file": "/cut-stock-music/chill-lounge.mp3",
+    "file": "/api/stock-media/cut-stock-music/chill-lounge.mp3",
     "duration": 30.8,
     "peaks": [
       0.91,
@@ -2277,7 +2277,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "groove",
       "mellow"
     ],
-    "file": "/cut-stock-music/chill-sunset.mp3",
+    "file": "/api/stock-media/cut-stock-music/chill-sunset.mp3",
     "duration": 30.7,
     "peaks": [
       0.89,
@@ -2350,7 +2350,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "easygoing",
       "soft"
     ],
-    "file": "/cut-stock-music/chill-study.mp3",
+    "file": "/api/stock-media/cut-stock-music/chill-study.mp3",
     "duration": 30.8,
     "peaks": [
       0.68,
@@ -2423,7 +2423,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "positive",
       "clean"
     ],
-    "file": "/cut-stock-music/corporate-clean.mp3",
+    "file": "/api/stock-media/cut-stock-music/corporate-clean.mp3",
     "duration": 30.8,
     "peaks": [
       0.54,
@@ -2496,7 +2496,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "modern",
       "minimal"
     ],
-    "file": "/cut-stock-music/corporate-tech.mp3",
+    "file": "/api/stock-media/cut-stock-music/corporate-tech.mp3",
     "duration": 30.7,
     "peaks": [
       1,
@@ -2569,7 +2569,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "optimistic",
       "uplifting"
     ],
-    "file": "/cut-stock-music/corporate-inspiring.mp3",
+    "file": "/api/stock-media/cut-stock-music/corporate-inspiring.mp3",
     "duration": 30.8,
     "peaks": [
       0.67,
@@ -2642,7 +2642,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "professional",
       "motivating"
     ],
-    "file": "/cut-stock-music/corporate-confident.mp3",
+    "file": "/api/stock-media/cut-stock-music/corporate-confident.mp3",
     "duration": 30.8,
     "peaks": [
       0.71,
@@ -2715,7 +2715,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "reflective",
       "calm"
     ],
-    "file": "/cut-stock-music/piano-gentle-solo.mp3",
+    "file": "/api/stock-media/cut-stock-music/piano-gentle-solo.mp3",
     "duration": 29.6,
     "peaks": [
       0.89,
@@ -2788,7 +2788,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "moving",
       "soft"
     ],
-    "file": "/cut-stock-music/piano-emotional.mp3",
+    "file": "/api/stock-media/cut-stock-music/piano-emotional.mp3",
     "duration": 30.8,
     "peaks": [
       0.55,
@@ -2861,7 +2861,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "warm",
       "melodic"
     ],
-    "file": "/cut-stock-music/piano-bright-flowing.mp3",
+    "file": "/api/stock-media/cut-stock-music/piano-bright-flowing.mp3",
     "duration": 30.8,
     "peaks": [
       0.56,
@@ -2934,7 +2934,7 @@ export const STOCK_MUSIC: StockMusic[] = [
       "calm",
       "intimate"
     ],
-    "file": "/cut-stock-music/piano-quiet-nocturne.mp3",
+    "file": "/api/stock-media/cut-stock-music/piano-quiet-nocturne.mp3",
     "duration": 28.2,
     "peaks": [
       0.38,

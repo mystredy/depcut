@@ -1,6 +1,8 @@
 // The bundled stock catalogs: AI-generated stills and clips that ship with the
-// site (files under public/cut-stock and public/cut-stock-video, manifests in
-// stockManifest.ts and stockVideoManifest.ts). Each entry keeps the exact
+// site (images under public/cut-stock; video and music served from R2 through
+// /api/stock-media — see scripts/upload-stock-media-to-r2.mjs — with
+// manifests in stockManifest.ts, stockVideoManifest.ts, and
+// stockMusicManifest.ts). Each entry keeps the exact
 // prompt that produced it — clicking a stock tile copies that prompt into the
 // generate panel beside it for the user to edit and re-render on their account.
 // Regenerate or extend the sets with `bun scripts/generate-stock-images.ts`
@@ -38,7 +40,7 @@ export interface StockVideo {
    * subjects) — what the search box matches beyond the prompt text. */
   tags: string[];
   aspect: StockVideoAspect;
-  /** Site-relative mp4 URL (under /cut-stock-video/) — playback, refs, timeline. */
+  /** Served from R2 via /api/stock-media — playback, refs, timeline. */
   file: string;
   /** Poster-frame thumbnail URL for the browse grid. */
   thumb: string;
@@ -46,8 +48,8 @@ export interface StockVideo {
   duration: number;
 }
 
-/** Pregenerated background-music beds (Gemini/Lyria), bundled under
- * public/cut-stock-music with the manifest in stockMusicManifest.ts. Regenerate
+/** Pregenerated background-music beds (Gemini/Lyria), served from R2 via
+ * /api/stock-media with the manifest in stockMusicManifest.ts. Regenerate
  * or extend the set with `bun scripts/generate-stock-music.ts`. */
 export interface StockMusic {
   id: string;
@@ -56,7 +58,7 @@ export interface StockMusic {
   prompt: string;
   /** Mood/genre/instrument keywords the search box matches beyond the prompt. */
   tags: string[];
-  /** Site-relative mp3 URL (under /cut-stock-music/) — preview and timeline. */
+  /** Served from R2 via /api/stock-media — preview and timeline. */
   file: string;
   /** Rendered length in seconds. */
   duration: number;

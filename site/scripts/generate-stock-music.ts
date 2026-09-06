@@ -207,7 +207,10 @@ async function writeManifest(results: Map<string, { duration: number; peaks: num
     category: c.category,
     prompt: c.prompt,
     tags: c.tags,
-    file: `/cut-stock-music/${c.id}.mp3`,
+    // Served from R2 (see scripts/upload-stock-media-to-r2.mjs), not the
+    // local public/cut-stock-music this file lands in when generated —
+    // upload the new output there after a regeneration.
+    file: `/api/stock-media/cut-stock-music/${c.id}.mp3`,
     duration: results.get(c.id)!.duration,
     peaks: results.get(c.id)!.peaks,
   }));
