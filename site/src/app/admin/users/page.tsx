@@ -1,8 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { Loader2, MoreVertical, Search, ShieldCheck, ShieldOff } from "lucide-react";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -14,7 +20,7 @@ import {
 } from "@/components/ui/table";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { useSiteDateFormat } from "@/lib/siteDateFormat";
-import { useAdminUsers } from "@/queries/admin";
+import { useAdminUsers, useSetSuperUser } from "@/queries/admin";
 
 // admin/settings/general's Date Format decides the fallback once an activity
 // timestamp is old enough to stop reading as a relative "N days ago".
@@ -33,6 +39,7 @@ function timeAgo(iso: string, formatDate: (value: string) => string) {
 export default function AdminUsersPage() {
   const [query, setQuery] = useState("");
   const users = useAdminUsers(query);
+  const setSuperUser = useSetSuperUser();
   const { formatDate } = useSiteDateFormat();
 
   return (
@@ -68,6 +75,7 @@ export default function AdminUsersPage() {
                 <TableHead className="min-w-[180px]">User</TableHead>
                 <TableHead className="w-28">Active</TableHead>
                 <TableHead className="w-24">Joined</TableHead>
+                <TableHead className="w-10 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -91,6 +99,34 @@ export default function AdminUsersPage() {
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {formatDate(u.createdAt)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        title="User actions"
+                        aria-label="User actions"
+                        className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <MoreVertical className="size-3.5" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          disabled={setSuperUser.isPending}
+                          onClick={() =>
+                            setSuperUser.mutate({ superUser: !u.superUser, userId: u.id })
+                          }
+                        >
+                          {setSuperUser.isPending ? (
+                            <Loader2 className="animate-spin" />
+                          ) : u.superUser ? (
+                            <ShieldOff />
+                          ) : (
+                            <ShieldCheck />
+                          )}
+                          {u.superUser ? "Remove super user" : "Make super user"}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
