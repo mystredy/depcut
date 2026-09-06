@@ -9,7 +9,7 @@ import { SuperuserCreditsCard } from "@/app/cut/app/(home)/settings/_components/
 // DepCut-only surface and stays on the apex settings.
 export default function CutBillingPage() {
   return (
-    <div className="max-w-2xl divide-y pb-9">
+    <div className="mx-auto max-w-4xl divide-y pb-9">
       <ProCard />
       <CreditsCard />
       <SuperuserCreditsCard />

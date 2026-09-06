@@ -24,7 +24,7 @@ import {
 // fetch, so they all load in parallel instead of one after another.
 export default function CutProfilePage() {
   return (
-    <div className="max-w-2xl divide-y pb-9">
+    <div className="mx-auto max-w-4xl divide-y pb-9">
       <ProfileCard />
       <PreferencesSection />
       <EmailSection />

@@ -81,7 +81,7 @@ export default function PayoutsPage() {
   const connectedMethod = connected && PAYOUT_METHODS.find((m) => m.type === connected.type)!;
 
   return (
-    <div className="max-w-2xl divide-y pb-9">
+    <div className="mx-auto max-w-4xl divide-y pb-9">
       <div className="py-6 first:pt-0">
         <div className="space-y-1">
           <h2 className="text-base font-medium">Earnings</h2>
