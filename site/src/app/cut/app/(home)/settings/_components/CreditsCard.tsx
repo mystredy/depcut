@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { track } from "@/lib/analytics";
-import { dollarsToCredits, formatCredits } from "@/lib/credits/format-credits";
+import { creditsToDollars, dollarsToCredits, formatCredits } from "@/lib/credits/format-credits";
 import {
   creditTopUpDefaultDollars,
   creditTopUpMaxDollars,
@@ -146,9 +146,9 @@ function AutoReloadSection({ onNeedsCard }: { onNeedsCard: () => void }) {
         event.preventDefault();
         const form = new FormData(event.currentTarget);
         save({
-          amountDollars: Number(form.get("amount")),
+          amountDollars: creditsToDollars(Number(form.get("amount"))),
           enabled: form.get("enabled") === "on",
-          thresholdDollars: Number(form.get("threshold")),
+          thresholdDollars: creditsToDollars(Number(form.get("threshold"))),
         });
       }}
     >
@@ -164,25 +164,25 @@ function AutoReloadSection({ onNeedsCard }: { onNeedsCard: () => void }) {
       <div className="flex flex-wrap items-end gap-3 text-sm text-muted-foreground">
         <span>When balance falls below</span>
         <div className="flex items-center gap-1">
-          <span>$</span>
           <Input
-            className="w-20"
-            defaultValue={data?.thresholdDollars ?? 10}
+            className="w-24"
+            defaultValue={dollarsToCredits(data?.thresholdDollars ?? 10)}
             min={0}
             name="threshold"
             type="number"
           />
+          <span>credits</span>
         </div>
         <span>automatically buy</span>
         <div className="flex items-center gap-1">
-          <span>$</span>
           <Input
-            className="w-20"
-            defaultValue={data?.amountDollars ?? creditTopUpDefaultDollars}
-            min={5}
+            className="w-24"
+            defaultValue={dollarsToCredits(data?.amountDollars ?? creditTopUpDefaultDollars)}
+            min={dollarsToCredits(creditTopUpMinDollars)}
             name="amount"
             type="number"
           />
+          <span>credits</span>
         </div>
         <Button disabled={update.isPending} size="sm" type="submit">
           {update.isPending ? "Saving…" : "Save"}

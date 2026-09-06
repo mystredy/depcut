@@ -9,6 +9,14 @@ export function dollarsToCredits(dollars: number): number {
   return Math.round(dollars * CREDITS_PER_DOLLAR);
 }
 
+// The inverse, for a form field that takes credits but still has to submit a
+// whole-dollar amount (Stripe, the ledger, and the auto-reload API all deal
+// in whole dollars — see amounts.ts and the auto-reload route's z.number().int()).
+// Round-trips cleanly for any value dollarsToCredits produced.
+export function creditsToDollars(credits: number): number {
+  return Math.round(credits / CREDITS_PER_DOLLAR);
+}
+
 // null/undefined → an em dash (no value yet); a non-numeric string → "0
 // credits"; otherwise the credit count with a thousands separator.
 export function formatCredits(value: string | null | undefined): string {
