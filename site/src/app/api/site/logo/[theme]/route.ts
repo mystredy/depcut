@@ -14,6 +14,27 @@ type RouteContext = { params: Promise<{ theme: string }> };
 const SINGLETON_ID = "singleton";
 const MAX_BYTES = 1024 * 1024;
 const ALLOWED_TYPES = new Set(["image/svg+xml", "image/png", "image/webp"]);
+// Rendered on every surface, signed in or not, ahead of anything else on the
+// page — a slow or unreachable DB has no business making visitors wait for a
+// logo. This bounds that wait so SiteLogo's own onError fallback chain reaches
+// the bundled default quickly instead of hanging on the query.
+const DB_TIMEOUT_MS = 3000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timed out")), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 type LogoColumns =
   | { data: "logoLight"; type: "logoLightContentType" }
@@ -37,20 +58,27 @@ export const GET = async (_request: Request, context: RouteContext) => {
   const columns = columnsFor(theme);
   if (!columns) return notFoundResponse();
 
-  const settings = await prisma.appSettings.findUnique({
-    select: { [columns.data]: true, [columns.type]: true },
-    where: { id: SINGLETON_ID },
-  });
+  const settings = await withTimeout(
+    prisma.appSettings.findUnique({
+      select: { [columns.data]: true, [columns.type]: true },
+      where: { id: SINGLETON_ID },
+    }),
+    DB_TIMEOUT_MS,
+  ).catch(() => null);
   const data = settings?.[columns.data];
   const contentType = settings?.[columns.type];
   if (!data || !contentType) return notFoundResponse();
 
   return new NextResponse(new Blob([data], { type: contentType }), {
     headers: {
-      // Short-lived rather than immutable: unlike an avatar or a brand logo,
-      // this URL never changes when the image does, so a stale cache would
-      // otherwise outlive the upload that replaced it.
-      "Cache-Control": "public, max-age=300",
+      // A day, not immutable: this URL never changes when the logo does, so
+      // any cache outlives an upload that replaces it — the tradeoff is
+      // between that staleness window and every page load in between paying
+      // a live DB round trip just to paint a logo. A changed logo reaching
+      // every browser within a day is the better side of that trade; the
+      // admin preview in BrandingSection reads the new bytes immediately
+      // either way, since that upload response isn't cached at all.
+      "Cache-Control": "public, max-age=86400",
       "Content-Type": contentType,
       "X-Content-Type-Options": "nosniff",
     },
