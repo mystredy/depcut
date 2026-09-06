@@ -13,6 +13,15 @@ import {
   ShieldOff,
 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +40,7 @@ import {
 } from "@/components/ui/table";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { useSiteDateFormat } from "@/lib/siteDateFormat";
-import { useAdminUsers, useSetSuperUser } from "@/queries/admin";
+import { type AdminUser, useAdminUsers, useSetSuperUser } from "@/queries/admin";
 
 // Matches AdminNav.tsx's own `soon` helper — every one of these per-user
 // pages is still just the nav item's shared "not built yet" placeholder,
@@ -57,6 +66,7 @@ export default function AdminUsersPage() {
   const [query, setQuery] = useState("");
   const users = useAdminUsers(query);
   const setSuperUser = useSetSuperUser();
+  const [superUserTarget, setSuperUserTarget] = useState<AdminUser | null>(null);
   const { formatDate } = useSiteDateFormat();
 
   return (
@@ -128,18 +138,10 @@ export default function AdminUsersPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
-                          disabled={setSuperUser.isPending}
-                          onClick={() =>
-                            setSuperUser.mutate({ superUser: !u.superUser, userId: u.id })
-                          }
+                          variant={u.superUser ? "default" : "destructive"}
+                          onClick={() => setSuperUserTarget(u)}
                         >
-                          {setSuperUser.isPending ? (
-                            <Loader2 className="animate-spin" />
-                          ) : u.superUser ? (
-                            <ShieldOff />
-                          ) : (
-                            <ShieldCheck />
-                          )}
+                          {u.superUser ? <ShieldOff /> : <ShieldCheck />}
                           {u.superUser ? "Remove super user" : "Make super user"}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
@@ -181,6 +183,57 @@ export default function AdminUsersPage() {
           </Table>
         )}
       </div>
+
+      <Dialog
+        open={superUserTarget !== null}
+        onOpenChange={(o) => !o && setSuperUserTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {superUserTarget?.superUser ? "Remove super user access?" : "Make super user?"}
+            </DialogTitle>
+            <DialogDescription>
+              {superUserTarget?.superUser ? (
+                <>
+                  <span className="font-medium text-foreground">{superUserTarget?.email}</span>{" "}
+                  will lose full admin access to this site.
+                </>
+              ) : (
+                <>
+                  <span className="font-medium text-foreground">{superUserTarget?.email}</span>{" "}
+                  will get full admin access to this site — every admin page, every user&apos;s
+                  data, and every setting.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {setSuperUser.isError && (
+            <p className="text-sm text-destructive">Couldn&apos;t update this account. Try again.</p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSuperUserTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant={superUserTarget?.superUser ? "default" : "destructive"}
+              disabled={setSuperUser.isPending}
+              onClick={() => {
+                if (!superUserTarget) return;
+                setSuperUser.mutate(
+                  { superUser: !superUserTarget.superUser, userId: superUserTarget.id },
+                  { onSuccess: () => setSuperUserTarget(null) },
+                );
+              }}
+            >
+              {setSuperUser.isPending ? (
+                <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" />
+              ) : null}
+              {superUserTarget?.superUser ? "Remove super user" : "Make super user"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
