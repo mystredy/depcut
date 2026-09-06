@@ -95,6 +95,8 @@ const updateSchema = z
     helpCenterUrl: optionalUrl,
     socialLinks: socialLinksSchema.optional(),
     betaMode: z.boolean().optional(),
+    creditRateCredits: z.number().int().min(1).max(1_000_000).optional(),
+    creditRateDollars: z.number().int().min(1).max(1_000_000).optional(),
   })
   .strict();
 

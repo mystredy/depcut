@@ -1,5 +1,6 @@
 import { AppearanceSection } from "./AppearanceSection";
 import { BrandingSection } from "./BrandingSection";
+import { CreditsSection } from "./CreditsSection";
 import { LegalLinksSection } from "./LegalLinksSection";
 import { LocalizationSection } from "./LocalizationSection";
 import { PlatformStatusSection } from "./PlatformStatusSection";
@@ -24,6 +25,7 @@ export default function AdminGeneralSettingsPage() {
       <AppearanceSection />
       <LegalLinksSection />
       <SystemSection />
+      <CreditsSection />
       <PlatformStatusSection />
     </div>
   );

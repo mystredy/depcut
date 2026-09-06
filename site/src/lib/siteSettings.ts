@@ -16,6 +16,8 @@ const PUBLIC_SELECT = {
   contactEmail: true,
   cookiePolicyUrl: true,
   copyrightText: true,
+  creditRateCredits: true,
+  creditRateDollars: true,
   dateFormat: true,
   defaultLocale: true,
   defaultTheme: true,
@@ -44,6 +46,8 @@ export type PublicSiteSettings = {
   contactEmail: string | null;
   cookiePolicyUrl: string | null;
   copyrightText: string | null;
+  creditRateCredits: number;
+  creditRateDollars: number;
   dateFormat: string;
   defaultLocale: string;
   defaultTheme: string;
@@ -72,6 +76,8 @@ const DEFAULTS: PublicSiteSettings = {
   contactEmail: null,
   cookiePolicyUrl: null,
   copyrightText: null,
+  creditRateCredits: 1000,
+  creditRateDollars: 3,
   dateFormat: "MM/DD/YYYY",
   defaultLocale: "en-US",
   defaultTheme: "system",

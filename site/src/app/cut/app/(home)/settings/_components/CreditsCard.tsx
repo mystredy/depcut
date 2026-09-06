@@ -7,7 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { track } from "@/lib/analytics";
-import { creditsToDollars, dollarsToCredits, formatCredits } from "@/lib/credits/format-credits";
+import {
+  type CreditRate,
+  DEFAULT_CREDIT_RATE,
+  creditsToDollars,
+  dollarsToCredits,
+  formatCredits,
+} from "@/lib/credits/format-credits";
 import {
   creditTopUpDefaultDollars,
   creditTopUpMaxDollars,
@@ -21,11 +27,19 @@ import {
   useStartCreditCheckout,
   useUpdateCreditAutoReload,
 } from "@/queries/credits";
+import { usePublicSiteSettings } from "@/queries/site";
 
 export function CreditsCard() {
   const balance = useCreditBalance();
   const checkout = useStartCreditCheckout();
   const [customAmount, setCustomAmount] = useState("");
+  const siteSettings = usePublicSiteSettings();
+  const creditRate: CreditRate = siteSettings.data
+    ? {
+        credits: siteSettings.data.settings.creditRateCredits,
+        dollars: siteSettings.data.settings.creditRateDollars,
+      }
+    : DEFAULT_CREDIT_RATE;
 
   const startCheckout = (amountDollars: number) => {
     track("credits_checkout_started", { amountDollars });
@@ -53,7 +67,7 @@ export function CreditsCard() {
           <Skeleton className="h-9 w-32" />
         ) : (
           <div className="text-3xl font-semibold tabular-nums">
-            {formatCredits(balance.data?.balance ?? "0")}
+            {formatCredits(balance.data?.balance ?? "0", creditRate)}
           </div>
         )}
         <p className="mt-1 text-sm text-muted-foreground">Available balance</p>
@@ -69,7 +83,7 @@ export function CreditsCard() {
               onClick={() => setCustomAmount(String(amount))}
               variant={customAmount === String(amount) ? "default" : "outline"}
             >
-              {dollarsToCredits(amount).toLocaleString("en-US")}
+              {dollarsToCredits(amount, creditRate).toLocaleString("en-US")}
             </Button>
           ))}
         </div>
@@ -105,13 +119,20 @@ export function CreditsCard() {
       </div>
 
       <AutoReloadSection
+        creditRate={creditRate}
         onNeedsCard={() => startCheckout(creditTopUpDefaultDollars)}
       />
     </div>
   );
 }
 
-function AutoReloadSection({ onNeedsCard }: { onNeedsCard: () => void }) {
+function AutoReloadSection({
+  creditRate,
+  onNeedsCard,
+}: {
+  creditRate: CreditRate;
+  onNeedsCard: () => void;
+}) {
   const autoReload = useCreditAutoReload();
   const update = useUpdateCreditAutoReload();
   const [needsCard, setNeedsCard] = useState(false);
@@ -146,9 +167,9 @@ function AutoReloadSection({ onNeedsCard }: { onNeedsCard: () => void }) {
         event.preventDefault();
         const form = new FormData(event.currentTarget);
         save({
-          amountDollars: creditsToDollars(Number(form.get("amount"))),
+          amountDollars: creditsToDollars(Number(form.get("amount")), creditRate),
           enabled: form.get("enabled") === "on",
-          thresholdDollars: creditsToDollars(Number(form.get("threshold"))),
+          thresholdDollars: creditsToDollars(Number(form.get("threshold")), creditRate),
         });
       }}
     >
@@ -166,7 +187,7 @@ function AutoReloadSection({ onNeedsCard }: { onNeedsCard: () => void }) {
         <div className="flex items-center gap-1">
           <Input
             className="w-24"
-            defaultValue={dollarsToCredits(data?.thresholdDollars ?? 10)}
+            defaultValue={dollarsToCredits(data?.thresholdDollars ?? 10, creditRate)}
             min={0}
             name="threshold"
             type="number"
@@ -177,8 +198,8 @@ function AutoReloadSection({ onNeedsCard }: { onNeedsCard: () => void }) {
         <div className="flex items-center gap-1">
           <Input
             className="w-24"
-            defaultValue={dollarsToCredits(data?.amountDollars ?? creditTopUpDefaultDollars)}
-            min={dollarsToCredits(creditTopUpMinDollars)}
+            defaultValue={dollarsToCredits(data?.amountDollars ?? creditTopUpDefaultDollars, creditRate)}
+            min={dollarsToCredits(creditTopUpMinDollars, creditRate)}
             name="amount"
             type="number"
           />

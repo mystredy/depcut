@@ -3,9 +3,10 @@
 import { usePathname } from "next/navigation";
 import { Zap } from "lucide-react";
 
-import { formatCredits } from "@/lib/credits/format-credits";
+import { DEFAULT_CREDIT_RATE, formatCredits } from "@/lib/credits/format-credits";
 import { cn } from "@/lib/utils";
 import { useCreditBalance } from "@/queries/credits";
+import { usePublicSiteSettings } from "@/queries/site";
 
 // Ordered so the more specific path wins the suffix match. Billing pins its
 // title while the cards scroll; usage lets the title scroll away so the
@@ -43,6 +44,13 @@ export function SettingsHeader() {
   const section =
     SECTIONS.find((s) => pathname.endsWith(s.suffix)) ?? SECTIONS.at(-1)!;
   const credits = useCreditBalance();
+  const siteSettings = usePublicSiteSettings();
+  const creditRate = siteSettings.data
+    ? {
+        credits: siteSettings.data.settings.creditRateCredits,
+        dollars: siteSettings.data.settings.creditRateDollars,
+      }
+    : DEFAULT_CREDIT_RATE;
   return (
     <div
       className={cn(
@@ -61,7 +69,7 @@ export function SettingsHeader() {
           <Zap className="size-3.5 fill-primary text-primary" />
           <span className="text-xs font-medium text-muted-foreground">AI credits</span>
           <span className="font-mono text-xs font-semibold tabular-nums">
-            {credits.isLoading ? "…" : formatCredits(credits.data?.balance ?? "0")}
+            {credits.isLoading ? "…" : formatCredits(credits.data?.balance ?? "0", creditRate)}
           </span>
         </div>
       )}

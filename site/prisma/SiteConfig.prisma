@@ -55,6 +55,13 @@ model AppSettings {
   socialLinks          Json?
   // Shows a Beta badge beside the logo and an optional notice; see BetaBadge.tsx.
   betaMode             Boolean  @default(false)
+  // The AI credits pay-as-you-go balance and buy-credit presets display as
+  // "creditRateCredits credits = $creditRateDollars" (see
+  // lib/credits/format-credits.ts) — a purely cosmetic conversion; Stripe
+  // still charges and the ledger still stores real dollars regardless of
+  // this rate. Stored as a ratio, not a float, so it round-trips exactly.
+  creditRateCredits   Int      @default(1000)
+  creditRateDollars   Int      @default(3)
   // Site branding, uploaded from admin/settings/general. The favicon and apple
   // touch icon back the /icon and /apple-icon routes (site/src/app/icon.tsx
   // and apple-icon.tsx) independently — one is not derived from the other.

@@ -415,6 +415,8 @@ export type AdminSettings = {
   helpCenterUrl: string | null;
   socialLinks: SiteSocialLinks | null;
   betaMode: boolean;
+  creditRateCredits: number;
+  creditRateDollars: number;
   updatedAt: string;
 };
 
