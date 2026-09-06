@@ -39,7 +39,7 @@ import { NavStorage } from "@/cut/components/NavStorage";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type ThemeChoice, useTheme } from "@/cut/components/ThemeProvider";
 import { UserAvatar } from "@/cut/components/UserAvatar";
-import { formatUsd } from "@/lib/credits/format-usd";
+import { formatCredits } from "@/lib/credits/format-credits";
 import { openOnboarding } from "@/cut/lib/onboarding";
 import { useCutBase } from "@/cut/lib/nav";
 import { authClient } from "@/lib/auth-client";
@@ -178,7 +178,7 @@ export function NavUser() {
                 AI credits
               </span>
               <span className="font-mono text-xs font-semibold tabular-nums">
-                {credits.isLoading ? "…" : formatUsd(credits.data?.balance ?? "0")}
+                {credits.isLoading ? "…" : formatCredits(credits.data?.balance ?? "0")}
               </span>
             </div>
             <Button

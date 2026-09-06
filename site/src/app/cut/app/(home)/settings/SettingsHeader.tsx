@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { Zap } from "lucide-react";
 
-import { formatUsd } from "@/lib/credits/format-usd";
+import { formatCredits } from "@/lib/credits/format-credits";
 import { cn } from "@/lib/utils";
 import { useCreditBalance } from "@/queries/credits";
 
@@ -61,7 +61,7 @@ export function SettingsHeader() {
           <Zap className="size-3.5 fill-primary text-primary" />
           <span className="text-xs font-medium text-muted-foreground">AI credits</span>
           <span className="font-mono text-xs font-semibold tabular-nums">
-            {credits.isLoading ? "…" : formatUsd(credits.data?.balance ?? "0")}
+            {credits.isLoading ? "…" : formatCredits(credits.data?.balance ?? "0")}
           </span>
         </div>
       )}

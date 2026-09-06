@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { track } from "@/lib/analytics";
-import { formatUsd } from "@/lib/credits/format-usd";
+import { dollarsToCredits, formatCredits } from "@/lib/credits/format-credits";
 import {
   creditTopUpDefaultDollars,
   creditTopUpMaxDollars,
@@ -53,7 +53,7 @@ export function CreditsCard() {
           <Skeleton className="h-9 w-32" />
         ) : (
           <div className="text-3xl font-semibold tabular-nums">
-            {formatUsd(balance.data?.balance ?? "0")}
+            {formatCredits(balance.data?.balance ?? "0")}
           </div>
         )}
         <p className="mt-1 text-sm text-muted-foreground">Available balance</p>
@@ -69,7 +69,7 @@ export function CreditsCard() {
               onClick={() => setCustomAmount(String(amount))}
               variant={customAmount === String(amount) ? "default" : "outline"}
             >
-              ${amount}
+              {dollarsToCredits(amount).toLocaleString("en-US")}
             </Button>
           ))}
         </div>
