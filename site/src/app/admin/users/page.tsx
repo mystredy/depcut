@@ -52,7 +52,7 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight">Users & Credits</h1>
+        <h1 className="text-lg font-semibold tracking-tight">Users</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Search accounts, grant credits, and manage super-user access.
         </p>
