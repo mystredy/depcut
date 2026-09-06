@@ -21,7 +21,7 @@ export default function CutSettingsLayout({ children }: { children: ReactNode })
   return (
     <SettingsGuard>
       <SettingsHeader />
-      <div className="h-full min-h-0 w-full flex-1 px-3 py-px">
+      <div className="h-full min-h-0 w-full flex-1 px-5 py-px">
         {children}
       </div>
     </SettingsGuard>
