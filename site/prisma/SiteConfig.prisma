@@ -55,13 +55,17 @@ model AppSettings {
   socialLinks          Json?
   // Shows a Beta badge beside the logo and an optional notice; see BetaBadge.tsx.
   betaMode             Boolean  @default(false)
-  // Site branding, uploaded from admin/settings/general. Light/dark/compact
-  // logos are shown by SiteLogo (site/src/cut/components/SiteLogo.tsx) — the
-  // admin surfaces' logo, CSS-toggled by theme — falling back to the bundled
-  // default wherever a variant has no upload. The favicon and apple touch
-  // icon back the /icon and /apple-icon routes (site/src/app/icon.tsx and
-  // apple-icon.tsx) independently — one is not derived from the other. The
-  // social share image feeds the root layout's Open Graph/Twitter meta.
+  // Site branding, uploaded from admin/settings/general. The favicon and apple
+  // touch icon back the /icon and /apple-icon routes (site/src/app/icon.tsx
+  // and apple-icon.tsx) independently — one is not derived from the other.
+  // The social share image feeds the root layout's Open Graph/Twitter meta.
+  //
+  // logoLight/logoDark/logoCompact below are unused — SiteLogo now reads its
+  // three variants from R2 (site-branding/logo-<theme>, see the site logo
+  // route and cut/server/cloud/r2.ts's siteLogoKey) instead of these columns,
+  // since a logo painted on every surface shouldn't depend on a live DB read.
+  // Left in place rather than migrated out; safe to drop in a future schema
+  // change.
   logoLight            Bytes?
   logoLightContentType String?
   logoDark             Bytes?

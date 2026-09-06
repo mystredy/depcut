@@ -107,6 +107,12 @@ export const AUDIO_GENERATION_PREFIX = "audio-generations/";
 export const audioGenerationKey = (userId: string, id: string, fileName: string) =>
   `${AUDIO_GENERATION_PREFIX}${userId}/${id}/${fileName}`;
 
+/** admin/settings/general's Branding section: the site's own logo marks.
+ * Overwritten in place on each upload (see the site logo route's GET) rather
+ * than content-addressed like stock media, since there's no database row to
+ * repoint at a new key — the fixed key is the only pointer to it. */
+export const siteLogoKey = (theme: string) => `site-branding/logo-${theme}`;
+
 export function presignPut(key: string, mime: string): Promise<string> {
   return getSignedUrl(
     r2(),
