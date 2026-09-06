@@ -1,12 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, MoreVertical, Search, ShieldCheck, ShieldOff } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Activity,
+  LayoutDashboard,
+  Loader2,
+  MoreVertical,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldOff,
+} from "lucide-react";
 
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -21,6 +32,11 @@ import {
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { useSiteDateFormat } from "@/lib/siteDateFormat";
 import { useAdminUsers, useSetSuperUser } from "@/queries/admin";
+
+// Matches AdminNav.tsx's own `soon` helper — every one of these per-user
+// pages is still just the nav item's shared "not built yet" placeholder,
+// scoped to which user you opened the menu from.
+const soon = (topic: string) => `/admin/more?topic=${encodeURIComponent(topic)}`;
 
 // admin/settings/general's Date Format decides the fallback once an activity
 // timestamp is old enough to stop reading as a relative "N days ago".
@@ -37,6 +53,7 @@ function timeAgo(iso: string, formatDate: (value: string) => string) {
 }
 
 export default function AdminUsersPage() {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const users = useAdminUsers(query);
   const setSuperUser = useSetSuperUser();
@@ -124,6 +141,29 @@ export default function AdminUsersPage() {
                             <ShieldCheck />
                           )}
                           {u.superUser ? "Remove super user" : "Make super user"}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => router.push(soon(`User Management — Dashboard: ${u.email}`))}
+                        >
+                          <LayoutDashboard /> Dashboard
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => router.push(soon(`User Management — Activities: ${u.email}`))}
+                        >
+                          <Activity /> Activities
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            router.push(soon(`User Management — Deletion Requests: ${u.email}`))
+                          }
+                        >
+                          <ShieldAlert /> Deletion Requests
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => router.push(soon(`User Management — Permissions: ${u.email}`))}
+                        >
+                          <ShieldAlert /> Permissions
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
