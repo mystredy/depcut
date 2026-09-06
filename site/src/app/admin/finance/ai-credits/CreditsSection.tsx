@@ -43,6 +43,14 @@ export function CreditsSection() {
 
   return (
     <div className="max-w-2xl space-y-5 rounded-2xl border bg-card p-6">
+      <div>
+        <h2 className="text-sm font-semibold">Display rate</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          How the pay-as-you-go balance displays as &quot;credits&quot; — a display-only
+          conversion. Stripe still charges and the ledger still stores real dollars; this
+          only sets the number shown on screen.
+        </p>
+      </div>
       <div className="flex flex-wrap items-end gap-3 text-sm text-muted-foreground">
         <div className="space-y-1.5">
           <Label htmlFor="credit-rate-credits">Credits</Label>
