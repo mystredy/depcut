@@ -21,7 +21,6 @@ import {
   useAdjustCreatorRate,
   useAdminFinanceRates,
 } from "@/queries/admin";
-import { CreditsSection } from "./CreditsSection";
 
 export default function AdminFinanceRatesPage() {
   const [query, setQuery] = useState("");
@@ -38,8 +37,6 @@ export default function AdminFinanceRatesPage() {
           admin-managed and every change is logged to Transactions.
         </p>
       </div>
-
-      <CreditsSection />
 
       <label className="flex w-full max-w-sm items-center gap-2 rounded-lg border border-input px-2.5 py-1.5 focus-within:border-ring">
         <Search className="size-3.5 shrink-0 text-muted-foreground" />
