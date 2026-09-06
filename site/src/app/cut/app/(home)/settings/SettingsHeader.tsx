@@ -46,7 +46,7 @@ export function SettingsHeader() {
   return (
     <div
       className={cn(
-        "mx-auto flex w-full max-w-6xl shrink-0 items-start justify-between gap-4 px-10 pt-9 pb-5",
+        "flex w-full shrink-0 items-start justify-between gap-4 px-3 pt-9 pb-5",
         section.pinned && "sticky top-0 z-20 bg-background",
       )}
     >
