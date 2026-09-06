@@ -3,13 +3,6 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -48,75 +41,73 @@ export function CreditsCard() {
     customValue <= creditTopUpMaxDollars;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Credits</CardTitle>
-        <CardDescription>
+    <div className="space-y-6 py-6 first:pt-0">
+      <div className="space-y-1">
+        <h2 className="text-base font-medium">Credits</h2>
+        <p className="text-sm text-muted-foreground">
           Pay-as-you-go balance for the DepCut app. Buy more any time.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div>
-          {balance.isLoading ? (
-            <Skeleton className="h-9 w-32" />
-          ) : (
-            <div className="text-3xl font-semibold tabular-nums">
-              {formatUsd(balance.data?.balance ?? "0")}
-            </div>
-          )}
-          <p className="mt-1 text-sm text-muted-foreground">Available balance</p>
-        </div>
-
-        <div className="space-y-3">
-          <Label>Buy credits</Label>
-          <div className="flex flex-wrap gap-2">
-            {creditTopUpPresetsDollars.map((amount) => (
-              <Button
-                disabled={checkout.isPending}
-                key={amount}
-                onClick={() => setCustomAmount(String(amount))}
-                variant={customAmount === String(amount) ? "default" : "outline"}
-              >
-                ${amount}
-              </Button>
-            ))}
+        </p>
+      </div>
+      <div>
+        {balance.isLoading ? (
+          <Skeleton className="h-9 w-32" />
+        ) : (
+          <div className="text-3xl font-semibold tabular-nums">
+            {formatUsd(balance.data?.balance ?? "0")}
           </div>
-          <div className="flex items-end gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground" htmlFor="custom-amount">
-                Amount (USD)
-              </Label>
-              <Input
-                className="w-32"
-                id="custom-amount"
-                inputMode="numeric"
-                max={creditTopUpMaxDollars}
-                min={creditTopUpMinDollars}
-                onChange={(event) => setCustomAmount(event.target.value)}
-                placeholder="50"
-                type="number"
-                value={customAmount}
-              />
-            </div>
+        )}
+        <p className="mt-1 text-sm text-muted-foreground">Available balance</p>
+      </div>
+
+      <div className="space-y-3">
+        <Label>Buy credits</Label>
+        <div className="flex flex-wrap gap-2">
+          {creditTopUpPresetsDollars.map((amount) => (
             <Button
-              disabled={!customValid || checkout.isPending}
-              onClick={() => startCheckout(customValue)}
+              disabled={checkout.isPending}
+              key={amount}
+              onClick={() => setCustomAmount(String(amount))}
+              variant={customAmount === String(amount) ? "default" : "outline"}
             >
-              {checkout.isPending ? "Starting…" : "Buy"}
+              ${amount}
             </Button>
-          </div>
-          {checkout.isError ? (
-            <p className="text-sm text-destructive">
-              Couldn&apos;t start checkout. Try again in a moment.
-            </p>
-          ) : null}
+          ))}
         </div>
+        <div className="flex items-end gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground" htmlFor="custom-amount">
+              Amount (USD)
+            </Label>
+            <Input
+              className="w-32"
+              id="custom-amount"
+              inputMode="numeric"
+              max={creditTopUpMaxDollars}
+              min={creditTopUpMinDollars}
+              onChange={(event) => setCustomAmount(event.target.value)}
+              placeholder="50"
+              type="number"
+              value={customAmount}
+            />
+          </div>
+          <Button
+            disabled={!customValid || checkout.isPending}
+            onClick={() => startCheckout(customValue)}
+          >
+            {checkout.isPending ? "Starting…" : "Buy"}
+          </Button>
+        </div>
+        {checkout.isError ? (
+          <p className="text-sm text-destructive">
+            Couldn&apos;t start checkout. Try again in a moment.
+          </p>
+        ) : null}
+      </div>
 
-        <AutoReloadSection
-          onNeedsCard={() => startCheckout(creditTopUpDefaultDollars)}
-        />
-      </CardContent>
-    </Card>
+      <AutoReloadSection
+        onNeedsCard={() => startCheckout(creditTopUpDefaultDollars)}
+      />
+    </div>
   );
 }
 

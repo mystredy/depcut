@@ -7,14 +7,6 @@ import {
 } from "@/queries/billing";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { track } from "@/lib/analytics";
 import { formatUsd } from "@/lib/credits/format-usd";
@@ -26,14 +18,10 @@ export function ProCard() {
 
   if (pro.isLoading) {
     return (
-      <Card>
-        <CardHeader>
-          <Skeleton className="h-6 w-40" />
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-16 w-full" />
-        </CardContent>
-      </Card>
+      <div className="space-y-4 py-6 first:pt-0">
+        <Skeleton className="h-6 w-40" />
+        <Skeleton className="h-16 w-full" />
+      </div>
     );
   }
 
@@ -41,21 +29,21 @@ export function ProCard() {
   const isActive = data?.isActive ?? false;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-3">
+    <div className="space-y-4 py-6 first:pt-0">
+      <div className="space-y-1">
+        <h2 className="flex items-center gap-3 text-base font-medium">
           DepCut Pro
           {isActive && data ? (
             <Badge variant="default">{data.status}</Badge>
           ) : null}
-        </CardTitle>
-        <CardDescription>
+        </h2>
+        <p className="text-sm text-muted-foreground">
           A monthly usage allowance that resets each month — you can still buy
           credits any time.
-        </CardDescription>
-      </CardHeader>
+        </p>
+      </div>
       {isActive && data ? (
-        <CardContent className="text-sm text-muted-foreground">
+        <div className="text-sm text-muted-foreground">
           <div className="space-y-1">
             <div className="text-foreground">
               {formatUsd(data.allowanceRemaining)} of{" "}
@@ -73,9 +61,9 @@ export function ProCard() {
               </div>
             ) : null}
           </div>
-        </CardContent>
+        </div>
       ) : null}
-      <CardFooter className="gap-3">
+      <div className="flex items-center gap-3">
         {isActive ? (
           <Button
             disabled={portal.isPending}
@@ -107,7 +95,7 @@ export function ProCard() {
             Billing is unavailable right now.
           </span>
         ) : null}
-      </CardFooter>
-    </Card>
+      </div>
+    </div>
   );
 }
