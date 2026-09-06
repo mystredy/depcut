@@ -60,12 +60,13 @@ model AppSettings {
   // and apple-icon.tsx) independently — one is not derived from the other.
   // The social share image feeds the root layout's Open Graph/Twitter meta.
   //
-  // logoLight/logoDark/logoCompact below are unused — SiteLogo now reads its
-  // three variants from R2 (site-branding/logo-<theme>, see the site logo
-  // route and cut/server/cloud/r2.ts's siteLogoKey) instead of these columns,
-  // since a logo painted on every surface shouldn't depend on a live DB read.
-  // Left in place rather than migrated out; safe to drop in a future schema
-  // change.
+  // All six *Bytes columns below are unused — every branding image now lives
+  // in R2 instead (site-branding/logo-<theme>, favicon, apple-touch-icon,
+  // social-share-image — see cut/server/cloud/r2.ts's key helpers and the
+  // site logo route / branding-image route / _icon-source.ts / _social-image
+  // .tsx that read them), since an image painted on every surface shouldn't
+  // depend on a live DB read. Left in place rather than migrated out; safe to
+  // drop in a future schema change.
   logoLight            Bytes?
   logoLightContentType String?
   logoDark             Bytes?

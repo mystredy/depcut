@@ -113,6 +113,14 @@ export const audioGenerationKey = (userId: string, id: string, fileName: string)
  * repoint at a new key — the fixed key is the only pointer to it. */
 export const siteLogoKey = (theme: string) => `site-branding/logo-${theme}`;
 
+/** The rest of admin/settings/general's Branding section — favicon, apple
+ * touch icon, social share image. Same fixed-key-overwritten-in-place scheme
+ * as siteLogoKey, backing /icon, /apple-icon, and the Open Graph/Twitter
+ * image routes (site/src/app/_icon-source.ts, _social-image.tsx). */
+export const faviconKey = () => "site-branding/favicon";
+export const appleTouchIconKey = () => "site-branding/apple-touch-icon";
+export const socialShareImageKey = () => "site-branding/social-share-image";
+
 export function presignPut(key: string, mime: string): Promise<string> {
   return getSignedUrl(
     r2(),
