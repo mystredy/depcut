@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, Clapperboard, Copy, Heart, Pencil } from "lucide-react";
+import { Check, Clapperboard, Copy, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { authClient } from "@/lib/auth-client";
@@ -11,6 +11,22 @@ import { useAccountProfile, visibleName } from "@/queries/accountProfile";
 import { cn } from "@/lib/utils";
 
 type Tab = "published" | "likes";
+
+// A stand-in handle until User has a real username column: slugified from
+// the same display name settings/profile edits, so it's real, chosen data —
+// not the internal database id (that's an implementation detail, not an
+// identity a Space should show off, and collides across users far less
+// gracefully than the id itself once this page might actually be public).
+// Not guaranteed unique the way a stored, validated username would be — two
+// accounts can share a display name today. Swap this for User.username once
+// that column exists.
+function handleFor(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `@${slug || "user"}`;
+}
 
 // A personal space for each account: who you are, and what you've put out
 // (Showcase submissions once that's public, likes once liking exists). No
@@ -31,10 +47,9 @@ export default function SpacePage() {
 
   const name = visibleName(profile, session.user.name);
   const image = profile?.image ?? session.user.image ?? null;
-  const handle = profile?.username ? `@${profile.username}` : null;
+  const handle = handleFor(name);
 
   const copyHandle = () => {
-    if (!handle) return;
     void navigator.clipboard.writeText(handle);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
@@ -45,27 +60,14 @@ export default function SpacePage() {
       <div className="flex flex-col items-center pt-4 text-center">
         <UserAvatar name={name} image={image} className="size-20 rounded-2xl text-2xl" />
         <h1 className="mt-3 text-lg font-semibold tracking-tight">{name}</h1>
-        {handle ? (
-          <button
-            type="button"
-            onClick={copyHandle}
-            className="mt-1 flex shrink-0 items-center gap-1 rounded-full border border-input px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-            {copied ? "Copied" : handle}
-          </button>
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-1 h-6 text-[11px]"
-            nativeButton={false}
-            render={<Link href={`${base}/settings/profile`} />}
-          >
-            <Pencil data-icon="inline-start" className="size-3" />
-            Set a username
-          </Button>
-        )}
+        <button
+          type="button"
+          onClick={copyHandle}
+          className="mt-1 flex shrink-0 items-center gap-1 rounded-full border border-input px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+          {copied ? "Copied" : handle}
+        </button>
       </div>
 
       <div className="flex justify-center gap-1 border-b border-border">
