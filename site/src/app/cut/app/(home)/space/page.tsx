@@ -12,6 +12,22 @@ import { cn } from "@/lib/utils";
 
 type Tab = "published" | "likes";
 
+// A stand-in handle until User has a real username column: slugified from
+// the same display name settings/profile edits, so it's real, chosen data —
+// not the internal database id (that's an implementation detail, not an
+// identity a Space should show off, and collides across users far less
+// gracefully than the id itself once this page might actually be public).
+// Not guaranteed unique the way a stored, validated username would be — two
+// accounts can share a display name today. Swap this for User.username once
+// that column exists.
+function handleFor(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `@${slug || "user"}`;
+}
+
 // A personal space for each account: who you are, and what you've put out
 // (Showcase submissions once that's public, likes once liking exists). No
 // followers/following graph, no Subscribe banner, no Tasks/Invite/Events —
@@ -31,9 +47,10 @@ export default function SpacePage() {
 
   const name = visibleName(profile, session.user.name);
   const image = profile?.image ?? session.user.image ?? null;
+  const handle = handleFor(name);
 
-  const copyId = () => {
-    void navigator.clipboard.writeText(session.user.id);
+  const copyHandle = () => {
+    void navigator.clipboard.writeText(handle);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -42,18 +59,15 @@ export default function SpacePage() {
     <div className="mx-auto max-w-2xl space-y-8 p-6">
       <div className="flex flex-col items-center pt-4 text-center">
         <UserAvatar name={name} image={image} className="size-20 rounded-2xl text-2xl" />
-        <div className="mt-3 flex items-center gap-2">
-          <h1 className="text-lg font-semibold tracking-tight">{name}</h1>
-          <button
-            type="button"
-            onClick={copyId}
-            className="flex shrink-0 items-center gap-1 rounded-full border border-input px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-            {copied ? "Copied" : "ID"}
-          </button>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">{session.user.email}</p>
+        <h1 className="mt-3 text-lg font-semibold tracking-tight">{name}</h1>
+        <button
+          type="button"
+          onClick={copyHandle}
+          className="mt-1 flex shrink-0 items-center gap-1 rounded-full border border-input px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+          {copied ? "Copied" : handle}
+        </button>
       </div>
 
       <div className="flex justify-center gap-1 border-b border-border">
