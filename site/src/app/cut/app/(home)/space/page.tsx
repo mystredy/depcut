@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Heart, MapPin, Pencil, Play, Plus, Video } from "lucide-react";
+import { Heart, Pencil, Play, Plus, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatBytes } from "@/cut/components/desktopFolders";
 import { PostToSpaceDialog } from "@/cut/components/PostToSpaceDialog";
@@ -78,13 +78,6 @@ export default function SpacePage() {
             <Pencil data-icon="inline-start" className="size-3" />
             Set a username
           </Button>
-        )}
-
-        {profile?.location && (
-          <span className="mt-2 flex items-center gap-1 rounded-full border border-input px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-            <MapPin className="size-3" />
-            {profile.location}
-          </span>
         )}
 
         {profile?.bio && (

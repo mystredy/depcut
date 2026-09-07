@@ -17,7 +17,6 @@ export type AccountProfile = {
   // unique across accounts. Null until the user picks one.
   username: string | null;
   bio: string | null;
-  location: string | null;
   backgroundImage: string | null;
   // Whether My Space shows a follower count publicly — the count itself is
   // always 0 today, there's no follower graph yet.
@@ -129,20 +128,6 @@ export function useUpdateBio() {
     mutationFn: (bio: string | null) =>
       apiFetch<AccountProfile>("/api/account/profile", {
         body: JSON.stringify({ bio }),
-        method: "PUT",
-      }),
-    onSuccess: (profile) => {
-      queryClient.setQueryData(accountProfileQueryKey, profile);
-    },
-  });
-}
-
-export function useUpdateLocation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (location: string | null) =>
-      apiFetch<AccountProfile>("/api/account/profile", {
-        body: JSON.stringify({ location }),
         method: "PUT",
       }),
     onSuccess: (profile) => {

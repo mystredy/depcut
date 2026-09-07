@@ -10,13 +10,11 @@ model User {
   // identity. Optional until the user sets one.
   username      String?   @unique
   // My Space profile fields — all optional, all editable from
-  // settings/profile. bio and location are plain display text, no
-  // structured geocoding behind location. backgroundImageKey is an R2 key
-  // (site/src/cut/server/cloud/r2.ts's userBackgroundImageKey), overwritten
-  // in place the same way the avatar's single row is — see
+  // settings/profile. bio is plain display text. backgroundImageKey is an R2
+  // key (site/src/cut/server/cloud/r2.ts's userBackgroundImageKey),
+  // overwritten in place the same way the avatar's single row is — see
   // /api/account/background-image's route for the read/write.
   bio                String?
-  location           String?
   backgroundImageKey String?
   // Whether My Space shows a follower count publicly. There's no follower
   // graph yet — the count is always 0 today — so this only controls whether

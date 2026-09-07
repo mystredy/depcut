@@ -20,13 +20,12 @@ export const dynamic = "force-dynamic";
 //
 // `username` is a separate, independent field — the stable @handle a Space is
 // identified by, not derived from displayName (which can be anything and
-// change freely). bio/location/showFollowerCount are the rest of My Space's
-// editable profile. Every field is optional in the request so a caller can
-// update just one without resending the others.
+// change freely). bio/showFollowerCount are the rest of My Space's editable
+// profile. Every field is optional in the request so a caller can update
+// just one without resending the others.
 const updateProfileSchema = z.object({
   bio: z.string().trim().max(150).nullable().optional(),
   displayName: z.string().trim().max(60).nullable().optional(),
-  location: z.string().trim().max(100).nullable().optional(),
   showFollowerCount: z.boolean().optional(),
   username: z
     .string()
@@ -58,7 +57,6 @@ export const PUT = withDepCutAuth(async (request: DepCutAuthenticatedRequest) =>
   if ("displayName" in parsed.data) data.displayName = parsed.data.displayName || null;
   if ("username" in parsed.data) data.username = parsed.data.username || null;
   if ("bio" in parsed.data) data.bio = parsed.data.bio || null;
-  if ("location" in parsed.data) data.location = parsed.data.location || null;
   if ("showFollowerCount" in parsed.data) data.showFollowerCount = parsed.data.showFollowerCount;
 
   try {

@@ -21,7 +21,6 @@ import {
   useUpdateBackgroundImage,
   useUpdateBio,
   useUpdateDisplayName,
-  useUpdateLocation,
   useUpdateShowFollowerCount,
   useUpdateUsername,
   visibleName,
@@ -49,7 +48,6 @@ function ProfileCard() {
   const update = useUpdateDisplayName();
   const updateUsername = useUpdateUsername();
   const updateBio = useUpdateBio();
-  const updateLocation = useUpdateLocation();
   const updateShowFollowerCount = useUpdateShowFollowerCount();
   const updateBackgroundImage = useUpdateBackgroundImage();
   const removeBackgroundImage = useRemoveBackgroundImage();
@@ -58,7 +56,6 @@ function ProfileCard() {
   const [draft, setDraft] = useState<string | null>(null);
   const [usernameDraft, setUsernameDraft] = useState<string | null>(null);
   const [bioDraft, setBioDraft] = useState<string | null>(null);
-  const [locationDraft, setLocationDraft] = useState<string | null>(null);
   const [editingAvatar, setEditingAvatar] = useState(false);
   const backgroundInputRef = useRef<HTMLInputElement>(null);
 
@@ -97,12 +94,6 @@ function ProfileCard() {
   const bioDirty = bioValue.trim() !== (profile.bio ?? "");
   const saveBio = () => {
     updateBio.mutate(bioValue.trim() || null, { onSuccess: () => setBioDraft(null) });
-  };
-
-  const locationValue = locationDraft ?? profile.location ?? "";
-  const locationDirty = locationValue.trim() !== (profile.location ?? "");
-  const saveLocation = () => {
-    updateLocation.mutate(locationValue.trim() || null, { onSuccess: () => setLocationDraft(null) });
   };
 
   const pickBackgroundImage = (file: File | null | undefined) => {
@@ -216,26 +207,6 @@ function ProfileCard() {
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">{bioValue.length} / 150</span>
               <Button size="sm" disabled={!bioDirty || updateBio.isPending} onClick={saveBio}>
-                Save
-              </Button>
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-1.5">
-            <Label htmlFor="location">Location</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                id="location"
-                className="max-w-xs"
-                maxLength={100}
-                placeholder="City, region, country"
-                value={locationValue}
-                onChange={(e) => setLocationDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && locationDirty) saveLocation();
-                }}
-              />
-              <Button disabled={!locationDirty || updateLocation.isPending} onClick={saveLocation}>
                 Save
               </Button>
             </div>
