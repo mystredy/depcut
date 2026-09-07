@@ -13,18 +13,22 @@ import { notifyTelegram } from "@/lib/telegram/notify";
 // once at creation; only a hash is stored (handled by the apiKey plugin).
 export const visionApiKeyPrefix = "dk_live_";
 
-// depcut.com is the intended production host: the sign-in pages, the auth
-// API, the Google OAuth callback, and the session are meant to all live on
-// that one origin (the proxy 308s www. to the apex before anything serves),
-// so auth cookies stay plain host-only cookies. Hosted deploys resolve
-// baseURL per-request from this allowlist — it decides the OAuth
-// redirect_uri — falling back to the canonical host for anything else, so an
-// unrecognized Host header can never hijack a session. depcut.vercel.app is
-// this fork's current deploy target; add a host here only after registering
-// its OAuth redirect URI with the Google client too. Local dev leaves
-// baseURL unset and better-auth derives it from the localhost request.
+// depcut.com is the canonical production host (the proxy 308s www. to the
+// apex before anything serves, so auth cookies stay plain host-only
+// cookies), but sign-in also needs to work on every other domain this app
+// is actually reachable from — depcut.app runs alongside it, not through
+// it, so it gets no such apex redirect (see DEPCUT_HOSTS in cut/lib/hosts.ts).
+// Hosted deploys resolve baseURL per-request from this allowlist — it
+// decides the OAuth redirect_uri — falling back to the canonical host for
+// anything else, so an unrecognized Host header can never hijack a session.
+// Add a host here only after registering its OAuth redirect URI with the
+// Google client too. Local dev leaves baseURL unset and better-auth derives
+// it from the localhost request.
 const baseURL = process.env.VERCEL
-  ? { allowedHosts: ["depcut.com", "depcut.vercel.app"], fallback: DEPCUT_CANONICAL }
+  ? {
+      allowedHosts: ["depcut.com", "depcut.vercel.app", "depcut.app", "www.depcut.app"],
+      fallback: DEPCUT_CANONICAL,
+    }
   : undefined;
 
 // Best-effort admin alert for a new signup — never blocks account creation.
