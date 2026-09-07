@@ -12,9 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/cut/components/UserAvatar";
+import { ApiError } from "@/queries/apiClient";
 import {
   useAccountProfile,
   useUpdateDisplayName,
+  useUpdateUsername,
   visibleName,
 } from "@/queries/accountProfile";
 
@@ -38,9 +40,11 @@ export default function CutProfilePage() {
 function ProfileCard() {
   const { data: profile, isPending, isError } = useAccountProfile();
   const update = useUpdateDisplayName();
+  const updateUsername = useUpdateUsername();
   // Null means "not edited yet", so the field follows the saved value until
   // the user types and again once a save lands.
   const [draft, setDraft] = useState<string | null>(null);
+  const [usernameDraft, setUsernameDraft] = useState<string | null>(null);
   const [editingAvatar, setEditingAvatar] = useState(false);
 
   if (isPending) {
@@ -59,6 +63,21 @@ function ProfileCard() {
 
   const save = () => {
     update.mutate(value.trim() || null, { onSuccess: () => setDraft(null) });
+  };
+
+  const usernameValue = usernameDraft ?? profile.username ?? "";
+  const usernameDirty = usernameValue.trim().toLowerCase() !== (profile.username ?? "");
+  const usernameError =
+    updateUsername.error instanceof ApiError
+      ? updateUsername.error.status === 409
+        ? "That username is taken."
+        : updateUsername.error.message
+      : null;
+
+  const saveUsername = () => {
+    updateUsername.mutate(usernameValue.trim().toLowerCase() || null, {
+      onSuccess: () => setUsernameDraft(null),
+    });
   };
 
   return (
@@ -116,6 +135,35 @@ function ProfileCard() {
               Couldn&apos;t save that name — try again.
             </p>
           )}
+        </div>
+
+        <div className="mt-5 border-t pt-5">
+          <Label htmlFor="username">Username</Label>
+          <p className="mt-1 text-sm text-muted-foreground">
+            The @handle My Space is identified by — separate from your display name.
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <div className="relative max-w-xs flex-1">
+              <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground">
+                @
+              </span>
+              <Input
+                id="username"
+                className="pl-6"
+                maxLength={20}
+                placeholder="username"
+                value={usernameValue}
+                onChange={(e) => setUsernameDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && usernameDirty) saveUsername();
+                }}
+              />
+            </div>
+            <Button disabled={!usernameDirty || updateUsername.isPending} onClick={saveUsername}>
+              Save
+            </Button>
+          </div>
+          {usernameError && <p className="mt-2 text-sm text-red-600">{usernameError}</p>}
         </div>
       </div>
 

@@ -4,6 +4,11 @@ model User {
   name          String
   // The name the product shows instead, when the user has set one.
   displayName   String?
+  // The handle a Space is identified by (My Space, and wherever else a
+  // profile is linked to). Independent of displayName — a display name can
+  // be anything and change freely; a username is the stable, unique, url-safe
+  // identity. Optional until the user sets one.
+  username      String?   @unique
   email         String    @unique
   emailVerified Boolean   @default(false)
   image         String?

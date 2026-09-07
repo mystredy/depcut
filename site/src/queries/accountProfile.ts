@@ -13,6 +13,9 @@ export type AccountProfile = {
   displayName: string | null;
   email: string;
   image: string | null;
+  // The @handle a Space is identified by — independent of displayName, and
+  // unique across accounts. Null until the user picks one.
+  username: string | null;
 };
 
 // What the product calls you: your chosen name when you have one, otherwise
@@ -65,6 +68,20 @@ export function useUpdateDisplayName() {
     mutationFn: (displayName: string | null) =>
       apiFetch<AccountProfile>("/api/account/profile", {
         body: JSON.stringify({ displayName }),
+        method: "PUT",
+      }),
+    onSuccess: (profile) => {
+      queryClient.setQueryData(accountProfileQueryKey, profile);
+    },
+  });
+}
+
+export function useUpdateUsername() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (username: string | null) =>
+      apiFetch<AccountProfile>("/api/account/profile", {
+        body: JSON.stringify({ username }),
         method: "PUT",
       }),
     onSuccess: (profile) => {
