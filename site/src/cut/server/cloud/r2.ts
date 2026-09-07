@@ -102,6 +102,10 @@ export const spacePostVideoKey = (userId: string, postId: string, fileName: stri
 export const spacePostThumbnailKey = (userId: string, postId: string, fileName: string) =>
   `${SPACE_PREFIX}${userId}/posts/${postId}/thumbnail/${fileName}`;
 
+// A user's Space background image — one per account, overwritten in place
+// on every re-upload, same fixed-key scheme as siteLogoKey/faviconKey above.
+export const userBackgroundImageKey = (userId: string) => `${SPACE_PREFIX}${userId}/background`;
+
 /** The unified Image & Video feature's own top-level prefix — a Flow's
  * generated media, kept out of a user's project media (`cut/${userId}/...`)
  * the same way marketplace submissions are (see MARKETPLACE_PREFIX above).

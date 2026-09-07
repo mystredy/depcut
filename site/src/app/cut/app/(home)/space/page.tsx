@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, Copy, Heart, Play, Video } from "lucide-react";
+import { Heart, MapPin, Pencil, Play, Plus, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatBytes } from "@/cut/components/desktopFolders";
+import { PostToSpaceDialog } from "@/cut/components/PostToSpaceDialog";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { authClient } from "@/lib/auth-client";
 import { useCutBase } from "@/cut/lib/nav";
@@ -14,36 +15,20 @@ import { cn } from "@/lib/utils";
 
 type Tab = "posts" | "likes";
 
-// A stand-in handle until User has a real username column: slugified from
-// the same display name settings/profile edits, so it's real, chosen data —
-// not the internal database id (that's an implementation detail, not an
-// identity a Space should show off, and collides across users far less
-// gracefully than the id itself once this page might actually be public).
-// Not guaranteed unique the way a stored, validated username would be — two
-// accounts can share a display name today. Swap this for User.username once
-// that column exists.
-function handleFor(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return `@${slug || "user"}`;
-}
-
 // A personal space for each account: who you are, and what you've posted
-// (from the editor's Post to Space action — see PostToSpaceDialog) plus
-// likes, once liking exists. No followers/following graph, no Subscribe
-// banner, no Tasks/Invite/Events — those either belong to billing/settings
-// already, or don't exist yet. Bio isn't here yet either: there's no column
-// for it on User, only what settings/profile already edits for real
-// (display name, avatar).
+// (from the editor's Post to Space action, or the floating Post button
+// below) plus likes, once liking exists. No followers/following graph yet —
+// showFollowerCount just controls whether a (currently always zero) count
+// renders, ahead of that feature existing. No Subscribe banner, no Tasks/
+// Invite/Events — those either belong to billing/settings already, or don't
+// exist yet.
 export default function SpacePage() {
   const base = useCutBase();
   const { data: session } = authClient.useSession();
   const { data: profile } = useAccountProfile();
   const posts = useSpacePosts();
   const [tab, setTab] = useState<Tab>("posts");
-  const [copied, setCopied] = useState(false);
+  const [posting, setPosting] = useState(false);
 
   // The layout's SettingsGuard redirects a signed-out visitor before this
   // ever renders; this null render is only the one frame before that fires.
@@ -51,32 +36,72 @@ export default function SpacePage() {
 
   const name = visibleName(profile, session.user.name);
   const image = profile?.image ?? session.user.image ?? null;
-  const handle = handleFor(name);
-
-  const copyHandle = () => {
-    void navigator.clipboard.writeText(handle);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
 
   const visiblePosts = (posts.data?.posts ?? []).filter((p) => p.status !== "error");
   const usedBytes = posts.data?.usedBytes ?? 0;
   const limitBytes = posts.data?.limitBytes ?? 10 * 1024 ** 3;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8 p-6">
-      <div className="flex flex-col items-center pt-4 text-center">
-        <UserAvatar name={name} image={image} className="size-20 rounded-2xl text-2xl" />
+    <div className="mx-auto max-w-2xl pb-24">
+      <div className="relative h-32 w-full overflow-hidden rounded-b-2xl bg-muted sm:h-40">
+        {profile?.backgroundImage && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={profile.backgroundImage}
+            alt=""
+            className="size-full object-cover"
+          />
+        )}
+      </div>
+
+      <div className="flex flex-col items-center px-6 text-center">
+        <UserAvatar
+          name={name}
+          image={image}
+          className="-mt-10 size-20 rounded-full text-2xl ring-4 ring-primary ring-offset-4 ring-offset-background"
+        />
         <h1 className="mt-3 text-lg font-semibold tracking-tight">{name}</h1>
-        <button
-          type="button"
-          onClick={copyHandle}
-          className="mt-1 flex shrink-0 items-center gap-1 rounded-full border border-input px-2 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+
+        {profile?.username ? (
+          <p className="mt-0.5 text-[13px] text-muted-foreground">
+            @{profile.username}
+            {profile.showFollowerCount && <> · 0 followers</>}
+          </p>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-1.5 h-6 text-[11px]"
+            nativeButton={false}
+            render={<Link href={`${base}/settings/profile`} />}
+          >
+            <Pencil data-icon="inline-start" className="size-3" />
+            Set a username
+          </Button>
+        )}
+
+        {profile?.location && (
+          <span className="mt-2 flex items-center gap-1 rounded-full border border-input px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+            <MapPin className="size-3" />
+            {profile.location}
+          </span>
+        )}
+
+        {profile?.bio && (
+          <p className="mt-3 max-w-sm text-sm text-foreground/90">{profile.bio}</p>
+        )}
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-4"
+          nativeButton={false}
+          render={<Link href={`${base}/settings/profile`} />}
         >
-          {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
-          {copied ? "Copied" : handle}
-        </button>
-        <p className="mt-3 text-[11px] text-muted-foreground">
+          Edit Profile
+        </Button>
+
+        <p className="mt-4 text-[11px] text-muted-foreground">
           {formatBytes(usedBytes)} of {formatBytes(limitBytes)} used
         </p>
         <div className="mt-1 h-1 w-40 overflow-hidden rounded-full bg-muted">
@@ -87,7 +112,7 @@ export default function SpacePage() {
         </div>
       </div>
 
-      <div className="flex justify-center gap-1 border-b border-border">
+      <div className="mt-6 flex justify-center gap-1 border-b border-border px-6">
         {(
           [
             { key: "posts", label: "Posts" },
@@ -110,62 +135,72 @@ export default function SpacePage() {
         ))}
       </div>
 
-      {tab === "posts" ? (
-        visiblePosts.length === 0 ? (
-          <div className="grid min-h-[40vh] place-items-center">
+      <div className="px-6 pt-6">
+        {tab === "posts" ? (
+          visiblePosts.length === 0 ? (
+            <div className="grid min-h-[30vh] place-items-center">
+              <div className="flex flex-col items-center gap-4 text-center">
+                <div className="grid size-14 place-items-center rounded-2xl bg-muted">
+                  <Video className="size-7 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground">No posts yet.</p>
+                <p className="max-w-xs text-xs text-muted-foreground">
+                  Use the Post button below, or Post to Space from the editor's export bar.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {visiblePosts.map((post) => (
+                <a
+                  key={post.id}
+                  href={post.status === "complete" ? `/api/space/posts/${post.id}/video` : undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={cn(
+                    "group relative flex aspect-video flex-col justify-end overflow-hidden rounded-xl border bg-muted p-2",
+                    post.status !== "complete" && "pointer-events-none opacity-60"
+                  )}
+                >
+                  {post.status === "complete" && (
+                    <span className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
+                      <span className="grid size-9 place-items-center rounded-full bg-white/95">
+                        <Play className="ml-0.5 size-4 fill-ink text-ink" />
+                      </span>
+                    </span>
+                  )}
+                  <p className="truncate text-[11px] font-medium text-foreground">
+                    {post.status === "uploading" ? "Uploading…" : post.caption || post.fileName || "Untitled"}
+                  </p>
+                  {post.sizeBytes != null && (
+                    <p className="text-[10px] text-muted-foreground">{formatBytes(post.sizeBytes)}</p>
+                  )}
+                </a>
+              ))}
+            </div>
+          )
+        ) : (
+          <div className="grid min-h-[30vh] place-items-center">
             <div className="flex flex-col items-center gap-4 text-center">
               <div className="grid size-14 place-items-center rounded-2xl bg-muted">
-                <Video className="size-7 text-muted-foreground" />
+                <Heart className="size-7 text-muted-foreground" />
               </div>
-              <p className="text-sm text-muted-foreground">No posts yet.</p>
-              <p className="max-w-xs text-xs text-muted-foreground">
-                Open a project in the editor and use Post to Space to put a finished export here.
-              </p>
-              <Button nativeButton={false} render={<Link href={`${base}/projects`} />}>
-                Open a project
-              </Button>
+              <p className="text-sm text-muted-foreground">No likes yet.</p>
             </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {visiblePosts.map((post) => (
-              <a
-                key={post.id}
-                href={post.status === "complete" ? `/api/space/posts/${post.id}/video` : undefined}
-                target="_blank"
-                rel="noreferrer"
-                className={cn(
-                  "group relative flex aspect-video flex-col justify-end overflow-hidden rounded-xl border bg-muted p-2",
-                  post.status !== "complete" && "pointer-events-none opacity-60"
-                )}
-              >
-                {post.status === "complete" && (
-                  <span className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
-                    <span className="grid size-9 place-items-center rounded-full bg-white/95">
-                      <Play className="ml-0.5 size-4 fill-ink text-ink" />
-                    </span>
-                  </span>
-                )}
-                <p className="truncate text-[11px] font-medium text-foreground">
-                  {post.status === "uploading" ? "Uploading…" : post.caption || post.fileName || "Untitled"}
-                </p>
-                {post.sizeBytes != null && (
-                  <p className="text-[10px] text-muted-foreground">{formatBytes(post.sizeBytes)}</p>
-                )}
-              </a>
-            ))}
-          </div>
-        )
-      ) : (
-        <div className="grid min-h-[40vh] place-items-center">
-          <div className="flex flex-col items-center gap-4 text-center">
-            <div className="grid size-14 place-items-center rounded-2xl bg-muted">
-              <Heart className="size-7 text-muted-foreground" />
-            </div>
-            <p className="text-sm text-muted-foreground">No likes yet.</p>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setPosting(true)}
+        className="fixed bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105"
+      >
+        <Plus className="size-4" />
+        Post
+      </button>
+
+      {posting && <PostToSpaceDialog projectId={null} onClose={() => setPosting(false)} />}
     </div>
   );
 }

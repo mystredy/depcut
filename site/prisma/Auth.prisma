@@ -4,6 +4,24 @@ model User {
   name          String
   // The name the product shows instead, when the user has set one.
   displayName   String?
+  // The handle a Space is identified by (My Space, and wherever else a
+  // profile is linked to). Independent of displayName — a display name can
+  // be anything and change freely; a username is the stable, unique, url-safe
+  // identity. Optional until the user sets one.
+  username      String?   @unique
+  // My Space profile fields — all optional, all editable from
+  // settings/profile. bio and location are plain display text, no
+  // structured geocoding behind location. backgroundImageKey is an R2 key
+  // (site/src/cut/server/cloud/r2.ts's userBackgroundImageKey), overwritten
+  // in place the same way the avatar's single row is — see
+  // /api/account/background-image's route for the read/write.
+  bio                String?
+  location           String?
+  backgroundImageKey String?
+  // Whether My Space shows a follower count publicly. There's no follower
+  // graph yet — the count is always 0 today — so this only controls whether
+  // that (currently zero) number is shown, ahead of the feature existing.
+  showFollowerCount  Boolean @default(true)
   email         String    @unique
   emailVerified Boolean   @default(false)
   image         String?
