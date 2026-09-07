@@ -1,10 +1,15 @@
 /**
  * One CORS policy for Cut's engine, shared by the Next dev server (src/proxy.ts)
- * and the packaged engine's http server (src/cut/engine/serve.ts). The hosted
- * Cut page is the only browser origin allowed to reach the engine
- * cross-origin; every other origin is refused before any handler runs.
+ * and the packaged engine's http server (src/cut/engine/serve.ts). Only these
+ * hosted Cut origins may reach the engine cross-origin; every other origin is
+ * refused before any handler runs. depcut.app runs alongside depcut.com (see
+ * the allowedHosts comment in lib/auth.ts), so it needs the same grant.
  */
-export const CUT_CLIENT_ORIGINS = new Set(["https://depcut.com"]);
+export const CUT_CLIENT_ORIGINS = new Set([
+  "https://depcut.com",
+  "https://depcut.app",
+  "https://www.depcut.app",
+]);
 
 /** The echo-back origin for an allowed caller, else null. */
 export function allowedOrigin(origin: string): string | null {
