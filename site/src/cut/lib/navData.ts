@@ -61,7 +61,7 @@ export const GROUPS: NavGroup[] = [
 
 export const CREATOR_HUB_GROUP: NavGroup = {
   key: "creator-hub",
-  label: "Creator Hub",
+  label: "Artist",
   icon: Video,
   children: [
     { slug: "inspiration", label: "Inspiration", icon: Compass },
