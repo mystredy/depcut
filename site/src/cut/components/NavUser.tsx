@@ -8,6 +8,7 @@ import {
   Clapperboard,
   CreditCard,
   EllipsisVertical,
+  LayoutGrid,
   LogOut,
   MessageCircleHeart,
   Monitor,
@@ -200,6 +201,9 @@ export function NavUser() {
           </div>
           <NavStorage />
           <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => router.push(`${base}/space`)}>
+            <LayoutGrid /> My Space
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => router.push(`${base}/settings`)}>
             <CreditCard /> Billing
           </DropdownMenuItem>
