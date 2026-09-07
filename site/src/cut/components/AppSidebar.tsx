@@ -17,6 +17,10 @@ export function AppSidebar() {
   const pathname = usePathname();
   const base = useCutBase();
   const account = useAccount();
+  // Showcase is superuser-only while it's being built (see its layout's own
+  // guard) — keep it out of the sidebar for everyone else so the link isn't
+  // just a dead end.
+  const visibleLinks = LINKS.filter((l) => l.tab !== "showcase" || account.data?.superUser === true);
   const { isMobile, open: mobileOpen, setOpen: setMobileOpen } = useMobileSidebar();
   const [collapsed, setCollapsed] = useState(false);
   // Mobile always shows the narrow icon rail — there's no room for the
@@ -180,7 +184,7 @@ export function AppSidebar() {
                 <ChevronRight className="absolute inset-0 m-auto size-4 text-sidebar-foreground opacity-0 transition-opacity group-hover:opacity-100" />
               </button>
             )}
-            {LINKS.map(({ tab, label, icon: Icon }) => {
+            {visibleLinks.map(({ tab, label, icon: Icon }) => {
               const href = homeHref(base, tab);
               const active = pathname === href;
               return (
@@ -236,7 +240,7 @@ export function AppSidebar() {
             </div>
 
             <nav className="flex flex-col gap-0.5">
-              {LINKS.map(({ tab, label, icon: Icon }) => {
+              {visibleLinks.map(({ tab, label, icon: Icon }) => {
                 const href = homeHref(base, tab);
                 const active = pathname === href;
                 return (
