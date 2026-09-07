@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Image,
   LayoutDashboard,
+  LayoutGrid,
   Languages,
   MessageSquare,
   Scissors,
@@ -19,6 +20,7 @@ import { CUT_APP_BASE, homeHref, type CutTab } from "@/cut/lib/nav";
 export const LINKS: { tab: CutTab; label: string; icon: LucideIcon }[] = [
   { tab: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { tab: "library", label: "Library", icon: FolderOpen },
+  { tab: "showcase", label: "Showcase", icon: LayoutGrid },
 ];
 
 // A child's location is normally its group's own route (${base}/${group.key}/${slug}).
