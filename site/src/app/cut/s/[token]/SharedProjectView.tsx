@@ -5,8 +5,11 @@ import { useParams } from "next/navigation";
 import { Clapperboard, Loader2 } from "lucide-react";
 import { authHrefFor } from "@/app/_components/landing/useAppEntryHref";
 import { Button } from "@/components/ui/button";
+import { AppSurfaceBackground } from "@/components/AppSurfaceBackground";
 import { Editor } from "@/cut/components/Editor";
 import { MobileShare } from "@/cut/components/share/MobileShare";
+import { ThemeProvider } from "@/cut/components/ThemeProvider";
+import { ThemeScript } from "@/cut/components/ThemeScript";
 import { useIsNarrow } from "@/cut/hooks/useIsNarrow";
 import { bindCutMode } from "@/cut/lib/backend";
 import { bindSharedBackend } from "@/cut/lib/backend/shared";
@@ -123,15 +126,22 @@ export function SharedProject() {
   );
 }
 
-export function SharedProjectView() {
+export function SharedProjectView({ defaultTheme }: { defaultTheme: string }) {
   // Dynamic viewport units, not h-screen: on a phone the browser's own chrome
   // slides in and out, and 100vh measures the tallest state — so the bottom of
-  // a fixed-height page sits under the toolbar for most of a visit.
+  // a fixed-height page sits under the toolbar for most of a visit. Its own
+  // ThemeProvider/ThemeScript because this route sits outside /cut/app (see
+  // the note above) and would otherwise inherit a lingering "dark" class from
+  // a prior app visit without the app-surface flag that makes it render right.
   return (
-    <div className="h-[100dvh] bg-white font-system text-foreground antialiased">
-      <Suspense>
-        <SharedProject />
-      </Suspense>
-    </div>
+    <ThemeProvider>
+      <ThemeScript defaultTheme={defaultTheme} />
+      <div className="h-[100dvh] bg-background font-system text-foreground antialiased">
+        <AppSurfaceBackground />
+        <Suspense>
+          <SharedProject />
+        </Suspense>
+      </div>
+    </ThemeProvider>
   );
 }

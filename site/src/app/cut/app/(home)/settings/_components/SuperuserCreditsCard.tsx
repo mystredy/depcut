@@ -4,13 +4,6 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Dialog,
   DialogClose,
   DialogContent,
@@ -88,92 +81,88 @@ export function SuperuserCreditsCard() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          Super user · Credits
-        </CardTitle>
-        <CardDescription>
+    <div className="space-y-5 py-6 first:pt-0">
+      <div className="space-y-1">
+        <h2 className="text-base font-medium">Super user · Credits</h2>
+        <p className="text-sm text-muted-foreground">
           Defaults to your account — change the recipient to grant to another
           user. Visible to super users only.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        <div className="space-y-2">
-          <Label htmlFor="grant-email">Recipient</Label>
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="grant-email">Recipient</Label>
+        <Input
+          className="max-w-xs"
+          id="grant-email"
+          onChange={(event) => setEmailOverride(event.target.value)}
+          placeholder="user@example.com"
+          type="email"
+          value={email}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="grant-amount">Amount (USD)</Label>
+        <div className="flex flex-wrap items-center gap-2">
+          {presetDollars.map((preset) => (
+            <Button
+              key={preset}
+              onClick={() => setAmount(String(preset))}
+              type="button"
+              variant={amount === String(preset) ? "default" : "outline"}
+            >
+              ${preset}
+            </Button>
+          ))}
           <Input
-            className="max-w-xs"
-            id="grant-email"
-            onChange={(event) => setEmailOverride(event.target.value)}
-            placeholder="user@example.com"
-            type="email"
-            value={email}
+            className="max-w-[7rem]"
+            id="grant-amount"
+            max={maxCreditGrantDollars}
+            min={1}
+            onChange={(event) => setAmount(event.target.value)}
+            placeholder="Custom"
+            type="number"
+            value={amount}
           />
         </div>
+      </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="grant-amount">Amount (USD)</Label>
-          <div className="flex flex-wrap items-center gap-2">
-            {presetDollars.map((preset) => (
-              <Button
-                key={preset}
-                onClick={() => setAmount(String(preset))}
-                type="button"
-                variant={amount === String(preset) ? "default" : "outline"}
-              >
-                ${preset}
-              </Button>
-            ))}
-            <Input
-              className="max-w-[7rem]"
-              id="grant-amount"
-              max={maxCreditGrantDollars}
-              min={1}
-              onChange={(event) => setAmount(event.target.value)}
-              placeholder="Custom"
-              type="number"
-              value={amount}
-            />
-          </div>
-        </div>
+      <Button
+        disabled={grant.isPending || !amountValid}
+        onClick={() => setConfirmOpen(true)}
+      >
+        {grant.isPending ? "Granting…" : `Grant $${amountDollars}`}
+      </Button>
 
-        <Button
-          disabled={grant.isPending || !amountValid}
-          onClick={() => setConfirmOpen(true)}
-        >
-          {grant.isPending ? "Granting…" : `Grant $${amountDollars}`}
-        </Button>
+      <Dialog onOpenChange={setConfirmOpen} open={confirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm credit grant</DialogTitle>
+            <DialogDescription>
+              Grant <span className="font-medium">${amountDollars}</span> in
+              credits to{" "}
+              <span className="font-medium">{recipientLabel}</span>?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>
+              Cancel
+            </DialogClose>
+            <Button disabled={grant.isPending} onClick={submit}>
+              {grant.isPending ? "Granting…" : `Grant $${amountDollars}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        <Dialog onOpenChange={setConfirmOpen} open={confirmOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Confirm credit grant</DialogTitle>
-              <DialogDescription>
-                Grant <span className="font-medium">${amountDollars}</span> in
-                credits to{" "}
-                <span className="font-medium">{recipientLabel}</span>?
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <DialogClose render={<Button variant="outline" />}>
-                Cancel
-              </DialogClose>
-              <Button disabled={grant.isPending} onClick={submit}>
-                {grant.isPending ? "Granting…" : `Grant $${amountDollars}`}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {lastResult ? (
-          <p className="text-sm text-muted-foreground">{lastResult}</p>
-        ) : null}
-        {grant.isError ? (
-          <p className="text-sm text-destructive">
-            Grant failed. Check the email and amount, then try again.
-          </p>
-        ) : null}
-      </CardContent>
-    </Card>
+      {lastResult ? (
+        <p className="text-sm text-muted-foreground">{lastResult}</p>
+      ) : null}
+      {grant.isError ? (
+        <p className="text-sm text-destructive">
+          Grant failed. Check the email and amount, then try again.
+        </p>
+      ) : null}
+    </div>
   );
 }

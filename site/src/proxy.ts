@@ -6,6 +6,8 @@ import {
   isDepCutHost,
   isLocalHost,
 } from "@/cut/lib/hosts";
+import { auth } from "@/lib/auth";
+import { isDepCutSuperUser } from "@/lib/depcut-api-auth";
 import { fetchPublicSiteSettings } from "@/lib/siteSettings";
 
 // Cut (the video editor, publicly "DepCut") lives under /cut in this single
@@ -76,13 +78,15 @@ const PASSTHROUGH = [
   "/twitter-image",
 ];
 
-// What maintenance mode still has to serve regardless: admins need "/admin"
-// to turn it back off and "/sign-in" to get there, and every icon/share-image
-// route is chrome, not content, so a maintenance visitor's tab still gets a
-// real favicon instead of a 503. Narrower than PASSTHROUGH on purpose —
-// "closed to visitors" means /install, /sign-up, and the legal pages gate
-// too, even though the rewrite lets them through untouched otherwise.
-const MAINTENANCE_BYPASS = ["/admin", "/sign-in", "/icon", "/apple-icon", "/opengraph-image", "/twitter-image"];
+// What maintenance mode still has to serve regardless of who's asking:
+// "/sign-in" so a super user can get a session in the first place, and every
+// icon/share-image route is chrome, not content, so a maintenance visitor's
+// tab still gets a real favicon instead of a 503. Narrower than PASSTHROUGH
+// on purpose — "closed to visitors" means /install, /sign-up, and the legal
+// pages gate too, even though the rewrite lets them through untouched
+// otherwise. A signed-in super user bypasses the gate everywhere else (see
+// below), so "/admin" doesn't need its own entry here anymore.
+const MAINTENANCE_BYPASS = ["/sign-in", "/icon", "/apple-icon", "/opengraph-image", "/twitter-image"];
 
 function maintenancePage(header: string | null, paragraph: string | null, footer: string | null): NextResponse {
   const esc = (s: string) =>
@@ -128,6 +132,20 @@ async function cachedMaintenanceSettings() {
   return settings;
 }
 
+// Only called while maintenance mode is on, so this doesn't add a DB round
+// trip to ordinary traffic — but it does mean the bypass itself now depends
+// on the DB being reachable. Swallow any failure into "not a super user"
+// (see the caller) instead of letting it propagate and break the maintenance
+// page for everyone.
+async function isSuperUserSafe(headers: Headers): Promise<boolean> {
+  try {
+    const session = await auth.api.getSession({ headers });
+    return session ? await isDepCutSuperUser(session.user.id) : false;
+  } catch {
+    return false;
+  }
+}
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (isCutApi(pathname)) return cutApi(req);
@@ -161,11 +179,22 @@ export async function proxy(req: NextRequest) {
   if (!MAINTENANCE_BYPASS.some((p) => underPath(pathname, p))) {
     const settings = await cachedMaintenanceSettings();
     if (settings.maintenanceMode) {
-      return maintenancePage(
-        settings.maintenanceHeader,
-        settings.maintenanceParagraph,
-        settings.maintenanceFooter,
-      );
+      // A signed-in super user rides through the closed site entirely —
+      // not just /admin — so turning maintenance on never locks the person
+      // who'd need to turn it back off out of the app they'd use to check
+      // whatever prompted the toggle in the first place. Fails closed: if
+      // the session/role lookup itself errors (the DB being unreachable is
+      // exactly the kind of thing that might prompt flipping this switch),
+      // every visitor — super user included — sees the maintenance page
+      // rather than this check taking the page down with it.
+      const isSuperUser = await isSuperUserSafe(req.headers);
+      if (!isSuperUser) {
+        return maintenancePage(
+          settings.maintenanceHeader,
+          settings.maintenanceParagraph,
+          settings.maintenanceFooter,
+        );
+      }
     }
   }
 

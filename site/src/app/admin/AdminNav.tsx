@@ -87,7 +87,7 @@ const SECTIONS: NavSection[] = [
       { label: "Users Activities", href: soon("User Management — Users Activities"), icon: Activity, color: "text-emerald-500" },
       { label: "Users Dashboard", href: soon("User Management — Users Dashboard"), icon: LayoutDashboard, color: "text-amber-500" },
       { label: "User Deletion Requests", href: soon("User Management — Deletion Requests"), icon: ShieldAlert, color: "text-red-500" },
-      { label: "User Permissions", href: "/admin/users", icon: ShieldAlert, color: "text-pink-600" },
+      { label: "User Permissions", href: soon("User Management — User Permissions"), icon: ShieldAlert, color: "text-pink-600" },
     ],
   },
   {
@@ -161,7 +161,7 @@ const SECTIONS: NavSection[] = [
       { label: "Giveaways", href: "/admin/finance/giveaways", icon: Gift, color: "text-pink-500" },
       { label: "Referrals", href: "/admin/finance/referrals", icon: Users2, color: "text-violet-500" },
       { label: "Payment Methods", href: "/admin/finance/payment-methods", icon: CreditCard, color: "text-cyan-500" },
-      { label: "AI Credits", href: "/admin/users", icon: Zap, color: "text-yellow-500" },
+      { label: "AI Credits", href: "/admin/finance/ai-credits", icon: Zap, color: "text-yellow-500" },
       { label: "Reports", href: "/admin/finance/reports", icon: FileText, color: "text-orange-500" },
       { label: "Finance Settings", href: "/admin/finance/settings", icon: SettingsIcon, color: "text-gray-500" },
       { label: "Payment API", href: "/admin/finance/payment-api", icon: Key, color: "text-amber-500" },

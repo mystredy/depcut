@@ -24,7 +24,7 @@ import {
 // fetch, so they all load in parallel instead of one after another.
 export default function CutProfilePage() {
   return (
-    <div className="max-w-2xl space-y-6 pb-9">
+    <div className="divide-y pb-9">
       <ProfileCard />
       <PreferencesSection />
       <EmailSection />
@@ -48,7 +48,7 @@ function ProfileCard() {
   }
   if (isError || !profile) {
     return (
-      <div className="rounded-xl border bg-card p-5">
+      <div className="py-6 first:pt-0">
         <p className="text-sm text-red-600">Couldn&apos;t load your profile.</p>
       </div>
     );
@@ -63,7 +63,7 @@ function ProfileCard() {
 
   return (
     <>
-      <div className="rounded-xl border bg-card p-5">
+      <div className="py-6 first:pt-0">
         <div className="flex items-center gap-3">
           {/* The picture is the way into its own editor — pick, frame, save. */}
           <button

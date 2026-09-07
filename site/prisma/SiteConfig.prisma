@@ -55,13 +55,25 @@ model AppSettings {
   socialLinks          Json?
   // Shows a Beta badge beside the logo and an optional notice; see BetaBadge.tsx.
   betaMode             Boolean  @default(false)
-  // Site branding, uploaded from admin/settings/general. Light/dark/compact
-  // logos are shown by SiteLogo (site/src/cut/components/SiteLogo.tsx) — the
-  // admin surfaces' logo, CSS-toggled by theme — falling back to the bundled
-  // default wherever a variant has no upload. The favicon and apple touch
-  // icon back the /icon and /apple-icon routes (site/src/app/icon.tsx and
-  // apple-icon.tsx) independently — one is not derived from the other. The
-  // social share image feeds the root layout's Open Graph/Twitter meta.
+  // The AI credits pay-as-you-go balance and buy-credit presets display as
+  // "creditRateCredits credits = $creditRateDollars" (see
+  // lib/credits/format-credits.ts) — a purely cosmetic conversion; Stripe
+  // still charges and the ledger still stores real dollars regardless of
+  // this rate. Stored as a ratio, not a float, so it round-trips exactly.
+  creditRateCredits   Int      @default(1000)
+  creditRateDollars   Int      @default(3)
+  // Site branding, uploaded from admin/settings/general. The favicon and apple
+  // touch icon back the /icon and /apple-icon routes (site/src/app/icon.tsx
+  // and apple-icon.tsx) independently — one is not derived from the other.
+  // The social share image feeds the root layout's Open Graph/Twitter meta.
+  //
+  // All six *Bytes columns below are unused — every branding image now lives
+  // in R2 instead (site-branding/logo-<theme>, favicon, apple-touch-icon,
+  // social-share-image — see cut/server/cloud/r2.ts's key helpers and the
+  // site logo route / branding-image route / _icon-source.ts / _social-image
+  // .tsx that read them), since an image painted on every surface shouldn't
+  // depend on a live DB read. Left in place rather than migrated out; safe to
+  // drop in a future schema change.
   logoLight            Bytes?
   logoLightContentType String?
   logoDark             Bytes?

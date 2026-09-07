@@ -29,8 +29,8 @@ export function PreferencesSection() {
   if (!prefs.data) return <Skeleton className="h-56 w-full rounded-xl" />;
 
   return (
-    <div className="rounded-xl border bg-card p-5">
-      <div className="text-sm font-medium">Preferences</div>
+    <div className="py-6 first:pt-0">
+      <h2 className="text-base font-medium">Preferences</h2>
       <div className="mt-4 divide-y border-t">
         <PreferenceRow
           checked={prefs.data.pushPayouts}

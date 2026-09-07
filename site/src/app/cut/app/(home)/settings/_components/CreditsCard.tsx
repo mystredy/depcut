@@ -3,18 +3,17 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { track } from "@/lib/analytics";
-import { formatUsd } from "@/lib/credits/format-usd";
+import {
+  type CreditRate,
+  DEFAULT_CREDIT_RATE,
+  creditsToDollars,
+  dollarsToCredits,
+  formatCredits,
+} from "@/lib/credits/format-credits";
 import {
   creditTopUpDefaultDollars,
   creditTopUpMaxDollars,
@@ -28,11 +27,19 @@ import {
   useStartCreditCheckout,
   useUpdateCreditAutoReload,
 } from "@/queries/credits";
+import { usePublicSiteSettings } from "@/queries/site";
 
 export function CreditsCard() {
   const balance = useCreditBalance();
   const checkout = useStartCreditCheckout();
   const [customAmount, setCustomAmount] = useState("");
+  const siteSettings = usePublicSiteSettings();
+  const creditRate: CreditRate = siteSettings.data
+    ? {
+        credits: siteSettings.data.settings.creditRateCredits,
+        dollars: siteSettings.data.settings.creditRateDollars,
+      }
+    : DEFAULT_CREDIT_RATE;
 
   const startCheckout = (amountDollars: number) => {
     track("credits_checkout_started", { amountDollars });
@@ -48,79 +55,84 @@ export function CreditsCard() {
     customValue <= creditTopUpMaxDollars;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Credits</CardTitle>
-        <CardDescription>
+    <div className="space-y-6 py-6 first:pt-0">
+      <div className="space-y-1">
+        <h2 className="text-base font-medium">Credits</h2>
+        <p className="text-sm text-muted-foreground">
           Pay-as-you-go balance for the DepCut app. Buy more any time.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div>
-          {balance.isLoading ? (
-            <Skeleton className="h-9 w-32" />
-          ) : (
-            <div className="text-3xl font-semibold tabular-nums">
-              {formatUsd(balance.data?.balance ?? "0")}
-            </div>
-          )}
-          <p className="mt-1 text-sm text-muted-foreground">Available balance</p>
-        </div>
-
-        <div className="space-y-3">
-          <Label>Buy credits</Label>
-          <div className="flex flex-wrap gap-2">
-            {creditTopUpPresetsDollars.map((amount) => (
-              <Button
-                disabled={checkout.isPending}
-                key={amount}
-                onClick={() => setCustomAmount(String(amount))}
-                variant={customAmount === String(amount) ? "default" : "outline"}
-              >
-                ${amount}
-              </Button>
-            ))}
+        </p>
+      </div>
+      <div>
+        {balance.isLoading ? (
+          <Skeleton className="h-9 w-32" />
+        ) : (
+          <div className="text-3xl font-semibold tabular-nums">
+            {formatCredits(balance.data?.balance ?? "0", creditRate)}
           </div>
-          <div className="flex items-end gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground" htmlFor="custom-amount">
-                Amount (USD)
-              </Label>
-              <Input
-                className="w-32"
-                id="custom-amount"
-                inputMode="numeric"
-                max={creditTopUpMaxDollars}
-                min={creditTopUpMinDollars}
-                onChange={(event) => setCustomAmount(event.target.value)}
-                placeholder="50"
-                type="number"
-                value={customAmount}
-              />
-            </div>
+        )}
+        <p className="mt-1 text-sm text-muted-foreground">Available balance</p>
+      </div>
+
+      <div className="space-y-3">
+        <Label>Buy credits</Label>
+        <div className="flex flex-wrap gap-2">
+          {creditTopUpPresetsDollars.map((amount) => (
             <Button
-              disabled={!customValid || checkout.isPending}
-              onClick={() => startCheckout(customValue)}
+              disabled={checkout.isPending}
+              key={amount}
+              onClick={() => setCustomAmount(String(amount))}
+              variant={customAmount === String(amount) ? "default" : "outline"}
             >
-              {checkout.isPending ? "Starting…" : "Buy"}
+              {dollarsToCredits(amount, creditRate).toLocaleString("en-US")}
             </Button>
-          </div>
-          {checkout.isError ? (
-            <p className="text-sm text-destructive">
-              Couldn&apos;t start checkout. Try again in a moment.
-            </p>
-          ) : null}
+          ))}
         </div>
+        <div className="flex items-end gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground" htmlFor="custom-amount">
+              Amount (USD)
+            </Label>
+            <Input
+              className="w-32"
+              id="custom-amount"
+              inputMode="numeric"
+              max={creditTopUpMaxDollars}
+              min={creditTopUpMinDollars}
+              onChange={(event) => setCustomAmount(event.target.value)}
+              placeholder="50"
+              type="number"
+              value={customAmount}
+            />
+          </div>
+          <Button
+            disabled={!customValid || checkout.isPending}
+            onClick={() => startCheckout(customValue)}
+          >
+            {checkout.isPending ? "Starting…" : "Buy"}
+          </Button>
+        </div>
+        {checkout.isError ? (
+          <p className="text-sm text-destructive">
+            Couldn&apos;t start checkout. Try again in a moment.
+          </p>
+        ) : null}
+      </div>
 
-        <AutoReloadSection
-          onNeedsCard={() => startCheckout(creditTopUpDefaultDollars)}
-        />
-      </CardContent>
-    </Card>
+      <AutoReloadSection
+        creditRate={creditRate}
+        onNeedsCard={() => startCheckout(creditTopUpDefaultDollars)}
+      />
+    </div>
   );
 }
 
-function AutoReloadSection({ onNeedsCard }: { onNeedsCard: () => void }) {
+function AutoReloadSection({
+  creditRate,
+  onNeedsCard,
+}: {
+  creditRate: CreditRate;
+  onNeedsCard: () => void;
+}) {
   const autoReload = useCreditAutoReload();
   const update = useUpdateCreditAutoReload();
   const [needsCard, setNeedsCard] = useState(false);
@@ -155,9 +167,9 @@ function AutoReloadSection({ onNeedsCard }: { onNeedsCard: () => void }) {
         event.preventDefault();
         const form = new FormData(event.currentTarget);
         save({
-          amountDollars: Number(form.get("amount")),
+          amountDollars: creditsToDollars(Number(form.get("amount")), creditRate),
           enabled: form.get("enabled") === "on",
-          thresholdDollars: Number(form.get("threshold")),
+          thresholdDollars: creditsToDollars(Number(form.get("threshold")), creditRate),
         });
       }}
     >
@@ -173,25 +185,25 @@ function AutoReloadSection({ onNeedsCard }: { onNeedsCard: () => void }) {
       <div className="flex flex-wrap items-end gap-3 text-sm text-muted-foreground">
         <span>When balance falls below</span>
         <div className="flex items-center gap-1">
-          <span>$</span>
           <Input
-            className="w-20"
-            defaultValue={data?.thresholdDollars ?? 10}
+            className="w-24"
+            defaultValue={dollarsToCredits(data?.thresholdDollars ?? 10, creditRate)}
             min={0}
             name="threshold"
             type="number"
           />
+          <span>credits</span>
         </div>
         <span>automatically buy</span>
         <div className="flex items-center gap-1">
-          <span>$</span>
           <Input
-            className="w-20"
-            defaultValue={data?.amountDollars ?? creditTopUpDefaultDollars}
-            min={5}
+            className="w-24"
+            defaultValue={dollarsToCredits(data?.amountDollars ?? creditTopUpDefaultDollars, creditRate)}
+            min={dollarsToCredits(creditTopUpMinDollars, creditRate)}
             name="amount"
             type="number"
           />
+          <span>credits</span>
         </div>
         <Button disabled={update.isPending} size="sm" type="submit">
           {update.isPending ? "Saving…" : "Save"}

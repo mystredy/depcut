@@ -1,15 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { prisma } from "@/lib/prisma";
-
-const SINGLETON_ID = "singleton";
+import { appleTouchIconKey, faviconKey, getObject } from "@/cut/server/cloud/r2";
 
 type IconSlot = "favicon" | "appleTouchIcon";
 
-const COLUMNS: Record<IconSlot, { data: "favicon" | "appleTouchIcon"; type: "faviconContentType" | "appleTouchIconContentType" }> = {
-  appleTouchIcon: { data: "appleTouchIcon", type: "appleTouchIconContentType" },
-  favicon: { data: "favicon", type: "faviconContentType" },
+const KEY_FOR: Record<IconSlot, () => string> = {
+  appleTouchIcon: appleTouchIconKey,
+  favicon: faviconKey,
 };
 
 /** The bytes and content type an icon route should serve: the admin-uploaded
@@ -22,15 +20,9 @@ export async function iconSource(
   slot: IconSlot,
   defaultFile: string
 ): Promise<{ data: Buffer; contentType: string }> {
-  const columns = COLUMNS[slot];
-  const settings = await prisma.appSettings.findUnique({
-    select: { [columns.data]: true, [columns.type]: true },
-    where: { id: SINGLETON_ID },
-  });
-  const data = settings?.[columns.data];
-  const contentType = settings?.[columns.type];
-  if (data && contentType) {
-    return { contentType, data: Buffer.from(data) };
+  const object = await getObject(KEY_FOR[slot]());
+  if (object) {
+    return { contentType: object.mime, data: object.bytes };
   }
   const fallback = await readFile(join(process.cwd(), "public", defaultFile));
   return { contentType: defaultFile.endsWith(".ico") ? "image/x-icon" : "image/png", data: fallback };

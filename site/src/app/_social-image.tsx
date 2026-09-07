@@ -1,33 +1,32 @@
 import { ImageResponse } from "next/og";
 import { NextResponse } from "next/server";
 
-import { prisma } from "@/lib/prisma";
+import { getObject, socialShareImageKey } from "@/cut/server/cloud/r2";
+import { publicSiteSettings } from "@/lib/siteSettings";
 
 export const SOCIAL_IMAGE_SIZE = { height: 630, width: 1200 };
-
-const SINGLETON_ID = "singleton";
 
 /** Shared by opengraph-image.tsx and twitter-image.tsx — Next.js resolves
  * them as two independent conventions with no fallback between them, so both
  * files call this rather than one aliasing the other. Serves the
  * admin-uploaded social share image (admin/settings/general) as-is, or a
- * plain rendered text card naming the site when nothing's been uploaded. */
+ * plain rendered text card naming the site when nothing's been uploaded. The
+ * image itself lives in R2 (see the site logo route's own migration for why);
+ * publicSiteSettings for the rendered fallback's appName/tagline is already
+ * cached and fails closed to defaults on a DB error, so this never blocks a
+ * card render on a live query the way a raw Prisma read would. */
 export async function siteShareImage(): Promise<Response> {
-  const settings = await prisma.appSettings.findUnique({
-    select: {
-      appName: true,
-      socialShareImage: true,
-      socialShareImageContentType: true,
-      tagline: true,
-    },
-    where: { id: SINGLETON_ID },
-  });
-
-  if (settings?.socialShareImage && settings.socialShareImageContentType) {
-    return new NextResponse(new Uint8Array(settings.socialShareImage), {
-      headers: { "Content-Type": settings.socialShareImageContentType },
+  const object = await getObject(socialShareImageKey());
+  if (object) {
+    return new NextResponse(new Uint8Array(object.bytes), {
+      headers: {
+        "Cache-Control": "public, max-age=3600",
+        "Content-Type": object.mime,
+      },
     });
   }
+
+  const settings = await publicSiteSettings();
 
   return new ImageResponse(
     (

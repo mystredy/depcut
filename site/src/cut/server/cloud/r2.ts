@@ -107,6 +107,20 @@ export const AUDIO_GENERATION_PREFIX = "audio-generations/";
 export const audioGenerationKey = (userId: string, id: string, fileName: string) =>
   `${AUDIO_GENERATION_PREFIX}${userId}/${id}/${fileName}`;
 
+/** admin/settings/general's Branding section: the site's own logo marks.
+ * Overwritten in place on each upload (see the site logo route's GET) rather
+ * than content-addressed like stock media, since there's no database row to
+ * repoint at a new key — the fixed key is the only pointer to it. */
+export const siteLogoKey = (theme: string) => `site-branding/logo-${theme}`;
+
+/** The rest of admin/settings/general's Branding section — favicon, apple
+ * touch icon, social share image. Same fixed-key-overwritten-in-place scheme
+ * as siteLogoKey, backing /icon, /apple-icon, and the Open Graph/Twitter
+ * image routes (site/src/app/_icon-source.ts, _social-image.tsx). */
+export const faviconKey = () => "site-branding/favicon";
+export const appleTouchIconKey = () => "site-branding/apple-touch-icon";
+export const socialShareImageKey = () => "site-branding/social-share-image";
+
 export function presignPut(key: string, mime: string): Promise<string> {
   return getSignedUrl(
     r2(),

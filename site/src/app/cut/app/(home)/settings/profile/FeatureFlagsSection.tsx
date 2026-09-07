@@ -14,8 +14,8 @@ export function FeatureFlagsSection() {
   if (!flags?.length) return null;
 
   return (
-    <div className="rounded-xl border bg-card p-5">
-      <div className="text-sm font-medium">Feature flags</div>
+    <div className="py-6 first:pt-0">
+      <h2 className="text-base font-medium">Feature flags</h2>
       <p className="mt-1 text-sm text-muted-foreground">
         Early features you can turn on for your account.
       </p>

@@ -39,12 +39,13 @@ import { NavStorage } from "@/cut/components/NavStorage";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type ThemeChoice, useTheme } from "@/cut/components/ThemeProvider";
 import { UserAvatar } from "@/cut/components/UserAvatar";
-import { formatUsd } from "@/lib/credits/format-usd";
+import { DEFAULT_CREDIT_RATE, formatCredits } from "@/lib/credits/format-credits";
 import { openOnboarding } from "@/cut/lib/onboarding";
 import { useCutBase } from "@/cut/lib/nav";
 import { authClient } from "@/lib/auth-client";
 import { useAccountProfile, visibleName } from "@/queries/accountProfile";
 import { useCreditBalance } from "@/queries/credits";
+import { usePublicSiteSettings } from "@/queries/site";
 
 type CachedNavProfile = { name: string; image: string | null };
 
@@ -92,6 +93,13 @@ export function NavUser() {
   // before the other could start.
   const { data: profile, isPending } = useAccountProfile();
   const credits = useCreditBalance();
+  const siteSettings = usePublicSiteSettings();
+  const creditRate = siteSettings.data
+    ? {
+        credits: siteSettings.data.settings.creditRateCredits,
+        dollars: siteSettings.data.settings.creditRateDollars,
+      }
+    : DEFAULT_CREDIT_RATE;
   const { theme, setTheme } = useTheme();
 
   // The name and picture the user chose live in the profile, not the
@@ -178,7 +186,7 @@ export function NavUser() {
                 AI credits
               </span>
               <span className="font-mono text-xs font-semibold tabular-nums">
-                {credits.isLoading ? "…" : formatUsd(credits.data?.balance ?? "0")}
+                {credits.isLoading ? "…" : formatCredits(credits.data?.balance ?? "0", creditRate)}
               </span>
             </div>
             <Button

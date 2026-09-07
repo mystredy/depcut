@@ -17,8 +17,8 @@ export function EmailSection() {
   if (!prefs) return <Skeleton className="h-24 w-full rounded-xl" />;
 
   return (
-    <div className="rounded-xl border bg-card p-5">
-      <div className="text-sm font-medium">Email preferences</div>
+    <div className="py-6 first:pt-0">
+      <h2 className="text-base font-medium">Email preferences</h2>
       <div className="mt-4 border-t pt-4">
         <div className="flex items-start justify-between gap-6">
           <span className="min-w-0">

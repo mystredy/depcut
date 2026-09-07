@@ -415,6 +415,8 @@ export type AdminSettings = {
   helpCenterUrl: string | null;
   socialLinks: SiteSocialLinks | null;
   betaMode: boolean;
+  creditRateCredits: number;
+  creditRateDollars: number;
   updatedAt: string;
 };
 
@@ -543,13 +545,38 @@ export function useAdminUsers(q: string) {
   });
 }
 
+// "grant-super-user" | "revoke-super-user" — mirrors lib/admin/action-verification.ts's
+// AdminAction, kept as its own literal union here since that module is
+// server-only (node:crypto) and can't be imported into client code.
+export type AdminUserAction = "grant-super-user" | "revoke-super-user";
+
+export function useRequestActionCode() {
+  return useMutation({
+    mutationFn: ({ userId, action }: { userId: string; action: AdminUserAction }) =>
+      apiFetch<{ challenge: string; sentTo: string }>(
+        `/api/admin/users/${userId}/action-code`,
+        { body: JSON.stringify({ action }), method: "POST" },
+      ),
+  });
+}
+
 export function useSetSuperUser() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ userId, superUser }: { userId: string; superUser: boolean }) =>
+    mutationFn: ({
+      userId,
+      superUser,
+      challenge,
+      code,
+    }: {
+      userId: string;
+      superUser: boolean;
+      challenge: string;
+      code: string;
+    }) =>
       apiFetch<{ user: { id: string; email: string; superUser: boolean } }>(
         `/api/admin/users/${userId}`,
-        { body: JSON.stringify({ superUser }), method: "PATCH" },
+        { body: JSON.stringify({ challenge, code, superUser }), method: "PATCH" },
       ),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] }),

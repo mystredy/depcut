@@ -1,19 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Search } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+  Activity,
+  LayoutDashboard,
+  MoreVertical,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldOff,
+} from "lucide-react";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -23,11 +28,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatUsd } from "@/lib/credits/format-usd";
-import { creditTopUpPresetsDollars, maxCreditGrantDollars } from "@/lib/credits/top-up";
+import { UserAvatar } from "@/cut/components/UserAvatar";
 import { useSiteDateFormat } from "@/lib/siteDateFormat";
 import { type AdminUser, useAdminUsers } from "@/queries/admin";
-import { useGrantCredits } from "@/queries/credits";
+
+import { SuperUserDialog } from "./SuperUserDialog";
+
+// Matches AdminNav.tsx's own `soon` helper — every one of these per-user
+// pages is still just the nav item's shared "not built yet" placeholder,
+// scoped to which user you opened the menu from.
+const soon = (topic: string) => `/admin/more?topic=${encodeURIComponent(topic)}`;
 
 // admin/settings/general's Date Format decides the fallback once an activity
 // timestamp is old enough to stop reading as a relative "N days ago".
@@ -44,18 +54,17 @@ function timeAgo(iso: string, formatDate: (value: string) => string) {
 }
 
 export default function AdminUsersPage() {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const users = useAdminUsers(query);
-  const [grantTarget, setGrantTarget] = useState<AdminUser | null>(null);
+  const [superUserTarget, setSuperUserTarget] = useState<AdminUser | null>(null);
   const { formatDate } = useSiteDateFormat();
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight">Users & Credits</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Search accounts, grant credits, and manage super-user access.
-        </p>
+        <h1 className="text-lg font-semibold tracking-tight">Users</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Search and browse every account.</p>
       </div>
 
       <label className="flex w-full max-w-sm items-center gap-2 rounded-lg border border-input px-2.5 py-1.5 focus-within:border-ring">
@@ -78,49 +87,79 @@ export default function AdminUsersPage() {
         ) : users.isError ? (
           <p className="p-6 text-sm text-destructive">Couldn&apos;t load users. Try again.</p>
         ) : (
-          <Table className="min-w-[760px] table-fixed">
+          <Table className="min-w-[420px] table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="min-w-[140px]">User</TableHead>
-                <TableHead className="w-20">Balance</TableHead>
+                <TableHead className="min-w-[180px]">User</TableHead>
                 <TableHead className="w-28">Active</TableHead>
                 <TableHead className="w-24">Joined</TableHead>
-                <TableHead className="w-28">Spent</TableHead>
-                <TableHead className="w-28">Received</TableHead>
-                <TableHead className="w-16 text-right">Add Fund</TableHead>
+                <TableHead className="w-10 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {users.data?.users.map((u) => (
                 <TableRow key={u.id}>
                   <TableCell className="overflow-hidden">
-                    <div className="min-w-0 overflow-hidden">
-                      <p className="truncate text-sm font-medium">{u.displayName || u.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                    <div className="flex min-w-0 items-center gap-2.5 overflow-hidden">
+                      <UserAvatar
+                        className="size-8 shrink-0"
+                        name={u.displayName || u.name}
+                        image={u.image}
+                      />
+                      <div className="min-w-0 overflow-hidden">
+                        <p className="truncate text-sm font-medium">{u.displayName || u.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                      </div>
                     </div>
                   </TableCell>
-                  <TableCell className="font-mono text-sm">{formatUsd(u.balance)}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {u.lastActiveAt ? timeAgo(u.lastActiveAt, formatDate) : "Never"}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {formatDate(u.createdAt)}
                   </TableCell>
-                  <TableCell className="font-mono text-sm text-muted-foreground">
-                    {formatUsd(u.lifetimeCharged)}
-                  </TableCell>
-                  <TableCell className="font-mono text-sm text-muted-foreground">
-                    {formatUsd(u.lifetimeGranted)}
-                  </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      title="Grant credits"
-                      onClick={() => setGrantTarget(u)}
-                    >
-                      Grant
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        title="User actions"
+                        aria-label="User actions"
+                        className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <MoreVertical className="size-3.5" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          variant={u.superUser ? "default" : "destructive"}
+                          onClick={() => setSuperUserTarget(u)}
+                        >
+                          {u.superUser ? <ShieldOff /> : <ShieldCheck />}
+                          {u.superUser ? "Remove super user" : "Make super user"}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => router.push(soon(`User Management — Dashboard: ${u.email}`))}
+                        >
+                          <LayoutDashboard /> Dashboard
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => router.push(soon(`User Management — Activities: ${u.email}`))}
+                        >
+                          <Activity /> Activities
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            router.push(soon(`User Management — Deletion Requests: ${u.email}`))
+                          }
+                        >
+                          <ShieldAlert /> Deletion Requests
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => router.push(soon(`User Management — Permissions: ${u.email}`))}
+                        >
+                          <ShieldAlert /> Permissions
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
@@ -136,82 +175,7 @@ export default function AdminUsersPage() {
         )}
       </div>
 
-      <GrantCreditsDialog target={grantTarget} onClose={() => setGrantTarget(null)} />
+      <SuperUserDialog target={superUserTarget} onClose={() => setSuperUserTarget(null)} />
     </div>
-  );
-}
-
-function GrantCreditsDialog({
-  target,
-  onClose,
-}: {
-  target: AdminUser | null;
-  onClose: () => void;
-}) {
-  const grant = useGrantCredits();
-  const [amount, setAmount] = useState(String(creditTopUpPresetsDollars[0] ?? 10));
-
-  const amountDollars = Number(amount);
-  const amountValid =
-    Number.isInteger(amountDollars) && amountDollars > 0 && amountDollars <= maxCreditGrantDollars;
-
-  const submit = () => {
-    if (!target || !amountValid) return;
-    grant.mutate(
-      { amountDollars, userId: target.id },
-      { onSuccess: onClose },
-    );
-  };
-
-  return (
-    <Dialog open={target !== null} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Grant credits</DialogTitle>
-          <DialogDescription>
-            Add credits to <span className="font-medium">{target?.email}</span>&apos;s balance.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            {creditTopUpPresetsDollars.map((preset) => (
-              <Button
-                key={preset}
-                type="button"
-                size="sm"
-                variant={amount === String(preset) ? "default" : "outline"}
-                onClick={() => setAmount(String(preset))}
-              >
-                ${preset}
-              </Button>
-            ))}
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="admin-grant-amount">Amount (USD)</Label>
-            <Input
-              id="admin-grant-amount"
-              type="number"
-              min={1}
-              max={maxCreditGrantDollars}
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="w-32"
-            />
-          </div>
-          {grant.isError && (
-            <p className="text-sm text-destructive">Grant failed. Check the amount and try again.</p>
-          )}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button disabled={!amountValid || grant.isPending} onClick={submit}>
-            {grant.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
-            Grant ${Number.isFinite(amountDollars) ? amountDollars : 0}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

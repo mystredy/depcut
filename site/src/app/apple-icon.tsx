@@ -11,7 +11,10 @@ export default async function AppleIcon() {
   const { data, contentType } = await iconSource("appleTouchIcon", "default-apple-icon.png");
   return new NextResponse(new Uint8Array(data), {
     headers: {
-      "Cache-Control": "public, max-age=300",
+      // An hour, not immutable: this key is overwritten in place on each
+      // upload rather than content-addressed, so a replaced icon needs the
+      // old cache to actually expire.
+      "Cache-Control": "public, max-age=3600",
       "Content-Type": contentType,
     },
   });
