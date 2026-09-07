@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronLeft, CloudUpload, LayoutGrid, Loader2, MessageCircleHeart, Mic, MoreHorizontal, Redo2, Send, Share2, Sparkles, TriangleAlert, Undo2, Upload, Video } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, CloudUpload, Loader2, MessageCircleHeart, Mic, MoreHorizontal, Redo2, Send, Share2, Sparkles, TriangleAlert, Undo2, Upload, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -36,7 +36,6 @@ import { useEditor } from "@/cut/lib/store";
 import { useCreateDraftSubmission } from "@/queries/submissions";
 import { cn } from "@/lib/utils";
 import { FeedbackDialog } from "@/cut/components/FeedbackDialog";
-import { PostToSpaceDialog } from "@/cut/components/PostToSpaceDialog";
 import { SiteLogo } from "@/cut/components/SiteLogo";
 import { RecordDialog, type RecordMode } from "./RecordDialog";
 import { ShareDialog } from "./ShareDialog";
@@ -183,7 +182,6 @@ export function TopBar({
     wasUploading.current = cloudUploading;
   }, [cloudUploading, queryClient]);
   const [shareOpen, setShareOpen] = useState(false);
-  const [postToSpaceOpen, setPostToSpaceOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -296,21 +294,6 @@ export function TopBar({
       >
         <Upload data-icon={compact ? undefined : "inline-start"} />
         {!compact && <span className="hidden sm:inline">Export</span>}
-      </Button>
-      <Button
-        variant="ghost"
-        size={compact ? "icon-sm" : "sm"}
-        className="max-sm:size-7 max-sm:px-0"
-        aria-label="Post to Space"
-        // Post uploads an exported video file — nothing renders it, so it's
-        // gated on the same "has a real cut, no imports still in flight or
-        // failed" check Export and Submit share, same reasoning as Submit's.
-        disabled={exportBlocked}
-        title={exportBlockedTitle ?? (compact ? "Post to Space" : undefined)}
-        onClick={() => setPostToSpaceOpen(true)}
-      >
-        <LayoutGrid data-icon={compact ? undefined : "inline-start"} />
-        {!compact && <span className="hidden sm:inline">Post to Space</span>}
       </Button>
       {cutMode === "cloud" && (
         <Button
@@ -558,9 +541,6 @@ export function TopBar({
                 >
                   <Upload /> {exportBlockedTitle ?? "Export"}
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled={exportBlocked} onClick={() => setPostToSpaceOpen(true)}>
-                  <LayoutGrid /> Post to Space
-                </DropdownMenuItem>
                 {cutMode === "cloud" && (
                   <DropdownMenuItem
                     disabled={createSubmission.isPending || exportBlocked}
@@ -591,12 +571,6 @@ export function TopBar({
         <ShareDialog
           projectId={useEditor.getState().projectId ?? ""}
           onClose={() => setShareOpen(false)}
-        />
-      )}
-      {postToSpaceOpen && (
-        <PostToSpaceDialog
-          projectId={useEditor.getState().projectId ?? null}
-          onClose={() => setPostToSpaceOpen(false)}
         />
       )}
       {feedbackOpen && <FeedbackDialog onClose={() => setFeedbackOpen(false)} />}

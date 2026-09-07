@@ -46,7 +46,6 @@ model User {
   emailSettings UserEmailSettings?
   claimedTasks  Task[] @relation("TaskClaims")
   submissions   Submission[] @relation("UserSubmissions")
-  spacePosts    SpacePost[]
   reviewedSubmissions Submission[] @relation("ReviewedSubmissions")
   uploadsCreated Upload[] @relation("UploadCreatedBy")
   uploadsToPublish Upload[] @relation("UploadPublishBy")
