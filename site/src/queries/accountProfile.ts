@@ -13,6 +13,14 @@ export type AccountProfile = {
   displayName: string | null;
   email: string;
   image: string | null;
+  // The @handle a Space is identified by — independent of displayName, and
+  // unique across accounts. Null until the user picks one.
+  username: string | null;
+  bio: string | null;
+  backgroundImage: string | null;
+  // Whether My Space shows a follower count publicly — the count itself is
+  // always 0 today, there's no follower graph yet.
+  showFollowerCount: boolean;
 };
 
 // What the product calls you: your chosen name when you have one, otherwise
@@ -59,12 +67,81 @@ export function useRemoveAvatar() {
   });
 }
 
+// Same shape as the avatar: raw bytes, straight PUT, no crop step.
+export function useUpdateBackgroundImage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (image: Blob) =>
+      apiFetch<AccountProfile>("/api/account/background-image", {
+        body: image,
+        headers: { "Content-Type": image.type },
+        method: "PUT",
+      }),
+    onSuccess: (profile) => {
+      queryClient.setQueryData(accountProfileQueryKey, profile);
+    },
+  });
+}
+
+export function useRemoveBackgroundImage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<AccountProfile>("/api/account/background-image", { method: "DELETE" }),
+    onSuccess: (profile) => {
+      queryClient.setQueryData(accountProfileQueryKey, profile);
+    },
+  });
+}
+
 export function useUpdateDisplayName() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (displayName: string | null) =>
       apiFetch<AccountProfile>("/api/account/profile", {
         body: JSON.stringify({ displayName }),
+        method: "PUT",
+      }),
+    onSuccess: (profile) => {
+      queryClient.setQueryData(accountProfileQueryKey, profile);
+    },
+  });
+}
+
+export function useUpdateUsername() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (username: string | null) =>
+      apiFetch<AccountProfile>("/api/account/profile", {
+        body: JSON.stringify({ username }),
+        method: "PUT",
+      }),
+    onSuccess: (profile) => {
+      queryClient.setQueryData(accountProfileQueryKey, profile);
+    },
+  });
+}
+
+export function useUpdateBio() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (bio: string | null) =>
+      apiFetch<AccountProfile>("/api/account/profile", {
+        body: JSON.stringify({ bio }),
+        method: "PUT",
+      }),
+    onSuccess: (profile) => {
+      queryClient.setQueryData(accountProfileQueryKey, profile);
+    },
+  });
+}
+
+export function useUpdateShowFollowerCount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (showFollowerCount: boolean) =>
+      apiFetch<AccountProfile>("/api/account/profile", {
+        body: JSON.stringify({ showFollowerCount }),
         method: "PUT",
       }),
     onSuccess: (profile) => {
