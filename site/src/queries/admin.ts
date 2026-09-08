@@ -312,18 +312,26 @@ export type AdminSocialWorkflow = {
   updatedAt: string;
 };
 
+export type AdminSupportMessage = {
+  id: string;
+  authorId: string;
+  authorName: string;
+  message: string;
+  createdAt: string;
+  attachments: { id: string; contentType: string }[];
+};
+
 export type AdminSupportTicket = {
   id: string;
   number: number;
   subject: string;
-  message: string;
-  status: "Open" | "Investigating" | "Resolved";
-  response: string | null;
+  status: "Open" | "Investigating" | "Answered" | "Closed";
+  priority: "Low" | "Medium" | "High";
   raisedByName: string;
   raisedByEmail: string;
-  resolvedAt: string | null;
+  lastReplyAt: string | null;
   createdAt: string;
-  attachments: { id: string; contentType: string }[];
+  messages: AdminSupportMessage[];
 };
 
 export type AnnouncementTargetType = "all" | "super_users" | "specific_user";
@@ -1719,13 +1727,16 @@ export function useAdminSupportTickets() {
   });
 }
 
+// Adds a reply to a ticket's thread — the server sets status to "Answered"
+// itself (unless the ticket is already Closed), so callers only send the
+// message.
 export function useReplySupportTicket() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...input }: { id: string; response: string; status: "Resolved" }) =>
-      apiFetch<{ ticket: AdminSupportTicket }>(`/api/admin/support-tickets/${id}`, {
-        body: JSON.stringify(input),
-        method: "PATCH",
+    mutationFn: ({ id, message }: { id: string; message: string }) =>
+      apiFetch<{ ok: boolean }>(`/api/admin/support-tickets/${id}/messages`, {
+        body: JSON.stringify({ message }),
+        method: "POST",
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminSupportTicketsQueryKey }),
   });
@@ -1734,9 +1745,21 @@ export function useReplySupportTicket() {
 export function useUpdateSupportTicketStatus() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: "Open" | "Investigating" }) =>
-      apiFetch<{ ticket: AdminSupportTicket }>(`/api/admin/support-tickets/${id}`, {
+    mutationFn: ({ id, status }: { id: string; status: AdminSupportTicket["status"] }) =>
+      apiFetch<{ ok: boolean }>(`/api/admin/support-tickets/${id}`, {
         body: JSON.stringify({ status }),
+        method: "PATCH",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminSupportTicketsQueryKey }),
+  });
+}
+
+export function useUpdateSupportTicketPriority() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, priority }: { id: string; priority: AdminSupportTicket["priority"] }) =>
+      apiFetch<{ ok: boolean }>(`/api/admin/support-tickets/${id}`, {
+        body: JSON.stringify({ priority }),
         method: "PATCH",
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminSupportTicketsQueryKey }),

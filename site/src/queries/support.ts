@@ -4,16 +4,23 @@ import { useMutation } from "@tanstack/react-query";
 
 import { apiFetch } from "@/queries/apiClient";
 
+export type SupportMessage = {
+  id: string;
+  authorId: string;
+  message: string;
+  createdAt: string;
+  attachments: { id: string; contentType: string }[];
+};
+
 export type SupportTicket = {
   id: string;
   number: number;
   subject: string;
-  message: string;
-  status: "Open" | "Investigating" | "Resolved";
-  response: string | null;
+  status: "Open" | "Investigating" | "Answered" | "Closed";
+  priority: "Low" | "Medium" | "High";
+  lastReplyAt: string | null;
   createdAt: string;
-  updatedAt: string;
-  attachments: { id: string; contentType: string }[];
+  messages: SupportMessage[];
 };
 
 export function useCreateSupportTicket() {

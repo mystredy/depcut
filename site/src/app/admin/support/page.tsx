@@ -10,6 +10,7 @@ import {
   type AdminSupportTicket,
   useAdminSupportTickets,
   useReplySupportTicket,
+  useUpdateSupportTicketPriority,
   useUpdateSupportTicketStatus,
 } from "@/queries/admin";
 
@@ -25,11 +26,13 @@ function timeAgo(iso: string) {
 }
 
 // Every ticket a signed-in user has filed via the account menu's "Give
-// feedback" dialog (POST /api/support-tickets).
+// feedback" dialog (POST /api/support-tickets), threaded: each ticket holds
+// the raiser's opening message plus every admin reply, not just one final
+// response.
 export default function AdminSupportPage() {
   const tickets = useAdminSupportTickets();
-  const open = (tickets.data?.tickets ?? []).filter((t) => t.status !== "Resolved");
-  const resolved = (tickets.data?.tickets ?? []).filter((t) => t.status === "Resolved");
+  const closed = (tickets.data?.tickets ?? []).filter((t) => t.status === "Closed");
+  const active = (tickets.data?.tickets ?? []).filter((t) => t.status !== "Closed");
 
   return (
     <div className="space-y-6">
@@ -52,19 +55,19 @@ export default function AdminSupportPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {open.length > 0 && (
+          {active.length > 0 && (
             <div className="space-y-3">
-              {open.map((t) => (
+              {active.map((t) => (
                 <TicketCard key={t.id} ticket={t} />
               ))}
             </div>
           )}
-          {resolved.length > 0 && (
+          {closed.length > 0 && (
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Resolved ({resolved.length})
+                Closed ({closed.length})
               </p>
-              {resolved.map((t) => (
+              {closed.map((t) => (
                 <TicketCard key={t.id} ticket={t} />
               ))}
             </div>
@@ -78,86 +81,155 @@ export default function AdminSupportPage() {
 function TicketCard({ ticket }: { ticket: AdminSupportTicket }) {
   const reply = useReplySupportTicket();
   const setStatus = useUpdateSupportTicketStatus();
-  const [response, setResponse] = useState("");
+  const setPriority = useUpdateSupportTicketPriority();
+  const [draft, setDraft] = useState("");
 
   const submit = () => {
-    if (!response.trim()) return;
-    reply.mutate({ id: ticket.id, response: response.trim(), status: "Resolved" });
+    if (!draft.trim()) return;
+    reply.mutate({ id: ticket.id, message: draft.trim() }, { onSuccess: () => setDraft("") });
   };
 
   return (
-    <div className="space-y-2 rounded-xl border bg-card p-4">
+    <div className="space-y-3 rounded-xl border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="font-mono text-xs font-bold text-primary">TKT-{1000 + ticket.number}</span>
           <span className="text-xs font-semibold">{ticket.subject}</span>
           <StatusBadge status={ticket.status} />
+          <PriorityBadge priority={ticket.priority} />
         </div>
-        {ticket.status === "Open" && (
-          <Button size="sm" variant="outline" onClick={() => setStatus.mutate({ id: ticket.id, status: "Investigating" })}>
-            Mark investigating
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <select
+            value={ticket.priority}
+            onChange={(e) =>
+              setPriority.mutate({
+                id: ticket.id,
+                priority: e.target.value as AdminSupportTicket["priority"],
+              })
+            }
+            className="rounded-lg border border-input bg-transparent px-2 py-1 text-xs outline-none focus-visible:border-ring"
+          >
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+          </select>
+          {ticket.status === "Open" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setStatus.mutate({ id: ticket.id, status: "Investigating" })}
+            >
+              Mark investigating
+            </Button>
+          )}
+          {ticket.status !== "Closed" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setStatus.mutate({ id: ticket.id, status: "Closed" })}
+            >
+              Close
+            </Button>
+          )}
+          {ticket.status === "Closed" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setStatus.mutate({ id: ticket.id, status: "Open" })}
+            >
+              Reopen
+            </Button>
+          )}
+        </div>
       </div>
 
       <p className="text-xs text-muted-foreground">
         Raised by {ticket.raisedByName} ({ticket.raisedByEmail}) · {timeAgo(ticket.createdAt)}
       </p>
 
-      <p className="rounded-lg border bg-muted/20 p-2.5 text-xs">{ticket.message}</p>
-
-      {ticket.attachments.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {ticket.attachments.map((a) => (
-            <a
-              key={a.id}
-              href={`/api/admin/support-tickets/attachment/${a.id}`}
-              target="_blank"
-              rel="noreferrer"
-              className="block w-fit"
+      <div className="space-y-2">
+        {ticket.messages.map((m) => {
+          const fromRaiser = m.authorId === ticket.messages[0]?.authorId;
+          return (
+            <div
+              key={m.id}
+              className={cn(
+                "space-y-1.5 rounded-lg border p-2.5 text-xs",
+                fromRaiser ? "bg-muted/20" : "bg-emerald-500/10"
+              )}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element -- an admin-only inline-DB image, not worth a remote loader config for */}
-              <img
-                src={`/api/admin/support-tickets/attachment/${a.id}`}
-                alt="Attachment"
-                className="h-24 w-auto rounded-lg border object-cover transition-opacity hover:opacity-90"
-              />
-            </a>
-          ))}
-        </div>
-      )}
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <span className="font-medium">{fromRaiser ? m.authorName : `${m.authorName} (admin)`}</span>
+                <span>{timeAgo(m.createdAt)}</span>
+              </div>
+              <p>{m.message}</p>
+              {m.attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {m.attachments.map((a) => (
+                    <a
+                      key={a.id}
+                      href={`/api/admin/support-tickets/attachment/${a.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block w-fit"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element -- an admin-only inline-DB image, not worth a remote loader config for */}
+                      <img
+                        src={`/api/admin/support-tickets/attachment/${a.id}`}
+                        alt="Attachment"
+                        className="h-24 w-auto rounded-lg border object-cover transition-opacity hover:opacity-90"
+                      />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
-      {ticket.status === "Resolved" ? (
-        <p className="rounded-lg border bg-emerald-500/10 p-2.5 text-xs text-emerald-700 dark:text-emerald-400">
-          {ticket.response}
-        </p>
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            value={response}
-            onChange={(e) => setResponse(e.target.value)}
-            placeholder="Write response…"
-            className="max-w-xs flex-1 rounded-lg border bg-transparent px-2.5 py-1 text-xs outline-none focus-visible:border-ring"
-          />
-          <Button size="sm" variant="outline" disabled={!response.trim() || reply.isPending} onClick={submit}>
-            {reply.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
-            Reply & Resolve
-          </Button>
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && draft.trim()) submit();
+          }}
+          placeholder="Write a reply…"
+          className="max-w-xs flex-1 rounded-lg border bg-transparent px-2.5 py-1 text-xs outline-none focus-visible:border-ring"
+        />
+        <Button size="sm" variant="outline" disabled={!draft.trim() || reply.isPending} onClick={submit}>
+          {reply.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
+          Reply
+        </Button>
+      </div>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: AdminSupportTicket["status"] }) {
   const styles: Record<AdminSupportTicket["status"], string> = {
+    Answered: "bg-violet-500/10 text-violet-700 dark:text-violet-400",
+    Closed: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
     Investigating: "bg-sky-500/10 text-sky-700 dark:text-sky-400",
     Open: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-    Resolved: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   };
   return (
     <span className={cn("rounded px-2 py-0.5 text-[10px] font-bold uppercase", styles[status])}>
       {status}
+    </span>
+  );
+}
+
+function PriorityBadge({ priority }: { priority: AdminSupportTicket["priority"] }) {
+  const styles: Record<AdminSupportTicket["priority"], string> = {
+    High: "bg-red-500/10 text-red-700 dark:text-red-400",
+    Low: "bg-muted text-muted-foreground",
+    Medium: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  };
+  return (
+    <span className={cn("rounded px-2 py-0.5 text-[10px] font-bold uppercase", styles[priority])}>
+      {priority}
     </span>
   );
 }

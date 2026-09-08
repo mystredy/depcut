@@ -7,7 +7,6 @@ import {
   withDepCutAuth,
 } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
-import { notifyUserEverywhere } from "@/lib/notify";
 
 export const dynamic = "force-dynamic";
 
@@ -15,13 +14,13 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 const updateSchema = z
   .object({
-    status: z.enum(["Open", "Investigating", "Resolved"]).optional(),
-    response: z.string().trim().max(4000).optional(),
+    status: z.enum(["Open", "Investigating", "Answered", "Closed"]).optional(),
+    priority: z.enum(["Low", "Medium", "High"]).optional(),
   })
   .strict();
 
-// Super-user only. "Reply & Resolve" sends response + status: "Resolved" in
-// one call; a bare status change (e.g. marking "Investigating") omits it.
+// Super-user only. A bare status or priority change — no message. See
+// [id]/messages/route.ts for replying, which sets status itself.
 export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
   if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
@@ -50,38 +49,7 @@ export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
     );
   }
 
-  const isResolving = parsed.data.status === "Resolved";
-  const ticket = await prisma.supportTicket.update({
-    data: {
-      ...parsed.data,
-      ...(isResolving
-        ? { resolvedAt: new Date(), resolvedById: request.depcut.userId }
-        : {}),
-    },
-    include: { user: { select: { displayName: true, email: true, name: true } } },
-    where: { id },
-  });
+  await prisma.supportTicket.update({ data: parsed.data, where: { id } });
 
-  // The only surface a raiser has for a reply — there's no ticket-status
-  // page and no email send for this yet. Also DMs Telegram for a raiser
-  // who's linked their bot and opted into telegramAlerts.
-  if (parsed.data.response) {
-    await notifyUserEverywhere({
-      body: parsed.data.response,
-      title: `Reply to "${ticket.subject}"`,
-      userId: ticket.userId,
-    });
-  }
-
-  return NextResponse.json({
-    ticket: {
-      ...ticket,
-      createdAt: ticket.createdAt.toISOString(),
-      updatedAt: ticket.updatedAt.toISOString(),
-      resolvedAt: ticket.resolvedAt?.toISOString() ?? null,
-      raisedByEmail: ticket.user.email,
-      raisedByName: ticket.user.displayName ?? ticket.user.name,
-      user: undefined,
-    },
-  });
+  return NextResponse.json({ ok: true });
 });

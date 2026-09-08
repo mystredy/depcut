@@ -63,7 +63,7 @@ model User {
   uploadsToPublish Upload[] @relation("UploadPublishBy")
   notifications Notification[]
   supportTicketsRaised   SupportTicket[] @relation("SupportTicketRaisedBy")
-  supportTicketsResolved SupportTicket[] @relation("SupportTicketResolvedBy")
+  supportMessagesSent    SupportMessage[] @relation("SupportMessageAuthor")
   creatorRateAccount CreatorRateAccount?
   withdrawals   Withdrawal[]
   financeTransactions FinanceTransaction[]

@@ -33,18 +33,26 @@ const createSchema = z
   .strict();
 
 // Selected explicitly so a ticket list never carries attachment bytes — just
-// each one's id and content type, enough to link to the route that serves it.
+// each message's id and content type, enough to link to the route that
+// serves it.
 const listSelect = {
   id: true,
   number: true,
   subject: true,
-  message: true,
   status: true,
-  response: true,
+  priority: true,
+  lastReplyAt: true,
   createdAt: true,
-  updatedAt: true,
-  resolvedAt: true,
-  attachments: { select: { id: true, contentType: true } },
+  messages: {
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      authorId: true,
+      message: true,
+      createdAt: true,
+      attachments: { select: { id: true, contentType: true } },
+    },
+  },
 } as const;
 
 export const POST = withDepCutAuth(async (request) => {
@@ -62,7 +70,7 @@ export const POST = withDepCutAuth(async (request) => {
     );
   }
 
-  const { attachments: rawAttachments, ...fields } = parsed.data;
+  const { subject, message, attachments: rawAttachments } = parsed.data;
   // A fresh ArrayBuffer copy per file — Prisma's Bytes input wants a
   // Uint8Array<ArrayBuffer> specifically, which sidesteps Buffer's wider
   // (and here, pooled) ArrayBufferLike typing.
@@ -79,9 +87,15 @@ export const POST = withDepCutAuth(async (request) => {
   const [ticket, user] = await Promise.all([
     prisma.supportTicket.create({
       data: {
-        ...fields,
+        subject,
         userId: request.depcut.userId,
-        attachments: { create: attachments.map((a) => ({ contentType: a.contentType, data: a.data })) },
+        messages: {
+          create: {
+            authorId: request.depcut.userId,
+            message,
+            attachments: { create: attachments.map((a) => ({ contentType: a.contentType, data: a.data })) },
+          },
+        },
       },
       select: listSelect,
     }),
@@ -92,7 +106,7 @@ export const POST = withDepCutAuth(async (request) => {
   ]);
 
   const requesterName = user?.displayName || user?.name || user?.email || "a user";
-  const detailText = `🆘 Support ticket TKT-${1000 + ticket.number} from ${requesterName}\n${ticket.subject}\n\n${ticket.message}`;
+  const detailText = `🆘 Support ticket TKT-${1000 + ticket.number} from ${requesterName}\n${ticket.subject}\n\n${message}`;
   await notifyTelegramWithMedia("supportTicket", detailText, attachments);
 
   return NextResponse.json({ ticket });
