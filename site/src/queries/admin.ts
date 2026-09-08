@@ -39,6 +39,7 @@ export const adminFinanceTransactionsQueryKey = (filters: {
 }) => ["admin", "finance-transactions", filters.user ?? "", filters.type ?? "", filters.status ?? ""] as const;
 export const adminFinanceGiveawaysQueryKey = ["admin", "finance-giveaways"] as const;
 export const adminFinanceReferralsQueryKey = ["admin", "finance-referrals"] as const;
+export const adminFinanceAffiliatesQueryKey = ["admin", "finance-affiliates"] as const;
 export const adminFinanceOverviewQueryKey = ["admin", "finance-overview"] as const;
 export const adminCreatorApplicationsQueryKey = ["admin", "creator-applications"] as const;
 export const adminTasksQueryKey = ["admin", "tasks"] as const;
@@ -98,6 +99,7 @@ export type AdminFinanceSettings = {
   methodTonWallet: boolean;
   methodStars: boolean;
   methodCrypto: boolean;
+  affiliateCommissionRates: number;
   updatedAt: string;
 };
 
@@ -187,6 +189,17 @@ export type AdminGiveawayPayment = {
   status: "Pending" | "Paid" | "Rejected";
   paidBy: string | null;
   paidDate: string | null;
+  createdAt: string;
+};
+
+export type AdminAffiliate = {
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userImage: string | null;
+  code: string;
+  referralCount: number;
+  totalCommissionRates: number;
   createdAt: string;
 };
 
@@ -1444,6 +1457,13 @@ export function useUpdateGiveaway() {
       queryClient.invalidateQueries({ queryKey: adminFinanceGiveawaysQueryKey });
       queryClient.invalidateQueries({ queryKey: ["admin", "finance-transactions"] });
     },
+  });
+}
+
+export function useAdminFinanceAffiliates() {
+  return useQuery({
+    queryFn: () => apiFetch<{ affiliates: AdminAffiliate[] }>("/api/admin/finance/affiliates"),
+    queryKey: adminFinanceAffiliatesQueryKey,
   });
 }
 

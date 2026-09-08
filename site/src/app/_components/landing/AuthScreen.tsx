@@ -7,8 +7,12 @@ import { useCallback, useEffect, useState } from "react";
 
 import { TopNav } from "@/app/_components/landing/TopNav";
 import { CutFooter } from "@/app/cut/_components/landing/CutFooter";
+import { AFFILIATE_REF_COOKIE } from "@/lib/affiliate/constants";
 import { authClient, useHydrationSafeSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
+
+const REF_CODE_RE = /^[A-Z0-9]{4,16}$/;
+const REF_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
 
 type AuthMode = "sign-in" | "sign-up";
 
@@ -74,6 +78,17 @@ export function AuthScreen({ mode }: Props) {
     const searchParams = new URLSearchParams(window.location.search);
     router.replace(searchParams.get("callbackURL") ?? "/app");
   }, [session, router]);
+
+  // A referral link is /sign-up?ref=CODE. The code rides a cookie (not the
+  // URL) across the Google OAuth round-trip, so it's still readable from
+  // auth.ts's user.create hook once the callback lands and creates the
+  // account — by then the ?ref= query param itself is long gone.
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref")?.toUpperCase();
+    if (ref && REF_CODE_RE.test(ref)) {
+      document.cookie = `${AFFILIATE_REF_COOKIE}=${ref}; path=/; max-age=${REF_COOKIE_MAX_AGE}; SameSite=Lax`;
+    }
+  }, []);
 
   const handleGoogleAuth = useCallback(async () => {
     const searchParams = new URLSearchParams(window.location.search);

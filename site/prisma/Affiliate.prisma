@@ -1,0 +1,31 @@
+// The affiliate program: any signed-in user can generate a referral link and
+// earns a flat Rates commission for every new account that signs up through
+// it. Distinct from Finance.prisma's ReferralCommission, the older, fully
+// manual referral ledger with no real attribution — commissions here are
+// posted automatically by lib/affiliate/attribute-referral.ts.
+
+model Affiliate {
+  userId    String              @id
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String              @unique
+  referrals AffiliateReferral[]
+  createdAt DateTime            @default(now())
+
+  @@map("affiliate")
+}
+
+// One row per attributed signup. referredUserId is unique so a person is
+// ever credited to at most one affiliate. commissionRates is captured at
+// signup time so a later admin rate change never reprices a past referral.
+model AffiliateReferral {
+  id              String    @id @default(cuid())
+  affiliateId     String
+  affiliate       Affiliate @relation(fields: [affiliateId], references: [userId], onDelete: Cascade)
+  referredUserId  String    @unique
+  referredUser    User      @relation("AffiliateReferredUser", fields: [referredUserId], references: [id], onDelete: Cascade)
+  commissionRates Int
+  createdAt       DateTime  @default(now())
+
+  @@index([affiliateId])
+  @@map("affiliate_referral")
+}

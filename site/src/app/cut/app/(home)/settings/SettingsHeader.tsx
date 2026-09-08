@@ -26,6 +26,12 @@ const SECTIONS = [
     pinned: false,
   },
   {
+    suffix: "/settings/affiliate",
+    title: "Affiliate",
+    description: "Your referral link and commissions.",
+    pinned: false,
+  },
+  {
     suffix: "/settings/profile",
     title: "Profile",
     pinned: true,

@@ -70,6 +70,8 @@ model User {
   giveawayPayments GiveawayPayment[]
   referralCommission ReferralCommission?
   creatorApplication CreatorApplication?
+  affiliate          Affiliate?
+  affiliateReferral  AffiliateReferral? @relation("AffiliateReferredUser")
 
   @@map("user")
 }
