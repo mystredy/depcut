@@ -137,6 +137,19 @@ export const useExports = create<ExportsState>((set, get) => ({
         ),
       }));
     };
+    // A tab a mobile OS suspends mid-render (backgrounded, screen locked) never
+    // rejects on its own — its in-flight fetches just hang — so the render sits
+    // at 0% forever with nothing to catch. Silence past this long, with the tab
+    // never having claimed a job either, means the render is stuck rather than
+    // slow: abort it and fall through to the worker below instead of leaving it
+    // spinning.
+    const STALL_MS = 30_000;
+    let lastProgressAt = Date.now();
+    const stallTimer = inBrowser
+      ? setInterval(() => {
+          if (!claimedId && Date.now() - lastProgressAt > STALL_MS) abort!.abort();
+        }, 5_000)
+      : null;
     try {
       if (inBrowser) {
         await runBrowserExport(projectId, doc, settings, {
@@ -146,12 +159,15 @@ export const useExports = create<ExportsState>((set, get) => ({
           // done with it.
           onClaimed: (jobId) => {
             claimedId = jobId;
+            lastProgressAt = Date.now();
             set((s) => ({ rendering: [...new Set([...s.rendering, jobId])] }));
           },
-          onProgress: (progress) =>
+          onProgress: (progress) => {
+            lastProgressAt = Date.now();
             set((s) => ({
               local: s.local.map((r) => (r.id === localId ? { ...r, progress } : r)),
-            })),
+            }));
+          },
         });
       } else {
         await createExportJob(projectId, doc, settings);
@@ -166,14 +182,33 @@ export const useExports = create<ExportsState>((set, get) => ({
       set((s) => ({ local: s.local.filter((r) => r.id !== localId) }));
     } catch (err) {
       release();
-      // A render the user stopped leaves no row at all — the dock already
-      // showed it going, and an error card for their own cancel reads as a
-      // failure.
-      if (err instanceof DOMException && err.name === "AbortError") {
-        set((s) => ({ local: s.local.filter((r) => r.id !== localId) }));
-        return;
+      // cancel() removes the local row before aborting, so it is gone by the
+      // time this runs for a stop the user asked for — nothing left to do. A
+      // row still here means the abort (or failure) was this render's own, not
+      // a stop: a cloud project has a second machine for exactly this, so the
+      // documented behavior is to hand it off rather than surface an error.
+      const ownAbort = err instanceof DOMException && err.name === "AbortError";
+      const stillHere = get().local.some((r) => r.id === localId);
+      if (ownAbort && !stillHere) return;
+      if (inBrowser && stillHere) {
+        set((s) => ({
+          local: s.local.map((r) =>
+            r.id === localId ? { ...r, status: "preparing" as const, progress: undefined, abort: undefined } : r
+          ),
+        }));
+        try {
+          await createExportJob(projectId, doc, settings);
+          await get().refresh().catch(() => {});
+          set((s) => ({ local: s.local.filter((r) => r.id !== localId) }));
+          return;
+        } catch (fallbackErr) {
+          fail(fallbackErr);
+          return;
+        }
       }
       fail(err);
+    } finally {
+      if (stallTimer) clearInterval(stallTimer);
     }
   },
 
