@@ -40,6 +40,7 @@ const updateSchema = z
     methodTonWallet: z.boolean().optional(),
     methodStars: z.boolean().optional(),
     methodCrypto: z.boolean().optional(),
+    affiliateCommissionRates: z.number().int().min(0).optional(),
   })
   .strict();
 

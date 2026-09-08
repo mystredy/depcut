@@ -4,6 +4,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 
 import { DEPCUT_CANONICAL } from "@/cut/lib/hosts";
+import { attributeAffiliateReferral } from "@/lib/affiliate/attribute-referral";
 import { formatUsd } from "@/lib/credits/format-usd";
 import { provisionSignupGrants } from "@/lib/onboarding/signup-grants";
 import { prisma } from "@/lib/prisma";
@@ -91,6 +92,7 @@ export const auth = betterAuth({
         after: async (user, context) => {
           await provisionSignupGrants(user.id);
           await notifyNewSignup(user.id, user.name, context?.request?.headers ?? null);
+          await attributeAffiliateReferral(user.id, context?.request?.headers ?? null);
         },
       },
     },

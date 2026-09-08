@@ -9,6 +9,7 @@ import {
   CreditCard,
   EllipsisVertical,
   LayoutGrid,
+  Link2,
   LogOut,
   MessageCircleHeart,
   Monitor,
@@ -212,6 +213,9 @@ export function NavUser() {
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => router.push(`${base}/settings/payouts`)}>
             <Wallet /> Payouts
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push(`${base}/settings/affiliate`)}>
+            <Link2 /> Affiliate
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setCreatorApplicationOpen(true)}>
             <Clapperboard /> Apply to be creator

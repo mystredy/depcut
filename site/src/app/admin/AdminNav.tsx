@@ -160,6 +160,7 @@ const SECTIONS: NavSection[] = [
       { label: "Payout Queue", href: "/admin/finance/payout-queue", icon: Layers, color: "text-indigo-500" },
       { label: "Giveaways", href: "/admin/finance/giveaways", icon: Gift, color: "text-pink-500" },
       { label: "Referrals", href: "/admin/finance/referrals", icon: Users2, color: "text-violet-500" },
+      { label: "Affiliates", href: "/admin/finance/affiliates", icon: Link2, color: "text-yellow-500" },
       { label: "Payment Methods", href: "/admin/finance/payment-methods", icon: CreditCard, color: "text-cyan-500" },
       { label: "AI Credits", href: "/admin/finance/ai-credits", icon: Zap, color: "text-yellow-500" },
       { label: "Reports", href: "/admin/finance/reports", icon: FileText, color: "text-orange-500" },
@@ -178,7 +179,6 @@ const SECTIONS: NavSection[] = [
       { label: "Onboarding", href: "/admin/onboarding", icon: Sparkles, color: "text-teal-500" },
     ],
   },
-  { kind: "leaf", id: "affiliates", label: "Affiliates", icon: Link2, color: "text-yellow-500", href: soon("Affiliates") },
   {
     kind: "group",
     id: "api-integration",

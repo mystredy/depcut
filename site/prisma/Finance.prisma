@@ -79,6 +79,9 @@ model FinanceSettings {
   methodTonWallet   Boolean  @default(false)
   methodStars       Boolean  @default(false)
   methodCrypto      Boolean  @default(false)
+  // Rates paid to an affiliate for every qualified new signup through their
+  // referral link. See Affiliate.prisma.
+  affiliateCommissionRates Int @default(100)
   updatedAt         DateTime @updatedAt
 
   @@map("finance_settings")
