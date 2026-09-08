@@ -152,7 +152,7 @@ export default function InspirationPage() {
   const createDraft = useCreateDraftSubmission();
   const goToSubmit = () => {
     createDraft.mutate(undefined, {
-      onSuccess: (data) => router.push(`${base}/creator-hub/submit-project/${data.submission.id}`),
+      onSuccess: (data) => router.push(`${base}/artist/submit-project/${data.submission.id}`),
       onError: (error) => {
         setToastIsError(true);
         setToastMessage(error instanceof Error ? error.message : "Couldn't start a new submission.");

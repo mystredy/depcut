@@ -33,7 +33,7 @@ type ShowcaseItem = {
 };
 
 // No showcase backend exists yet (no public-project submission or feed
-// table) — same situation Creator Hub's Inspiration board was in, so this
+// table) — same situation Artist's Inspiration board was in, so this
 // follows its pattern: a local seed list standing in for what a real feed
 // would serve, with real filter/search/sort logic against it. Category
 // names are the real marketplace taxonomy (useCategories), not invented.

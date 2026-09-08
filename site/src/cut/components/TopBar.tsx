@@ -157,7 +157,7 @@ export function TopBar({
     const projectId = useEditor.getState().projectId;
     if (!projectId) return;
     createSubmission.mutate(projectId, {
-      onSuccess: (data) => router.push(`${base}/creator-hub/submit-project/${data.submission.id}`),
+      onSuccess: (data) => router.push(`${base}/artist/submit-project/${data.submission.id}`),
       onError: (e) => setSubmitError(e instanceof Error ? e.message : "Could not start the submission."),
     });
   };

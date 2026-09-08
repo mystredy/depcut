@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 // Super-user only. Every Inspire-mode task campaign. The creator-facing
 // Inspiration board doesn't read from this table yet (it's seeded locally —
-// see src/app/cut/app/(home)/creator-hub/inspiration/page.tsx) but this is
+// see src/app/cut/app/(home)/artist/inspiration/page.tsx) but this is
 // the real table it's meant to eventually read from.
 export const GET = withDepCutAuth(async (request) => {
   if (!(await isDepCutSuperUser(request.depcut.userId))) {

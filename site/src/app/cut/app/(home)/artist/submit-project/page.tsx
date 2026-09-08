@@ -24,7 +24,7 @@ export default function SubmitProjectLandingPage() {
     firedRef.current = true;
     createDraft.mutate(undefined, {
       onSuccess: (data) => {
-        router.replace(`${base}/creator-hub/submit-project/${data.submission.id}`);
+        router.replace(`${base}/artist/submit-project/${data.submission.id}`);
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -37,7 +37,7 @@ export default function SubmitProjectLandingPage() {
         <p className="text-destructive">
           {createDraft.error instanceof Error ? createDraft.error.message : "Couldn't start a new submission."}
         </p>
-        <Link href={`${base}/creator-hub/my-projects`} className="font-medium text-primary underline">
+        <Link href={`${base}/artist/my-projects`} className="font-medium text-primary underline">
           Back to My Submissions
         </Link>
       </div>

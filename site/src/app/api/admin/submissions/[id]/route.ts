@@ -102,7 +102,7 @@ export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
       prisma.notification.create(
         notifyUser({
           body: `"${submission.title}" earned ${earnedRates} Rates.${input.remark ? ` ${input.remark}` : ""}`,
-          link: "/app/creator-hub/my-projects",
+          link: "/app/artist/my-projects",
           title: "Submission approved",
           userId: submission.userId,
         }),
@@ -126,7 +126,7 @@ export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
       prisma.notification.create(
         notifyUser({
           body: `"${submission.title}" wasn't approved.${input.remark ? ` ${input.remark}` : ""}`,
-          link: "/app/creator-hub/my-projects",
+          link: "/app/artist/my-projects",
           title: "Submission rejected",
           userId: submission.userId,
         }),

@@ -16,7 +16,7 @@ import { postSpaceVideo, spacePostsQueryKey, useCreateSpacePost, useSpacePosts }
 import { cn } from "@/lib/utils";
 
 // Posts a finished export to My Space. Deliberately just "attach the video
-// you already exported" — the same manual drop-a-file step Creator Hub's
+// you already exported" — the same manual drop-a-file step Artist's
 // Submit already uses (there's no render pipeline behind either one; Export
 // is what renders, this just uploads what it produced) — rather than
 // re-rendering the project itself.

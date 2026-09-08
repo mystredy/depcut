@@ -59,8 +59,8 @@ export const GROUPS: NavGroup[] = [
   },
 ];
 
-export const CREATOR_HUB_GROUP: NavGroup = {
-  key: "creator-hub",
+export const ARTIST_GROUP: NavGroup = {
+  key: "artist",
   label: "Artist",
   icon: Video,
   children: [
@@ -69,11 +69,11 @@ export const CREATOR_HUB_GROUP: NavGroup = {
   ],
 };
 
-export const ALL_GROUPS = [...GROUPS, CREATOR_HUB_GROUP];
+export const ALL_GROUPS = [...GROUPS, ARTIST_GROUP];
 
 /** The current page's label, for the header's page-title pill. */
 export function pageTitleForPath(pathname: string, base: string): string {
-  // The Projects page's nav entry was "My Projects" (its Creator Hub link)
+  // The Projects page's nav entry was "My Projects" (its Artist group link)
   // label; we've renamed the link to "My Submissions" but the page itself
   // is still titled "Projects".
   if (pathname === `${base}/projects`) return "Projects";

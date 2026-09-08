@@ -5,7 +5,7 @@ import type React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight, Shield, X } from "lucide-react";
-import { ALL_GROUPS, CREATOR_HUB_GROUP, GROUPS, LINKS, type NavGroup } from "@/cut/lib/navData";
+import { ALL_GROUPS, ARTIST_GROUP, GROUPS, LINKS, type NavGroup } from "@/cut/lib/navData";
 import { homeHref, useCutBase } from "@/cut/lib/nav";
 import { useMobileSidebar } from "@/cut/lib/mobileSidebar";
 import { useAccount } from "@/queries/credits";
@@ -205,7 +205,7 @@ export function AppSidebar() {
             })}
             {GROUPS.map(renderRailGroup)}
             <div className={cn("border-t border-sidebar-border", isMobile ? "mt-3 pt-3" : "mt-4 pt-4")}>
-              {renderRailGroup(CREATOR_HUB_GROUP)}
+              {renderRailGroup(ARTIST_GROUP)}
             </div>
             {account.data?.superUser && (
               <Link
@@ -259,7 +259,7 @@ export function AppSidebar() {
               })}
               {GROUPS.map(renderGroup)}
             </nav>
-            <div className="mt-4 border-t border-sidebar-border pt-4">{renderGroup(CREATOR_HUB_GROUP)}</div>
+            <div className="mt-4 border-t border-sidebar-border pt-4">{renderGroup(ARTIST_GROUP)}</div>
             {account.data?.superUser && (
               <div className="mt-4 border-t border-sidebar-border pt-4">
                 <Link

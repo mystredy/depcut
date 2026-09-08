@@ -95,7 +95,7 @@ export default function MyProjectsPage() {
   const [playItem, setPlayItem] = useState<Submission | null>(null);
   const [deleteItem, setDeleteItem] = useState<Submission | null>(null);
 
-  const goToSubmission = (id: string) => router.push(`${base}/creator-hub/submit-project/${id}`);
+  const goToSubmission = (id: string) => router.push(`${base}/artist/submit-project/${id}`);
   const confirmDelete = () => {
     if (!deleteItem) return;
     deleteSubmission.mutate(deleteItem.id, { onSuccess: () => setDeleteItem(null) });

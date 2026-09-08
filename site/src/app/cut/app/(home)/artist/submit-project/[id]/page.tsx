@@ -733,7 +733,7 @@ export default function SubmitProjectEditorPage() {
     return (
       <div className="mx-auto max-w-5xl space-y-3 p-6">
         <p className="text-sm text-muted-foreground">Couldn't find that submission.</p>
-        <Button variant="outline" onClick={() => router.push(`${base}/creator-hub/my-projects`)}>
+        <Button variant="outline" onClick={() => router.push(`${base}/artist/my-projects`)}>
           Back to My Submissions
         </Button>
       </div>
@@ -1586,7 +1586,7 @@ export default function SubmitProjectEditorPage() {
               type="button"
               variant="outline"
               className="w-full"
-              onClick={() => router.push(`${base}/creator-hub/my-projects`)}
+              onClick={() => router.push(`${base}/artist/my-projects`)}
             >
               Back to My Submissions
             </Button>
