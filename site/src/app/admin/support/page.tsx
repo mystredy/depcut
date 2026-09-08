@@ -4,6 +4,13 @@ import { useState } from "react";
 import { HelpCircle, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
@@ -99,20 +106,26 @@ function TicketCard({ ticket }: { ticket: AdminSupportTicket }) {
           <PriorityBadge priority={ticket.priority} />
         </div>
         <div className="flex items-center gap-2">
-          <select
+          <Select
             value={ticket.priority}
-            onChange={(e) =>
+            onValueChange={(value) =>
               setPriority.mutate({
                 id: ticket.id,
-                priority: e.target.value as AdminSupportTicket["priority"],
+                priority: value as AdminSupportTicket["priority"],
               })
             }
-            className="rounded-lg border border-input bg-transparent px-2 py-1 text-xs outline-none focus-visible:border-ring"
           >
-            <option value="Low">Low</option>
-            <option value="Medium">Medium</option>
-            <option value="High">High</option>
-          </select>
+            <SelectTrigger size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {(["Low", "Medium", "High"] as const).map((p) => (
+                <SelectItem key={p} value={p}>
+                  <PriorityDot priority={p} /> {p}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {ticket.status === "Open" && (
             <Button
               size="sm"
@@ -232,4 +245,16 @@ function PriorityBadge({ priority }: { priority: AdminSupportTicket["priority"] 
       {priority}
     </span>
   );
+}
+
+// The priority Select's own value and each option lead with this dot —
+// same three colors as PriorityBadge above, just as a glance-able swatch
+// instead of a colored pill (the dropdown already reads as "priority").
+function PriorityDot({ priority }: { priority: AdminSupportTicket["priority"] }) {
+  const colors: Record<AdminSupportTicket["priority"], string> = {
+    High: "bg-red-500",
+    Low: "bg-muted-foreground/50",
+    Medium: "bg-amber-500",
+  };
+  return <span className={cn("size-1.5 shrink-0 rounded-full", colors[priority])} />;
 }
