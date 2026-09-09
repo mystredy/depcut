@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-import { ArtistGuard } from "@/cut/components/ArtistGuard";
+import { PayoutsGuard } from "@/cut/components/PayoutsGuard";
 
 export default function PayoutsLayout({ children }: { children: ReactNode }) {
-  return <ArtistGuard>{children}</ArtistGuard>;
+  return <PayoutsGuard>{children}</PayoutsGuard>;
 }

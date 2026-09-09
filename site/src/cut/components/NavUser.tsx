@@ -212,7 +212,7 @@ export function NavUser() {
           <DropdownMenuItem onClick={() => router.push(`${base}/settings/usage`)}>
             <ChartColumn /> Usage
           </DropdownMenuItem>
-          {account.data?.isArtist && (
+          {account.data?.payoutsEligible && (
             <DropdownMenuItem onClick={() => router.push(`${base}/settings/payouts`)}>
               <Wallet /> Payouts
             </DropdownMenuItem>

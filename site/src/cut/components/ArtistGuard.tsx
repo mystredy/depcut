@@ -10,11 +10,12 @@ import { signInUrl } from "@/cut/lib/generate";
 import { authClient } from "@/lib/auth-client";
 import { useAccount } from "@/queries/credits";
 
-// Gates Inspiration, My Submissions, Submit Project, and Payouts — every
-// surface that only makes sense once someone is an artist. Unlike AdminGuard,
-// a non-artist isn't hiding anything shady: they land on a page that offers
-// the same "Apply to be creator" flow the account menu does, since Artist is
-// a program anyone can ask to join.
+// Gates Inspiration, My Submissions, and Submit Project — every surface that
+// only makes sense once someone is a DepArtist. Payouts is broader (see
+// PayoutsGuard: any earning program grants it, not just this one). Unlike
+// AdminGuard, a non-artist isn't hiding anything shady: they land on a page
+// that offers the same "Apply to be creator" flow the account menu does,
+// since Artist is a program anyone can ask to join.
 export function ArtistGuard({ children }: { children: ReactNode }) {
   const { data: session, isPending: sessionPending } = authClient.useSession();
   const account = useAccount();

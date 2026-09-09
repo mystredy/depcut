@@ -37,6 +37,9 @@ export type Account = {
   email: string | null;
   superUser: boolean;
   isArtist: boolean;
+  // Earns from any program — DepArtist or Affiliate today. Gates Payouts,
+  // which is shared across every earning program rather than owned by one.
+  payoutsEligible: boolean;
 };
 
 export function useCreditBalance() {
