@@ -141,6 +141,9 @@ export type AdminCreatorRateAccount = {
   // application or a direct grant here. False for a user who just happens to
   // match the search but has never been made an artist.
   hasAccount: boolean;
+  // "Standard" | "Pro". "Standard" for a user with no account yet too — it's
+  // the default a grant would apply, not a claim they have one.
+  tier: string;
 };
 
 export type AdminCreatorApplication = {
@@ -442,6 +445,10 @@ export type AdminSettings = {
   betaMode: boolean;
   creditRateCredits: number;
   creditRateDollars: number;
+  // Gates the editor's Submit button and /app/artist/submit-project to
+  // Pro-tier artists only; Standard artists see it locked. See
+  // CreatorRateAccount.tier.
+  submitProjectRequiresPro: boolean;
   updatedAt: string;
 };
 
@@ -1303,6 +1310,7 @@ export function useAdminFinanceRates(q: string) {
 
 export type AdjustCreatorRateInput =
   | { userId: string; action: "grant" | "reset-pending" | "reset-available" | "transfer-pending-to-available" }
+  | { userId: string; action: "set-tier"; tier: "Standard" | "Pro" }
   | {
       userId: string;
       action: "adjust";

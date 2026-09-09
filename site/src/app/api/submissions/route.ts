@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { isDepCutArtist, withDepCutAuth } from "@/lib/depcut-api-auth";
+import { canDepCutSubmitProject, isDepCutArtist, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -26,13 +26,20 @@ const MAX_OPEN_DRAFTS = 3;
 // already has one continues that draft instead of creating a duplicate and
 // silently eating a slot toward MAX_OPEN_DRAFTS.
 //
-// Artist-only. Everything downstream of a submission (its own routes, asset
-// uploads) trusts ownership alone because a non-artist can never get a row
-// created here in the first place.
+// Artist-only, and Pro-only when an admin has turned that on. Everything
+// downstream of a submission (its own routes, asset uploads) trusts
+// ownership alone because a row can never get created here without passing
+// this check first.
 export const POST = withDepCutAuth(async (request) => {
   if (!(await isDepCutArtist(request.depcut.userId))) {
     return NextResponse.json(
       { error: "Forbidden", message: "Artist access required." },
+      { status: 403 },
+    );
+  }
+  if (!(await canDepCutSubmitProject(request.depcut.userId))) {
+    return NextResponse.json(
+      { error: "Forbidden", message: "Submit Project requires Pro tier." },
       { status: 403 },
     );
   }

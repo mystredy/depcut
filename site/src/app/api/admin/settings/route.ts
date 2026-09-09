@@ -97,6 +97,7 @@ const updateSchema = z
     betaMode: z.boolean().optional(),
     creditRateCredits: z.number().int().min(1).max(1_000_000).optional(),
     creditRateDollars: z.number().int().min(1).max(1_000_000).optional(),
+    submitProjectRequiresPro: z.boolean().optional(),
   })
   .strict();
 

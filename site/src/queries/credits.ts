@@ -37,10 +37,21 @@ export type Account = {
   email: string | null;
   superUser: boolean;
   isArtist: boolean;
+  // "Standard" | "Pro" | null — null when not an artist.
+  creatorTier: string | null;
+  // Whether an admin has gated Submit Project to Pro artists only.
+  submitProjectRequiresPro: boolean;
   // Earns from any program — DepArtist or Affiliate today. Gates Payouts,
   // which is shared across every earning program rather than owned by one.
   payoutsEligible: boolean;
 };
+
+// Can this artist use Submit Project right now, given the site's current
+// Pro-gate setting.
+export function canSubmitProject(account: Account | undefined): boolean {
+  if (!account?.isArtist) return false;
+  return !account.submitProjectRequiresPro || account.creatorTier === "Pro";
+}
 
 export function useCreditBalance() {
   return useQuery({
