@@ -39,7 +39,11 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { OAUTH_CAPABLE_PLATFORMS, YOUTUBE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
+import {
+  OAUTH_CAPABLE_PLATFORMS,
+  PUBLISHABLE_PLATFORMS,
+  YOUTUBE_PLATFORMS,
+} from "@/lib/marketplace/oauth-providers";
 import { SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
 import { cn } from "@/lib/utils";
 import {
@@ -184,6 +188,7 @@ function ConnectionCard({ connection }: { connection: AdminSocialConnection }) {
   const [viewingAnalytics, setViewingAnalytics] = useState(false);
   const Icon = PLATFORM_ICONS[connection.platform] ?? Link2;
   const isYoutube = YOUTUBE_PLATFORMS.includes(connection.platform);
+  const isPublishable = PUBLISHABLE_PLATFORMS.includes(connection.platform);
 
   const expiryLabel = connection.tokenExpiresAt
     ? new Date(connection.tokenExpiresAt) < new Date()
@@ -230,29 +235,29 @@ function ConnectionCard({ connection }: { connection: AdminSocialConnection }) {
         </button>
         {menuOpen && (
           <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border bg-popover p-1 text-xs shadow-md">
+            {isPublishable && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPosting(true);
+                  setMenuOpen(false);
+                }}
+                className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+              >
+                Post video
+              </button>
+            )}
             {isYoutube && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPosting(true);
-                    setMenuOpen(false);
-                  }}
-                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
-                >
-                  Post video
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setViewingAnalytics(true);
-                    setMenuOpen(false);
-                  }}
-                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
-                >
-                  View analytics
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewingAnalytics(true);
+                  setMenuOpen(false);
+                }}
+                className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+              >
+                View analytics
+              </button>
             )}
             <button
               type="button"
@@ -280,11 +285,11 @@ function ConnectionCard({ connection }: { connection: AdminSocialConnection }) {
         )}
       </div>
 
+      {isPublishable && (
+        <PostVideoDialog connection={connection} open={posting} onClose={() => setPosting(false)} />
+      )}
       {isYoutube && (
-        <>
-          <PostVideoDialog connection={connection} open={posting} onClose={() => setPosting(false)} />
-          <AnalyticsDialog connection={connection} open={viewingAnalytics} onClose={() => setViewingAnalytics(false)} />
-        </>
+        <AnalyticsDialog connection={connection} open={viewingAnalytics} onClose={() => setViewingAnalytics(false)} />
       )}
     </div>
   );
@@ -305,6 +310,11 @@ function PostVideoDialog({
   const [description, setDescription] = useState("");
   const [privacyStatus, setPrivacyStatus] = useState<"public" | "unlisted" | "private">("unlisted");
 
+  const isYoutubePlatform = YOUTUBE_PLATFORMS.includes(connection.platform);
+  const isTiktok = connection.platform === "tiktok";
+  const isX = connection.platform === "x";
+  const videoRequired = isYoutubePlatform || isTiktok;
+
   const close = () => {
     publish.reset();
     setVideoUrl("");
@@ -315,9 +325,23 @@ function PostVideoDialog({
   };
 
   const submit = () => {
-    if (!videoUrl.trim() || !title.trim()) return;
-    publish.mutate({ description: description.trim() || undefined, id: connection.id, privacyStatus, title: title.trim(), videoUrl: videoUrl.trim() });
+    if ((videoRequired && !videoUrl.trim()) || !title.trim()) return;
+    publish.mutate({
+      description: description.trim() || undefined,
+      id: connection.id,
+      privacyStatus,
+      title: title.trim(),
+      videoUrl: videoUrl.trim() || undefined,
+    });
   };
+
+  const published = publish.data?.published;
+  const publishedUrl =
+    published && "url" in published && typeof published.url === "string" ? published.url : null;
+  const publishedId =
+    published && "publishId" in published && typeof published.publishId === "string"
+      ? published.publishId
+      : null;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
@@ -326,8 +350,15 @@ function PostVideoDialog({
           <DialogTitle>Post to {connection.accountName}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
+          {isTiktok && (
+            <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-400">
+              TikTok forces unaudited apps to post private/self-only — this will land as a draft
+              visible only to the connected account until TikTok approves the app for public
+              posting.
+            </p>
+          )}
           <div className="space-y-1.5">
-            <Label className="text-xs">Video URL</Label>
+            <Label className="text-xs">Video URL{isX ? " (optional)" : ""}</Label>
             <Input
               value={videoUrl}
               onChange={(e) => setVideoUrl(e.target.value)}
@@ -340,35 +371,50 @@ function PostVideoDialog({
             </p>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Title</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Video title" />
+            <Label className="text-xs">{isX ? "Post text" : isTiktok ? "Caption" : "Title"}</Label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={isX ? 280 : undefined}
+              placeholder={isX ? "What's happening?" : isTiktok ? "Caption" : "Video title"}
+            />
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Description (optional)</Label>
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Privacy</Label>
-            <Select value={privacyStatus} onValueChange={(v) => setPrivacyStatus(v as typeof privacyStatus)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="unlisted">Unlisted</SelectItem>
-                <SelectItem value="public">Public</SelectItem>
-                <SelectItem value="private">Private</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {isYoutubePlatform && (
+            <>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Description (optional)</Label>
+                <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Privacy</Label>
+                <Select value={privacyStatus} onValueChange={(v) => setPrivacyStatus(v as typeof privacyStatus)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unlisted">Unlisted</SelectItem>
+                    <SelectItem value="public">Public</SelectItem>
+                    <SelectItem value="private">Private</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
           {publish.isError && (
             <p className="text-xs text-destructive">{(publish.error as Error).message}</p>
           )}
-          {publish.isSuccess && (
+          {publish.isSuccess && publishedUrl && (
             <p className="text-xs text-emerald-600 dark:text-emerald-400">
               Published:{" "}
-              <a href={publish.data.published.url} target="_blank" rel="noreferrer" className="underline">
-                {publish.data.published.url}
+              <a href={publishedUrl} target="_blank" rel="noreferrer" className="underline">
+                {publishedUrl}
               </a>
+            </p>
+          )}
+          {publish.isSuccess && !publishedUrl && publishedId && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400">
+              Submitted — publish ID {publishedId}. Check the connected account&apos;s TikTok app to
+              see it.
             </p>
           )}
         </div>
@@ -377,7 +423,10 @@ function PostVideoDialog({
             {publish.isSuccess ? "Close" : "Cancel"}
           </Button>
           {!publish.isSuccess && (
-            <Button disabled={!videoUrl.trim() || !title.trim() || publish.isPending} onClick={submit}>
+            <Button
+              disabled={(videoRequired && !videoUrl.trim()) || !title.trim() || publish.isPending}
+              onClick={submit}
+            >
               {publish.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
               Post
             </Button>

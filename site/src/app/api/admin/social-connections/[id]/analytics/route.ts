@@ -6,11 +6,8 @@ import {
   withDepCutAuth,
 } from "@/lib/depcut-api-auth";
 import { YOUTUBE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
-import {
-  getValidYoutubeAccessToken,
-  getYoutubeChannelAnalytics,
-  YoutubeApiError,
-} from "@/lib/marketplace/youtube-api";
+import { getValidAccessToken, SocialConnectionError } from "@/lib/marketplace/oauth-token-refresh";
+import { getYoutubeChannelAnalytics, YoutubeApiError } from "@/lib/marketplace/youtube-api";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -44,11 +41,11 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
   const days = Number.isFinite(daysParam) && daysParam > 0 ? Math.min(daysParam, 365) : 28;
 
   try {
-    const accessToken = await getValidYoutubeAccessToken(id);
+    const accessToken = await getValidAccessToken(id);
     const rows = await getYoutubeChannelAnalytics({ accessToken, days });
     return NextResponse.json({ rows });
   } catch (error) {
-    if (error instanceof YoutubeApiError) {
+    if (error instanceof SocialConnectionError || error instanceof YoutubeApiError) {
       return NextResponse.json({ error: "Analytics failed", message: error.message }, { status: 502 });
     }
     throw error;

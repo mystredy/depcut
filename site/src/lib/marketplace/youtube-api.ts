@@ -1,71 +1,10 @@
 // Real YouTube Data/Analytics API calls for a connected SocialConnection
-// (youtube or youtube_shorts platform) — token refresh, video publish, and
-// channel analytics. Used by /api/admin/social-connections/[id]/publish and
-// .../analytics, triggered manually from /admin/social/connections.
-import { getOAuthProvider } from "@/lib/marketplace/oauth-providers";
-import { prisma } from "@/lib/prisma";
-
+// (youtube or youtube_shorts platform) — video publish and channel
+// analytics. Used by /api/admin/social-connections/[id]/publish and
+// .../analytics, triggered manually from /admin/social/connections. Token
+// refresh is shared with every other standard-OAuth2 platform — see
+// oauth-token-refresh.ts.
 export class YoutubeApiError extends Error {}
-
-// Refreshes and persists a new access token when the stored one is missing,
-// expired, or expires within the next minute; otherwise returns it as-is.
-// Google issues a refresh token only on the first consent (extraAuthorizeParams
-// sends prompt=consent for exactly this reason) — a connection without one
-// needs a fresh Connect, not a refresh.
-export async function getValidYoutubeAccessToken(connectionId: string): Promise<string> {
-  const connection = await prisma.socialConnection.findUnique({ where: { id: connectionId } });
-  if (!connection) throw new YoutubeApiError("Connection not found.");
-
-  const expiresSoon =
-    !connection.accessToken ||
-    !connection.tokenExpiresAt ||
-    connection.tokenExpiresAt.getTime() - Date.now() < 60_000;
-  if (!expiresSoon) return connection.accessToken!;
-
-  if (!connection.refreshToken) {
-    throw new YoutubeApiError(
-      "This connection has no refresh token on file — remove it and connect again.",
-    );
-  }
-
-  const provider = getOAuthProvider(connection.platform);
-  if (!provider) throw new YoutubeApiError(`Unknown platform "${connection.platform}".`);
-
-  const config = await prisma.socialAppConfig.findUnique({ where: { platform: connection.platform } });
-  const credentials = (config?.credentials as Record<string, string> | null) ?? {};
-  const clientId = credentials[provider.clientIdField];
-  const clientSecret = credentials[provider.clientSecretField];
-  if (!clientId || !clientSecret) {
-    throw new YoutubeApiError(
-      `${connection.platform}'s App ID/Secret aren't configured under Settings → OAuth App.`,
-    );
-  }
-
-  const body = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
-    grant_type: "refresh_token",
-    refresh_token: connection.refreshToken,
-  });
-  const res = await fetch(provider.tokenUrl, {
-    body,
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    method: "POST",
-  });
-  const data = await res.json().catch(() => null);
-  if (!res.ok || !data?.access_token) {
-    await prisma.socialConnection.update({ data: { status: "inactive" }, where: { id: connectionId } });
-    throw new YoutubeApiError("Google rejected the token refresh — remove this connection and connect again.");
-  }
-
-  const tokenExpiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000) : null;
-  await prisma.socialConnection.update({
-    data: { accessToken: data.access_token, status: "active", tokenExpiresAt },
-    where: { id: connectionId },
-  });
-
-  return data.access_token as string;
-}
 
 // Fetches the video from videoUrl and re-uploads it to YouTube via the
 // resumable upload protocol. Buffers the whole video in memory — fine for

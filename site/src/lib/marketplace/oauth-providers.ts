@@ -113,7 +113,7 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
       };
     },
     platform: "tiktok",
-    scope: "user.info.basic",
+    scope: "user.info.basic,video.publish",
     tokenAuthStyle: "form_post",
     tokenUrl: "https://open.tiktokapis.com/v2/oauth/token/",
     usesPkce: true,
@@ -135,7 +135,7 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
       };
     },
     platform: "x",
-    scope: "tweet.read users.read offline.access",
+    scope: "tweet.read tweet.write users.read offline.access media.write",
     tokenAuthStyle: "form_post_basic_auth",
     tokenUrl: "https://api.twitter.com/2/oauth2/token",
     usesPkce: true,
@@ -218,3 +218,10 @@ export const OAUTH_CAPABLE_PLATFORMS = Object.keys(OAUTH_PROVIDERS);
 // pulls in the Prisma client, so client components can read this list
 // without bundling server-only code.
 export const YOUTUBE_PLATFORMS = ["youtube", "youtube_shorts"];
+
+// Platforms with a real "Post video" publish path today (see
+// /api/admin/social-connections/[id]/publish). Facebook, Instagram, and
+// Threads aren't here yet — they publish through a Page/Business Account,
+// which needs a picker step this connect flow doesn't have. Snapchat has
+// no public API for posting to a connected account at all.
+export const PUBLISHABLE_PLATFORMS = ["youtube", "youtube_shorts", "tiktok", "x"];

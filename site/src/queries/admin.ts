@@ -1714,6 +1714,13 @@ export function useDeleteSocialConnection() {
 // reachable (an R2 object, or any hosted file); there's no upload-from-disk
 // path yet, since Vercel's request body limit rules out routing a large
 // file straight through this endpoint.
+// Shape varies by platform: YouTube/X return a public url, TikTok returns
+// only a publishId (self-only posts have no shareable public link).
+export type PublishedResult =
+  | { videoId: string; url: string }
+  | { id: string; url: string }
+  | { publishId: string };
+
 export function usePublishSocialVideo() {
   return useMutation({
     mutationFn: ({
@@ -1721,15 +1728,15 @@ export function usePublishSocialVideo() {
       ...body
     }: {
       id: string;
-      videoUrl: string;
+      videoUrl?: string;
       title: string;
       description?: string;
       privacyStatus?: "public" | "unlisted" | "private";
     }) =>
-      apiFetch<{ published: { videoId: string; url: string } }>(
-        `/api/admin/social-connections/${id}/publish`,
-        { body: JSON.stringify(body), method: "POST" },
-      ),
+      apiFetch<{ published: PublishedResult }>(`/api/admin/social-connections/${id}/publish`, {
+        body: JSON.stringify(body),
+        method: "POST",
+      }),
   });
 }
 
