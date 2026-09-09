@@ -113,7 +113,7 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
       };
     },
     platform: "tiktok",
-    scope: "user.info.basic,video.publish",
+    scope: "user.info.profile,video.publish",
     tokenAuthStyle: "form_post",
     tokenUrl: "https://open.tiktokapis.com/v2/oauth/token/",
     usesPkce: true,
