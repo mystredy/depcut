@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -163,23 +162,6 @@ export default function AdminFinanceSettingsPage() {
                 <Input value={autoTransferDates} onChange={(e) => setAutoTransferDates(e.target.value)} />
               </div>
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Enabled Cashout Methods
-            </p>
-            {[
-              { label: "Bank Transfer", value: methodBank, set: setMethodBank },
-              { label: "TON Wallet", value: methodTonWallet, set: setMethodTonWallet },
-              { label: "Telegram Stars", value: methodStars, set: setMethodStars },
-              { label: "Crypto (USDT/USDC)", value: methodCrypto, set: setMethodCrypto },
-            ].map((m) => (
-              <div key={m.label} className="flex items-center justify-between rounded-xl border p-3">
-                <span className="text-sm font-medium">{m.label}</span>
-                <Switch checked={m.value} onCheckedChange={m.set} aria-label={m.label} />
-              </div>
-            ))}
           </div>
 
           <div className="flex justify-end pt-2">
