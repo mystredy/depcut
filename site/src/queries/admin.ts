@@ -1704,6 +1704,49 @@ export function useDeleteSocialConnection() {
   });
 }
 
+// Manually publishes to a connected YouTube / YouTube Shorts destination —
+// see /api/admin/social-connections/[id]/publish. videoUrl must already be
+// reachable (an R2 object, or any hosted file); there's no upload-from-disk
+// path yet, since Vercel's request body limit rules out routing a large
+// file straight through this endpoint.
+export function usePublishSocialVideo() {
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string;
+      videoUrl: string;
+      title: string;
+      description?: string;
+      privacyStatus?: "public" | "unlisted" | "private";
+    }) =>
+      apiFetch<{ published: { videoId: string; url: string } }>(
+        `/api/admin/social-connections/${id}/publish`,
+        { body: JSON.stringify(body), method: "POST" },
+      ),
+  });
+}
+
+export type SocialConnectionAnalyticsRow = {
+  day: string;
+  views: number;
+  estimatedMinutesWatched: number;
+  likes: number;
+  subscribersGained: number;
+};
+
+// Fetched on demand (not a background query) since it calls YouTube live —
+// see /api/admin/social-connections/[id]/analytics.
+export function useSocialConnectionAnalytics() {
+  return useMutation({
+    mutationFn: ({ id, days }: { id: string; days?: number }) =>
+      apiFetch<{ rows: SocialConnectionAnalyticsRow[] }>(
+        `/api/admin/social-connections/${id}/analytics${days ? `?days=${days}` : ""}`,
+      ),
+  });
+}
+
 export function useAdminSocialWorkflows() {
   return useQuery({
     queryFn: () => apiFetch<{ workflows: AdminSocialWorkflow[] }>("/api/admin/social-workflows"),

@@ -38,15 +38,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { OAUTH_CAPABLE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
+import { Textarea } from "@/components/ui/textarea";
+import { OAUTH_CAPABLE_PLATFORMS, YOUTUBE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
 import { SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
 import { cn } from "@/lib/utils";
 import {
   type AdminSocialConnection,
+  type SocialConnectionAnalyticsRow,
   adminSocialConnectionsQueryKey,
   useAdminSocialConnections,
   useCreateSocialConnection,
   useDeleteSocialConnection,
+  usePublishSocialVideo,
+  useSocialConnectionAnalytics,
   useUpdateSocialConnection,
 } from "@/queries/admin";
 
@@ -176,7 +180,10 @@ function ConnectionCard({ connection }: { connection: AdminSocialConnection }) {
   const update = useUpdateSocialConnection();
   const del = useDeleteSocialConnection();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [viewingAnalytics, setViewingAnalytics] = useState(false);
   const Icon = PLATFORM_ICONS[connection.platform] ?? Link2;
+  const isYoutube = YOUTUBE_PLATFORMS.includes(connection.platform);
 
   const expiryLabel = connection.tokenExpiresAt
     ? new Date(connection.tokenExpiresAt) < new Date()
@@ -218,6 +225,30 @@ function ConnectionCard({ connection }: { connection: AdminSocialConnection }) {
         </button>
         {menuOpen && (
           <div className="absolute right-0 z-10 mt-1 w-40 rounded-lg border bg-popover p-1 text-xs shadow-md">
+            {isYoutube && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPosting(true);
+                    setMenuOpen(false);
+                  }}
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                >
+                  Post video
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewingAnalytics(true);
+                    setMenuOpen(false);
+                  }}
+                  className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                >
+                  View analytics
+                </button>
+              </>
+            )}
             <button
               type="button"
               disabled={update.isPending}
@@ -243,7 +274,179 @@ function ConnectionCard({ connection }: { connection: AdminSocialConnection }) {
           </div>
         )}
       </div>
+
+      {isYoutube && (
+        <>
+          <PostVideoDialog connection={connection} open={posting} onClose={() => setPosting(false)} />
+          <AnalyticsDialog connection={connection} open={viewingAnalytics} onClose={() => setViewingAnalytics(false)} />
+        </>
+      )}
     </div>
+  );
+}
+
+function PostVideoDialog({
+  connection,
+  open,
+  onClose,
+}: {
+  connection: AdminSocialConnection;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const publish = usePublishSocialVideo();
+  const [videoUrl, setVideoUrl] = useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [privacyStatus, setPrivacyStatus] = useState<"public" | "unlisted" | "private">("unlisted");
+
+  const close = () => {
+    publish.reset();
+    setVideoUrl("");
+    setTitle("");
+    setDescription("");
+    setPrivacyStatus("unlisted");
+    onClose();
+  };
+
+  const submit = () => {
+    if (!videoUrl.trim() || !title.trim()) return;
+    publish.mutate({ description: description.trim() || undefined, id: connection.id, privacyStatus, title: title.trim(), videoUrl: videoUrl.trim() });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && close()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Post to {connection.accountName}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Video URL</Label>
+            <Input
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              placeholder="https://…/video.mp4"
+              autoFocus
+            />
+            <p className="text-[11px] text-muted-foreground">
+              A direct link to the video file — an R2 object or any hosted URL. There&apos;s no
+              upload-from-computer path yet.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Title</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Video title" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Description (optional)</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Privacy</Label>
+            <Select value={privacyStatus} onValueChange={(v) => setPrivacyStatus(v as typeof privacyStatus)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unlisted">Unlisted</SelectItem>
+                <SelectItem value="public">Public</SelectItem>
+                <SelectItem value="private">Private</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {publish.isError && (
+            <p className="text-xs text-destructive">{(publish.error as Error).message}</p>
+          )}
+          {publish.isSuccess && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400">
+              Published:{" "}
+              <a href={publish.data.published.url} target="_blank" rel="noreferrer" className="underline">
+                {publish.data.published.url}
+              </a>
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={close}>
+            {publish.isSuccess ? "Close" : "Cancel"}
+          </Button>
+          {!publish.isSuccess && (
+            <Button disabled={!videoUrl.trim() || !title.trim() || publish.isPending} onClick={submit}>
+              {publish.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
+              Post
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+type AnalyticsTotalKey = Exclude<keyof SocialConnectionAnalyticsRow, "day">;
+
+const ANALYTICS_METRICS: { key: AnalyticsTotalKey; label: string }[] = [
+  { key: "views", label: "Views" },
+  { key: "estimatedMinutesWatched", label: "Minutes watched" },
+  { key: "likes", label: "Likes" },
+  { key: "subscribersGained", label: "Subscribers gained" },
+];
+
+function AnalyticsDialog({
+  connection,
+  open,
+  onClose,
+}: {
+  connection: AdminSocialConnection;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const analytics = useSocialConnectionAnalytics();
+
+  useEffect(() => {
+    if (open) analytics.mutate({ days: 28, id: connection.id });
+    // Re-fetch fresh each time the dialog opens; not on every analytics identity change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, connection.id]);
+
+  const totals = analytics.data?.rows.reduce(
+    (acc, row) => {
+      for (const { key } of ANALYTICS_METRICS) acc[key] += row[key];
+      return acc;
+    },
+    { estimatedMinutesWatched: 0, likes: 0, subscribersGained: 0, views: 0 }
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{connection.accountName} — last 28 days</DialogTitle>
+        </DialogHeader>
+        {analytics.isPending ? (
+          <div className="space-y-2">
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        ) : analytics.isError ? (
+          <p className="text-sm text-destructive">{(analytics.error as Error).message}</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {ANALYTICS_METRICS.map(({ key, label }) => (
+              <div key={key} className="rounded-xl border bg-muted/20 p-3">
+                <p className="text-xs text-muted-foreground">{label}</p>
+                <p className="text-lg font-semibold">{(totals?.[key] ?? 0).toLocaleString()}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

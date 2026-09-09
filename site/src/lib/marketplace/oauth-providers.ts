@@ -145,7 +145,8 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
       };
     },
     platform: "youtube",
-    scope: "https://www.googleapis.com/auth/youtube.readonly",
+    scope:
+      "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/yt-analytics.readonly",
     tokenAuthStyle: "form_post",
     tokenUrl: "https://oauth2.googleapis.com/token",
     usesPkce: false,
@@ -168,7 +169,8 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
       };
     },
     platform: "youtube_shorts",
-    scope: "https://www.googleapis.com/auth/youtube.readonly",
+    scope:
+      "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/yt-analytics.readonly",
     tokenAuthStyle: "form_post",
     tokenUrl: "https://oauth2.googleapis.com/token",
     usesPkce: false,
@@ -182,3 +184,9 @@ export function getOAuthProvider(platform: string): OAuthProviderConfig | null {
 // Platforms with a real "Connect" flow — everything in SOCIAL_APP_SEED
 // except Telegram, which is bot-token based, not OAuth.
 export const OAUTH_CAPABLE_PLATFORMS = Object.keys(OAUTH_PROVIDERS);
+
+// Platforms with real publish/analytics wiring (see
+// src/lib/marketplace/youtube-api.ts) — split out from that file, which
+// pulls in the Prisma client, so client components can read this list
+// without bundling server-only code.
+export const YOUTUBE_PLATFORMS = ["youtube", "youtube_shorts"];
