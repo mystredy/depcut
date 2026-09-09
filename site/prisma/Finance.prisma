@@ -5,14 +5,14 @@
 // earns and cashes out, not what they spend on AI tools.
 //
 // No automated flow posts here yet (Task/Submission completions don't credit
-// a CreatorRateAccount automatically) — admins manage balances directly from
+// an ArtistRateAccount automatically) — admins manage balances directly from
 // /admin/finance. Every balance change and withdrawal is logged to
 // FinanceTransaction, so the ledger stays real even before that wiring
 // exists.
 
 // One row per creator with a Rates balance. Created lazily (upsert) the
 // first time an admin adjusts a user's balance.
-model CreatorRateAccount {
+model ArtistRateAccount {
   userId    String   @id
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   pending   Int      @default(0)
@@ -29,7 +29,7 @@ model CreatorRateAccount {
   active    Boolean  @default(true)
   updatedAt DateTime @updatedAt
 
-  @@map("creator_rate_account")
+  @@map("artist_rate_account")
 }
 
 // A creator cashout request against their available Rates balance.

@@ -1,7 +1,7 @@
 // A user's request to become a paid Rates creator — the short form behind
 // "Apply to be creator" in the account menu. One row per user: resubmitting
 // after a rejection overwrites the same row and resets it to Pending rather
-// than piling up a history. Approving one upserts a CreatorRateAccount (see
+// than piling up a history. Approving one upserts an ArtistRateAccount (see
 // Finance.prisma) so the new creator can earn and cash out immediately.
 model CreatorApplication {
   userId     String    @id

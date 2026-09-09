@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { type AdminUser, useAdjustCreatorRate } from "@/queries/admin";
+import { type AdminUser, useAdjustArtistRate } from "@/queries/admin";
 import { ApiError } from "@/queries/apiClient";
 
 import { SuperUserDialog } from "./SuperUserDialog";
@@ -47,9 +47,9 @@ function PermissionsDialogBody({
   const [superUser, setSuperUser] = useState(target.superUser);
   const [isArtist, setIsArtist] = useState(target.isArtist);
   const [tier, setTier] = useState<"Standard" | "Pro">(target.creatorTier === "Pro" ? "Pro" : "Standard");
-  const grant = useAdjustCreatorRate();
-  const revoke = useAdjustCreatorRate();
-  const setTierMutation = useAdjustCreatorRate();
+  const grant = useAdjustArtistRate();
+  const revoke = useAdjustArtistRate();
+  const setTierMutation = useAdjustArtistRate();
 
   const doGrant = () => {
     grant.mutate({ action: "grant", userId: target.id }, { onSuccess: () => setIsArtist(true) });

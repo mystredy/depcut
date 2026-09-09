@@ -51,7 +51,7 @@ export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
 
   // Rejecting returns the reserved Rates to the creator's available balance.
   if (status === "Rejected" && existing.status !== "Rejected" && existing.status !== "Paid") {
-    await prisma.creatorRateAccount.update({
+    await prisma.artistRateAccount.update({
       data: { available: { increment: existing.amountRequested } },
       where: { userId: existing.userId },
     });

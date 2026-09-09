@@ -19,7 +19,7 @@ const NOTIFY_BODY: Record<"Approved" | "Rejected", string> = {
 };
 
 // Approve or reject an "Apply to be creator" submission. Approving upserts a
-// CreatorRateAccount (see Finance.prisma) so the new creator can earn and
+// ArtistRateAccount (see Finance.prisma) so the new creator can earn and
 // cash out immediately — otherwise the account stays admin-grantable-only,
 // which would leave an approved applicant with nowhere to receive Rates.
 export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
@@ -45,7 +45,7 @@ export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
       where: { userId },
     }),
     ...(status === "Approved"
-      ? [prisma.creatorRateAccount.upsert({ create: { userId }, update: {}, where: { userId } })]
+      ? [prisma.artistRateAccount.upsert({ create: { userId }, update: {}, where: { userId } })]
       : []),
     prisma.notification.create(
       notifyUser({

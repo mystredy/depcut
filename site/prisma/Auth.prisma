@@ -64,7 +64,7 @@ model User {
   notifications Notification[]
   supportTicketsRaised   SupportTicket[] @relation("SupportTicketRaisedBy")
   supportMessagesSent    SupportMessage[] @relation("SupportMessageAuthor")
-  creatorRateAccount CreatorRateAccount?
+  artistRateAccount ArtistRateAccount?
   withdrawals   Withdrawal[]
   financeTransactions FinanceTransaction[]
   giveawayPayments GiveawayPayment[]

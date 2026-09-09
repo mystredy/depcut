@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useAdjustCreatorRate, useAdminFinanceRates } from "@/queries/admin";
+import { useAdjustArtistRate, useAdminFinanceRates } from "@/queries/admin";
 
 // Read-only report of every artist's Rates balance — granting, revoking,
 // and tier all moved to the Permissions dialog on /admin/users. Only
@@ -21,7 +21,7 @@ import { useAdjustCreatorRate, useAdminFinanceRates } from "@/queries/admin";
 export default function AdminFinanceRatesPage() {
   const [query, setQuery] = useState("");
   const accounts = useAdminFinanceRates(query);
-  const tier = useAdjustCreatorRate();
+  const tier = useAdjustArtistRate();
 
   return (
     <div className="space-y-6">

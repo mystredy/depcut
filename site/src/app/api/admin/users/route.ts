@@ -27,7 +27,7 @@ export const GET = withDepCutAuth(async (request) => {
       creditAccount: {
         select: { balanceMicros: true, lifetimeChargedMicros: true, lifetimeGrantedMicros: true },
       },
-      creatorRateAccount: { select: { active: true, tier: true } },
+      artistRateAccount: { select: { active: true, tier: true } },
       displayName: true,
       email: true,
       id: true,
@@ -62,12 +62,12 @@ export const GET = withDepCutAuth(async (request) => {
     users: users.map((u) => ({
       balance: creditMicrosToString(u.creditAccount?.balanceMicros ?? BigInt(0)),
       createdAt: u.createdAt.toISOString(),
-      creatorTier: u.creatorRateAccount?.tier ?? null,
+      creatorTier: u.artistRateAccount?.tier ?? null,
       displayName: u.displayName,
       email: u.email,
       id: u.id,
       image: u.image,
-      isArtist: u.creatorRateAccount?.active === true,
+      isArtist: u.artistRateAccount?.active === true,
       lastActiveAt: lastActiveByUserId.get(u.id)?.toISOString() ?? null,
       lifetimeCharged: creditMicrosToString(u.creditAccount?.lifetimeChargedMicros ?? BigInt(0)),
       lifetimeGranted: creditMicrosToString(u.creditAccount?.lifetimeGrantedMicros ?? BigInt(0)),

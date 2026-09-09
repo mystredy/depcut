@@ -107,7 +107,7 @@ export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
   // artist, but that's UX only — the submitter's own tier is what actually
   // decides whether this submission can carry the Pro extension.
   if (parsed.data.extension === "pro") {
-    const account = await prisma.creatorRateAccount.findUnique({
+    const account = await prisma.artistRateAccount.findUnique({
       select: { tier: true },
       where: { userId: submission.userId },
     });

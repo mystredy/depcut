@@ -50,7 +50,7 @@ export async function attributeAffiliateReferral(
       prisma.affiliateReferral.create({
         data: { affiliateId: affiliate.userId, commissionRates, referredUserId },
       }),
-      prisma.creatorRateAccount.upsert({
+      prisma.artistRateAccount.upsert({
         create: {
           available: commissionRates,
           lifetime: commissionRates,

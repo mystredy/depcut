@@ -15,7 +15,7 @@ export const GET = withDepCutAuth(async (request) => {
   }
 
   const [balances, exchangeRate, settings, withdrawalsByStatus, paidWithdrawals] = await Promise.all([
-    prisma.creatorRateAccount.aggregate({ _sum: { available: true, pending: true } }),
+    prisma.artistRateAccount.aggregate({ _sum: { available: true, pending: true } }),
     prisma.financeExchangeRate.upsert({ create: { id: "singleton" }, update: {}, where: { id: "singleton" } }),
     prisma.financeSettings.upsert({ create: { id: "singleton" }, update: {}, where: { id: "singleton" } }),
     prisma.withdrawal.groupBy({ _count: { _all: true }, by: ["status"] }),

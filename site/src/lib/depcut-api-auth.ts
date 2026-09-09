@@ -239,13 +239,13 @@ export async function isDepCutSuperUser(userId: string) {
   return user?.superUser === true;
 }
 
-// Artist access — an active CreatorRateAccount row means an admin approved
+// Artist access — an active ArtistRateAccount row means an admin approved
 // this user's application or granted it directly (see /admin/finance/rates).
 // No separate flag: the account that lets a creator earn Rates is the same
 // thing that unlocks Inspiration, My Submissions, and Payouts. The row can
 // exist but be inactive (revoked) — see PATCH /api/admin/finance/rates.
 export async function isDepCutArtist(userId: string) {
-  const account = await prisma.creatorRateAccount.findUnique({
+  const account = await prisma.artistRateAccount.findUnique({
     select: { active: true },
     where: { userId },
   });

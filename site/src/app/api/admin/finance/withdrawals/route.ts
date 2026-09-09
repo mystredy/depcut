@@ -60,7 +60,7 @@ export const POST = withDepCutAuth(async (request) => {
 
   const { userId, amountRequested, method, destination } = parsed.data;
 
-  const account = await prisma.creatorRateAccount.upsert({
+  const account = await prisma.artistRateAccount.upsert({
     create: { userId },
     update: {},
     where: { userId },
@@ -95,7 +95,7 @@ export const POST = withDepCutAuth(async (request) => {
       },
       include: { user: { select: { displayName: true, email: true, name: true } } },
     }),
-    prisma.creatorRateAccount.update({
+    prisma.artistRateAccount.update({
       data: { available: account.available - amountRequested },
       where: { userId },
     }),

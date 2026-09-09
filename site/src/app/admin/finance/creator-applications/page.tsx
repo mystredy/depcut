@@ -25,7 +25,7 @@ function timeAgo(iso: string) {
 
 // Every "Apply to be creator" submission from the account menu's dialog
 // (POST /api/creator-applications/me). Approving upserts a
-// CreatorRateAccount so the new creator can earn and cash out right away.
+// ArtistRateAccount so the new creator can earn and cash out right away.
 export default function AdminCreatorApplicationsPage() {
   const applications = useAdminCreatorApplications();
   const pending = (applications.data?.applications ?? []).filter((a) => a.status === "Pending");

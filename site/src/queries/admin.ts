@@ -128,7 +128,7 @@ export type AdminFinanceExchangeRateHistoryEntry = {
   createdAt: string;
 };
 
-export type AdminCreatorRateAccount = {
+export type AdminArtistRateAccount = {
   userId: string;
   name: string;
   email: string;
@@ -1298,7 +1298,7 @@ export function useUpdateFinanceExchangeRate() {
 export function useAdminFinanceRates(q: string) {
   return useQuery({
     queryFn: () =>
-      apiFetch<{ accounts: AdminCreatorRateAccount[] }>(
+      apiFetch<{ accounts: AdminArtistRateAccount[] }>(
         `/api/admin/finance/rates${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`
       ),
     queryKey: adminFinanceRatesQueryKey(q.trim()),
@@ -1319,13 +1319,13 @@ export type AdjustCreatorRateInput =
       amount: number;
     };
 
-export function useAdjustCreatorRate() {
+export function useAdjustArtistRate() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: AdjustCreatorRateInput) =>
       // revoke returns { ok: true } instead of an account (there isn't one
       // anymore); every other action returns the updated account.
-      apiFetch<{ account: AdminCreatorRateAccount } | { ok: true }>("/api/admin/finance/rates", {
+      apiFetch<{ account: AdminArtistRateAccount } | { ok: true }>("/api/admin/finance/rates", {
         body: JSON.stringify(input),
         method: "PATCH",
       }),

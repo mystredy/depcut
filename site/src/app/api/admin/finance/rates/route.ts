@@ -25,7 +25,7 @@ export const GET = withDepCutAuth(async (request) => {
   const users = await prisma.user.findMany({
     orderBy: { name: "asc" },
     select: {
-      creatorRateAccount: true,
+      artistRateAccount: true,
       displayName: true,
       email: true,
       id: true,
@@ -33,7 +33,7 @@ export const GET = withDepCutAuth(async (request) => {
       name: true,
     },
     where: {
-      creatorRateAccount: { isNot: null },
+      artistRateAccount: { isNot: null },
       ...(q
         ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }] }
         : {}),
@@ -41,15 +41,15 @@ export const GET = withDepCutAuth(async (request) => {
   });
 
   const accounts = users.map((u) => ({
-    active: u.creatorRateAccount?.active === true,
-    available: u.creatorRateAccount?.available ?? 0,
+    active: u.artistRateAccount?.active === true,
+    available: u.artistRateAccount?.available ?? 0,
     email: u.email,
     image: u.image,
-    lifetime: u.creatorRateAccount?.lifetime ?? 0,
+    lifetime: u.artistRateAccount?.lifetime ?? 0,
     name: u.displayName || u.name,
-    pending: u.creatorRateAccount?.pending ?? 0,
-    referral: u.creatorRateAccount?.referral ?? 0,
-    tier: u.creatorRateAccount?.tier ?? "Standard",
+    pending: u.artistRateAccount?.pending ?? 0,
+    referral: u.artistRateAccount?.referral ?? 0,
+    tier: u.artistRateAccount?.tier ?? "Standard",
     userId: u.id,
   }));
 
@@ -119,14 +119,14 @@ export const PATCH = withDepCutAuth(async (request) => {
   // with a balance, which reads as "they're a creator now" without the
   // notification that actually says so.
   if (action === "set-tier") {
-    const existing = await prisma.creatorRateAccount.findUnique({ where: { userId } });
+    const existing = await prisma.artistRateAccount.findUnique({ where: { userId } });
     if (!existing) {
       return NextResponse.json(
         { error: "Invalid request", message: "Grant artist access before setting a tier." },
         { status: 400 },
       );
     }
-    const account = await prisma.creatorRateAccount.update({
+    const account = await prisma.artistRateAccount.update({
       data: { tier: parsed.data.tier },
       where: { userId },
     });
@@ -140,8 +140,8 @@ export const PATCH = withDepCutAuth(async (request) => {
   // whenever access actually changes (never granted, or was revoked), not on
   // a repeat click against an already-active account.
   if (action === "grant") {
-    const existing = await prisma.creatorRateAccount.findUnique({ where: { userId } });
-    const account = await prisma.creatorRateAccount.upsert({
+    const existing = await prisma.artistRateAccount.findUnique({ where: { userId } });
+    const account = await prisma.artistRateAccount.upsert({
       create: { userId },
       update: { active: true },
       where: { userId },
@@ -166,7 +166,7 @@ export const PATCH = withDepCutAuth(async (request) => {
   // still show a former artist and re-granting reactivates instead of
   // starting a fresh row.
   if (action === "revoke") {
-    const existing = await prisma.creatorRateAccount.findUnique({ where: { userId } });
+    const existing = await prisma.artistRateAccount.findUnique({ where: { userId } });
     if (!existing) return NextResponse.json({ ok: true });
 
     const forfeited = existing.pending + existing.available;
@@ -191,7 +191,7 @@ export const PATCH = withDepCutAuth(async (request) => {
             }),
           ]
         : []),
-      prisma.creatorRateAccount.update({
+      prisma.artistRateAccount.update({
         data: { active: false, available: 0, pending: 0 },
         where: { userId },
       }),
@@ -199,7 +199,7 @@ export const PATCH = withDepCutAuth(async (request) => {
     return NextResponse.json({ ok: true });
   }
 
-  const account = await prisma.creatorRateAccount.upsert({
+  const account = await prisma.artistRateAccount.upsert({
     create: { userId },
     update: {},
     where: { userId },
@@ -249,7 +249,7 @@ export const PATCH = withDepCutAuth(async (request) => {
   });
 
   const [updated] = await prisma.$transaction([
-    prisma.creatorRateAccount.update({ data, where: { userId } }),
+    prisma.artistRateAccount.update({ data, where: { userId } }),
     prisma.financeTransaction.create({
       data: {
         amount: txRatesAmount * exchangeRate.currentRate,
