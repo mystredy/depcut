@@ -33,9 +33,9 @@ export default function AdminFinanceRatesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight">Creator Rates</h1>
+        <h1 className="text-lg font-semibold tracking-tight">Artist Rates</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Every creator&apos;s Rates balance. No automated flow credits these yet — balances are
+          Every artist&apos;s Rates balance. No automated flow credits these yet — balances are
           admin-managed and every change is logged to Transactions.
         </p>
       </div>
@@ -61,7 +61,7 @@ export default function AdminFinanceRatesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Creator</TableHead>
+                <TableHead>Artist</TableHead>
                 <TableHead>Tier</TableHead>
                 <TableHead className="text-right">Pending</TableHead>
                 <TableHead className="text-right">Available</TableHead>

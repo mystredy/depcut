@@ -22,9 +22,9 @@ export default function AdminFinanceReportsPage() {
   const reports = [
     {
       data: rates.data?.accounts,
-      desc: "Every creator's pending, available, referral, and lifetime Rates balance.",
-      name: "depcut_creator_rates_summary",
-      title: "Creator Rates Summary",
+      desc: "Every artist's pending, available, referral, and lifetime Rates balance.",
+      name: "depcut_artist_rates_summary",
+      title: "Artist Rates Summary",
     },
     {
       data: withdrawals.data?.withdrawals,
