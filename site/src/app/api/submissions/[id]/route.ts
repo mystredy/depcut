@@ -103,6 +103,22 @@ export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
     );
   }
 
+  // The Pro toggle in the editor is disabled client-side for a Standard
+  // artist, but that's UX only — the submitter's own tier is what actually
+  // decides whether this submission can carry the Pro extension.
+  if (parsed.data.extension === "pro") {
+    const account = await prisma.creatorRateAccount.findUnique({
+      select: { tier: true },
+      where: { userId: submission.userId },
+    });
+    if (account?.tier !== "Pro") {
+      return NextResponse.json(
+        { error: "Forbidden", message: "Pro tier required to submit as Pro." },
+        { status: 403 },
+      );
+    }
+  }
+
   const updated = await prisma.submission.update({
     data: parsed.data,
     include: {

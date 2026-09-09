@@ -41,7 +41,7 @@ import { useCutBase } from "@/cut/lib/nav";
 import { cn } from "@/lib/utils";
 import { ApiError, apiFetch } from "@/queries/apiClient";
 import { useCategories } from "@/queries/categories";
-import { creditBalanceQueryKey, useCreditBalance } from "@/queries/credits";
+import { creditBalanceQueryKey, useAccount, useCreditBalance } from "@/queries/credits";
 import {
   type AssetType,
   type AutosaveSubmissionInput,
@@ -256,6 +256,8 @@ export default function SubmitProjectEditorPage() {
   const base = useCutBase();
   const queryClient = useQueryClient();
   const credits = useCreditBalance();
+  const account = useAccount();
+  const isProTier = account.data?.creatorTier === "Pro";
   const categories = useCategories();
 
   const { data, isLoading, isError } = useSubmission(id);
@@ -747,7 +749,10 @@ export default function SubmitProjectEditorPage() {
           <h1 className="text-lg font-semibold">Submit Project</h1>
           <p className="mt-1 text-sm text-muted-foreground">Share a finished video for review.</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2.5 rounded-2xl border bg-card px-3.5 py-2">
+        <div
+          className="flex shrink-0 items-center gap-2.5 rounded-2xl border bg-card px-3.5 py-2"
+          title={!isProTier ? "Pro tier required — ask an admin to grant Pro." : undefined}
+        >
           <span
             className={cn(
               "text-xs font-bold tracking-wider",
@@ -762,7 +767,7 @@ export default function SubmitProjectEditorPage() {
               updateProMode(v);
               if (!v) setVerificationUploadError(null);
             }}
-            disabled={!isDraft}
+            disabled={!isDraft || !isProTier}
             aria-label="Pro submission"
           />
         </div>
