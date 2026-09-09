@@ -250,22 +250,3 @@ export async function isDepCutArtist(userId: string) {
   });
   return account !== null;
 }
-
-// Submit Project needs artist access, and — when an admin has turned on
-// AppSettings.submitProjectRequiresPro — Pro tier specifically. A Standard
-// artist still has every other artist surface; this is the one capability a
-// tier can gate.
-export async function canDepCutSubmitProject(userId: string) {
-  const [account, appSettings] = await Promise.all([
-    prisma.creatorRateAccount.findUnique({
-      select: { tier: true },
-      where: { userId },
-    }),
-    prisma.appSettings.findUnique({
-      select: { submitProjectRequiresPro: true },
-      where: { id: "singleton" },
-    }),
-  ]);
-  if (!account) return false;
-  return appSettings?.submitProjectRequiresPro !== true || account.tier === "Pro";
-}

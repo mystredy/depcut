@@ -445,10 +445,6 @@ export type AdminSettings = {
   betaMode: boolean;
   creditRateCredits: number;
   creditRateDollars: number;
-  // Gates the editor's Submit button and /app/artist/submit-project to
-  // Pro-tier artists only; Standard artists see it locked. See
-  // CreatorRateAccount.tier.
-  submitProjectRequiresPro: boolean;
   updatedAt: string;
 };
 
