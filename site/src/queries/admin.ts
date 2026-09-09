@@ -137,13 +137,11 @@ export type AdminCreatorRateAccount = {
   available: number;
   referral: number;
   lifetime: number;
-  // Whether this user has been granted artist access — via an approved
-  // application or a direct grant here. False for a user who just happens to
-  // match the search but has never been made an artist.
-  hasAccount: boolean;
-  // "Standard" | "Pro". "Standard" for a user with no account yet too — it's
-  // the default a grant would apply, not a claim they have one.
+  // "Standard" | "Pro".
   tier: string;
+  // False for a former artist — access was revoked, but the row (and
+  // balance history) stays so they still show up here.
+  active: boolean;
 };
 
 export type AdminCreatorApplication = {

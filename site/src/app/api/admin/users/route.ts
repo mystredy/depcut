@@ -27,7 +27,7 @@ export const GET = withDepCutAuth(async (request) => {
       creditAccount: {
         select: { balanceMicros: true, lifetimeChargedMicros: true, lifetimeGrantedMicros: true },
       },
-      creatorRateAccount: { select: { tier: true } },
+      creatorRateAccount: { select: { active: true, tier: true } },
       displayName: true,
       email: true,
       id: true,
@@ -67,7 +67,7 @@ export const GET = withDepCutAuth(async (request) => {
       email: u.email,
       id: u.id,
       image: u.image,
-      isArtist: u.creatorRateAccount != null,
+      isArtist: u.creatorRateAccount?.active === true,
       lastActiveAt: lastActiveByUserId.get(u.id)?.toISOString() ?? null,
       lifetimeCharged: creditMicrosToString(u.creditAccount?.lifetimeChargedMicros ?? BigInt(0)),
       lifetimeGranted: creditMicrosToString(u.creditAccount?.lifetimeGrantedMicros ?? BigInt(0)),

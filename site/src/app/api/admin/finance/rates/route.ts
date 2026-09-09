@@ -7,9 +7,11 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-// Super-user only. Every user's Rates balance (zero-defaulted for users who
-// have never been adjusted). No automated flow credits these yet — see
-// Finance.prisma's module comment.
+// Super-user only. Every user who currently has an artist grant — granting,
+// revoking, and setting tier all moved to the Permissions dialog on
+// /admin/users; this is a read-only report of the resulting balances (tier
+// stays editable inline, since that's a Rates-page concern, not a grant).
+// No automated flow credits these yet — see Finance.prisma's module comment.
 export const GET = withDepCutAuth(async (request) => {
   if (!(await isDepCutSuperUser(request.depcut.userId))) {
     return NextResponse.json(
@@ -30,15 +32,18 @@ export const GET = withDepCutAuth(async (request) => {
       image: true,
       name: true,
     },
-    where: q
-      ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }] }
-      : undefined,
+    where: {
+      creatorRateAccount: { isNot: null },
+      ...(q
+        ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }] }
+        : {}),
+    },
   });
 
   const accounts = users.map((u) => ({
+    active: u.creatorRateAccount?.active === true,
     available: u.creatorRateAccount?.available ?? 0,
     email: u.email,
-    hasAccount: u.creatorRateAccount != null,
     image: u.image,
     lifetime: u.creatorRateAccount?.lifetime ?? 0,
     name: u.displayName || u.name,
@@ -130,16 +135,18 @@ export const PATCH = withDepCutAuth(async (request) => {
 
   // Grant: admin hands someone artist access directly, no application. Same
   // upsert the application-approval route uses, so the two paths land the
-  // same account shape — just notify only the first time, not on a repeat
-  // click against an account that already exists.
+  // same account shape. Reactivates a previously revoked row rather than
+  // starting fresh — Artist Rates keeps their balance history — and notifies
+  // whenever access actually changes (never granted, or was revoked), not on
+  // a repeat click against an already-active account.
   if (action === "grant") {
-    const existed = (await prisma.creatorRateAccount.findUnique({ where: { userId } })) !== null;
+    const existing = await prisma.creatorRateAccount.findUnique({ where: { userId } });
     const account = await prisma.creatorRateAccount.upsert({
       create: { userId },
-      update: {},
+      update: { active: true },
       where: { userId },
     });
-    if (!existed) {
+    if (existing?.active !== true) {
       await prisma.notification.create(
         notifyUser({
           body: "You're a creator now — check Payouts in your account menu to set up cashouts.",
@@ -152,11 +159,12 @@ export const PATCH = withDepCutAuth(async (request) => {
     return NextResponse.json({ account });
   }
 
-  // Revoke: the inverse of grant. Any pending/available balance is forfeit
-  // (deleting the row is what actually takes away isArtist — see
-  // isDepCutArtist) — logged as a negative transaction first, the same way
-  // reset-pending/reset-available record what they zeroed, so the ledger
-  // still shows where the balance went.
+  // Revoke: the inverse of grant. Any pending/available balance is forfeit —
+  // logged as a negative transaction first, the same way reset-pending/
+  // reset-available record what they zeroed. The row itself stays (just
+  // inactive, balance zeroed) rather than being deleted, so Artist Rates can
+  // still show a former artist and re-granting reactivates instead of
+  // starting a fresh row.
   if (action === "revoke") {
     const existing = await prisma.creatorRateAccount.findUnique({ where: { userId } });
     if (!existing) return NextResponse.json({ ok: true });
@@ -183,7 +191,10 @@ export const PATCH = withDepCutAuth(async (request) => {
             }),
           ]
         : []),
-      prisma.creatorRateAccount.delete({ where: { userId } }),
+      prisma.creatorRateAccount.update({
+        data: { active: false, available: 0, pending: 0 },
+        where: { userId },
+      }),
     ]);
     return NextResponse.json({ ok: true });
   }

@@ -22,6 +22,11 @@ model CreatorRateAccount {
   // "Standard" | "Pro" — set by an admin (see /admin/finance/rates). Not
   // read by anything yet; a place to hang a future Pro-only capability.
   tier      String   @default("Standard")
+  // False after an admin revokes artist access (see isDepCutArtist) — the
+  // row itself stays so Artist Rates can still show a former artist and
+  // their balance history, and re-granting reactivates it rather than
+  // starting a fresh row.
+  active    Boolean  @default(true)
   updatedAt DateTime @updatedAt
 
   @@map("creator_rate_account")

@@ -15,18 +15,19 @@ export const GET = withDepCutAuth(async (request) => {
   const user = await prisma.user.findUnique({
     select: {
       affiliate: { select: { userId: true } },
-      creatorRateAccount: { select: { tier: true, userId: true } },
+      creatorRateAccount: { select: { active: true, tier: true } },
       email: true,
       superUser: true,
     },
     where: { id: request.depcut.userId },
   });
+  const isArtist = user?.creatorRateAccount?.active === true;
 
   return NextResponse.json({
     creatorTier: user?.creatorRateAccount?.tier ?? null,
     email: user?.email ?? null,
-    isArtist: user?.creatorRateAccount != null,
-    payoutsEligible: user?.creatorRateAccount != null || user?.affiliate != null,
+    isArtist,
+    payoutsEligible: isArtist || user?.affiliate != null,
     superUser: user?.superUser === true,
     userId: request.depcut.userId,
   });

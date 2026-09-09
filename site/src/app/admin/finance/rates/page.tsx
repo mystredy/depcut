@@ -1,11 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Search } from "lucide-react";
+import { Search } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -15,28 +12,24 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  type AdjustCreatorRateInput,
-  type AdminCreatorRateAccount,
-  useAdjustCreatorRate,
-  useAdminFinanceRates,
-} from "@/queries/admin";
+import { useAdjustCreatorRate, useAdminFinanceRates } from "@/queries/admin";
 
+// Read-only report of every artist's Rates balance — granting, revoking,
+// and tier all moved to the Permissions dialog on /admin/users. Only
+// scoped to users who currently have (or once had) artist access; see
+// /api/admin/finance/rates for how that's filtered.
 export default function AdminFinanceRatesPage() {
   const [query, setQuery] = useState("");
   const accounts = useAdminFinanceRates(query);
-  const adjust = useAdjustCreatorRate();
-  const grant = useAdjustCreatorRate();
   const tier = useAdjustCreatorRate();
-  const [target, setTarget] = useState<AdminCreatorRateAccount | null>(null);
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-lg font-semibold tracking-tight">Artist Rates</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Every artist&apos;s Rates balance. No automated flow credits these yet — balances are
-          admin-managed and every change is logged to Transactions.
+          Every artist&apos;s Rates balance. Grant, revoke, and tier live on each account&apos;s
+          Permissions dialog under Users.
         </p>
       </div>
 
@@ -67,35 +60,37 @@ export default function AdminFinanceRatesPage() {
                 <TableHead className="text-right">Available</TableHead>
                 <TableHead className="text-right">Referral</TableHead>
                 <TableHead className="text-right">Lifetime</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {accounts.data?.accounts.map((a) => (
-                <TableRow key={a.userId}>
+                <TableRow key={a.userId} className={!a.active ? "opacity-60" : undefined}>
                   <TableCell>
-                    <p className="text-sm font-medium">{a.name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium">{a.name}</p>
+                      {!a.active && (
+                        <span className="rounded-full border border-destructive/30 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                          Revoked
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground">{a.email}</p>
                   </TableCell>
                   <TableCell>
-                    {a.hasAccount ? (
-                      <button
-                        type="button"
-                        disabled={tier.isPending}
-                        onClick={() =>
-                          tier.mutate({
-                            action: "set-tier",
-                            tier: a.tier === "Pro" ? "Standard" : "Pro",
-                            userId: a.userId,
-                          })
-                        }
-                        className="rounded-full border px-2 py-0.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
-                      >
-                        {a.tier}
-                      </button>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
+                    <button
+                      type="button"
+                      disabled={tier.isPending || !a.active}
+                      onClick={() =>
+                        tier.mutate({
+                          action: "set-tier",
+                          tier: a.tier === "Pro" ? "Standard" : "Pro",
+                          userId: a.userId,
+                        })
+                      }
+                      className="rounded-full border px-2 py-0.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
+                    >
+                      {a.tier}
+                    </button>
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm text-amber-600 dark:text-amber-400">
                     {a.pending.toLocaleString()}
@@ -105,33 +100,12 @@ export default function AdminFinanceRatesPage() {
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm">{a.referral.toLocaleString()}</TableCell>
                   <TableCell className="text-right font-mono text-sm">{a.lifetime.toLocaleString()}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      {a.hasAccount ? (
-                        <Button size="sm" variant="outline" onClick={() => setTarget(a)}>
-                          Adjust
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={grant.isPending}
-                          onClick={() => grant.mutate({ action: "grant", userId: a.userId })}
-                        >
-                          {grant.isPending && grant.variables?.userId === a.userId ? (
-                            <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" />
-                          ) : null}
-                          Grant Artist Access
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
                 </TableRow>
               ))}
               {accounts.data?.accounts.length === 0 && (
                 <TableRow>
-                  <TableCell className="text-sm text-muted-foreground" colSpan={7}>
-                    No users found.
+                  <TableCell className="text-sm text-muted-foreground" colSpan={6}>
+                    No artists found.
                   </TableCell>
                 </TableRow>
               )}
@@ -139,117 +113,6 @@ export default function AdminFinanceRatesPage() {
           </Table>
         )}
       </div>
-
-      {target && (
-        <AdjustPanel
-          account={target}
-          onClose={() => setTarget(null)}
-          onSubmit={(input) => adjust.mutate(input, { onSuccess: () => setTarget(null) })}
-          pending={adjust.isPending}
-        />
-      )}
-    </div>
-  );
-}
-
-function AdjustPanel({
-  account,
-  onClose,
-  onSubmit,
-  pending,
-}: {
-  account: AdminCreatorRateAccount;
-  onClose: () => void;
-  onSubmit: (input: AdjustCreatorRateInput) => void;
-  pending: boolean;
-}) {
-  const [field, setField] = useState<"pending" | "available">("pending");
-  const [direction, setDirection] = useState<"add" | "deduct">("add");
-  const [amount, setAmount] = useState(0);
-
-  return (
-    <div className="max-w-xl space-y-4 rounded-2xl border bg-card p-5">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold">Adjust balance — {account.name}</p>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-destructive hover:text-destructive"
-            disabled={pending}
-            onClick={() => onSubmit({ action: "revoke", userId: account.userId })}
-          >
-            Revoke Artist Access
-          </Button>
-          <Button size="sm" variant="ghost" onClick={onClose}>
-            Close
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={pending}
-          onClick={() => onSubmit({ action: "reset-pending", userId: account.userId })}
-        >
-          Reset Pending
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={pending}
-          onClick={() => onSubmit({ action: "reset-available", userId: account.userId })}
-        >
-          Reset Available
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={pending || account.pending <= 0}
-          onClick={() => onSubmit({ action: "transfer-pending-to-available", userId: account.userId })}
-        >
-          Transfer Pending → Available
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="space-y-1.5">
-          <Label className="text-xs">Target Balance</Label>
-          <select
-            value={field}
-            onChange={(e) => setField(e.target.value as "pending" | "available")}
-            className="w-full rounded-xl border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
-          >
-            <option value="pending">Pending Rates</option>
-            <option value="available">Available Rates</option>
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Action</Label>
-          <select
-            value={direction}
-            onChange={(e) => setDirection(e.target.value as "add" | "deduct")}
-            className="w-full rounded-xl border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
-          >
-            <option value="add">Add Rates</option>
-            <option value="deduct">Deduct Rates</option>
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Amount</Label>
-          <Input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} />
-        </div>
-      </div>
-
-      <Button
-        disabled={pending || amount <= 0}
-        onClick={() => onSubmit({ action: "adjust", amount, direction, field, userId: account.userId })}
-      >
-        {pending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
-        Apply Adjustment
-      </Button>
     </div>
   );
 }
