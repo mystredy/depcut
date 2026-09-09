@@ -27,9 +27,14 @@ function actionFor(target: AdminUser): AdminUserAction {
 export function SuperUserDialog({
   target,
   onClose,
+  onSuccess,
 }: {
   target: AdminUser | null;
   onClose: () => void;
+  /** Fires with the new value right before onClose — for a caller holding
+   * its own copy of this user (PermissionsDialog) to update without waiting
+   * on a refetch. */
+  onSuccess?: (superUser: boolean) => void;
 }) {
   const requestCode = useRequestActionCode();
   const setSuperUser = useSetSuperUser();
@@ -62,9 +67,15 @@ export function SuperUserDialog({
 
   const confirm = () => {
     if (!target || !challenge) return;
+    const next = !target.superUser;
     setSuperUser.mutate(
-      { challenge, code, superUser: !target.superUser, userId: target.id },
-      { onSuccess: onClose },
+      { challenge, code, superUser: next, userId: target.id },
+      {
+        onSuccess: () => {
+          onSuccess?.(next);
+          onClose();
+        },
+      },
     );
   };
 

@@ -2,21 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Activity,
-  LayoutDashboard,
-  MoreVertical,
-  Search,
-  ShieldAlert,
-  ShieldCheck,
-  ShieldOff,
-} from "lucide-react";
+import { Activity, LayoutDashboard, MoreVertical, Search, ShieldAlert } from "lucide-react";
 
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,7 +23,7 @@ import { UserAvatar } from "@/cut/components/UserAvatar";
 import { useSiteDateFormat } from "@/lib/siteDateFormat";
 import { type AdminUser, useAdminUsers } from "@/queries/admin";
 
-import { SuperUserDialog } from "./SuperUserDialog";
+import { PermissionsDialog } from "./PermissionsDialog";
 
 // Matches AdminNav.tsx's own `soon` helper — every one of these per-user
 // pages is still just the nav item's shared "not built yet" placeholder,
@@ -57,7 +48,7 @@ export default function AdminUsersPage() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const users = useAdminUsers(query);
-  const [superUserTarget, setSuperUserTarget] = useState<AdminUser | null>(null);
+  const [permissionsTarget, setPermissionsTarget] = useState<AdminUser | null>(null);
   const { formatDate } = useSiteDateFormat();
 
   return (
@@ -129,14 +120,6 @@ export default function AdminUsersPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
-                          variant={u.superUser ? "default" : "destructive"}
-                          onClick={() => setSuperUserTarget(u)}
-                        >
-                          {u.superUser ? <ShieldOff /> : <ShieldCheck />}
-                          {u.superUser ? "Remove super user" : "Make super user"}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
                           onClick={() => router.push(soon(`User Management — Dashboard: ${u.email}`))}
                         >
                           <LayoutDashboard /> Dashboard
@@ -153,9 +136,7 @@ export default function AdminUsersPage() {
                         >
                           <ShieldAlert /> Deletion Requests
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => router.push(soon(`User Management — Permissions: ${u.email}`))}
-                        >
+                        <DropdownMenuItem onClick={() => setPermissionsTarget(u)}>
                           <ShieldAlert /> Permissions
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -175,7 +156,7 @@ export default function AdminUsersPage() {
         )}
       </div>
 
-      <SuperUserDialog target={superUserTarget} onClose={() => setSuperUserTarget(null)} />
+      <PermissionsDialog target={permissionsTarget} onClose={() => setPermissionsTarget(null)} />
     </div>
   );
 }

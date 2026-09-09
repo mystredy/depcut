@@ -528,6 +528,9 @@ export type AdminUser = {
   displayName: string | null;
   image: string | null;
   superUser: boolean;
+  isArtist: boolean;
+  // "Standard" | "Pro" | null — null when not an artist.
+  creatorTier: string | null;
   balance: string;
   lifetimeGranted: string;
   lifetimeCharged: string;
@@ -1326,6 +1329,8 @@ export function useAdjustCreatorRate() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "finance-rates"] });
       queryClient.invalidateQueries({ queryKey: adminFinanceOverviewQueryKey });
+      // grant/set-tier change isArtist/creatorTier on the Users list too.
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
     },
   });
 }
