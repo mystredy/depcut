@@ -220,8 +220,8 @@ export const OAUTH_CAPABLE_PLATFORMS = Object.keys(OAUTH_PROVIDERS);
 export const YOUTUBE_PLATFORMS = ["youtube", "youtube_shorts"];
 
 // Platforms with a real "Post video" publish path today (see
-// /api/admin/social-connections/[id]/publish). Facebook, Instagram, and
-// Threads aren't here yet — they publish through a Page/Business Account,
-// which needs a picker step this connect flow doesn't have. Snapchat has
-// no public API for posting to a connected account at all.
-export const PUBLISHABLE_PLATFORMS = ["youtube", "youtube_shorts", "tiktok", "x"];
+// /api/admin/social-connections/[id]/publish). Threads isn't here yet — it
+// needs the same long-lived-token handling Facebook/Instagram just got,
+// not yet wired. Snapchat has no public API for posting to a connected
+// account at all.
+export const PUBLISHABLE_PLATFORMS = ["youtube", "youtube_shorts", "tiktok", "x", "facebook", "instagram"];

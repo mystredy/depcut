@@ -6,12 +6,20 @@ import {
   notFoundResponse,
   withDepCutAuth,
 } from "@/lib/depcut-api-auth";
+import { publishFacebookVideo, FacebookApiError } from "@/lib/marketplace/facebook-api";
+import { publishInstagramVideo, InstagramApiError } from "@/lib/marketplace/instagram-api";
+import { getStoredPageAccessToken, MetaPagesError } from "@/lib/marketplace/meta-pages";
 import { PUBLISHABLE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
 import { getValidAccessToken, SocialConnectionError } from "@/lib/marketplace/oauth-token-refresh";
 import { publishTiktokVideo, TiktokApiError } from "@/lib/marketplace/tiktok-api";
 import { publishXPost, XApiError } from "@/lib/marketplace/x-api";
 import { publishYoutubeVideo, YoutubeApiError } from "@/lib/marketplace/youtube-api";
 import { prisma } from "@/lib/prisma";
+
+// Facebook/Instagram Page tokens have no refresh_token grant (see
+// meta-pages.ts) — they're read as stored, not refreshed like the
+// standard-OAuth2 platforms.
+const META_PLATFORMS = new Set(["facebook", "instagram"]);
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -72,7 +80,37 @@ export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   const { videoUrl, title, description, privacyStatus } = parsed.data;
 
   try {
-    const accessToken = await getValidAccessToken(id);
+    const accessToken = META_PLATFORMS.has(connection.platform)
+      ? await getStoredPageAccessToken(id)
+      : await getValidAccessToken(id);
+
+    if (connection.platform === "facebook" || connection.platform === "instagram") {
+      if (!videoUrl) {
+        return NextResponse.json(
+          { error: "Invalid request", message: `videoUrl is required for ${connection.platform}.` },
+          { status: 400 },
+        );
+      }
+      if (!connection.platformAccountId) {
+        return NextResponse.json(
+          {
+            error: "Connection needs reconnecting",
+            message: "This connection predates Page linking — remove it and connect again.",
+          },
+          { status: 400 },
+        );
+      }
+      const published =
+        connection.platform === "facebook"
+          ? await publishFacebookVideo({ accessToken, description: title, pageId: connection.platformAccountId, videoUrl })
+          : await publishInstagramVideo({
+              accessToken,
+              caption: title,
+              igUserId: connection.platformAccountId,
+              videoUrl,
+            });
+      return NextResponse.json({ published });
+    }
 
     if (connection.platform === "youtube" || connection.platform === "youtube_shorts") {
       if (!videoUrl) {
@@ -110,7 +148,10 @@ export const POST = withDepCutAuth(async (request, context: RouteContext) => {
       error instanceof SocialConnectionError ||
       error instanceof YoutubeApiError ||
       error instanceof TiktokApiError ||
-      error instanceof XApiError
+      error instanceof XApiError ||
+      error instanceof FacebookApiError ||
+      error instanceof InstagramApiError ||
+      error instanceof MetaPagesError
     ) {
       return NextResponse.json({ error: "Publish failed", message: error.message }, { status: 502 });
     }

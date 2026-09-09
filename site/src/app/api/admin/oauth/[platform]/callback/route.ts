@@ -1,8 +1,17 @@
 import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
-import { oauthPopupHtml } from "@/lib/marketplace/oauth-popup-html";
+import {
+  exchangeForLongLivedUserToken,
+  fetchConnectableCandidates,
+  MetaPagesError,
+} from "@/lib/marketplace/meta-pages";
+import { oauthPagePickerHtml, oauthPopupHtml } from "@/lib/marketplace/oauth-popup-html";
+import { signPageState } from "@/lib/marketplace/oauth-page-state";
 import { getOAuthProvider } from "@/lib/marketplace/oauth-providers";
 import { verifyOAuthState } from "@/lib/marketplace/oauth-state";
+import { upsertSocialConnection } from "@/lib/marketplace/social-connection-upsert";
 import { prisma } from "@/lib/prisma";
+
+const META_PICKER_PLATFORMS = new Set(["facebook", "instagram"]);
 
 export const dynamic = "force-dynamic";
 
@@ -118,6 +127,69 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
     });
   }
 
+  // Facebook/Instagram post through a Page's own access token, not the
+  // user token OAuth just returned — resolve which Page(s) this account
+  // manages (Instagram further needs the Business Account linked to that
+  // Page) and either auto-select the only candidate or show a picker.
+  if (META_PICKER_PLATFORMS.has(platform)) {
+    try {
+      const longLived = await exchangeForLongLivedUserToken({
+        clientId,
+        clientSecret,
+        shortLivedToken: token.accessToken,
+      });
+      const candidates = await fetchConnectableCandidates(
+        platform as "facebook" | "instagram",
+        longLived.accessToken,
+      );
+
+      if (candidates.length === 0) {
+        return oauthPopupHtml({
+          message:
+            platform === "facebook"
+              ? "This account doesn't manage any Facebook Pages."
+              : "None of this account's Facebook Pages have a linked Instagram Business Account.",
+          success: false,
+          title: "No Pages found",
+        });
+      }
+
+      if (candidates.length === 1) {
+        const [page] = candidates;
+        await upsertSocialConnection({
+          accessToken: page.accessToken,
+          accountName: state.label || page.name,
+          platform,
+          platformAccountId: page.id,
+          profileImage: page.profileImage,
+          role: state.role,
+          tokenExpiresAt: longLived.expiresIn ? new Date(Date.now() + longLived.expiresIn * 1000) : null,
+        });
+        return oauthPopupHtml({
+          message: `${state.label || page.name} is now connected.`,
+          success: true,
+          title: "Connected",
+        });
+      }
+
+      const pageState = signPageState({
+        label: state.label,
+        pages: candidates,
+        platform,
+        role: state.role,
+      });
+      return oauthPagePickerHtml({
+        pages: candidates,
+        selectUrl: `${url.origin}/api/admin/oauth/${platform}/select-page`,
+        state: pageState,
+        title: platform === "facebook" ? "Choose a Facebook Page" : "Choose an Instagram account",
+      });
+    } catch (error) {
+      const message = error instanceof MetaPagesError ? error.message : "Couldn't resolve this account's Pages.";
+      return oauthPopupHtml({ message, success: false, title: "Connection failed" });
+    }
+  }
+
   const fetched = await provider
     .fetchProfile(token.accessToken)
     .catch(() => ({ accountHandle: undefined as string | undefined, accountName: `${provider.platform} Account` }));
@@ -125,45 +197,17 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
 
   const tokenExpiresAt = token.expiresIn ? new Date(Date.now() + token.expiresIn * 1000) : null;
 
-  // Match by the platform's own account id when the provider gave us one —
-  // accountName is display text and can change on the platform without
-  // this connection changing. Falls back to the old accountName match for
-  // connections made before platformAccountId existed.
-  const existing = profile.platformAccountId
-    ? await prisma.socialConnection.findFirst({
-        where: { platform, platformAccountId: profile.platformAccountId },
-      })
-    : await prisma.socialConnection.findFirst({
-        where: { accountName: profile.accountName, platform },
-      });
-  if (existing) {
-    await prisma.socialConnection.update({
-      data: {
-        accessToken: token.accessToken,
-        accountHandle: profile.accountHandle,
-        platformAccountId: profile.platformAccountId,
-        profileImage: profile.profileImage,
-        refreshToken: token.refreshToken,
-        status: "active",
-        tokenExpiresAt,
-      },
-      where: { id: existing.id },
-    });
-  } else {
-    await prisma.socialConnection.create({
-      data: {
-        accessToken: token.accessToken,
-        accountHandle: profile.accountHandle,
-        accountName: profile.accountName,
-        platform,
-        platformAccountId: profile.platformAccountId,
-        profileImage: profile.profileImage,
-        refreshToken: token.refreshToken,
-        role: state.role,
-        tokenExpiresAt,
-      },
-    });
-  }
+  await upsertSocialConnection({
+    accessToken: token.accessToken,
+    accountHandle: profile.accountHandle,
+    accountName: profile.accountName,
+    platform,
+    platformAccountId: profile.platformAccountId,
+    profileImage: profile.profileImage,
+    refreshToken: token.refreshToken,
+    role: state.role,
+    tokenExpiresAt,
+  });
 
   return oauthPopupHtml({
     message: `${profile.accountName} is now connected.`,

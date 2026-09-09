@@ -313,7 +313,8 @@ function PostVideoDialog({
   const isYoutubePlatform = YOUTUBE_PLATFORMS.includes(connection.platform);
   const isTiktok = connection.platform === "tiktok";
   const isX = connection.platform === "x";
-  const videoRequired = isYoutubePlatform || isTiktok;
+  const isCaptionPlatform = isTiktok || connection.platform === "facebook" || connection.platform === "instagram";
+  const videoRequired = !isX;
 
   const close = () => {
     publish.reset();
@@ -371,12 +372,12 @@ function PostVideoDialog({
             </p>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">{isX ? "Post text" : isTiktok ? "Caption" : "Title"}</Label>
+            <Label className="text-xs">{isX ? "Post text" : isCaptionPlatform ? "Caption" : "Title"}</Label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={isX ? 280 : undefined}
-              placeholder={isX ? "What's happening?" : isTiktok ? "Caption" : "Video title"}
+              placeholder={isX ? "What's happening?" : isCaptionPlatform ? "Caption" : "Video title"}
             />
           </div>
           {isYoutubePlatform && (
