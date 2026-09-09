@@ -26,6 +26,7 @@ export default function AdminFinanceRatesPage() {
   const [query, setQuery] = useState("");
   const accounts = useAdminFinanceRates(query);
   const adjust = useAdjustCreatorRate();
+  const grant = useAdjustCreatorRate();
   const [target, setTarget] = useState<AdminCreatorRateAccount | null>(null);
 
   return (
@@ -83,9 +84,25 @@ export default function AdminFinanceRatesPage() {
                   <TableCell className="text-right font-mono text-sm">{a.referral.toLocaleString()}</TableCell>
                   <TableCell className="text-right font-mono text-sm">{a.lifetime.toLocaleString()}</TableCell>
                   <TableCell className="text-right">
-                    <Button size="sm" variant="outline" onClick={() => setTarget(a)}>
-                      Adjust
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      {a.hasAccount ? (
+                        <Button size="sm" variant="outline" onClick={() => setTarget(a)}>
+                          Adjust
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={grant.isPending}
+                          onClick={() => grant.mutate({ action: "grant", userId: a.userId })}
+                        >
+                          {grant.isPending && grant.variables?.userId === a.userId ? (
+                            <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" />
+                          ) : null}
+                          Grant Artist Access
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

@@ -137,6 +137,10 @@ export type AdminCreatorRateAccount = {
   available: number;
   referral: number;
   lifetime: number;
+  // Whether this user has been granted artist access — via an approved
+  // application or a direct grant here. False for a user who just happens to
+  // match the search but has never been made an artist.
+  hasAccount: boolean;
 };
 
 export type AdminCreatorApplication = {
@@ -1298,7 +1302,7 @@ export function useAdminFinanceRates(q: string) {
 }
 
 export type AdjustCreatorRateInput =
-  | { userId: string; action: "reset-pending" | "reset-available" | "transfer-pending-to-available" }
+  | { userId: string; action: "grant" | "reset-pending" | "reset-available" | "transfer-pending-to-available" }
   | {
       userId: string;
       action: "adjust";

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
+import { notifyUser } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,7 @@ export const GET = withDepCutAuth(async (request) => {
   const accounts = users.map((u) => ({
     available: u.creatorRateAccount?.available ?? 0,
     email: u.email,
+    hasAccount: u.creatorRateAccount != null,
     image: u.image,
     lifetime: u.creatorRateAccount?.lifetime ?? 0,
     name: u.displayName || u.name,
@@ -51,7 +53,7 @@ export const GET = withDepCutAuth(async (request) => {
 const adjustSchema = z
   .object({
     userId: z.string().trim().min(1),
-    action: z.enum(["reset-pending", "reset-available", "transfer-pending-to-available", "adjust"]),
+    action: z.enum(["grant", "reset-pending", "reset-available", "transfer-pending-to-available", "adjust"]),
     field: z.enum(["pending", "available"]).optional(),
     direction: z.enum(["add", "deduct"]).optional(),
     amount: z.number().int().positive().optional(),
@@ -93,6 +95,30 @@ export const PATCH = withDepCutAuth(async (request) => {
     return NextResponse.json({ error: "Not found", message: "No such user." }, { status: 404 });
   }
   const userName = user.displayName || user.name;
+
+  // Grant: admin hands someone artist access directly, no application. Same
+  // upsert the application-approval route uses, so the two paths land the
+  // same account shape — just notify only the first time, not on a repeat
+  // click against an account that already exists.
+  if (action === "grant") {
+    const existed = (await prisma.creatorRateAccount.findUnique({ where: { userId } })) !== null;
+    const account = await prisma.creatorRateAccount.upsert({
+      create: { userId },
+      update: {},
+      where: { userId },
+    });
+    if (!existed) {
+      await prisma.notification.create(
+        notifyUser({
+          body: "You're a creator now — check Payouts in your account menu to set up cashouts.",
+          link: "/app/settings/payouts",
+          title: "You've been granted artist access",
+          userId,
+        }),
+      );
+    }
+    return NextResponse.json({ account });
+  }
 
   const account = await prisma.creatorRateAccount.upsert({
     create: { userId },
