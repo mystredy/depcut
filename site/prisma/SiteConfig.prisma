@@ -62,6 +62,10 @@ model AppSettings {
   // this rate. Stored as a ratio, not a float, so it round-trips exactly.
   creditRateCredits   Int      @default(1000)
   creditRateDollars   Int      @default(3)
+  // Gates the editor's Submit button and /app/artist/submit-project to Pro-
+  // tier artists only; a Standard artist sees it locked. See
+  // CreatorRateAccount.tier in Finance.prisma.
+  submitProjectRequiresPro Boolean @default(false)
   // Site branding, uploaded from admin/settings/general. The favicon and apple
   // touch icon back the /icon and /apple-icon routes (site/src/app/icon.tsx
   // and apple-icon.tsx) independently — one is not derived from the other.

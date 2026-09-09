@@ -19,6 +19,10 @@ model CreatorRateAccount {
   available Int      @default(0)
   referral  Int      @default(0)
   lifetime  Int      @default(0)
+  // "Standard" | "Pro" — set by an admin (see /admin/finance/rates). Gates
+  // capabilities an admin has marked Pro-only in AppSettings, e.g.
+  // submitProjectRequiresPro.
+  tier      String   @default("Standard")
   updatedAt DateTime @updatedAt
 
   @@map("creator_rate_account")
