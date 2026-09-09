@@ -91,7 +91,7 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
       };
     },
     platform: "threads",
-    scope: "threads_basic",
+    scope: "threads_basic,threads_content_publish",
     tokenAuthStyle: "form_post",
     tokenUrl: "https://graph.threads.net/oauth/access_token",
     usesPkce: false,
@@ -220,8 +220,14 @@ export const OAUTH_CAPABLE_PLATFORMS = Object.keys(OAUTH_PROVIDERS);
 export const YOUTUBE_PLATFORMS = ["youtube", "youtube_shorts"];
 
 // Platforms with a real "Post video" publish path today (see
-// /api/admin/social-connections/[id]/publish). Threads isn't here yet — it
-// needs the same long-lived-token handling Facebook/Instagram just got,
-// not yet wired. Snapchat has no public API for posting to a connected
-// account at all.
-export const PUBLISHABLE_PLATFORMS = ["youtube", "youtube_shorts", "tiktok", "x", "facebook", "instagram"];
+// /api/admin/social-connections/[id]/publish). Snapchat has no public API
+// for posting to a connected account at all.
+export const PUBLISHABLE_PLATFORMS = [
+  "youtube",
+  "youtube_shorts",
+  "tiktok",
+  "x",
+  "facebook",
+  "instagram",
+  "threads",
+];

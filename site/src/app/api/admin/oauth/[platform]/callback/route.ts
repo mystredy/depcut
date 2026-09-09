@@ -9,6 +9,7 @@ import { signPageState } from "@/lib/marketplace/oauth-page-state";
 import { getOAuthProvider } from "@/lib/marketplace/oauth-providers";
 import { verifyOAuthState } from "@/lib/marketplace/oauth-state";
 import { upsertSocialConnection } from "@/lib/marketplace/social-connection-upsert";
+import { exchangeForLongLivedThreadsToken, ThreadsApiError } from "@/lib/marketplace/threads-api";
 import { prisma } from "@/lib/prisma";
 
 const META_PICKER_PLATFORMS = new Set(["facebook", "instagram"]);
@@ -190,21 +191,43 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
     }
   }
 
-  const fetched = await provider
-    .fetchProfile(token.accessToken)
-    .catch(() => ({ accountHandle: undefined as string | undefined, accountName: `${provider.platform} Account` }));
+  // Threads issues a short-lived token (~1 hour) from the code exchange —
+  // upgrade it to a long-lived one (~60 days, itself refreshable) right
+  // away so the stored token doesn't go stale almost immediately.
+  let accessToken = token.accessToken;
+  let refreshToken = token.refreshToken;
+  let tokenExpiresAt = token.expiresIn ? new Date(Date.now() + token.expiresIn * 1000) : null;
+  if (platform === "threads") {
+    try {
+      const longLived = await exchangeForLongLivedThreadsToken({
+        clientSecret,
+        shortLivedToken: token.accessToken,
+      });
+      accessToken = longLived.accessToken;
+      refreshToken = undefined;
+      tokenExpiresAt = longLived.expiresIn ? new Date(Date.now() + longLived.expiresIn * 1000) : null;
+    } catch (error) {
+      const message = error instanceof ThreadsApiError ? error.message : "Couldn't get a long-lived Threads token.";
+      return oauthPopupHtml({ message, success: false, title: "Connection failed" });
+    }
+  }
+
+  const fetched = await provider.fetchProfile(accessToken).catch(() => ({
+    accountHandle: undefined as string | undefined,
+    accountName: `${provider.platform} Account`,
+    platformAccountId: undefined as string | undefined,
+    profileImage: undefined as string | undefined,
+  }));
   const profile = { ...fetched, accountName: state.label || fetched.accountName };
 
-  const tokenExpiresAt = token.expiresIn ? new Date(Date.now() + token.expiresIn * 1000) : null;
-
   await upsertSocialConnection({
-    accessToken: token.accessToken,
+    accessToken,
     accountHandle: profile.accountHandle,
     accountName: profile.accountName,
     platform,
     platformAccountId: profile.platformAccountId,
     profileImage: profile.profileImage,
-    refreshToken: token.refreshToken,
+    refreshToken,
     role: state.role,
     tokenExpiresAt,
   });

@@ -313,7 +313,11 @@ function PostVideoDialog({
   const isYoutubePlatform = YOUTUBE_PLATFORMS.includes(connection.platform);
   const isTiktok = connection.platform === "tiktok";
   const isX = connection.platform === "x";
-  const isCaptionPlatform = isTiktok || connection.platform === "facebook" || connection.platform === "instagram";
+  const isCaptionPlatform =
+    isTiktok ||
+    connection.platform === "facebook" ||
+    connection.platform === "instagram" ||
+    connection.platform === "threads";
   const videoRequired = !isX;
 
   const close = () => {

@@ -11,14 +11,16 @@ import { publishInstagramVideo, InstagramApiError } from "@/lib/marketplace/inst
 import { getStoredPageAccessToken, MetaPagesError } from "@/lib/marketplace/meta-pages";
 import { PUBLISHABLE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
 import { getValidAccessToken, SocialConnectionError } from "@/lib/marketplace/oauth-token-refresh";
+import { getValidThreadsAccessToken, publishThreadsVideo, ThreadsApiError } from "@/lib/marketplace/threads-api";
 import { publishTiktokVideo, TiktokApiError } from "@/lib/marketplace/tiktok-api";
 import { publishXPost, XApiError } from "@/lib/marketplace/x-api";
 import { publishYoutubeVideo, YoutubeApiError } from "@/lib/marketplace/youtube-api";
 import { prisma } from "@/lib/prisma";
 
-// Facebook/Instagram Page tokens have no refresh_token grant (see
-// meta-pages.ts) — they're read as stored, not refreshed like the
-// standard-OAuth2 platforms.
+// Facebook/Instagram Page tokens have no refresh_token grant at all (see
+// meta-pages.ts) — read as stored, not refreshed. Threads has its own
+// long-lived-token refresh, distinct from the standard OAuth2 grant the
+// remaining platforms use — see oauth-token-refresh.ts vs threads-api.ts.
 const META_PLATFORMS = new Set(["facebook", "instagram"]);
 
 export const dynamic = "force-dynamic";
@@ -82,7 +84,34 @@ export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   try {
     const accessToken = META_PLATFORMS.has(connection.platform)
       ? await getStoredPageAccessToken(id)
-      : await getValidAccessToken(id);
+      : connection.platform === "threads"
+        ? await getValidThreadsAccessToken(id)
+        : await getValidAccessToken(id);
+
+    if (connection.platform === "threads") {
+      if (!videoUrl) {
+        return NextResponse.json(
+          { error: "Invalid request", message: "videoUrl is required for Threads." },
+          { status: 400 },
+        );
+      }
+      if (!connection.platformAccountId) {
+        return NextResponse.json(
+          {
+            error: "Connection needs reconnecting",
+            message: "This connection predates the current Threads linking — remove it and connect again.",
+          },
+          { status: 400 },
+        );
+      }
+      const published = await publishThreadsVideo({
+        accessToken,
+        text: title,
+        threadsUserId: connection.platformAccountId,
+        videoUrl,
+      });
+      return NextResponse.json({ published });
+    }
 
     if (connection.platform === "facebook" || connection.platform === "instagram") {
       if (!videoUrl) {
@@ -151,7 +180,8 @@ export const POST = withDepCutAuth(async (request, context: RouteContext) => {
       error instanceof XApiError ||
       error instanceof FacebookApiError ||
       error instanceof InstagramApiError ||
-      error instanceof MetaPagesError
+      error instanceof MetaPagesError ||
+      error instanceof ThreadsApiError
     ) {
       return NextResponse.json({ error: "Publish failed", message: error.message }, { status: 502 });
     }
