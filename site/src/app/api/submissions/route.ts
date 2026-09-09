@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { withDepCutAuth } from "@/lib/depcut-api-auth";
+import { isDepCutArtist, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,18 @@ const MAX_OPEN_DRAFTS = 3;
 // (draft) submission at a time, so clicking Submit again on a project that
 // already has one continues that draft instead of creating a duplicate and
 // silently eating a slot toward MAX_OPEN_DRAFTS.
+//
+// Artist-only. Everything downstream of a submission (its own routes, asset
+// uploads) trusts ownership alone because a non-artist can never get a row
+// created here in the first place.
 export const POST = withDepCutAuth(async (request) => {
+  if (!(await isDepCutArtist(request.depcut.userId))) {
+    return NextResponse.json(
+      { error: "Forbidden", message: "Artist access required." },
+      { status: 403 },
+    );
+  }
+
   let projectId: string | undefined;
   try {
     const body = (await request.json()) as { projectId?: string };

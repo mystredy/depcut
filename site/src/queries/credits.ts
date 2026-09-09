@@ -36,6 +36,7 @@ export type Account = {
   userId: string;
   email: string | null;
   superUser: boolean;
+  isArtist: boolean;
 };
 
 export function useCreditBalance() {

@@ -33,6 +33,7 @@ import { retryUpload } from "@/cut/lib/importQueue";
 import { backTarget, projectHref, useCutBase } from "@/cut/lib/nav";
 import { copyProjectAcross } from "@/cut/lib/projectCopy";
 import { useEditor } from "@/cut/lib/store";
+import { useAccount } from "@/queries/credits";
 import { useCreateDraftSubmission } from "@/queries/submissions";
 import { cn } from "@/lib/utils";
 import { FeedbackDialog } from "@/cut/components/FeedbackDialog";
@@ -150,6 +151,8 @@ export function TopBar({
   // meaningful in cloud mode — a local project has no CutProject row to
   // link) and hands off to the existing Submit Project flow.
   const router = useRouter();
+  const account = useAccount();
+  const isArtist = account.data?.isArtist === true;
   const createSubmission = useCreateDraftSubmission();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const submitProject = () => {
@@ -312,7 +315,7 @@ export function TopBar({
         <LayoutGrid data-icon={compact ? undefined : "inline-start"} />
         {!compact && <span className="hidden sm:inline">Post to Space</span>}
       </Button>
-      {cutMode === "cloud" && (
+      {cutMode === "cloud" && isArtist && (
         <Button
           variant="ghost"
           size={compact ? "icon-sm" : "sm"}
@@ -561,7 +564,7 @@ export function TopBar({
                 <DropdownMenuItem disabled={exportBlocked} onClick={() => setPostToSpaceOpen(true)}>
                   <LayoutGrid /> Post to Space
                 </DropdownMenuItem>
-                {cutMode === "cloud" && (
+                {cutMode === "cloud" && isArtist && (
                   <DropdownMenuItem
                     disabled={createSubmission.isPending || exportBlocked}
                     onClick={submitProject}

@@ -46,7 +46,7 @@ import { openOnboarding } from "@/cut/lib/onboarding";
 import { useCutBase } from "@/cut/lib/nav";
 import { authClient } from "@/lib/auth-client";
 import { useAccountProfile, visibleName } from "@/queries/accountProfile";
-import { useCreditBalance } from "@/queries/credits";
+import { useAccount, useCreditBalance } from "@/queries/credits";
 import { usePublicSiteSettings } from "@/queries/site";
 
 type CachedNavProfile = { name: string; image: string | null };
@@ -95,6 +95,7 @@ export function NavUser() {
   // before the other could start.
   const { data: profile, isPending } = useAccountProfile();
   const credits = useCreditBalance();
+  const account = useAccount();
   const siteSettings = usePublicSiteSettings();
   const creditRate = siteSettings.data
     ? {
@@ -211,15 +212,19 @@ export function NavUser() {
           <DropdownMenuItem onClick={() => router.push(`${base}/settings/usage`)}>
             <ChartColumn /> Usage
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => router.push(`${base}/settings/payouts`)}>
-            <Wallet /> Payouts
-          </DropdownMenuItem>
+          {account.data?.isArtist && (
+            <DropdownMenuItem onClick={() => router.push(`${base}/settings/payouts`)}>
+              <Wallet /> Payouts
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => router.push(`${base}/settings/affiliate`)}>
             <Link2 /> Affiliate
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setCreatorApplicationOpen(true)}>
-            <Clapperboard /> Apply to be creator
-          </DropdownMenuItem>
+          {!account.data?.isArtist && (
+            <DropdownMenuItem onClick={() => setCreatorApplicationOpen(true)}>
+              <Clapperboard /> Apply to be creator
+            </DropdownMenuItem>
+          )}
           {/* The welcome sequence is a full-window overlay mounted in the app
               shell, so this asks for it rather than routing anywhere. */}
           <DropdownMenuItem onClick={openOnboarding}>

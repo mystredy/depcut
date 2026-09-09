@@ -204,9 +204,11 @@ export function AppSidebar() {
               );
             })}
             {GROUPS.map(renderRailGroup)}
-            <div className={cn("border-t border-sidebar-border", isMobile ? "mt-3 pt-3" : "mt-4 pt-4")}>
-              {renderRailGroup(ARTIST_GROUP)}
-            </div>
+            {account.data?.isArtist && (
+              <div className={cn("border-t border-sidebar-border", isMobile ? "mt-3 pt-3" : "mt-4 pt-4")}>
+                {renderRailGroup(ARTIST_GROUP)}
+              </div>
+            )}
             {account.data?.superUser && (
               <Link
                 href="/admin"
@@ -259,7 +261,9 @@ export function AppSidebar() {
               })}
               {GROUPS.map(renderGroup)}
             </nav>
-            <div className="mt-4 border-t border-sidebar-border pt-4">{renderGroup(ARTIST_GROUP)}</div>
+            {account.data?.isArtist && (
+              <div className="mt-4 border-t border-sidebar-border pt-4">{renderGroup(ARTIST_GROUP)}</div>
+            )}
             {account.data?.superUser && (
               <div className="mt-4 border-t border-sidebar-border pt-4">
                 <Link
