@@ -44,6 +44,7 @@ export const GET = withDepCutAuth(async (request) => {
     name: u.displayName || u.name,
     pending: u.creatorRateAccount?.pending ?? 0,
     referral: u.creatorRateAccount?.referral ?? 0,
+    tier: u.creatorRateAccount?.tier ?? "Standard",
     userId: u.id,
   }));
 
@@ -53,16 +54,27 @@ export const GET = withDepCutAuth(async (request) => {
 const adjustSchema = z
   .object({
     userId: z.string().trim().min(1),
-    action: z.enum(["grant", "reset-pending", "reset-available", "transfer-pending-to-available", "adjust"]),
+    action: z.enum([
+      "grant",
+      "set-tier",
+      "reset-pending",
+      "reset-available",
+      "transfer-pending-to-available",
+      "adjust",
+    ]),
     field: z.enum(["pending", "available"]).optional(),
     direction: z.enum(["add", "deduct"]).optional(),
     amount: z.number().int().positive().optional(),
+    tier: z.enum(["Standard", "Pro"]).optional(),
   })
   .strict()
   .refine(
     (v) => v.action !== "adjust" || (v.field && v.direction && v.amount),
     { message: "field, direction, and amount are required for adjust" },
-  );
+  )
+  .refine((v) => v.action !== "set-tier" || v.tier, {
+    message: "tier is required for set-tier",
+  });
 
 export const PATCH = withDepCutAuth(async (request) => {
   if (!(await isDepCutSuperUser(request.depcut.userId))) {
@@ -95,6 +107,25 @@ export const PATCH = withDepCutAuth(async (request) => {
     return NextResponse.json({ error: "Not found", message: "No such user." }, { status: 404 });
   }
   const userName = user.displayName || user.name;
+
+  // Set tier: doesn't grant access on its own — an admin picking a tier for
+  // someone who was never granted access would silently create an account
+  // with a balance, which reads as "they're a creator now" without the
+  // notification that actually says so.
+  if (action === "set-tier") {
+    const existing = await prisma.creatorRateAccount.findUnique({ where: { userId } });
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Invalid request", message: "Grant artist access before setting a tier." },
+        { status: 400 },
+      );
+    }
+    const account = await prisma.creatorRateAccount.update({
+      data: { tier: parsed.data.tier },
+      where: { userId },
+    });
+    return NextResponse.json({ account });
+  }
 
   // Grant: admin hands someone artist access directly, no application. Same
   // upsert the application-approval route uses, so the two paths land the

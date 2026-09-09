@@ -33,7 +33,7 @@ import { retryUpload } from "@/cut/lib/importQueue";
 import { backTarget, projectHref, useCutBase } from "@/cut/lib/nav";
 import { copyProjectAcross } from "@/cut/lib/projectCopy";
 import { useEditor } from "@/cut/lib/store";
-import { useAccount } from "@/queries/credits";
+import { canSubmitProject, useAccount } from "@/queries/credits";
 import { useCreateDraftSubmission } from "@/queries/submissions";
 import { cn } from "@/lib/utils";
 import { FeedbackDialog } from "@/cut/components/FeedbackDialog";
@@ -153,6 +153,10 @@ export function TopBar({
   const router = useRouter();
   const account = useAccount();
   const isArtist = account.data?.isArtist === true;
+  // An artist still sees Submit when it's Pro-gated and they're Standard —
+  // hiding it entirely would read as "you're not an artist," when the real
+  // reason is the tier.
+  const submitLocked = isArtist && !canSubmitProject(account.data);
   const createSubmission = useCreateDraftSubmission();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const submitProject = () => {
@@ -321,8 +325,12 @@ export function TopBar({
           size={compact ? "icon-sm" : "sm"}
           className="max-sm:size-7 max-sm:px-0"
           aria-label="Submit"
-          disabled={createSubmission.isPending || exportBlocked}
-          title={submitError ?? exportBlockedTitle ?? (compact ? "Submit" : undefined)}
+          disabled={createSubmission.isPending || exportBlocked || submitLocked}
+          title={
+            submitLocked
+              ? "Submit Project is Pro-only"
+              : (submitError ?? exportBlockedTitle ?? (compact ? "Submit" : undefined))
+          }
           onClick={submitProject}
         >
           {createSubmission.isPending ? (
@@ -566,10 +574,10 @@ export function TopBar({
                 </DropdownMenuItem>
                 {cutMode === "cloud" && isArtist && (
                   <DropdownMenuItem
-                    disabled={createSubmission.isPending || exportBlocked}
+                    disabled={createSubmission.isPending || exportBlocked || submitLocked}
                     onClick={submitProject}
                   >
-                    <Send /> Submit
+                    <Send /> {submitLocked ? "Submit (Pro only)" : "Submit"}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem

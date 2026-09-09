@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -20,6 +21,8 @@ import {
   type AdminCreatorRateAccount,
   useAdjustCreatorRate,
   useAdminFinanceRates,
+  useAdminSettings,
+  useUpdateAdminSettings,
 } from "@/queries/admin";
 
 export default function AdminFinanceRatesPage() {
@@ -27,6 +30,7 @@ export default function AdminFinanceRatesPage() {
   const accounts = useAdminFinanceRates(query);
   const adjust = useAdjustCreatorRate();
   const grant = useAdjustCreatorRate();
+  const tier = useAdjustCreatorRate();
   const [target, setTarget] = useState<AdminCreatorRateAccount | null>(null);
 
   return (
@@ -38,6 +42,8 @@ export default function AdminFinanceRatesPage() {
           admin-managed and every change is logged to Transactions.
         </p>
       </div>
+
+      <ProgramSettingsCard />
 
       <label className="flex w-full max-w-sm items-center gap-2 rounded-lg border border-input px-2.5 py-1.5 focus-within:border-ring">
         <Search className="size-3.5 shrink-0 text-muted-foreground" />
@@ -61,6 +67,7 @@ export default function AdminFinanceRatesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Creator</TableHead>
+                <TableHead>Tier</TableHead>
                 <TableHead className="text-right">Pending</TableHead>
                 <TableHead className="text-right">Available</TableHead>
                 <TableHead className="text-right">Referral</TableHead>
@@ -74,6 +81,26 @@ export default function AdminFinanceRatesPage() {
                   <TableCell>
                     <p className="text-sm font-medium">{a.name}</p>
                     <p className="text-xs text-muted-foreground">{a.email}</p>
+                  </TableCell>
+                  <TableCell>
+                    {a.hasAccount ? (
+                      <button
+                        type="button"
+                        disabled={tier.isPending}
+                        onClick={() =>
+                          tier.mutate({
+                            action: "set-tier",
+                            tier: a.tier === "Pro" ? "Standard" : "Pro",
+                            userId: a.userId,
+                          })
+                        }
+                        className="rounded-full border px-2 py-0.5 text-xs font-medium hover:bg-accent disabled:opacity-50"
+                      >
+                        {a.tier}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm text-amber-600 dark:text-amber-400">
                     {a.pending.toLocaleString()}
@@ -108,7 +135,7 @@ export default function AdminFinanceRatesPage() {
               ))}
               {accounts.data?.accounts.length === 0 && (
                 <TableRow>
-                  <TableCell className="text-sm text-muted-foreground" colSpan={6}>
+                  <TableCell className="text-sm text-muted-foreground" colSpan={7}>
                     No users found.
                   </TableCell>
                 </TableRow>
@@ -125,6 +152,54 @@ export default function AdminFinanceRatesPage() {
           onSubmit={(input) => adjust.mutate(input, { onSuccess: () => setTarget(null) })}
           pending={adjust.isPending}
         />
+      )}
+    </div>
+  );
+}
+
+// Program-wide capability gates. Submit Project is the only one today: on,
+// only Pro-tier artists can start a submission; off, every artist can.
+function ProgramSettingsCard() {
+  const settings = useAdminSettings();
+  const update = useUpdateAdminSettings();
+
+  // null: no unsaved edit yet, so the switch shows the server's value. Set
+  // only by the user flipping it — avoids syncing server data into state via
+  // an effect, which is its own can of re-render worms.
+  const [edited, setEdited] = useState<boolean | null>(null);
+  const serverValue = settings.data?.settings.submitProjectRequiresPro ?? false;
+  const requiresPro = edited ?? serverValue;
+  const dirty = edited !== null && edited !== serverValue;
+
+  const save = () =>
+    update.mutate(
+      { submitProjectRequiresPro: requiresPro },
+      { onSuccess: () => setEdited(null) },
+    );
+
+  if (settings.isLoading) return <Skeleton className="h-24 w-full max-w-2xl" />;
+  if (settings.isError) return null;
+
+  return (
+    <div className="max-w-2xl space-y-4 rounded-2xl border bg-card p-5">
+      <h2 className="text-sm font-semibold">Program Settings</h2>
+      <div className="flex items-center justify-between rounded-xl border p-3">
+        <div>
+          <p className="text-sm font-semibold">Submit Project</p>
+          <p className="text-xs text-muted-foreground">Share a finished video for review.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">PRO</span>
+          <Switch checked={requiresPro} onCheckedChange={setEdited} aria-label="Require Pro tier" />
+        </div>
+      </div>
+      {dirty && (
+        <div className="flex justify-end">
+          <Button size="sm" disabled={update.isPending} onClick={save}>
+            {update.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
+            Save
+          </Button>
+        </div>
       )}
     </div>
   );
