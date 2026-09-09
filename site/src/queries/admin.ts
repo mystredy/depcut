@@ -1308,7 +1308,10 @@ export function useAdminFinanceRates(q: string) {
 }
 
 export type AdjustCreatorRateInput =
-  | { userId: string; action: "grant" | "reset-pending" | "reset-available" | "transfer-pending-to-available" }
+  | {
+      userId: string;
+      action: "grant" | "revoke" | "reset-pending" | "reset-available" | "transfer-pending-to-available";
+    }
   | { userId: string; action: "set-tier"; tier: "Standard" | "Pro" }
   | {
       userId: string;
@@ -1322,7 +1325,9 @@ export function useAdjustCreatorRate() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: AdjustCreatorRateInput) =>
-      apiFetch<{ account: AdminCreatorRateAccount }>("/api/admin/finance/rates", {
+      // revoke returns { ok: true } instead of an account (there isn't one
+      // anymore); every other action returns the updated account.
+      apiFetch<{ account: AdminCreatorRateAccount } | { ok: true }>("/api/admin/finance/rates", {
         body: JSON.stringify(input),
         method: "PATCH",
       }),

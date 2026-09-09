@@ -171,9 +171,20 @@ function AdjustPanel({
     <div className="max-w-xl space-y-4 rounded-2xl border bg-card p-5">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">Adjust balance — {account.name}</p>
-        <Button size="sm" variant="ghost" onClick={onClose}>
-          Close
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-destructive hover:text-destructive"
+            disabled={pending}
+            onClick={() => onSubmit({ action: "revoke", userId: account.userId })}
+          >
+            Revoke Artist Access
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onClose}>
+            Close
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">

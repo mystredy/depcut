@@ -48,10 +48,15 @@ function PermissionsDialogBody({
   const [isArtist, setIsArtist] = useState(target.isArtist);
   const [tier, setTier] = useState<"Standard" | "Pro">(target.creatorTier === "Pro" ? "Pro" : "Standard");
   const grant = useAdjustCreatorRate();
+  const revoke = useAdjustCreatorRate();
   const setTierMutation = useAdjustCreatorRate();
 
   const doGrant = () => {
     grant.mutate({ action: "grant", userId: target.id }, { onSuccess: () => setIsArtist(true) });
+  };
+
+  const doRevoke = () => {
+    revoke.mutate({ action: "revoke", userId: target.id }, { onSuccess: () => setIsArtist(false) });
   };
 
   const toggleTier = () => {
@@ -62,7 +67,7 @@ function PermissionsDialogBody({
     );
   };
 
-  const error = grant.error ?? setTierMutation.error;
+  const error = grant.error ?? revoke.error ?? setTierMutation.error;
 
   return (
     <>
@@ -100,17 +105,25 @@ function PermissionsDialogBody({
                 </p>
               </div>
               {isArtist ? (
-                <button
-                  type="button"
-                  disabled={setTierMutation.isPending}
-                  onClick={toggleTier}
-                  className="rounded-full border px-2.5 py-1 text-xs font-medium hover:bg-accent disabled:opacity-50"
-                >
-                  {setTierMutation.isPending && (
-                    <Loader2 className="mr-1 inline size-3 animate-spin" />
-                  )}
-                  {tier}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={setTierMutation.isPending}
+                    onClick={toggleTier}
+                    className="rounded-full border px-2.5 py-1 text-xs font-medium hover:bg-accent disabled:opacity-50"
+                  >
+                    {setTierMutation.isPending && (
+                      <Loader2 className="mr-1 inline size-3 animate-spin" />
+                    )}
+                    {tier}
+                  </button>
+                  <Button size="sm" variant="outline" disabled={revoke.isPending} onClick={doRevoke}>
+                    {revoke.isPending ? (
+                      <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" />
+                    ) : null}
+                    Remove
+                  </Button>
+                </div>
               ) : (
                 <Button size="sm" variant="outline" disabled={grant.isPending} onClick={doGrant}>
                   {grant.isPending ? (

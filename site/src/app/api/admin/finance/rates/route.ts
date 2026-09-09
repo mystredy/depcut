@@ -56,6 +56,7 @@ const adjustSchema = z
     userId: z.string().trim().min(1),
     action: z.enum([
       "grant",
+      "revoke",
       "set-tier",
       "reset-pending",
       "reset-available",
@@ -149,6 +150,42 @@ export const PATCH = withDepCutAuth(async (request) => {
       );
     }
     return NextResponse.json({ account });
+  }
+
+  // Revoke: the inverse of grant. Any pending/available balance is forfeit
+  // (deleting the row is what actually takes away isArtist — see
+  // isDepCutArtist) — logged as a negative transaction first, the same way
+  // reset-pending/reset-available record what they zeroed, so the ledger
+  // still shows where the balance went.
+  if (action === "revoke") {
+    const existing = await prisma.creatorRateAccount.findUnique({ where: { userId } });
+    if (!existing) return NextResponse.json({ ok: true });
+
+    const forfeited = existing.pending + existing.available;
+    const exchangeRate = await prisma.financeExchangeRate.upsert({
+      create: { id: "singleton" },
+      update: {},
+      where: { id: "singleton" },
+    });
+    await prisma.$transaction([
+      ...(forfeited > 0
+        ? [
+            prisma.financeTransaction.create({
+              data: {
+                amount: -forfeited * exchangeRate.currentRate,
+                details: `Revoked artist access for ${userName} — forfeited ${forfeited} Rates`,
+                ratesAmount: -forfeited,
+                status: "Completed",
+                type: "Manual Adjustment",
+                userId,
+                userName,
+              },
+            }),
+          ]
+        : []),
+      prisma.creatorRateAccount.delete({ where: { userId } }),
+    ]);
+    return NextResponse.json({ ok: true });
   }
 
   const account = await prisma.creatorRateAccount.upsert({
