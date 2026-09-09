@@ -72,6 +72,7 @@ model User {
   creatorApplication CreatorApplication?
   affiliate          Affiliate?
   affiliateReferral  AffiliateReferral? @relation("AffiliateReferredUser")
+  socialConnections  SocialConnection[]
 
   @@map("user")
 }

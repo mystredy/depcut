@@ -282,13 +282,18 @@ export type AdminSubmission = {
 export type AdminSocialConnection = {
   id: string;
   platform: string;
+  platformAccountId: string | null;
   accountName: string;
   accountHandle: string | null;
+  profileImage: string | null;
   role: "source" | "destination";
   status: "active" | "inactive";
   hasToken: boolean;
   tokenExpiresAt: string | null;
   brandId: string | null;
+  // Set when a DepCut user connected this account themselves; null for the
+  // admin-managed shared pool.
+  userId: string | null;
   createdAt: string;
   updatedAt: string;
 };

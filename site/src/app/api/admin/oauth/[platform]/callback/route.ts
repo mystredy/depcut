@@ -125,14 +125,24 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
 
   const tokenExpiresAt = token.expiresIn ? new Date(Date.now() + token.expiresIn * 1000) : null;
 
-  const existing = await prisma.socialConnection.findFirst({
-    where: { accountName: profile.accountName, platform },
-  });
+  // Match by the platform's own account id when the provider gave us one —
+  // accountName is display text and can change on the platform without
+  // this connection changing. Falls back to the old accountName match for
+  // connections made before platformAccountId existed.
+  const existing = profile.platformAccountId
+    ? await prisma.socialConnection.findFirst({
+        where: { platform, platformAccountId: profile.platformAccountId },
+      })
+    : await prisma.socialConnection.findFirst({
+        where: { accountName: profile.accountName, platform },
+      });
   if (existing) {
     await prisma.socialConnection.update({
       data: {
         accessToken: token.accessToken,
         accountHandle: profile.accountHandle,
+        platformAccountId: profile.platformAccountId,
+        profileImage: profile.profileImage,
         refreshToken: token.refreshToken,
         status: "active",
         tokenExpiresAt,
@@ -146,6 +156,8 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
         accountHandle: profile.accountHandle,
         accountName: profile.accountName,
         platform,
+        platformAccountId: profile.platformAccountId,
+        profileImage: profile.profileImage,
         refreshToken: token.refreshToken,
         role: state.role,
         tokenExpiresAt,

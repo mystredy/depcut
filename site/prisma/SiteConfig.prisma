@@ -114,26 +114,39 @@ model Brand {
 // after linking an account out-of-band, and mark them inactive when a
 // token expires. role: "source" | "destination".
 model SocialConnection {
-  id             String    @id @default(cuid())
-  platform       String
-  accountName    String
-  accountHandle  String?
-  role           String    @default("destination")
-  status         String    @default("active")
+  id                String    @id @default(cuid())
+  platform          String
+  // The platform's own id for the connected account (its channel/page/user
+  // id) — distinct from accountName, which is display text and can change
+  // on the platform without this changing. Not backfilled for connections
+  // made before this field existed.
+  platformAccountId String?
+  accountName       String
+  accountHandle     String?
+  profileImage      String?
+  role              String    @default("destination")
+  status            String    @default("active")
   // Write-only from the admin API, same redaction rule as everywhere else
   // credentials are stored — reads only ever say whether a token is set.
-  accessToken    String?
-  refreshToken   String?
-  tokenExpiresAt DateTime?
-  brandId        String?
-  brand          Brand?    @relation(fields: [brandId], references: [id], onDelete: SetNull)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  sourceOf       SocialWorkflow[] @relation("WorkflowSource")
-  destinationOf  SocialWorkflow[] @relation("WorkflowDestination")
+  accessToken       String?
+  refreshToken      String?
+  tokenExpiresAt    DateTime?
+  brandId           String?
+  brand             Brand?    @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  // Set when a DepCut user connects their own account (see
+  // /api/social-connections/[platform]/start) rather than an admin
+  // connecting a shared brand account from /admin/social/connections. Null
+  // for every admin-owned connection.
+  userId            String?
+  user              User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  sourceOf          SocialWorkflow[] @relation("WorkflowSource")
+  destinationOf     SocialWorkflow[] @relation("WorkflowDestination")
 
   @@index([platform])
   @@index([brandId])
+  @@index([userId])
   @@map("social_connection")
 }
 

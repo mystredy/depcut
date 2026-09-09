@@ -15,7 +15,12 @@ export type OAuthProviderConfig = {
   usesPkce: boolean;
   tokenAuthStyle: TokenAuthStyle;
   extraAuthorizeParams?: Record<string, string>;
-  fetchProfile: (accessToken: string) => Promise<{ accountName: string; accountHandle?: string }>;
+  fetchProfile: (accessToken: string) => Promise<{
+    accountName: string;
+    accountHandle?: string;
+    platformAccountId?: string;
+    profileImage?: string;
+  }>;
 };
 
 async function safeJson(res: Response): Promise<any> {
@@ -33,10 +38,14 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
     clientSecretField: "appSecret",
     fetchProfile: async (accessToken) => {
       const res = await fetch(
-        `https://graph.facebook.com/v21.0/me?fields=name&access_token=${encodeURIComponent(accessToken)}`
+        `https://graph.facebook.com/v21.0/me?fields=name,picture&access_token=${encodeURIComponent(accessToken)}`
       );
       const data = await safeJson(res);
-      return { accountName: data?.name ?? "Facebook Account" };
+      return {
+        accountName: data?.name ?? "Facebook Account",
+        platformAccountId: data?.id,
+        profileImage: data?.picture?.data?.url,
+      };
     },
     platform: "facebook",
     scope: "pages_show_list,pages_manage_posts,pages_read_engagement",
@@ -50,10 +59,14 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
     clientSecretField: "appSecret",
     fetchProfile: async (accessToken) => {
       const res = await fetch(
-        `https://graph.facebook.com/v21.0/me?fields=name&access_token=${encodeURIComponent(accessToken)}`
+        `https://graph.facebook.com/v21.0/me?fields=name,picture&access_token=${encodeURIComponent(accessToken)}`
       );
       const data = await safeJson(res);
-      return { accountName: data?.name ?? "Instagram Account" };
+      return {
+        accountName: data?.name ?? "Instagram Account",
+        platformAccountId: data?.id,
+        profileImage: data?.picture?.data?.url,
+      };
     },
     platform: "instagram",
     scope: "instagram_basic,pages_show_list",
@@ -67,10 +80,15 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
     clientSecretField: "appSecret",
     fetchProfile: async (accessToken) => {
       const res = await fetch(
-        `https://graph.threads.net/v1.0/me?fields=username&access_token=${encodeURIComponent(accessToken)}`
+        `https://graph.threads.net/v1.0/me?fields=username,threads_profile_picture_url&access_token=${encodeURIComponent(accessToken)}`
       );
       const data = await safeJson(res);
-      return { accountHandle: data?.username ? `@${data.username}` : undefined, accountName: data?.username ?? "Threads Account" };
+      return {
+        accountHandle: data?.username ? `@${data.username}` : undefined,
+        accountName: data?.username ?? "Threads Account",
+        platformAccountId: data?.id,
+        profileImage: data?.threads_profile_picture_url,
+      };
     },
     platform: "threads",
     scope: "threads_basic",
@@ -84,11 +102,15 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
     clientSecretField: "appSecret",
     fetchProfile: async (accessToken) => {
       const res = await fetch(
-        "https://open.tiktokapis.com/v2/user/info/?fields=display_name",
+        "https://open.tiktokapis.com/v2/user/info/?fields=display_name,avatar_url,open_id",
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
       const data = await safeJson(res);
-      return { accountName: data?.data?.user?.display_name ?? "TikTok Account" };
+      return {
+        accountName: data?.data?.user?.display_name ?? "TikTok Account",
+        platformAccountId: data?.data?.user?.open_id,
+        profileImage: data?.data?.user?.avatar_url,
+      };
     },
     platform: "tiktok",
     scope: "user.info.basic",
@@ -101,13 +123,15 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
     clientIdField: "clientId",
     clientSecretField: "clientSecret",
     fetchProfile: async (accessToken) => {
-      const res = await fetch("https://api.twitter.com/2/users/me", {
+      const res = await fetch("https://api.twitter.com/2/users/me?user.fields=profile_image_url", {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const data = await safeJson(res);
       return {
         accountHandle: data?.data?.username ? `@${data.data.username}` : undefined,
         accountName: data?.data?.name ?? "X Account",
+        platformAccountId: data?.data?.id,
+        profileImage: data?.data?.profile_image_url,
       };
     },
     platform: "x",
@@ -142,6 +166,8 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
       return {
         accountHandle: channel?.snippet?.customUrl,
         accountName: channel?.snippet?.title ?? "YouTube Channel",
+        platformAccountId: channel?.id,
+        profileImage: channel?.snippet?.thumbnails?.default?.url,
       };
     },
     platform: "youtube",
@@ -166,6 +192,8 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
       return {
         accountHandle: channel?.snippet?.customUrl,
         accountName: channel?.snippet?.title ?? "YouTube Shorts Channel",
+        platformAccountId: channel?.id,
+        profileImage: channel?.snippet?.thumbnails?.default?.url,
       };
     },
     platform: "youtube_shorts",
