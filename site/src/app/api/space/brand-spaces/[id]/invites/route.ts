@@ -12,6 +12,7 @@ import { sendBrandSpaceInvite } from "@/lib/email/send-brand-space-invite";
 import { validationErrorResponse } from "@/lib/inference/responses";
 import { prisma } from "@/lib/prisma";
 import { getBrandSpaceMembership, logBrandSpaceActivity } from "@/lib/space/brand-space-access";
+import { verifyInviteChallenge } from "@/lib/space/invite-verification";
 
 export const dynamic = "force-dynamic";
 
@@ -42,12 +43,16 @@ export const GET = withDepCutAuth(async (request: DepCutAuthenticatedRequest, co
 const inviteSchema = z
   .object({
     email: z.string().trim().toLowerCase().email(),
+    challenge: z.string().min(1),
+    code: z.string().length(6),
   })
   .strict();
 
-// Managers only. Creates the invite, emails it, and logs the action —
-// resending to the same email replaces the still-pending invite rather
-// than piling up duplicates.
+// Managers only. Step 2 of inviting someone: requires the challenge and
+// code from POST .../invites/request-code, proving the requesting manager
+// approved this exact invite from their own inbox. Only then creates the
+// invite, emails it, and logs the action — resending to the same email
+// replaces the still-pending invite rather than piling up duplicates.
 export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest, context: RouteContext) => {
   const { id } = await context.params;
   const membership = await getBrandSpaceMembership(request.depcut.userId, id);
@@ -55,6 +60,20 @@ export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest, c
 
   const parsed = inviteSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return validationErrorResponse(parsed.error);
+
+  const verified = verifyInviteChallenge({
+    brandSpaceId: id,
+    challenge: parsed.data.challenge,
+    code: parsed.data.code,
+    email: parsed.data.email,
+    requesterId: request.depcut.userId,
+  });
+  if (!verified) {
+    return NextResponse.json(
+      { error: "invalid_code", message: "That code is wrong or expired. Request a new one." },
+      { status: 400 },
+    );
+  }
 
   const space = await prisma.brandSpace.findUnique({ where: { id } });
   if (!space) return notFoundResponse();

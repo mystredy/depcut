@@ -35,11 +35,21 @@ import {
   useDeleteBrandSpace,
   useDisconnectBrandSpaceConnection,
   useRemoveBrandSpaceMember,
+  useRequestBrandSpaceInviteCode,
   useRevokeBrandSpaceInvite,
   useSendBrandSpaceInvite,
   useUpdateBrandSpace,
   brandSpaceConnectionsQueryKey,
 } from "@/queries/brandSpace";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ApiError } from "@/queries/apiClient";
 
 const PLATFORM_ICONS: Record<string, LucideIcon> = {
   facebook: MessageCircle,
@@ -203,9 +213,9 @@ function AccessSection({ spaceId, isOwner }: { spaceId: string; isOwner: boolean
   const members = useBrandSpaceMembers(spaceId);
   const invites = useBrandSpaceInvites(spaceId);
   const removeMember = useRemoveBrandSpaceMember(spaceId);
-  const sendInvite = useSendBrandSpaceInvite(spaceId);
   const revokeInvite = useRevokeBrandSpaceInvite(spaceId);
   const [email, setEmail] = useState("");
+  const [inviteTarget, setInviteTarget] = useState<string | null>(null);
 
   return (
     <div className="max-w-md space-y-8">
@@ -244,17 +254,10 @@ function AccessSection({ spaceId, isOwner }: { spaceId: string; isOwner: boolean
             placeholder="email@example.com"
             type="email"
           />
-          <Button
-            disabled={!email.trim() || sendInvite.isPending}
-            onClick={() => sendInvite.mutate(email.trim(), { onSuccess: () => setEmail("") })}
-          >
-            {sendInvite.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
+          <Button disabled={!email.trim()} onClick={() => setInviteTarget(email.trim())}>
             Invite
           </Button>
         </div>
-        {sendInvite.isError && (
-          <p className="mt-2 text-xs text-destructive">{(sendInvite.error as Error).message}</p>
-        )}
 
         {(invites.data?.invites ?? []).length > 0 && (
           <div className="mt-4 space-y-2">
@@ -274,7 +277,139 @@ function AccessSection({ spaceId, isOwner }: { spaceId: string; isOwner: boolean
           </div>
         )}
       </div>
+
+      <InviteManagerDialog
+        spaceId={spaceId}
+        email={inviteTarget}
+        onClose={() => setInviteTarget(null)}
+        onSent={() => setEmail("")}
+      />
     </div>
+  );
+}
+
+// Sending an invite is two steps: a code goes to the inviting manager's own
+// email first, and only entering it back here sends the actual invite to
+// the target address — see lib/space/invite-verification.ts.
+function InviteManagerDialog({
+  spaceId,
+  email,
+  onClose,
+  onSent,
+}: {
+  spaceId: string;
+  email: string | null;
+  onClose: () => void;
+  onSent: () => void;
+}) {
+  const requestCode = useRequestBrandSpaceInviteCode(spaceId);
+  const sendInvite = useSendBrandSpaceInvite(spaceId);
+  const [challenge, setChallenge] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+
+  // Resets challenge/code the moment the target email changes (including to
+  // null on close), in render rather than an effect — React's documented
+  // pattern for adjusting state when a prop changes.
+  const [trackedEmail, setTrackedEmail] = useState(email);
+  if (email !== trackedEmail) {
+    setTrackedEmail(email);
+    setChallenge(null);
+    setCode("");
+  }
+
+  useEffect(() => {
+    if (!email) return;
+    requestCode.mutate(email, { onSuccess: (result) => setChallenge(result.challenge) });
+    // Only re-fires when the target email changes, not on every render the
+    // mutations themselves cause.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [email]);
+
+  const resend = () => {
+    if (!email) return;
+    setCode("");
+    requestCode.mutate(email, { onSuccess: (result) => setChallenge(result.challenge) });
+  };
+
+  const confirm = () => {
+    if (!email || !challenge) return;
+    sendInvite.mutate(
+      { challenge, code, email },
+      {
+        onSuccess: () => {
+          onSent();
+          onClose();
+        },
+      },
+    );
+  };
+
+  return (
+    <Dialog open={email !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Confirm invite</DialogTitle>
+          <DialogDescription>
+            Enter the code we sent you to invite{" "}
+            <span className="font-medium text-foreground">{email}</span> to manage this space.
+          </DialogDescription>
+        </DialogHeader>
+
+        {requestCode.isPending && !challenge ? (
+          <p className="text-sm text-muted-foreground">Sending a code to your email…</p>
+        ) : requestCode.isError ? (
+          <div className="space-y-2">
+            <p className="text-sm text-destructive">
+              {requestCode.error instanceof ApiError ? requestCode.error.message : "Couldn't send a code."}
+            </p>
+            <Button size="sm" type="button" variant="outline" onClick={resend}>
+              Try again
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              We emailed a code to {requestCode.data?.sentTo ?? "your email"}.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="invite-code">Code</Label>
+              <Input
+                autoFocus
+                className="w-28 tracking-widest"
+                id="invite-code"
+                inputMode="numeric"
+                maxLength={6}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="000000"
+                value={code}
+              />
+            </div>
+            {sendInvite.isError && (
+              <p className="text-sm text-destructive">
+                {sendInvite.error instanceof ApiError ? sendInvite.error.message : "Couldn't send the invite."}
+              </p>
+            )}
+            <button
+              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              onClick={resend}
+              type="button"
+            >
+              Resend code
+            </button>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button disabled={!challenge || code.length !== 6 || sendInvite.isPending} onClick={confirm}>
+            {sendInvite.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
+            Send invite
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

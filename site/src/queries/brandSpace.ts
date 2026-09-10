@@ -126,12 +126,27 @@ export function useBrandSpaceInvites(id: string) {
   });
 }
 
+// Step 1 of inviting someone: emails a one-time code to the requesting
+// manager's own address. See useSendBrandSpaceInvite for step 2.
+export function useRequestBrandSpaceInviteCode(id: string) {
+  return useMutation({
+    mutationFn: (email: string) =>
+      apiFetch<{ challenge: string; sentTo: string }>(`/api/space/brand-spaces/${id}/invites/request-code`, {
+        body: JSON.stringify({ email }),
+        method: "POST",
+      }),
+  });
+}
+
+// Step 2: requires the challenge + code from useRequestBrandSpaceInviteCode,
+// proving the requesting manager approved this exact invite from their own
+// inbox, before the invite email goes out to the invitee.
 export function useSendBrandSpaceInvite(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (email: string) =>
+    mutationFn: ({ email, challenge, code }: { email: string; challenge: string; code: string }) =>
       apiFetch<{ invite: BrandSpaceInvite }>(`/api/space/brand-spaces/${id}/invites`, {
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ challenge, code, email }),
         method: "POST",
       }),
     onSuccess: () => {
