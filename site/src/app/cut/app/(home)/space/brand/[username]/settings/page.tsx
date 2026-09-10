@@ -132,6 +132,9 @@ function SetupSection({
   const [bio, setBio] = useState(space.bio ?? "");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  const dirty =
+    name.trim() !== space.name || username.trim() !== space.username || bio.trim() !== (space.bio ?? "");
+
   const save = () => {
     update.mutate({
       bio: bio.trim() || null,
@@ -161,7 +164,7 @@ function SetupSection({
 
       {update.isError && <p className="text-xs text-destructive">{(update.error as Error).message}</p>}
 
-      <Button disabled={update.isPending} onClick={save}>
+      <Button disabled={!dirty || update.isPending} onClick={save}>
         {update.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
         Save
       </Button>
@@ -314,6 +317,15 @@ function LinkedAccountsSection({
   // to keep it in sync.
   const [handles, setHandles] = useState<Record<string, string>>(linkedAccounts);
 
+  const normalize = (record: Record<string, string>) =>
+    JSON.stringify(
+      Object.entries(record)
+        .filter(([, v]) => v.trim())
+        .map(([k, v]) => [k, v.trim()])
+        .sort(([a], [b]) => a.localeCompare(b)),
+    );
+  const dirty = normalize(handles) !== normalize(linkedAccounts);
+
   return (
     <div className="max-w-md space-y-4">
       <p className="text-sm text-muted-foreground">
@@ -334,7 +346,7 @@ function LinkedAccountsSection({
         );
       })}
       <Button
-        disabled={update.isPending}
+        disabled={!dirty || update.isPending}
         onClick={() =>
           update.mutate({
             linkedAccounts: Object.fromEntries(Object.entries(handles).filter(([, v]) => v.trim())),
