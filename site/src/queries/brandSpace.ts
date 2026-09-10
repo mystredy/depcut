@@ -77,6 +77,12 @@ export function useUpdateBrandSpace(id: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: brandSpacesQueryKey });
       queryClient.invalidateQueries({ queryKey: brandSpaceActivityQueryKey(id) });
+      // useBrandSpaceByUsername keys on the username, not id, so this can't
+      // use brandSpaceQueryKey(id) — invalidate every ["brand-space", *] by
+      // prefix instead. It's what feeds the Setup/Linked accounts forms'
+      // dirty check, and without it Save never goes back to disabled after
+      // the first successful save this session.
+      queryClient.invalidateQueries({ queryKey: ["brand-space"] });
     },
   });
 }
