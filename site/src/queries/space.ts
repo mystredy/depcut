@@ -29,7 +29,7 @@ export function useSpacePosts() {
 
 export function useCreateSpacePost() {
   return useMutation({
-    mutationFn: (input: { caption?: string; projectId?: string | null }) =>
+    mutationFn: (input: { caption?: string; projectId?: string | null; brandSpaceId?: string | null }) =>
       apiFetch<{ post: { id: string } }>("/api/space/posts", {
         body: JSON.stringify(input),
         method: "POST",

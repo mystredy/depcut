@@ -11,6 +11,7 @@ import { verifyOAuthState } from "@/lib/marketplace/oauth-state";
 import { upsertSocialConnection } from "@/lib/marketplace/social-connection-upsert";
 import { exchangeForLongLivedThreadsToken, ThreadsApiError } from "@/lib/marketplace/threads-api";
 import { prisma } from "@/lib/prisma";
+import { isBrandSpaceManager } from "@/lib/space/brand-space-access";
 
 const META_PICKER_PLATFORMS = new Set(["facebook", "instagram"]);
 
@@ -64,14 +65,15 @@ async function exchangeCode(opts: {
   return { accessToken: data.access_token, expiresIn: data.expires_in, refreshToken: data.refresh_token };
 }
 
-// Super-user only, but reached via a top-level browser navigation from the
-// platform's own domain — normal OAuth redirect, not a fetch, so our
-// first-party session cookie still rides along.
+// Reached via a top-level browser navigation from the platform's own
+// domain — normal OAuth redirect, not a fetch, so our first-party session
+// cookie still rides along. Shared by two flows, distinguished by the
+// signed state's ownerType: an admin connecting the shared brand pool
+// (super-user only), or a Brand Space manager connecting that space's own
+// Repurpose destination. Both need the exact same redirect URI already
+// registered with each platform, which is why this one route serves both
+// instead of two separate callback paths.
 export const GET = withDepCutAuth(async (request, context: RouteContext) => {
-  if (!(await isDepCutSuperUser(request.depcut.userId))) {
-    return oauthPopupHtml({ message: "Only super users can do this.", success: false, title: "Forbidden" });
-  }
-
   const { platform } = await context.params;
   const provider = getOAuthProvider(platform);
   if (!provider) {
@@ -97,6 +99,18 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
       success: false,
       title: "Invalid request",
     });
+  }
+
+  if (state.ownerType === "brandSpace" && state.brandSpaceId) {
+    if (!(await isBrandSpaceManager(request.depcut.userId, state.brandSpaceId))) {
+      return oauthPopupHtml({
+        message: "You're not a manager of this space.",
+        success: false,
+        title: "Forbidden",
+      });
+    }
+  } else if (!(await isDepCutSuperUser(request.depcut.userId))) {
+    return oauthPopupHtml({ message: "Only super users can do this.", success: false, title: "Forbidden" });
   }
 
   const config = await prisma.socialAppConfig.findUnique({ where: { platform } });
@@ -127,6 +141,8 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
       title: "Connection failed",
     });
   }
+
+  const brandSpaceId = state.ownerType === "brandSpace" ? state.brandSpaceId : undefined;
 
   // Facebook/Instagram post through a Page's own access token, not the
   // user token OAuth just returned — resolve which Page(s) this account
@@ -160,6 +176,7 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
         await upsertSocialConnection({
           accessToken: page.accessToken,
           accountName: state.label || page.name,
+          brandSpaceId,
           platform,
           platformAccountId: page.id,
           profileImage: page.profileImage,
@@ -174,7 +191,9 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
       }
 
       const pageState = signPageState({
+        brandSpaceId,
         label: state.label,
+        ownerType: state.ownerType,
         pages: candidates,
         platform,
         role: state.role,
@@ -224,6 +243,7 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
     accessToken,
     accountHandle: profile.accountHandle,
     accountName: profile.accountName,
+    brandSpaceId,
     platform,
     platformAccountId: profile.platformAccountId,
     profileImage: profile.profileImage,

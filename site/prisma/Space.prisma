@@ -14,6 +14,11 @@ model SpacePost {
   id           String   @id @default(cuid())
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Null posts to the author's own personal Space (the default, and the
+  // only option before Brand Spaces existed); set posts to that Brand
+  // Space's feed instead — the author is still whichever manager posted it.
+  brandSpaceId String?
+  brandSpace   BrandSpace? @relation(fields: [brandSpaceId], references: [id], onDelete: Cascade)
   projectId    String?
   caption      String?
   // Original picked filename, kept as a label.
@@ -34,5 +39,6 @@ model SpacePost {
 
   @@index([userId])
   @@index([status])
+  @@index([brandSpaceId])
   @@map("space_post")
 }

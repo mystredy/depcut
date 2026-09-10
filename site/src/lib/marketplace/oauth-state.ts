@@ -9,8 +9,16 @@ type StatePayload = {
   role: "source" | "destination";
   label?: string;
   verifier?: string;
+  // Who this connection belongs to once it's created — the admin/brand
+  // pool (default) or a specific Brand Space's Repurpose panel. The
+  // callback route reads this to pick which permission check applies and
+  // which owner field to set on the resulting SocialConnection.
+  ownerType?: "admin" | "brandSpace";
+  brandSpaceId?: string;
   iat: number;
 };
+
+export type { StatePayload };
 
 function secret(): string {
   const s = process.env.BETTER_AUTH_SECRET;
