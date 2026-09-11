@@ -156,22 +156,38 @@ export default function SpacePage() {
                   target="_blank"
                   rel="noreferrer"
                   className={cn(
-                    "group relative flex aspect-video flex-col justify-end overflow-hidden rounded-xl border bg-muted p-2",
+                    "group relative flex aspect-[9/16] flex-col justify-end overflow-hidden rounded-xl border bg-muted p-2",
                     post.status !== "complete" && "pointer-events-none opacity-60"
                   )}
                 >
                   {post.status === "complete" && (
-                    <span className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
-                      <span className="grid size-9 place-items-center rounded-full bg-white/95">
-                        <Play className="ml-0.5 size-4 fill-ink text-ink" />
+                    <>
+                      <video
+                        src={`/api/space/posts/${post.id}/video`}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        // A loaded <video> doesn't paint its first frame until
+                        // something moves currentTime — a fixed nudge is enough
+                        // to make the browser render it as a thumbnail.
+                        onLoadedMetadata={(e) => {
+                          e.currentTarget.currentTime = 0.1;
+                        }}
+                        className="absolute inset-0 size-full object-cover"
+                      />
+                      <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-black/0" />
+                      <span className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
+                        <span className="grid size-9 place-items-center rounded-full bg-white/95">
+                          <Play className="ml-0.5 size-4 fill-ink text-ink" />
+                        </span>
                       </span>
-                    </span>
+                    </>
                   )}
-                  <p className="truncate text-[11px] font-medium text-foreground">
+                  <p className="relative truncate text-[11px] font-medium text-foreground">
                     {post.status === "uploading" ? "Uploading…" : post.caption || post.fileName || "Untitled"}
                   </p>
                   {post.sizeBytes != null && (
-                    <p className="text-[10px] text-muted-foreground">{formatBytes(post.sizeBytes)}</p>
+                    <p className="relative text-[10px] text-muted-foreground">{formatBytes(post.sizeBytes)}</p>
                   )}
                 </a>
               ))}
