@@ -2,10 +2,12 @@
 
 import { refFromAsset, refFromTextFile, type AssetRef } from "./assetRef";
 import { tagChatAsset } from "./chatAssets";
+import { FrameCompositor, type Frame } from "./composite";
 import { enrichAsset, importFileToProject, isMediaFile, isTextFile, renderAudioSpanWav } from "./media";
-import { frameSink, openMedia, videoTrackOf } from "./mediaRead";
+import { frameAt, frameSink, openMedia, videoTrackOf } from "./mediaRead";
 import { useEditor } from "./store";
 import { formatTime } from "./time";
+import { frameOf, type MediaAsset, type VideoClip } from "./types";
 
 // Turn refs and dropped files into what the hosted models take. Generation
 // routes read `inputs.images = [{ data, mimeType }]`: stock images upload
@@ -143,6 +145,70 @@ export async function videoSafeInline(img: InlineImage): Promise<InlineImage> {
   const fitted = await encodeWithin(blob);
   if (!fitted) throw new Error("A reference image is in a format the video model can't read.");
   return fitted;
+}
+
+// A hair inside a clip's own out point, so the decode always lands on a
+// legal source timestamp rather than one frame past the end.
+const EDGE_EPSILON = 1 / 60;
+
+async function loadImageAsFrame(url: string): Promise<{ image: CanvasImageSource; width: number; height: number }> {
+  const blob = await (await fetch(url)).blob();
+  const bitmap = await createImageBitmap(blob);
+  return { image: bitmap, width: bitmap.width, height: bitmap.height };
+}
+
+/**
+ * A clip's own last (or first) visible frame — its fit/pan/zoom/rotation/
+ * color grade applied exactly as it composites into the timeline, at the
+ * project's real frame size — with no other track, overlay, caption, or
+ * title baked in. Used to seed AI Extend's continuation.
+ *
+ * Unlike the chat assistant's capture_frame tool (aiTools.ts), which grabs
+ * the whole multi-layer `.stage canvas` downscaled to 640px for chat
+ * context, this renders the source clip alone through the same
+ * FrameCompositor the preview and export use, so nothing outside this one
+ * clip's own picture can leak into the generated continuation.
+ */
+export async function captureClipEdgeFrame(
+  clip: VideoClip,
+  asset: MediaAsset,
+  edge: "start" | "end"
+): Promise<InlineImage> {
+  if (asset.type !== "video" && asset.type !== "image") {
+    throw new Error("This clip's source has no picture to extend from.");
+  }
+  const source =
+    asset.type === "image"
+      ? await loadImageAsFrame(asset.url)
+      : await (async () => {
+          const srcTime = edge === "end" ? Math.max(0, clip.out - EDGE_EPSILON) : Math.max(0, clip.in);
+          const wrapped = await frameAt(asset.url, srcTime);
+          if (!wrapped) throw new Error("Could not read a frame from this clip's source.");
+          return { image: wrapped.canvas, width: wrapped.canvas.width, height: wrapped.canvas.height };
+        })();
+
+  const frame: Frame = { kind: "ready", ...source };
+  const { w, h } = frameOf(useEditor.getState().aspect);
+  const canvas = typeof document === "undefined" ? new OffscreenCanvas(w, h) : document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const compositor = new FrameCompositor(canvas);
+  compositor.clear();
+  compositor.drawLayer(frame, clip, true, 1, srcTimeFor(clip, edge));
+
+  const blob =
+    canvas instanceof OffscreenCanvas
+      ? await canvas.convertToBlob({ type: "image/png" })
+      : await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) throw new Error("Could not render this clip's frame.");
+  return blobToInline(blob);
+}
+
+/** The timeline-relative "at" FrameCompositor uses for film-grain continuity
+ * — approximate is fine here since this frame is never actually shown, only
+ * used to derive a seed image. */
+function srcTimeFor(clip: VideoClip, edge: "start" | "end"): number {
+  return edge === "end" ? clip.out : clip.in;
 }
 
 // Keeps the inline payload well under the Gemini per-request inline-data cap

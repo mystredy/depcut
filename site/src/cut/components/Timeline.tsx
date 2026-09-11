@@ -26,6 +26,7 @@ import {
   hasTemplateDrag,
 } from "@/cut/lib/assetDrag";
 import { audioClipRefs, draggingRef, hasRefDrag, refFromAsset, type AssetRef } from "@/cut/lib/assetRef";
+import { AiExtendDialog } from "@/cut/components/AiExtendDialog";
 import { sendFrameToChat, type FrameGrabOrigin } from "@/cut/lib/chatIntake";
 import { copyRefImage } from "@/cut/lib/refMedia";
 import { useCutCaps } from "@/cut/lib/backend/hooks";
@@ -2919,6 +2920,7 @@ function ClipView({
   ) => void;
 }) {
   const { clip, asset } = span;
+  const [extendOpen, setExtendOpen] = useState(false);
   const speed = clipSpeed(clip);
   // A transitioned pair genuinely overlaps now, so their two boxes would
   // otherwise stack on top of each other across the whole blend — instead
@@ -3024,6 +3026,14 @@ function ClipView({
           {+(clip.speed ?? 1).toFixed(2)}×
         </span>
       )}
+      {asset.origin === "extended" && (
+        <span
+          className="tl-extend-chip pointer-events-none absolute top-1 right-6 z-2 flex items-center gap-0.5 rounded-[5px] bg-black/70 px-1 py-px text-[9.5px] font-medium text-white"
+          title={asset.generation?.prompt ? `AI Extend: ${asset.generation.prompt}` : "AI Extend"}
+        >
+          <Sparkles className="size-2.5" /> AI
+        </span>
+      )}
       <HideChip
         hidden={!!clip.hidden}
         className="bottom-1 right-2"
@@ -3043,6 +3053,11 @@ function ClipView({
             <AudioLines /> Detach audio
           </DropdownMenuItem>
         ) : null}
+        {asset.type === "video" && clip.track === 0 ? (
+          <DropdownMenuItem onClick={() => setExtendOpen(true)}>
+            <Sparkles /> AI Extend
+          </DropdownMenuItem>
+        ) : null}
       </ClipMenu>
       <span
         className={cn(trimHandle, "tl-trim-l left-0")}
@@ -3052,6 +3067,7 @@ function ClipView({
         className={cn(trimHandle, "tl-trim-r right-0")}
         onPointerDown={(e) => startLaneTrim(e, "clip", clip.id, "r", ui)}
       />
+      {extendOpen && <AiExtendDialog clip={clip} asset={asset} onClose={() => setExtendOpen(false)} />}
     </div>
   );
 }

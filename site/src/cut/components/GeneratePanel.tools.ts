@@ -22,6 +22,18 @@ export const VIDEO_GEN_TOOLS = [
     }, ["prompt"]),
   },
   {
+    name: "extend_video",
+    description:
+      "AI Extend: render a continuation from a clip's own last (or first) frame — DepCut's hosted video model (Veo) picks up the clip's subject, scene, lighting, and camera motion and keeps going, no reshoot needed. Defaults to the current selection when clip_id is omitted (\"extend this clip\"). Only Veo tiers support this (directions: end only today; durations: 4, 6, or 8 seconds — nothing else). Passing an unsupported duration doesn't round it — the tool comes back with the real options so you can ask the user to pick one, e.g. \"extend this clip 5 seconds\" gets a 4/6/8s clarification, not a silent 6. The seed frame is the clip's own picture alone — its crop/pan/color grade, no captions or other layers — never the whole composited canvas. Like generate_video this returns once the render starts and the clip previews in this chat a minute or two later. add_to_timeline:true inserts it as a ripple-safe continuation immediately after the source clip (any transition into what followed moves to the new boundary) — only when the user asked for it in the cut. Needs the user signed in to DepCut (spends their credits).",
+    inputSchema: obj({
+      clip_id: str("The clip to extend (default: the current selection)"),
+      direction: { type: "string", enum: ["start", "end"], description: "Which edge to extend from (default: end — the only direction Veo supports today)" },
+      duration_seconds: num("Extend length in seconds — must be one the active model actually offers (Veo: 4, 6, or 8)"),
+      prompt: str("How the continuation should play out (default: \"Continue naturally.\")"),
+      add_to_timeline: bool("Insert the result on the timeline when it lands, as a ripple-safe continuation right after the source clip (default false — it stays on its chat card until the user asks)"),
+    }, ["duration_seconds"]),
+  },
+  {
     name: "generate_character_video",
     description:
       "Generate a UGC-style selfie clip of a stock talking character speaking a line you write (DepCut's hosted video model). Pick a character id from stock_search kind:\"character\" — each has a persona and look; the same person then delivers the line to camera. Like generate_video this RETURNS IMMEDIATELY and the clip previews in this chat a minute or two later; add_to_timeline:true places it when it lands. Needs the user signed in to DepCut (spends their credits).",

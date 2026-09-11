@@ -125,13 +125,35 @@ export interface StoredAsset {
    * drop, or upload), so it belongs in the Media panel. Any value marks media
    * Cut created or fetched — it lives where it was made (the timeline, a
    * generation panel, or an AI chat card) and is kept out of the Media panel. */
-  origin?: "voiceover" | "generated" | "recording" | "stock" | "freeze" | "chat" | "sticker";
+  origin?: "voiceover" | "generated" | "recording" | "stock" | "freeze" | "chat" | "sticker" | "extended";
   /** BCP-47 of the audio's spoken language, when known (stamped on voiceovers
    * at synthesis) — what transcription should run its recognizer in. */
   language?: string;
   /** For origin "chat": the chat thread that made it. Deleting that thread
    * deletes the assets it still owns (see chatAssets.ts). */
   chatId?: string;
+  /** For origin "extended" (AI Extend, generate.ts): what this clip continues
+   * and how, kept for the timeline's "AI extended" badge, Regenerate, billing
+   * audits, and provider migrations. Not present on any other origin. */
+  generation?: {
+    kind: "video-extend";
+    sourceAssetId: string;
+    sourceClipId: string;
+    sourceTrack: number;
+    /** Fingerprint of the source clip's placement/trim at submit time
+     * (`${assetId}:${in}:${out}:${track}`) — lets Apply tell "this clip
+     * changed underneath the render" from "it didn't", without a store-wide
+     * revision counter. */
+    sourceClipFingerprint: string;
+    direction: "start" | "end";
+    requestedDuration: number;
+    actualDuration: number;
+    prompt: string;
+    provider: string;
+    model: string;
+    jobId: string;
+    generatedAt: string;
+  };
 }
 
 /** An import whose bytes are still on their way to storage. While this is set

@@ -143,6 +143,34 @@ export type InferenceProvider = {
   ) => Promise<AssetGenerationProviderResult>;
 };
 
+// Extension point, not a working feature: no provider registered in
+// router.ts implements this today. Sketched ahead of time (per
+// docs/guides/cut/ai-assistant.md's "AI Edit" section) so a future mask-
+// scoped video-editing integration (object color/removal/replacement,
+// tracked across frames) has a clean seam to land in, instead of forcing a
+// first implementer to invent the shape under deadline. Do NOT wire a fake
+// or stubbed implementation of this — leave it unregistered until a real
+// provider (segmentation + tracking + inpainting/video-edit, none
+// configured in this repo as of AI Extend shipping) backs it.
+export interface GenerativeEditProvider {
+  id: string;
+  capabilities: {
+    objectEdit: boolean;
+    videoEdit: boolean;
+    imageEdit: boolean;
+    maskEdit: boolean;
+  };
+  /** Edit a still frame or short clip inside a mask's bounds, everything
+   * outside preserved. */
+  edit(request: {
+    sourceAssetId: string;
+    maskUrl: string;
+    prompt: string;
+    negativePrompt?: string;
+    seed?: number;
+  }): Promise<AssetGenerationProviderResult>;
+}
+
 export class InferenceProviderError extends Error {
   public statusCode: number;
   public code: string;

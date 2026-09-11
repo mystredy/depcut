@@ -30,6 +30,25 @@ export const VIDEO_ASPECT_LABEL: Record<VideoAspect, string> = {
  * price (provider-pricing.ts) is the whole client-side change. */
 export type VideoTier = "omni" | "veo-lite" | "veo-fast" | "veo-quality";
 
+/** What a video model can do for AI Extend, read by the Timeline UI and the
+ * extend_video tool so both only ever offer what the active provider
+ * genuinely supports — never a free-form range that gets silently clamped or
+ * rounded. `durations` is the discrete set a caller must pick from when the
+ * provider doesn't take an arbitrary length (Veo 3.1: 4, 6, or 8 seconds
+ * only, per gemini-veo-video.ts). Provider-independent: a future Kling/
+ * Runway/Seedance tier declares its own shape here instead of the Extend UI
+ * hard-coding Veo's. */
+export interface VideoExtendCapabilities {
+  supported: boolean;
+  directions: Array<"start" | "end">;
+  durations?: number[];
+  minDuration?: number;
+  maxDuration?: number;
+  supportsPrompt: boolean;
+  supportsAudio: boolean;
+  supportsSeedFrame: boolean;
+}
+
 export interface VideoModelOption {
   tier: VideoTier;
   /** Segment label and the model name shown beside it (equal for a
@@ -43,7 +62,30 @@ export interface VideoModelOption {
   /** Identity reference images a render accepts alongside the prompt. */
   maxReferenceImages: number;
   aspects: VideoAspect[];
+  /** AI Extend support — see VideoExtendCapabilities. */
+  extend: VideoExtendCapabilities;
 }
+
+const NO_EXTEND: VideoExtendCapabilities = {
+  supported: false,
+  directions: [],
+  supportsPrompt: false,
+  supportsAudio: false,
+  supportsSeedFrame: false,
+};
+
+// Veo 3.1 takes a seed frame (image-to-video) plus a prompt and returns
+// audio by default; it has no documented pre-roll/backward-generation mode,
+// so "start" isn't offered. Duration is a fixed 4/6/8s set, not a range —
+// see gemini-veo-video.ts's durationSeconds comment.
+const VEO_EXTEND: VideoExtendCapabilities = {
+  supported: true,
+  directions: ["end"],
+  durations: [4, 6, 8],
+  supportsPrompt: true,
+  supportsAudio: true,
+  supportsSeedFrame: true,
+};
 
 export const VIDEO_MODELS: VideoModelOption[] = [
   {
@@ -54,6 +96,7 @@ export const VIDEO_MODELS: VideoModelOption[] = [
     modelId: geminiOmniModels.flashVideo,
     maxReferenceImages: geminiOmniMaxReferenceImages,
     aspects: ["16:9", "9:16"],
+    extend: NO_EXTEND,
   },
   {
     tier: "veo-lite",
@@ -63,6 +106,7 @@ export const VIDEO_MODELS: VideoModelOption[] = [
     modelId: geminiVeoModels.lite,
     maxReferenceImages: 3,
     aspects: ["16:9", "9:16"],
+    extend: VEO_EXTEND,
   },
   {
     tier: "veo-fast",
@@ -72,6 +116,7 @@ export const VIDEO_MODELS: VideoModelOption[] = [
     modelId: geminiVeoModels.fast,
     maxReferenceImages: 3,
     aspects: ["16:9", "9:16"],
+    extend: VEO_EXTEND,
   },
   {
     tier: "veo-quality",
@@ -81,8 +126,16 @@ export const VIDEO_MODELS: VideoModelOption[] = [
     modelId: geminiVeoModels.quality,
     maxReferenceImages: 3,
     aspects: ["16:9", "9:16"],
+    extend: VEO_EXTEND,
   },
 ];
+
+/** The tiers AI Extend can actually use, cheapest/fastest first (veo-lite) —
+ * extend is usually a quick "keep it rolling" ask, not a final-quality
+ * render. */
+export function extendCapableTiers(): VideoModelOption[] {
+  return VIDEO_MODELS.filter((m) => m.extend.supported);
+}
 
 /** The registry entry for a tier — the single source of truth for what that
  * model supports. Any code that generates video (the panel, the scene pipeline)

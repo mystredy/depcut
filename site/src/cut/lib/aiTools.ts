@@ -35,7 +35,7 @@ import type { TransitionsToolName } from "@/cut/components/TransitionsPanel.tool
 import { apiFetch, apiJson, getBackend } from "./backend";
 import { refFromAsset, refFromStockVideo, type AssetRef } from "./assetRef";
 import { chatOwner, tagChatAsset } from "./chatAssets";
-import { applyOwnership, useGenerate, type VideoAttempt, type VideoGenOptions } from "./generate";
+import { applyOwnership, clipFingerprint, useGenerate, type VideoAttempt, type VideoGenOptions } from "./generate";
 import { useGenScene } from "./genScene";
 import { anchorRefused } from "./genvideo/shotAttempts";
 import {
@@ -1263,6 +1263,55 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       }
       // No reference: text is the whole request, so the single rung runs ungated.
       return launchVideoJob(projectId, input, [{ prompt, opts: { ...baseOpts } }]);
+  },
+
+  extend_video: async (s, input) => {
+      const projectId = s.projectId;
+      if (!projectId) throw new ToolError("No project open.");
+      const duration = isNum(input.duration_seconds) ? Math.round(input.duration_seconds) : NaN;
+      if (!Number.isFinite(duration) || duration <= 0) {
+        throw new ToolError("duration_seconds is required.");
+      }
+      const clipId = input.clip_id ? String(input.clip_id) : s.selection?.kind === "clip" ? s.selection.id : null;
+      if (!clipId) throw new ToolError("Pass clip_id or select a video clip first.");
+      const clip = requireItem(s.clips, clipId, "video clip");
+      const asset = s.assets.find((a) => a.id === clip.assetId);
+      if (!asset) throw new ToolError("Could not find that clip's source media.");
+      const direction: "start" | "end" = input.direction === "start" ? "start" : "end";
+
+      const gen = useGenerate.getState();
+      const signedIn = gen.signedIn ?? (await gen.probeNow());
+      if (!signedIn) throw new ToolError("Sign in to DepCut to generate video.");
+
+      const addToTimeline = wantsTimeline(input, "index");
+      const result = gen.extendVideo({
+        target: { projectId, sourceClipId: clip.id, sourceAssetId: asset.id },
+        direction,
+        duration,
+        ...(typeof input.prompt === "string" && input.prompt.trim() ? { prompt: input.prompt } : {}),
+        ...(addToTimeline ? { onDone: (a: MediaAsset) => applyExtendResult(a.id) } : {}),
+      });
+      if ("error" in result) throw new ToolError(result.error);
+
+      const outcome = await result.submitted;
+      if (!outcome.ok) {
+        return {
+          kind: "video",
+          started: false,
+          jobId: result.jobId,
+          error: outcome.error,
+          note: `The render didn't start — ${outcome.error} Tell the user it failed; don't say it's rendering.`,
+        };
+      }
+      return {
+        kind: "video",
+        started: true,
+        jobId: result.jobId,
+        addToTimeline,
+        note: addToTimeline
+          ? "Rendering the continuation — once it lands it inserts right after the source clip (ripple-safe, any transition carried over) as one undo step."
+          : "Rendering the continuation — it previews in this chat when it lands, in a minute or two. It stays there until the user asks to add it.",
+      };
   },
 
   wait_for_renders: async (s) => {
@@ -2497,6 +2546,63 @@ function addVideoTrackClip(
   const at = index === undefined ? count - 1 : clamp(Math.round(index), 0, count - 1);
   if (clipId && at !== count - 1) s.moveClip(clipId, at);
   return { added: true, clipId, index: at };
+}
+
+/**
+ * AI Extend's Apply step: re-validates the render's target is still what it
+ * was (the staleness guard the plan requires), then inserts the generated
+ * continuation immediately after its source clip via the exact same
+ * ripple-insert `addVideoTrackClip` already uses for freeze frames and
+ * generated clips (moveClip's track-0 reflow) — no custom Extend-specific
+ * ripple math. Any transition the source clip had into its original
+ * neighbor moves to the new clip's outgoing edge, since that's now the real
+ * cut into the neighbor; the source-to-extension edge is a hard cut. The
+ * whole thing is one undo step. Track 0 only for now — AI Extend on an
+ * overlay track needs that track's own ripple contract, not this one.
+ *
+ * Called from both the extend_video chat tool (add_to_timeline:true) and
+ * the Timeline UI's Apply button — one implementation, not two.
+ */
+export function applyExtendResult(
+  generatedAssetId: string
+): { ok: true; clipId: string; index: number } | { ok: false; reason: string } {
+  const s = useEditor.getState();
+  const asset = s.assets.find((a) => a.id === generatedAssetId);
+  const gen = asset?.generation;
+  if (!asset || !gen || gen.kind !== "video-extend") {
+    return { ok: false, reason: "That asset isn't an AI Extend result." };
+  }
+  const sourceClip = s.clips.find((c) => c.id === gen.sourceClipId);
+  if (
+    !sourceClip ||
+    sourceClip.assetId !== gen.sourceAssetId ||
+    clipFingerprint(sourceClip) !== gen.sourceClipFingerprint
+  ) {
+    return {
+      ok: false,
+      reason: "The source clip changed or was removed since this render started — apply it manually if it still fits.",
+    };
+  }
+  if (sourceClip.track !== 0) {
+    return { ok: false, reason: "AI Extend can only apply to track 0 clips right now." };
+  }
+
+  s.beginHistoryBatch();
+  try {
+    const row = track0Clips(useEditor.getState().clips);
+    const sourceIndex = row.findIndex((c) => c.id === sourceClip.id);
+    const originalTransition = sourceClip.transition;
+    const originalTransitionStyle = sourceClip.transitionStyle;
+    const { clipId, index } = addVideoTrackClip(asset.id, sourceIndex + 1);
+    if (!clipId || index === null) return { ok: false, reason: "Could not insert the extension clip." };
+    if (originalTransition) {
+      s.updateClip(sourceClip.id, { transition: 0 });
+      s.updateClip(clipId, { transition: originalTransition, transitionStyle: originalTransitionStyle });
+    }
+    return { ok: true, clipId, index };
+  } finally {
+    s.endHistoryBatch();
+  }
 }
 
 /** Start a video render — the shared shape of generate_video and

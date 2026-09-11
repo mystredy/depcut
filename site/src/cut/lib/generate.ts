@@ -18,12 +18,24 @@ import {
 import { CUT_APP_BASE } from "./nav";
 import { hostedPost } from "./hosted";
 import { enrichAsset, importFileToProject, uploadProjectImage } from "./media";
-import { refsToInlineImages, videoSafeInline, visualRefs, type InlineImage } from "./refMedia";
+import {
+  captureClipEdgeFrame,
+  refsToInlineImages,
+  videoSafeInline,
+  visualRefs,
+  type InlineImage,
+} from "./refMedia";
 import { useGenNotify } from "./genNotify";
 import { IMAGE_ASPECTS, useImageGen } from "./imageGen";
 import { useEditor } from "./store";
 import { mediaSlug, nearestAspect, type MediaAsset, type RenderRecord } from "./types";
-import { aspectFramingNote, videoModel, type VideoResolution, type VideoTier } from "./videoModels";
+import {
+  aspectFramingNote,
+  extendCapableTiers,
+  videoModel,
+  type VideoResolution,
+  type VideoTier,
+} from "./videoModels";
 import { walkLadder, type VideoAttempt } from "./videoLadder";
 
 // AI generation jobs, held outside the panels so a tab switch (which unmounts
@@ -67,6 +79,18 @@ export interface GenerateJob {
    * so they survive in memory but not the localStorage round trip; a retried
    * job from a past session walks every rung. */
   attempts?: VideoAttempt[];
+  /** Set only by extendVideo(): what this render continues and how. Plain
+   * data (not a callback) so it survives persistence/reload — a render
+   * resumed after a reload still lands with origin "extended" and full
+   * lineage, the same as one that finishes in the tab that started it. */
+  extendLineage?: {
+    sourceAssetId: string;
+    sourceClipId: string;
+    sourceTrack: number;
+    sourceClipFingerprint: string;
+    direction: "start" | "end";
+    requestedDuration: number;
+  };
   /** The provider poll payload for an in-flight render — persisting it is what
    * lets a reload re-attach to the running job instead of orphaning it. */
   poll?: {
@@ -138,8 +162,24 @@ interface GenerateState {
       onDone?: (asset: MediaAsset) => void;
       /** Called as each rung starts (0-based) — progress narration. */
       onAttempt?: (rung: number) => void;
+      /** Set by extendVideo(): stamps the landed asset as an AI Extend
+       * continuation instead of a plain generated render. */
+      extendLineage?: GenerateJob["extendLineage"];
     }
   ) => { jobId: string; settled: Promise<GenerateJob>; submitted: Promise<VideoSubmitOutcome> };
+  /** AI Extend: capture the source clip's own edge frame (its fit/pan/grade
+   * applied, no other tracks/overlays), then render a continuation from it.
+   * Reuses generateVideoLadder's job/poll/billing/undo-adjacent plumbing —
+   * see refMedia.ts's captureClipEdgeFrame and videoModels.ts's
+   * VideoExtendCapabilities for what makes this a real (not fake) feature:
+   * only Veo tiers are offered, only the durations they actually accept.
+   * Returns the same job handle generateVideo does; the caller reads
+   * `job.assetId` and that asset's `.generation` field once settled — the
+   * timeline insertion (Apply) is a deliberate separate step, never
+   * automatic, so the result previews before anything touches the doc. */
+  extendVideo: (
+    request: ExtendVideoRequest
+  ) => { jobId: string; settled: Promise<GenerateJob>; submitted: Promise<VideoSubmitOutcome> } | { error: string };
   /** Resubmit a failed video job as itself: same job id (so its chat card and
    * doc mirror follow along), same ladder. A render that failed on an empty
    * balance retries after a top-up without retyping the prompt or losing its
@@ -179,6 +219,14 @@ export interface VideoGenOptions {
   /** Frames mode's closing frame — a documented Veo parameter (lastFrame);
    * Omni has no equivalent, so this only reaches the render on a Veo tier. */
   endFrame?: AssetRef;
+  /** A seed image captured as bytes (AI Extend's per-clip frame capture,
+   * refMedia.ts) rather than a project/library/stock AssetRef — a thunk so
+   * the job can be created and appear in the list immediately, with the
+   * actual frame decode happening at submit time inside the ladder walk.
+   * Takes the render's one seed-image slot directly — mutually exclusive
+   * with `refs`/`referenceImages`, and skips the compose-refs rewrite since
+   * there's no reference to compose around. */
+  seedImage?: () => Promise<InlineImage>;
   /** Identity anchors (up to the registry's maxReferenceImages): the render
    * keeps these characters/objects/scenes consistent instead of playing one
    * as the first frame. Mutually exclusive with a `refs` image seed; the
@@ -204,6 +252,26 @@ export interface VideoGenOptions {
 
 export type { VideoAttempt } from "./videoLadder";
 
+/** What extendVideo() is asked to continue and how — everything applying the
+ * result later needs to re-validate the source is still what it was (see
+ * `target` in the plan: a stale-render guard, not just "does an id exist"). */
+export interface ExtendVideoRequest {
+  target: {
+    projectId: string;
+    sourceClipId: string;
+    sourceAssetId: string;
+  };
+  direction: "start" | "end";
+  /** Must be one of the active tier's extend.durations. */
+  duration: number;
+  prompt?: string;
+  tier?: VideoTier;
+  /** Called once the render lands and the project is still open — the
+   * caller's chance to place it (chat's add_to_timeline, the Timeline UI's
+   * Apply), same shape as VideoGenOptions.onDone. */
+  onDone?: (asset: MediaAsset) => void;
+}
+
 const REFRESH_MS = 8000;
 const VIDEO_DEADLINE_MS = 12 * 60_000;
 
@@ -214,6 +282,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * before residency existed fall back to the active backend. */
 const jobBackend = (job: { residency?: CutMode }): CutBackend =>
   job.residency === "cloud" ? cloudBackend : job.residency === "local" ? localBackend : getBackend();
+
+/** A cheap fingerprint of a clip's own placement/trim — what AI Extend's
+ * Apply step re-checks to tell "this clip changed underneath the render"
+ * from "it didn't", without a store-wide revision counter. */
+export function clipFingerprint(clip: { assetId: string; in: number; out: number; track: number }): string {
+  return `${clip.assetId}:${clip.in}:${clip.out}:${clip.track}`;
+}
 
 /** Display name for the asset: the prompt, tidied and capped. */
 const promptName = (prompt: string) => {
@@ -572,7 +647,24 @@ export const useGenerate = create<GenerateState>((set, get) => {
       return;
     }
     asset.name = promptName(job.prompt);
-    applyOwnership(asset, job.chatId);
+    if (job.extendLineage) {
+      // AI Extend's landed clip: never "generated" (that's the panel/chat
+      // render origin) — it's a continuation of a specific source clip, and
+      // the timeline reads this to badge it and to let Regenerate find it.
+      asset.origin = "extended";
+      asset.generation = {
+        kind: "video-extend",
+        ...job.extendLineage,
+        actualDuration: asset.duration,
+        prompt: job.prompt,
+        provider: gen.provider,
+        model: gen.model,
+        jobId: job.id,
+        generatedAt: new Date().toISOString(),
+      };
+    } else {
+      applyOwnership(asset, job.chatId);
+    }
     if (adopt(job.projectId, asset, backend)) {
       if (!job.chatId) useGenNotify.getState().landed("video", asset.id);
       onDone?.(asset);
@@ -647,9 +739,14 @@ export const useGenerate = create<GenerateState>((set, get) => {
             ).map(videoSafeInline)
           )
         : [];
-      const { prompt: sent, images: rawImages } = anchors.length
-        ? { prompt, images: [] as InlineImage[] }
-        : await promptAndImages("video", prompt, opts?.refs ?? [], opts?.composeRefs !== false, 1);
+      // AI Extend's per-clip frame capture (refMedia.ts) — takes the seed
+      // slot directly, no compose-refs rewrite (there's no reference to
+      // compose around, just the continuation prompt as written).
+      const { prompt: sent, images: rawImages } = opts?.seedImage
+        ? { prompt, images: [await opts.seedImage()] }
+        : anchors.length
+          ? { prompt, images: [] as InlineImage[] }
+          : await promptAndImages("video", prompt, opts?.refs ?? [], opts?.composeRefs !== false, 1);
       const images = await Promise.all(rawImages.map(videoSafeInline));
       // The closing frame, alongside the seed above — Veo's documented
       // last-frame parameter; the anchors path (identity references, no
@@ -873,11 +970,62 @@ export const useGenerate = create<GenerateState>((set, get) => {
         attempts,
         ...(jobOpts?.chatId ? { chatId: jobOpts.chatId } : {}),
         ...(jobOpts?.genKey ? { genKey: jobOpts.genKey } : {}),
+        ...(jobOpts?.extendLineage ? { extendLineage: jobOpts.extendLineage } : {}),
       };
       set((s) => ({ jobs: [job, ...s.jobs] }));
       claimJobLease(job.id); // this tab started it, this tab polls it
       mirrorRender(job.id);
       return runLadder(job, attempts, jobOpts);
+    },
+
+    extendVideo: (request) => {
+      const { target, direction, duration, prompt, tier, onDone } = request;
+      const s = useEditor.getState();
+      const clip = s.clips.find((c) => c.id === target.sourceClipId);
+      const asset = s.assets.find((a) => a.id === target.sourceAssetId);
+      if (!clip || !asset || clip.assetId !== asset.id) {
+        return { error: "That clip is no longer on the timeline." };
+      }
+      const selected = videoModel(tier ?? extendCapableTiers()[0]?.tier ?? "veo-lite");
+      if (!selected.extend.supported) {
+        return { error: `${selected.word} doesn't support AI Extend.` };
+      }
+      if (!selected.extend.directions.includes(direction)) {
+        return {
+          error: `${selected.word} only extends from the ${selected.extend.directions.join("/")} of a clip.`,
+        };
+      }
+      if (selected.extend.durations && !selected.extend.durations.includes(duration)) {
+        return {
+          error: `${selected.word} only extends in ${selected.extend.durations.join(", ")}-second increments — pick one of those.`,
+        };
+      }
+
+      const extendLineage: GenerateJob["extendLineage"] = {
+        sourceAssetId: asset.id,
+        sourceClipId: clip.id,
+        sourceTrack: clip.track,
+        sourceClipFingerprint: clipFingerprint(clip),
+        direction,
+        requestedDuration: duration,
+      };
+      return get().generateVideoLadder(
+        target.projectId,
+        [
+          {
+            prompt: prompt?.trim() || "Continue naturally.",
+            opts: {
+              tier: selected.tier,
+              durationSeconds: duration,
+              // The clip's own frame, not the project's default aspect pick —
+              // an extend should keep the shape the source clip is already in.
+              aspect: nearestAspect(s.aspect, selected.aspects),
+              seedImage: () => captureClipEdgeFrame(clip, asset, direction),
+            },
+          },
+        ],
+        { extendLineage, ...(onDone ? { onDone } : {}) }
+      );
     },
 
     retry: (id) => {
