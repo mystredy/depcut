@@ -91,8 +91,28 @@ function readExtras(form: FormData): TranscribeExtras {
   };
 }
 
+/** A short, human-readable reason out of whatever the provider's error body
+ * holds — providers vary in shape, so this reads the common fields rather
+ * than assuming one. */
+function providerDetail(body: unknown): string | null {
+  if (!body || typeof body !== "object") return null;
+  const b = body as Record<string, unknown>;
+  const detail = b.detail ?? b.message ?? b.error;
+  if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object") {
+    const d = detail as Record<string, unknown>;
+    if (typeof d.message === "string") return d.message;
+  }
+  return null;
+}
+
 export const transcribeCloud = {
   async transcribe(userId: string, req: Request): Promise<Response> {
+    // The page the request came from, for the admin alert below — every
+    // caller (Speech to Text, Dubbing, the editor's Subtitles panel, mic
+    // dictation) is same-origin, so the browser sends this without any
+    // per-caller wiring.
+    const pageUrl = req.headers.get("referer") ?? "unknown page";
     let audio: File | null = null;
     let sourceUrl: string | null = null;
     let locale = "";
@@ -173,9 +193,13 @@ export const transcribeCloud = {
       });
       const credit = creditErrorResponse(error);
       if (!credit) {
+        const statusCode = error instanceof ElevenLabsError ? error.statusCode : undefined;
+        const detail =
+          (error instanceof ElevenLabsError ? providerDetail(error.body) : null) ?? message;
         void notifyTelegram(
           "systemError",
-          `🚨 Transcription failed\nuser: ${userId}\nsource: ${sourceUrl ?? "uploaded audio"}\n${message}`,
+          `🚨 Transcription failed\npage: ${pageUrl}\nuser: ${userId}\nsource: ${sourceUrl ?? "uploaded audio"}\n` +
+            `reason: ${detail}${statusCode ? ` (${statusCode})` : ""}`,
         );
       }
       if (credit) return credit;
@@ -189,7 +213,7 @@ export const transcribeCloud = {
       // Multichannel/webhook response shapes aren't requested by this route.
       void notifyTelegram(
         "systemError",
-        `🚨 Transcription returned an unreadable response\nuser: ${userId}\nsource: ${sourceUrl ?? "uploaded audio"}`,
+        `🚨 Transcription returned an unreadable response\npage: ${pageUrl}\nuser: ${userId}\nsource: ${sourceUrl ?? "uploaded audio"}`,
       );
       return err("The transcription model returned an unreadable response — try again.", 502);
     }
