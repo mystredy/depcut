@@ -21,7 +21,7 @@ export async function sendStudioDeleteCode(params: {
   const { error } = await getResend().emails.send({
     from,
     to: params.ownerEmail,
-    subject: `Your code: ${params.code}`,
+    subject: `Studio deletion requested: "${params.studioName}"`,
     react: StudioDeleteCodeEmail({ code: params.code, studioName: params.studioName }),
   });
   if (error) {

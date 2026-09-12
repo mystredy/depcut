@@ -6,9 +6,9 @@ import {
   type DepCutAuthenticatedRequest,
 } from "@/lib/depcut-api-auth";
 import { sendStudioDeleteCode } from "@/lib/email/send-studio-delete-code";
-import { notifyUserEverywhere } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
 import { createDeleteChallenge, generateDeleteCode } from "@/lib/studio/delete-verification";
+import { notifyStudioDeleteCode } from "@/lib/studio/notify-delete-code";
 
 export const dynamic = "force-dynamic";
 
@@ -41,11 +41,7 @@ export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest, c
       { status: 502 },
     );
   }
-  await notifyUserEverywhere({
-    body: `Code: ${code} — expires in 10 minutes.`,
-    title: `Confirm deleting "${studio.name}"`,
-    userId: request.depcut.userId,
-  });
+  await notifyStudioDeleteCode({ code, studioName: studio.name, userId: request.depcut.userId });
 
   const challenge = createDeleteChallenge({ code, requesterId: request.depcut.userId, studioId: id });
   return NextResponse.json({ challenge, sentTo: owner.email });

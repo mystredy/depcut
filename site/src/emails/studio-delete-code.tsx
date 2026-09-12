@@ -23,7 +23,7 @@ export default function StudioDeleteCodeEmail({ studioName, code }: StudioDelete
   return (
     <Html>
       <Head />
-      <Preview>Your code: {code}</Preview>
+      <Preview>Confirm you want to delete this studio</Preview>
       <Tailwind config={{ presets: [pixelBasedPreset] }}>
         <Body className="bg-white font-sans text-[#0F0E0D]">
           <Container className="mx-auto max-w-[520px] px-6 py-12">
