@@ -13,7 +13,11 @@ export class ApiError extends Error {
   }
 }
 
-type ApiErrorBody = { error?: string; message?: string };
+type ApiErrorBody = {
+  error?: string;
+  message?: string;
+  issues?: { path: string; message: string }[];
+};
 
 export async function apiFetch<T>(
   path: string,
@@ -36,7 +40,7 @@ export async function apiFetch<T>(
       // Non-JSON error body; fall back to status text.
     }
     throw new ApiError(
-      body.message ?? response.statusText,
+      body.message ?? body.issues?.[0]?.message ?? response.statusText,
       response.status,
       body.error ?? null,
     );
