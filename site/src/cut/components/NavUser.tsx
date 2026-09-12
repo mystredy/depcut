@@ -251,7 +251,7 @@ export function NavUser() {
             <MessageCircleHeart /> Give feedback
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={signOut}>
+          <DropdownMenuItem variant="destructive" onClick={signOut}>
             <LogOut /> Log out
           </DropdownMenuItem>
         </DropdownMenuContent>
