@@ -10,6 +10,7 @@ import {
 } from "@/lib/depcut-api-auth";
 import { validationErrorResponse } from "@/lib/inference/responses";
 import { prisma } from "@/lib/prisma";
+import { usernameSchema } from "@/lib/username";
 
 export const dynamic = "force-dynamic";
 
@@ -27,13 +28,7 @@ const updateProfileSchema = z.object({
   bio: z.string().trim().max(150).nullable().optional(),
   displayName: z.string().trim().max(60).nullable().optional(),
   showFollowerCount: z.boolean().optional(),
-  username: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z][a-z0-9_]{2,19}$/, "3-20 characters: letters, numbers, underscores, starting with a letter")
-    .nullable()
-    .optional(),
+  username: usernameSchema.nullable().optional(),
 });
 
 /** True for a Prisma unique-constraint violation — same pattern

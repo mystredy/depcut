@@ -10,6 +10,7 @@ import {
 import { validationErrorResponse } from "@/lib/inference/responses";
 import { prisma } from "@/lib/prisma";
 import { getBrandSpaceMembership, logBrandSpaceActivity } from "@/lib/space/brand-space-access";
+import { usernameSchema } from "@/lib/username";
 
 export const dynamic = "force-dynamic";
 
@@ -48,12 +49,7 @@ export const GET = withDepCutAuth(async (request: DepCutAuthenticatedRequest, co
 const updateSchema = z
   .object({
     name: z.string().trim().min(1).max(60).optional(),
-    username: z
-      .string()
-      .trim()
-      .toLowerCase()
-      .regex(/^[a-z][a-z0-9_]{2,19}$/, "3-20 characters: letters, numbers, underscores, starting with a letter")
-      .optional(),
+    username: usernameSchema.optional(),
     bio: z.string().trim().max(150).nullable().optional(),
     spaceType: z.string().trim().min(1).max(40).optional(),
     linkedAccounts: z.record(z.string(), z.string().trim().max(160)).optional(),

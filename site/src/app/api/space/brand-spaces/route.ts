@@ -6,6 +6,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { validationErrorResponse } from "@/lib/inference/responses";
 import { logBrandSpaceActivity } from "@/lib/space/brand-space-access";
 import { prisma } from "@/lib/prisma";
+import { usernameSchema } from "@/lib/username";
 
 export const dynamic = "force-dynamic";
 
@@ -39,11 +40,7 @@ export const GET = withDepCutAuth(async (request: DepCutAuthenticatedRequest) =>
 const createSchema = z.object({
   name: z.string().trim().min(1).max(60),
   spaceType: z.string().trim().min(1).max(40).default("Creator"),
-  username: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z][a-z0-9_]{2,19}$/, "3-20 characters: letters, numbers, underscores, starting with a letter"),
+  username: usernameSchema,
 });
 
 // Creates the space and seeds its owner's BrandSpaceMember row in one
