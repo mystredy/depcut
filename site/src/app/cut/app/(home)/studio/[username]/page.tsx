@@ -38,7 +38,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
   const visibleDrops = (drops.data?.drops ?? []).filter((d) => d.status !== "error");
 
   return (
-    <div className="mx-auto max-w-5xl pb-24">
+    <div className="pb-24">
       <div className="px-6 pt-4">
         <StudioSwitcher currentUsername={studio.username} />
       </div>
