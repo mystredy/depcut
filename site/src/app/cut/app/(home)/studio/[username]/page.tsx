@@ -2,7 +2,7 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
-import { Play, Settings, Video } from "lucide-react";
+import { Play, Plus, Settings, Video } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { StudioSwitcher } from "@/cut/components/StudioSwitcher";
@@ -137,6 +137,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
           onClick={() => setPosting(true)}
           className="fixed bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg transition-transform hover:scale-105"
         >
+          <Plus className="size-4" />
           Drop
         </button>
       )}
