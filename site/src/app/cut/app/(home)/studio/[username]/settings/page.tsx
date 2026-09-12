@@ -23,7 +23,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { StudioSwitcher } from "@/cut/components/StudioSwitcher";
 import { OAUTH_CAPABLE_PLATFORMS, PUBLISHABLE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
 import { SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
 import { cn } from "@/lib/utils";
@@ -36,6 +35,7 @@ import {
   useDeleteStudio,
   useDisconnectStudioConnection,
   useRemoveStudioMember,
+  useRequestStudioDeleteCode,
   useRequestStudioInviteCode,
   useRevokeStudioInvite,
   useSendStudioInvite,
@@ -94,11 +94,7 @@ export default function StudioSettingsPage({ params }: { params: Promise<{ usern
 
   return (
     <div className="mx-auto max-w-2xl px-6 pb-24">
-      <div className="pt-4">
-        <StudioSwitcher currentUsername={studio.username} />
-      </div>
-
-      <h1 className="mt-4 text-lg font-semibold tracking-tight">{studio.name} — Settings</h1>
+      <h1 className="pt-4 text-lg font-semibold tracking-tight">{studio.name} — Settings</h1>
 
       <div className="mt-4 flex flex-wrap gap-1 border-b border-border">
         {SECTIONS.map((s) => (
@@ -137,11 +133,30 @@ function SetupSection({
   studio: { name: string; username: string; bio: string | null; spaceType: string; showFollowerCount: boolean };
 }) {
   const update = useUpdateStudio(studioId);
-  const del = useDeleteStudio();
+  const del = useDeleteStudio(studioId);
+  const requestDeleteCode = useRequestStudioDeleteCode(studioId);
   const [name, setName] = useState(studio.name);
   const [username, setUsername] = useState(studio.username);
   const [bio, setBio] = useState(studio.bio ?? "");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteCode, setDeleteCode] = useState("");
+
+  const startDelete = () => {
+    setConfirmingDelete(true);
+    setDeleteCode("");
+    requestDeleteCode.mutate();
+  };
+  const cancelDelete = () => {
+    setConfirmingDelete(false);
+    setDeleteCode("");
+  };
+  const confirmDelete = () => {
+    if (!requestDeleteCode.data) return;
+    del.mutate(
+      { challenge: requestDeleteCode.data.challenge, code: deleteCode },
+      { onSuccess: () => (window.location.href = "/app/studio") },
+    );
+  };
 
   const dirty =
     name.trim() !== studio.name || username.trim() !== studio.username || bio.trim() !== (studio.bio ?? "");
@@ -198,22 +213,58 @@ function SetupSection({
           Removes the studio, its drops, managers, and connections for everyone. This can&apos;t be undone.
         </p>
         {confirmingDelete ? (
-          <div className="mt-3 flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setConfirmingDelete(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              disabled={del.isPending}
-              onClick={() => del.mutate(studioId, { onSuccess: () => (window.location.href = "/app/studio") })}
-            >
-              {del.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
-              Confirm delete
-            </Button>
+          <div className="mt-3 space-y-2">
+            {requestDeleteCode.isPending ? (
+              <p className="text-xs text-muted-foreground">Sending a code to your email…</p>
+            ) : requestDeleteCode.isError ? (
+              <div className="space-y-2">
+                <p className="text-xs text-destructive">
+                  {requestDeleteCode.error instanceof ApiError
+                    ? requestDeleteCode.error.message
+                    : "Couldn't send a code."}
+                </p>
+                <Button size="sm" variant="outline" onClick={() => requestDeleteCode.mutate()}>
+                  Try again
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Label className="text-xs">
+                  Enter the code sent to {requestDeleteCode.data?.sentTo ?? "your email"} to confirm.
+                </Label>
+                <Input
+                  autoFocus
+                  className="w-28 tracking-widest"
+                  inputMode="numeric"
+                  maxLength={6}
+                  onChange={(e) => setDeleteCode(e.target.value.replace(/\D/g, ""))}
+                  placeholder="000000"
+                  value={deleteCode}
+                />
+              </>
+            )}
+            {del.isError && (
+              <p className="text-xs text-destructive">
+                {del.error instanceof ApiError ? del.error.message : "Couldn't delete the studio."}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={cancelDelete}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={!requestDeleteCode.data || deleteCode.length !== 6 || del.isPending}
+                onClick={confirmDelete}
+              >
+                {del.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
+                Confirm delete
+              </Button>
+            </div>
           </div>
         ) : (
-          <Button variant="destructive" size="sm" className="mt-3" onClick={() => setConfirmingDelete(true)}>
+          <Button variant="destructive" size="sm" className="mt-3" onClick={startDelete}>
             Delete studio
           </Button>
         )}

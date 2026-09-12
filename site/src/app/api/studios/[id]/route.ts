@@ -10,6 +10,7 @@ import {
 import { validationErrorResponse } from "@/lib/inference/responses";
 import { prisma } from "@/lib/prisma";
 import { getStudioMembership, logStudioActivity } from "@/lib/studio/access";
+import { verifyDeleteChallenge } from "@/lib/studio/delete-verification";
 import { usernameSchema } from "@/lib/username";
 
 export const dynamic = "force-dynamic";
@@ -129,8 +130,16 @@ export const PATCH = withDepCutAuth(async (request: DepCutAuthenticatedRequest, 
   }
 });
 
-// Owner only — deleting the studio cascades its members, invites, activity,
-// connections, and drops.
+const deleteSchema = z
+  .object({
+    challenge: z.string().min(1),
+    code: z.string().min(1),
+  })
+  .strict();
+
+// Owner only, and gated behind the one-time code from
+// POST /request-delete-code — deleting the studio cascades its members,
+// invites, activity, connections, and drops.
 export const DELETE = withDepCutAuth(async (request: DepCutAuthenticatedRequest, context: RouteContext) => {
   const { id } = await context.params;
   const membership = await getStudioMembership(request.depcut.userId, id);
@@ -139,6 +148,22 @@ export const DELETE = withDepCutAuth(async (request: DepCutAuthenticatedRequest,
     return NextResponse.json(
       { error: "Forbidden", message: "Only the owner can delete this studio." },
       { status: 403 },
+    );
+  }
+
+  const parsed = deleteSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return validationErrorResponse(parsed.error);
+
+  const verified = verifyDeleteChallenge({
+    challenge: parsed.data.challenge,
+    code: parsed.data.code,
+    requesterId: request.depcut.userId,
+    studioId: id,
+  });
+  if (!verified) {
+    return NextResponse.json(
+      { error: "invalid_code", message: "That code is wrong or expired." },
+      { status: 400 },
     );
   }
 

@@ -89,10 +89,26 @@ export function useUpdateStudio(id: string) {
   });
 }
 
-export function useDeleteStudio() {
+export function useRequestStudioDeleteCode(id: string) {
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<{ challenge: string; sentTo: string }>(`/api/studios/${id}/request-delete-code`, {
+        method: "POST",
+      }),
+  });
+}
+
+// Requires the challenge + code from useRequestStudioDeleteCode, proving the
+// owner approved this exact deletion from their own inbox (and Telegram, if
+// linked).
+export function useDeleteStudio(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiFetch<{ ok: boolean }>(`/api/studios/${id}`, { method: "DELETE" }),
+    mutationFn: ({ challenge, code }: { challenge: string; code: string }) =>
+      apiFetch<{ ok: boolean }>(`/api/studios/${id}`, {
+        body: JSON.stringify({ challenge, code }),
+        method: "DELETE",
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: studiosQueryKey }),
   });
 }
