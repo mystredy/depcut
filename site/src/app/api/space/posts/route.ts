@@ -7,7 +7,7 @@ import {
   type DepCutAuthenticatedRequest,
 } from "@/lib/depcut-api-auth";
 import { validationErrorResponse } from "@/lib/inference/responses";
-import { getBrandSpaceMembership } from "@/lib/space/brand-space-access";
+import { getStudioMembership } from "@/lib/space/studio-access";
 import { SPACE_STORAGE_LIMIT_BYTES, spaceStorageUsedBytes } from "@/lib/space/storage";
 import { prisma } from "@/lib/prisma";
 
@@ -48,8 +48,8 @@ const createPostSchema = z.object({
   caption: z.string().trim().max(280).nullable().optional(),
   projectId: z.string().trim().min(1).max(100).nullable().optional(),
   // Omitted/null posts to the author's own personal Space; set posts to
-  // that Brand Space's feed instead — the author must manage it.
-  brandSpaceId: z.string().trim().min(1).nullable().optional(),
+  // that Studio's feed instead — the author must manage it.
+  studioId: z.string().trim().min(1).nullable().optional(),
 });
 
 // A draft row, same shape as marketplace submissions' "New Submit": create
@@ -59,14 +59,14 @@ export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest) =
   const parsed = createPostSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return validationErrorResponse(parsed.error);
 
-  if (parsed.data.brandSpaceId) {
-    const membership = await getBrandSpaceMembership(request.depcut.userId, parsed.data.brandSpaceId);
+  if (parsed.data.studioId) {
+    const membership = await getStudioMembership(request.depcut.userId, parsed.data.studioId);
     if (!membership) return notFoundResponse();
   }
 
   const post = await prisma.spacePost.create({
     data: {
-      brandSpaceId: parsed.data.brandSpaceId || null,
+      studioId: parsed.data.studioId || null,
       caption: parsed.data.caption || null,
       projectId: parsed.data.projectId || null,
       userId: request.depcut.userId,

@@ -2,14 +2,14 @@ import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { oauthPopupHtml } from "@/lib/marketplace/oauth-popup-html";
 import { verifyPageState } from "@/lib/marketplace/oauth-page-state";
 import { upsertSocialConnection } from "@/lib/marketplace/social-connection-upsert";
-import { isBrandSpaceManager } from "@/lib/space/brand-space-access";
+import { isStudioManager } from "@/lib/space/studio-access";
 
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ platform: string }> };
 
 // The Facebook/Instagram Page-picker's follow-up: whoever clicked one of
-// the Pages listed by the callback route (an admin or a Brand Space
+// the Pages listed by the callback route (an admin or a Studio
 // manager, per the signed state) gets it finalized into a real
 // SocialConnection using the chosen Page's own access token — verified
 // from the signed state, not trusted from the request directly.
@@ -32,8 +32,8 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
     });
   }
 
-  if (state.ownerType === "brandSpace" && state.brandSpaceId) {
-    if (!(await isBrandSpaceManager(request.depcut.userId, state.brandSpaceId))) {
+  if (state.ownerType === "studio" && state.studioId) {
+    if (!(await isStudioManager(request.depcut.userId, state.studioId))) {
       return oauthPopupHtml({ message: "You're not a manager of this space.", success: false, title: "Forbidden" });
     }
   } else if (!(await isDepCutSuperUser(request.depcut.userId))) {
@@ -48,7 +48,7 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
   await upsertSocialConnection({
     accessToken: page.accessToken,
     accountName: state.label || page.name,
-    brandSpaceId: state.ownerType === "brandSpace" ? state.brandSpaceId : undefined,
+    studioId: state.ownerType === "studio" ? state.studioId : undefined,
     platform,
     platformAccountId: page.id,
     profileImage: page.profileImage,

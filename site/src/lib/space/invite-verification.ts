@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomInt, timingSafeEqual } from "node:crypto";
 
-// Gates a Brand Space manager invite behind a one-time code emailed to the
+// Gates a Studio manager invite behind a one-time code emailed to the
 // INVITING manager's own address — proof a human with inbox access approved
 // this specific invite, not just that the browser session is authenticated,
 // before the actual invite email goes out to the invitee. Stateless like
@@ -9,7 +9,7 @@ import { createHash, createHmac, randomInt, timingSafeEqual } from "node:crypto"
 // to add or expire.
 type ChallengePayload = {
   requesterId: string;
-  brandSpaceId: string;
+  studioId: string;
   email: string;
   codeHash: string;
   iat: number;
@@ -47,12 +47,12 @@ export function generateInviteCode(): string {
 
 export function createInviteChallenge(params: {
   requesterId: string;
-  brandSpaceId: string;
+  studioId: string;
   email: string;
   code: string;
 }): string {
   const payload: ChallengePayload = {
-    brandSpaceId: params.brandSpaceId,
+    studioId: params.studioId,
     codeHash: hashCode(params.code),
     email: params.email,
     iat: Date.now(),
@@ -66,7 +66,7 @@ export function verifyInviteChallenge(params: {
   challenge: string;
   code: string;
   requesterId: string;
-  brandSpaceId: string;
+  studioId: string;
   email: string;
 }): boolean {
   const [body, sig] = params.challenge.split(".");
@@ -83,7 +83,7 @@ export function verifyInviteChallenge(params: {
   if (Date.now() - payload.iat > EXPIRY_MS) return false;
   if (
     payload.requesterId !== params.requesterId ||
-    payload.brandSpaceId !== params.brandSpaceId ||
+    payload.studioId !== params.studioId ||
     payload.email !== params.email
   ) {
     return false;

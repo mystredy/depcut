@@ -10,11 +10,11 @@ type StatePayload = {
   label?: string;
   verifier?: string;
   // Who this connection belongs to once it's created — the admin/brand
-  // pool (default) or a specific Brand Space's Repurpose panel. The
+  // pool (default) or a specific Studio's Repurpose panel. The
   // callback route reads this to pick which permission check applies and
   // which owner field to set on the resulting SocialConnection.
-  ownerType?: "admin" | "brandSpace";
-  brandSpaceId?: string;
+  ownerType?: "admin" | "studio";
+  studioId?: string;
   iat: number;
 };
 

@@ -6,13 +6,13 @@ import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useCutBase } from "@/cut/lib/nav";
-import { useAcceptBrandSpaceInvite } from "@/queries/brandSpace";
+import { useAcceptStudioInvite } from "@/queries/studio";
 
-// Landing page for the "Accept invite" link in a Brand Space invite email.
-export default function BrandSpaceInvitePage({ params }: { params: Promise<{ token: string }> }) {
+// Landing page for the "Accept invite" link in a Studio invite email.
+export default function StudioInvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
   const base = useCutBase();
-  const accept = useAcceptBrandSpaceInvite();
+  const accept = useAcceptStudioInvite();
   // A ref, not state — the guard itself shouldn't trigger a render.
   const attempted = useRef(false);
 

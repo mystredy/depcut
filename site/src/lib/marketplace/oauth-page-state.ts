@@ -19,8 +19,8 @@ type PageStatePayload = {
   role: "source" | "destination";
   label?: string;
   pages: CandidatePage[];
-  ownerType?: "admin" | "brandSpace";
-  brandSpaceId?: string;
+  ownerType?: "admin" | "studio";
+  studioId?: string;
   iat: number;
 };
 

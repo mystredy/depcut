@@ -6,7 +6,7 @@ import { Heart, Pencil, Play, Plus, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatBytes } from "@/cut/components/desktopFolders";
 import { PostToSpaceDialog } from "@/cut/components/PostToSpaceDialog";
-import { BrandSpaceSwitcher } from "@/cut/components/BrandSpaceSwitcher";
+import { StudioSwitcher } from "@/cut/components/StudioSwitcher";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { authClient } from "@/lib/auth-client";
 import { useCutBase } from "@/cut/lib/nav";
@@ -45,7 +45,7 @@ export default function SpacePage() {
   return (
     <div className="mx-auto max-w-2xl pb-24">
       <div className="px-6 pt-4">
-        <BrandSpaceSwitcher currentUsername={null} />
+        <StudioSwitcher currentUsername={null} />
       </div>
 
       <div className="relative h-32 w-full overflow-hidden rounded-b-2xl bg-muted sm:h-40">

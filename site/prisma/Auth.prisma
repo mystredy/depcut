@@ -73,10 +73,10 @@ model User {
   affiliate          Affiliate?
   affiliateReferral  AffiliateReferral? @relation("AffiliateReferredUser")
   socialConnections  SocialConnection[]
-  ownedBrandSpaces      BrandSpace[]         @relation("BrandSpaceOwner")
-  brandSpaceMemberships BrandSpaceMember[]
-  brandSpaceInvitesSent BrandSpaceInvite[]   @relation("BrandSpaceInvitesSent")
-  brandSpaceActivity    BrandSpaceActivity[]
+  ownedStudios      Studio[]         @relation("StudioOwner")
+  studioMemberships StudioMember[]
+  studioInvitesSent StudioInvite[]   @relation("StudioInvitesSent")
+  studioActivity    StudioActivity[]
 
   @@map("user")
 }

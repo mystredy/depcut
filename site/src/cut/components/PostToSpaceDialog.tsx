@@ -12,23 +12,23 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { formatBytes } from "@/cut/components/desktopFolders";
-import { brandSpacePostsQueryKey } from "@/queries/brandSpace";
+import { studioPostsQueryKey } from "@/queries/studio";
 import { postSpaceVideo, spacePostsQueryKey, useCreateSpacePost, useSpacePosts } from "@/queries/space";
 import { cn } from "@/lib/utils";
 
-// Posts a finished export to My Space, or to a Brand Space's feed when
-// brandSpaceId is given. Deliberately just "attach the video you already
+// Posts a finished export to My Space, or to a Studio's feed when
+// studioId is given. Deliberately just "attach the video you already
 // exported" — the same manual drop-a-file step Artist's Submit already
 // uses (there's no render pipeline behind either one; Export is what
 // renders, this just uploads what it produced) — rather than re-rendering
 // the project itself.
 export function PostToSpaceDialog({
   projectId,
-  brandSpaceId,
+  studioId,
   onClose,
 }: {
   projectId: string | null;
-  brandSpaceId?: string;
+  studioId?: string;
   onClose: () => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
@@ -60,13 +60,13 @@ export function PostToSpaceDialog({
     setError(null);
     try {
       const { post: created } = await createPost.mutateAsync({
-        brandSpaceId: brandSpaceId || undefined,
+        studioId: studioId || undefined,
         caption: caption.trim() || undefined,
         projectId,
       });
       await postSpaceVideo(created.id, file, setProgress);
       void queryClient.invalidateQueries({
-        queryKey: brandSpaceId ? brandSpacePostsQueryKey(brandSpaceId) : spacePostsQueryKey,
+        queryKey: studioId ? studioPostsQueryKey(studioId) : spacePostsQueryKey,
       });
       setDone(true);
       setTimeout(onClose, 900);
