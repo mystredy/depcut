@@ -14,6 +14,7 @@ import {
   MessageCircleHeart,
   Monitor,
   Moon,
+  Plus,
   Settings,
   Sun,
   SunMoon,
@@ -46,6 +47,7 @@ import { authClient } from "@/lib/auth-client";
 import { useAccountProfile, visibleName } from "@/queries/accountProfile";
 import { useAccount, useCreditBalance } from "@/queries/credits";
 import { usePublicSiteSettings } from "@/queries/site";
+import { useStudios } from "@/queries/studio";
 
 type CachedNavProfile = { name: string; image: string | null };
 
@@ -94,6 +96,7 @@ export function NavUser() {
   const { data: profile, isPending } = useAccountProfile();
   const credits = useCreditBalance();
   const account = useAccount();
+  const studios = useStudios();
   const siteSettings = usePublicSiteSettings();
   const creditRate = siteSettings.data
     ? {
@@ -202,7 +205,15 @@ export function NavUser() {
           <NavStorage />
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => router.push(`${base}/studio`)}>
-            <LayoutGrid /> Studios
+            {(studios.data?.spaces.length ?? 0) === 0 ? (
+              <>
+                <Plus /> New studio
+              </>
+            ) : (
+              <>
+                <LayoutGrid /> Studios
+              </>
+            )}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => router.push(`${base}/settings`)}>
             <CreditCard /> Billing
