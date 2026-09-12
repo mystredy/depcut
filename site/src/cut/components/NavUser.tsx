@@ -15,7 +15,6 @@ import {
   Monitor,
   Moon,
   Settings,
-  Sparkles,
   Sun,
   SunMoon,
   Wallet,
@@ -42,7 +41,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { type ThemeChoice, useTheme } from "@/cut/components/ThemeProvider";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { DEFAULT_CREDIT_RATE, formatCredits } from "@/lib/credits/format-credits";
-import { openOnboarding } from "@/cut/lib/onboarding";
 import { useCutBase } from "@/cut/lib/nav";
 import { authClient } from "@/lib/auth-client";
 import { useAccountProfile, visibleName } from "@/queries/accountProfile";
@@ -225,11 +223,6 @@ export function NavUser() {
               <Clapperboard /> Apply to be creator
             </DropdownMenuItem>
           )}
-          {/* The welcome sequence is a full-window overlay mounted in the app
-              shell, so this asks for it rather than routing anywhere. */}
-          <DropdownMenuItem onClick={openOnboarding}>
-            <Sparkles /> View onboarding
-          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => router.push(`${base}/settings/profile`)}>
             <Settings /> Settings
           </DropdownMenuItem>
