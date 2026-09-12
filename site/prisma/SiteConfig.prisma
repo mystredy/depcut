@@ -139,12 +139,12 @@ model SocialConnection {
   // for every admin-owned connection.
   userId            String?
   user              User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  // Set when a Brand Space's Repurpose panel connects an account — see
-  // /api/space/brand-spaces/[id]/oauth/[platform]/start. The real, common
-  // case for a user-initiated connection; bare `userId` above stays for a
-  // hypothetical connection tied to an account directly, not a space.
-  brandSpaceId      String?
-  brandSpace        BrandSpace? @relation(fields: [brandSpaceId], references: [id], onDelete: Cascade)
+  // Set when a studio's Repurpose panel connects an account — see
+  // /api/studios/[id]/oauth/[platform]/start. The real, common case for a
+  // user-initiated connection; bare `userId` above stays for a hypothetical
+  // connection tied to an account directly, not a studio.
+  studioId          String?
+  studio            Studio?   @relation(fields: [studioId], references: [id], onDelete: Cascade)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   sourceOf          SocialWorkflow[] @relation("WorkflowSource")
@@ -153,7 +153,7 @@ model SocialConnection {
   @@index([platform])
   @@index([brandId])
   @@index([userId])
-  @@index([brandSpaceId])
+  @@index([studioId])
   @@map("social_connection")
 }
 

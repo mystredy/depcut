@@ -203,8 +203,8 @@ export function NavUser() {
           </div>
           <NavStorage />
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => router.push(`${base}/space`)}>
-            <LayoutGrid /> My Space
+          <DropdownMenuItem onClick={() => router.push(`${base}/studio`)}>
+            <LayoutGrid /> Studios
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => router.push(`${base}/settings`)}>
             <CreditCard /> Billing

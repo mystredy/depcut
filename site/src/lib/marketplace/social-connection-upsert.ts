@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 // Page-picker's select-page route. Matches by the platform's own account
 // id when given, scoped to the same owner — accountName is display text
 // and can change on the platform without this connection changing, and two
-// different owners (a Brand Space and the admin pool, say) connecting the
-// same underlying platform account must stay separate rows.
+// different owners (a studio and the admin pool, say) connecting the same
+// underlying platform account must stay separate rows.
 export async function upsertSocialConnection(opts: {
   platform: string;
   role: "source" | "destination";
@@ -16,18 +16,18 @@ export async function upsertSocialConnection(opts: {
   accessToken: string;
   refreshToken?: string;
   tokenExpiresAt: Date | null;
-  brandSpaceId?: string;
+  studioId?: string;
 }) {
   const existing = opts.platformAccountId
     ? await prisma.socialConnection.findFirst({
         where: {
-          brandSpaceId: opts.brandSpaceId ?? null,
           platform: opts.platform,
           platformAccountId: opts.platformAccountId,
+          studioId: opts.studioId ?? null,
         },
       })
     : await prisma.socialConnection.findFirst({
-        where: { accountName: opts.accountName, brandSpaceId: opts.brandSpaceId ?? null, platform: opts.platform },
+        where: { accountName: opts.accountName, platform: opts.platform, studioId: opts.studioId ?? null },
       });
 
   if (existing) {
@@ -50,12 +50,12 @@ export async function upsertSocialConnection(opts: {
       accessToken: opts.accessToken,
       accountHandle: opts.accountHandle,
       accountName: opts.accountName,
-      brandSpaceId: opts.brandSpaceId,
       platform: opts.platform,
       platformAccountId: opts.platformAccountId,
       profileImage: opts.profileImage,
       refreshToken: opts.refreshToken,
       role: opts.role,
+      studioId: opts.studioId,
       tokenExpiresAt: opts.tokenExpiresAt,
     },
   });

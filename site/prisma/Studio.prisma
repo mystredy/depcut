@@ -1,0 +1,93 @@
+// A studio: a user-created connected-account-equivalent, YouTube-channel
+// style — nothing exists until an account explicitly creates one, and an
+// account can own or manage several. Each has its own managers
+// (StudioMember), public profile, publicly-displayed linked-account
+// handles, connected publish destinations (SocialConnection.studioId), and
+// drop feed (Drop.studioId).
+model Studio {
+  id                 String   @id @default(cuid())
+  name               String
+  username           String   @unique
+  bio                String?
+  avatarImageKey     String?
+  backgroundImageKey String?
+  // Whether this studio shows a follower count publicly. There's no
+  // follower graph yet — the count is always 0 today — so this only
+  // controls whether that (currently zero) number is shown, ahead of the
+  // feature existing.
+  showFollowerCount  Boolean  @default(true)
+  // "Creator" today — a plain string, not an enum, so a new type doesn't
+  // need a migration.
+  spaceType          String   @default("Creator")
+  ownerId            String
+  owner              User     @relation("StudioOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  // { facebook?: "handle", instagram?: "handle", ... } — public display text
+  // only, no token. Distinct from `connections`, which are real
+  // OAuth-backed publish destinations.
+  linkedAccounts     Json?
+  members            StudioMember[]
+  invites            StudioInvite[]
+  activity           StudioActivity[]
+  connections        SocialConnection[]
+  drops              Drop[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([ownerId])
+  @@map("studio")
+}
+
+// Who can manage a studio. The owner also gets a row here (role "owner",
+// created alongside the studio) so member lists and permission checks never
+// special-case the owner separately. role: "owner" | "manager".
+model StudioMember {
+  id        String   @id @default(cuid())
+  studioId  String
+  studio    Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   @default("manager")
+  createdAt DateTime @default(now())
+
+  @@unique([studioId, userId])
+  @@index([userId])
+  @@map("studio_member")
+}
+
+// A pending invite to manage a studio, sent to an email address that may or
+// may not have a DepCut account yet. Redeemed into a StudioMember row when
+// the invited email accepts.
+// status: "Pending" | "Accepted" | "Revoked".
+model StudioInvite {
+  id          String   @id @default(cuid())
+  studioId    String
+  studio      Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  email       String
+  role        String   @default("manager")
+  invitedById String
+  invitedBy   User     @relation("StudioInvitesSent", fields: [invitedById], references: [id], onDelete: Cascade)
+  token       String   @unique
+  status      String   @default("Pending")
+  createdAt   DateTime @default(now())
+
+  @@index([studioId])
+  @@index([email])
+  @@map("studio_invite")
+}
+
+// The management-action history shown on a studio's settings — who did
+// what, when. Written alongside every mutation the studio routes make
+// (invited, removed, role changed, renamed, connection added/removed).
+model StudioActivity {
+  id        String   @id @default(cuid())
+  studioId  String
+  studio    Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([studioId])
+  @@map("studio_activity")
+}

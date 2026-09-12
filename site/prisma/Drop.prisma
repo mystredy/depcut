@@ -1,0 +1,47 @@
+// A post to a studio's feed — DepCut's publishing type, the equivalent of a
+// YouTube Short or a TikTok Post (see the editor's "Post to Space" action
+// and a studio's own page). Deliberately its own, simple model rather than
+// reusing Marketplace.prisma's Submission/SubmissionAsset — those carry a
+// whole paid-task review state machine (category, points, reward, status
+// remarks) that a casual drop has no business dragging along. One row per
+// drop; a drop has at most one video, so there's no separate per-asset
+// table the way a submission's video/thumbnail/verification trio needs.
+//
+// projectId is intentionally a plain field, not a relation: a local
+// (Mac-app-resident) project has no CutProject row at all, so an FK
+// constraint would break the common case. It's a label, not a join target.
+//
+// Mapped table is "drop", singular like every other table here — DROP is a
+// SQL keyword, but Prisma always double-quotes identifiers in generated
+// SQL, so this is safe as long as any hand-written SQL against it does too.
+model Drop {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Every drop belongs to a real studio — the author is still whichever
+  // manager posted it, but there's no implicit "my own default" one.
+  studioId     String
+  studio       Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  projectId    String?
+  caption      String?
+  // Original picked filename, kept as a label.
+  fileName     String?
+  // R2 object keys — see src/cut/server/cloud/r2.ts's spacePostVideoKey /
+  // spacePostThumbnailKey. Set as soon as a PUT is presigned; status is what
+  // tracks whether the bytes actually arrived.
+  storageKey   String?
+  thumbnailKey String?
+  // Authoritative byte size, filled in from R2's own HEAD response once the
+  // upload is verified — never trusted from the client. What the 10GB
+  // per-account quota (lib/studio/storage.ts) sums over.
+  sizeBytes    Int?
+  status       String   @default("pending")
+  error        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([studioId])
+  @@map("drop")
+}

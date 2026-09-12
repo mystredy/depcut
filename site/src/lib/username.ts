@@ -1,10 +1,9 @@
 import { z } from "zod";
 
-// Shared "@handle" rule for both a personal Space (User.username) and a
-// Brand Space (BrandSpace.username): lowercase letters, digits, and
-// underscores, 3-20 characters, starting with a letter. superRefine reports
-// the one rule that actually failed (e.g. "Dots aren't allowed") instead of
-// dumping the whole spec at every rejection.
+// The @handle rule for a studio (Studio.username): lowercase letters,
+// digits, and underscores, 3-20 characters, starting with a letter.
+// superRefine reports the one rule that actually failed (e.g. "Dots aren't
+// allowed") instead of dumping the whole spec at every rejection.
 export const usernameSchema = z
   .string()
   .trim()

@@ -34,10 +34,12 @@ import { backTarget, projectHref, useCutBase } from "@/cut/lib/nav";
 import { copyProjectAcross } from "@/cut/lib/projectCopy";
 import { useEditor } from "@/cut/lib/store";
 import { useAccount } from "@/queries/credits";
+import { useStudios } from "@/queries/studio";
 import { useCreateDraftSubmission } from "@/queries/submissions";
 import { cn } from "@/lib/utils";
+import { ChooseStudioDialog } from "@/cut/components/ChooseStudioDialog";
+import { DropDialog } from "@/cut/components/DropDialog";
 import { FeedbackDialog } from "@/cut/components/FeedbackDialog";
-import { PostToSpaceDialog } from "@/cut/components/PostToSpaceDialog";
 import { SiteLogo } from "@/cut/components/SiteLogo";
 import { RecordDialog, type RecordMode } from "./RecordDialog";
 import { ShareDialog } from "./ShareDialog";
@@ -186,7 +188,26 @@ export function TopBar({
     wasUploading.current = cloudUploading;
   }, [cloudUploading, queryClient]);
   const [shareOpen, setShareOpen] = useState(false);
-  const [postToSpaceOpen, setPostToSpaceOpen] = useState(false);
+  const [dropOpen, setDropOpen] = useState(false);
+  const [choosingStudio, setChoosingStudio] = useState(false);
+  const [dropStudioId, setDropStudioId] = useState<string | null>(null);
+  const studios = useStudios();
+  // A drop has no implied destination the way a specific studio's own Post
+  // button does — resolve it here: straight through with one studio, a
+  // picker with several, off to create one with none.
+  const openDropDialog = () => {
+    const spaces = studios.data?.spaces ?? [];
+    if (spaces.length === 0) {
+      router.push(`${base}/studio`);
+      return;
+    }
+    if (spaces.length === 1) {
+      setDropStudioId(spaces[0].id);
+      setDropOpen(true);
+      return;
+    }
+    setChoosingStudio(true);
+  };
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -304,16 +325,17 @@ export function TopBar({
         variant="ghost"
         size={compact ? "icon-sm" : "sm"}
         className="max-sm:size-7 max-sm:px-0"
-        aria-label="Post to Space"
-        // Post uploads an exported video file — nothing renders it, so it's
-        // gated on the same "has a real cut, no imports still in flight or
-        // failed" check Export and Submit share, same reasoning as Submit's.
+        aria-label="Drop"
+        // A drop uploads an exported video file — nothing renders it, so
+        // it's gated on the same "has a real cut, no imports still in
+        // flight or failed" check Export and Submit share, same reasoning
+        // as Submit's.
         disabled={exportBlocked}
-        title={exportBlockedTitle ?? (compact ? "Post to Space" : undefined)}
-        onClick={() => setPostToSpaceOpen(true)}
+        title={exportBlockedTitle ?? (compact ? "Drop" : undefined)}
+        onClick={openDropDialog}
       >
         <LayoutGrid data-icon={compact ? undefined : "inline-start"} />
-        {!compact && <span className="hidden sm:inline">Post to Space</span>}
+        {!compact && <span className="hidden sm:inline">Drop</span>}
       </Button>
       {cutMode === "cloud" && isArtist && (
         <Button
@@ -561,8 +583,8 @@ export function TopBar({
                 >
                   <Upload /> {exportBlockedTitle ?? "Export"}
                 </DropdownMenuItem>
-                <DropdownMenuItem disabled={exportBlocked} onClick={() => setPostToSpaceOpen(true)}>
-                  <LayoutGrid /> Post to Space
+                <DropdownMenuItem disabled={exportBlocked} onClick={openDropDialog}>
+                  <LayoutGrid /> Drop
                 </DropdownMenuItem>
                 {cutMode === "cloud" && isArtist && (
                   <DropdownMenuItem
@@ -596,10 +618,21 @@ export function TopBar({
           onClose={() => setShareOpen(false)}
         />
       )}
-      {postToSpaceOpen && (
-        <PostToSpaceDialog
+      {choosingStudio && (
+        <ChooseStudioDialog
+          onChoose={(studioId) => {
+            setDropStudioId(studioId);
+            setChoosingStudio(false);
+            setDropOpen(true);
+          }}
+          onClose={() => setChoosingStudio(false)}
+        />
+      )}
+      {dropOpen && dropStudioId && (
+        <DropDialog
           projectId={useEditor.getState().projectId ?? null}
-          onClose={() => setPostToSpaceOpen(false)}
+          studioId={dropStudioId}
+          onClose={() => setDropOpen(false)}
         />
       )}
       {feedbackOpen && <FeedbackDialog onClose={() => setFeedbackOpen(false)} />}
