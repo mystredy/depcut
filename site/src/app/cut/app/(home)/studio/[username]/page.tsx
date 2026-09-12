@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Play, Plus, Settings, Video } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { StudioSwitcher } from "@/cut/components/StudioSwitcher";
 import { DropDialog } from "@/cut/components/DropDialog";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { formatBytes } from "@/cut/components/desktopFolders";
@@ -39,10 +38,6 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
 
   return (
     <div className="pb-24">
-      <div className="px-6 pt-4">
-        <StudioSwitcher currentUsername={studio.username} />
-      </div>
-
       <div className="relative h-32 w-full overflow-hidden rounded-b-2xl bg-muted sm:h-40" />
 
       <div className="mx-auto flex max-w-2xl flex-col items-center px-6 text-center">
