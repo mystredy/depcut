@@ -207,7 +207,7 @@ export function NavUser() {
           <DropdownMenuItem onClick={() => router.push(`${base}/studio`)}>
             {(studios.data?.spaces.length ?? 0) === 0 ? (
               <>
-                <Video /> <Plus className="-ml-1 size-3" /> New studio
+                <Video /> New studio <Plus className="size-3" />
               </>
             ) : (
               <>
