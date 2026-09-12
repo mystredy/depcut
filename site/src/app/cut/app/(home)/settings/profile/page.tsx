@@ -13,7 +13,9 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateStudioDialog } from "@/cut/components/StudioSwitcher";
 import { UserAvatar } from "@/cut/components/UserAvatar";
+import { track } from "@/lib/analytics";
 import { useAccountProfile, useUpdateDisplayName, visibleName } from "@/queries/accountProfile";
+import { useOpenBillingPortal, useProSubscription, useStartCheckout } from "@/queries/billing";
 
 // The account's own page: who you're signed in as, and the one thing about it
 // you can change. Every section below fetches its own data independently and
@@ -35,6 +37,9 @@ export default function CutProfilePage() {
 function ProfileCard() {
   const { data: profile, isPending, isError } = useAccountProfile();
   const update = useUpdateDisplayName();
+  const pro = useProSubscription();
+  const checkout = useStartCheckout();
+  const portal = useOpenBillingPortal();
   // Null means "not edited yet", so the field follows the saved value until
   // the user types and again once a save lands.
   const [draft, setDraft] = useState<string | null>(null);
@@ -88,15 +93,40 @@ function ProfileCard() {
             </div>
             <div className="truncate text-sm text-muted-foreground">{profile.email}</div>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-auto shrink-0"
-            onClick={() => setCreatingStudio(true)}
-          >
-            <Plus data-icon="inline-start" className="size-3.5" />
-            Create studio
-          </Button>
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {pro.data?.isActive ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={portal.isPending}
+                onClick={() => {
+                  track("billing_portal_opened");
+                  portal.mutate(undefined, {
+                    onSuccess: (result) => window.location.assign(result.url),
+                  });
+                }}
+              >
+                {portal.isPending ? "Opening…" : "Manage billing"}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                disabled={checkout.isPending}
+                onClick={() => {
+                  track("pro_checkout_started");
+                  checkout.mutate("pro", {
+                    onSuccess: (result) => window.location.assign(result.url),
+                  });
+                }}
+              >
+                {checkout.isPending ? "Starting…" : "Subscribe to Pro"}
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setCreatingStudio(true)}>
+              <Plus data-icon="inline-start" className="size-3.5" />
+              Create studio
+            </Button>
+          </div>
         </div>
 
         <div className="mt-5 border-t pt-5">
