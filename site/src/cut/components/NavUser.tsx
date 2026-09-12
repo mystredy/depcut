@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ChartColumn,
   ChevronRight,
+  ChevronsUpDown,
   Clapperboard,
   CreditCard,
   EllipsisVertical,
@@ -211,7 +212,14 @@ export function NavUser() {
               </>
             ) : (
               <>
-                <Video /> Studios
+                <UserAvatar
+                  name={studios.data!.spaces[0].name}
+                  image={null}
+                  className="size-5"
+                  initialClassName="text-[10px]"
+                />
+                <span className="min-w-0 truncate">{studios.data!.spaces[0].name}</span>
+                <ChevronsUpDown className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
               </>
             )}
           </DropdownMenuItem>
