@@ -72,7 +72,7 @@ const SECTIONS: { key: Section; label: string }[] = [
   { key: "setup", label: "Studio setup" },
   { key: "access", label: "Studio access" },
   { key: "history", label: "Management history" },
-  { key: "linked", label: "Linked accounts" },
+  { key: "linked", label: "Social accounts" },
   { key: "repurpose", label: "Repurpose" },
 ];
 
