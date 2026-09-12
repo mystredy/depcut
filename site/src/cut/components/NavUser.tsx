@@ -256,7 +256,7 @@ export function NavUser() {
           <DropdownMenuItem onClick={() => router.push(`${base}/settings/affiliate`)}>
             <Link2 /> Affiliate
           </DropdownMenuItem>
-          {!account.data?.isArtist && (
+          {account.data?.superUser && !account.data?.isArtist && (
             <DropdownMenuItem onClick={() => setCreatorApplicationOpen(true)}>
               <Clapperboard /> Apply to be creator
             </DropdownMenuItem>
