@@ -109,7 +109,7 @@ export default function StudioSettingsPage({ params }: { params: Promise<{ usern
             className={cn(
               "border-b-2 px-3 py-2 text-sm font-medium transition-colors",
               section === s.key
-                ? "border-ink text-ink"
+                ? "border-foreground text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
