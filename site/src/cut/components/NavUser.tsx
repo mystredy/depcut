@@ -8,7 +8,6 @@ import {
   Clapperboard,
   CreditCard,
   EllipsisVertical,
-  LayoutGrid,
   Link2,
   LogOut,
   MessageCircleHeart,
@@ -18,6 +17,7 @@ import {
   Settings,
   Sun,
   SunMoon,
+  Video,
   Wallet,
   Zap,
 } from "lucide-react";
@@ -211,7 +211,7 @@ export function NavUser() {
               </>
             ) : (
               <>
-                <LayoutGrid /> Studios
+                <Video /> Studios
               </>
             )}
           </DropdownMenuItem>
