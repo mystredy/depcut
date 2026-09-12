@@ -241,9 +241,6 @@ export function NavUser() {
               <Clapperboard /> Apply to be creator
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onClick={() => router.push(`${base}/settings/profile`)}>
-            <Settings /> Settings
-          </DropdownMenuItem>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <SunMoon /> Theme
