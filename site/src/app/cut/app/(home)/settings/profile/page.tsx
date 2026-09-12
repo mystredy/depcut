@@ -9,7 +9,6 @@ import { FeatureFlagsSection } from "@/app/cut/app/(home)/settings/profile/Featu
 import { PreferencesSection } from "@/app/cut/app/(home)/settings/profile/PreferencesSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateStudioDialog } from "@/cut/components/StudioSwitcher";
 import { UserAvatar } from "@/cut/components/UserAvatar";
@@ -44,6 +43,7 @@ function ProfileCard() {
   // the user types and again once a save lands.
   const [draft, setDraft] = useState<string | null>(null);
   const [editingAvatar, setEditingAvatar] = useState(false);
+  const [editingName, setEditingName] = useState(false);
   const [creatingStudio, setCreatingStudio] = useState(false);
 
   if (isPending) {
@@ -60,13 +60,22 @@ function ProfileCard() {
   const value = draft ?? profile.displayName ?? "";
   const dirty = value.trim() !== (profile.displayName ?? "");
   const save = () => {
-    update.mutate(value.trim() || null, { onSuccess: () => setDraft(null) });
+    update.mutate(value.trim() || null, {
+      onSuccess: () => {
+        setDraft(null);
+        setEditingName(false);
+      },
+    });
+  };
+  const cancelEditingName = () => {
+    setDraft(null);
+    setEditingName(false);
   };
 
   return (
     <>
       <div className="py-6 first:pt-0">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* The picture is the way into its own editor — pick, frame, save. */}
           <button
             type="button"
@@ -88,10 +97,46 @@ function ProfileCard() {
             </span>
           </button>
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium">
-              {visibleName(profile, profile.name)}
-            </div>
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  autoFocus
+                  className="h-7 max-w-[200px]"
+                  maxLength={60}
+                  placeholder={profile.name}
+                  value={value}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && dirty) save();
+                    if (e.key === "Escape") cancelEditingName();
+                  }}
+                />
+                <Button size="sm" disabled={!dirty || update.isPending} onClick={save}>
+                  Save
+                </Button>
+                <Button size="sm" variant="ghost" onClick={cancelEditingName}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <span className="truncate text-sm font-medium">
+                  {visibleName(profile, profile.name)}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Edit display name"
+                  onClick={() => setEditingName(true)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Pencil className="size-3" />
+                </button>
+              </div>
+            )}
             <div className="truncate text-sm text-muted-foreground">{profile.email}</div>
+            {update.isError && (
+              <p className="mt-1 text-sm text-red-600">Couldn&apos;t save that name — try again.</p>
+            )}
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {pro.data?.isActive ? (
@@ -127,31 +172,6 @@ function ProfileCard() {
               Create studio
             </Button>
           </div>
-        </div>
-
-        <div className="mt-5 border-t pt-5">
-          <Label htmlFor="display-name">Display name</Label>
-          <div className="mt-3 flex items-center gap-2">
-            <Input
-              id="display-name"
-              className="max-w-xs"
-              maxLength={60}
-              placeholder={profile.name}
-              value={value}
-              onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && dirty) save();
-              }}
-            />
-            <Button disabled={!dirty || update.isPending} onClick={save}>
-              Save
-            </Button>
-          </div>
-          {update.isError && (
-            <p className="mt-2 text-sm text-red-600">
-              Couldn&apos;t save that name — try again.
-            </p>
-          )}
         </div>
       </div>
 
