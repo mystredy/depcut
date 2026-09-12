@@ -21,7 +21,7 @@ export async function sendStudioDeleteCode(params: {
   const { error } = await getResend().emails.send({
     from,
     to: params.ownerEmail,
-    subject: `Studio deletion requested: "${params.studioName}"`,
+    subject: `⚠️ Someone is trying to delete "${params.studioName}" on DepCut`,
     react: StudioDeleteCodeEmail({ code: params.code, studioName: params.studioName }),
   });
   if (error) {
