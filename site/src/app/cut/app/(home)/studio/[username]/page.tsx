@@ -38,14 +38,14 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
   const visibleDrops = (drops.data?.drops ?? []).filter((d) => d.status !== "error");
 
   return (
-    <div className="mx-auto max-w-2xl pb-24">
+    <div className="mx-auto max-w-5xl pb-24">
       <div className="px-6 pt-4">
         <StudioSwitcher currentUsername={studio.username} />
       </div>
 
       <div className="relative h-32 w-full overflow-hidden rounded-b-2xl bg-muted sm:h-40" />
 
-      <div className="flex flex-col items-center px-6 text-center">
+      <div className="mx-auto flex max-w-2xl flex-col items-center px-6 text-center">
         <UserAvatar
           name={studio.name}
           image={null}
@@ -84,7 +84,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {visibleDrops.map((drop) => (
               <a
                 key={drop.id}
