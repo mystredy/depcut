@@ -13,6 +13,7 @@ import {
   requireInferenceCredits,
 } from "@/lib/credits/inference";
 import { elevenLabsModels } from "@/lib/inference/elevenlabs-models";
+import { notifyTelegram } from "@/lib/telegram/notify";
 import { err } from "./util";
 
 // The client sends sub-megabyte chunks of 16-bit mono PCM; anything bigger is
@@ -154,9 +155,10 @@ export const transcribeCloud = {
           : { modelId: MODEL, file: audio!, languageCode, ...requestExtras }
       );
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       console.error("[transcribe] provider call failed", {
         body: error instanceof ElevenLabsError ? error.body : undefined,
-        message: error instanceof Error ? error.message : String(error),
+        message,
         sourceUrl: sourceUrl ?? undefined,
         statusCode: error instanceof ElevenLabsError ? error.statusCode : undefined,
       });
@@ -170,6 +172,12 @@ export const transcribeCloud = {
         userId,
       });
       const credit = creditErrorResponse(error);
+      if (!credit) {
+        void notifyTelegram(
+          "systemError",
+          `🚨 Transcription failed\nuser: ${userId}\nsource: ${sourceUrl ?? "uploaded audio"}\n${message}`,
+        );
+      }
       if (credit) return credit;
       if (error instanceof ElevenLabsError) {
         return err("Transcription failed.", error.statusCode ?? 502);
@@ -179,6 +187,10 @@ export const transcribeCloud = {
 
     if ("words" in result === false) {
       // Multichannel/webhook response shapes aren't requested by this route.
+      void notifyTelegram(
+        "systemError",
+        `🚨 Transcription returned an unreadable response\nuser: ${userId}\nsource: ${sourceUrl ?? "uploaded audio"}`,
+      );
       return err("The transcription model returned an unreadable response — try again.", 502);
     }
 
