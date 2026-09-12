@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChartColumn,
-  ChevronRight,
   ChevronsUpDown,
   Clapperboard,
   CreditCard,
@@ -181,7 +180,7 @@ export function NavUser() {
             >
               <UserAvatar name={name} image={image} />
               <span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
-              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+              <Settings className="size-4 shrink-0 text-muted-foreground" />
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <div className="mx-1 my-1.5 flex flex-col gap-2 rounded-lg border bg-muted/50 p-2.5">
