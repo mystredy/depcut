@@ -540,7 +540,13 @@ function RepurposeSection({ studioId }: { studioId: string }) {
       <div>
         <p className="text-sm font-semibold">Connected accounts</p>
         {(connections.data?.connections ?? []).length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">No accounts connected yet.</p>
+          <div className="mt-3 flex flex-col items-center gap-1.5 rounded-2xl border border-dashed p-8 text-center">
+            <Link2 className="mb-1 size-5 text-muted-foreground" />
+            <p className="text-sm font-semibold">No accounts connected</p>
+            <p className="text-sm text-muted-foreground">
+              Connect your YouTube, TikTok, or other social accounts to post your videos.
+            </p>
+          </div>
         ) : (
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {connections.data?.connections.map((c) => {
