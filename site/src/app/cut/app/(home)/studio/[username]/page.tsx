@@ -2,9 +2,15 @@
 
 import { use, useState } from "react";
 import Link from "next/link";
-import { Play, Plus, Settings, Video } from "lucide-react";
+import { EllipsisVertical, Link2, Pencil, Play, Plus, Video } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { DropDialog } from "@/cut/components/DropDialog";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { formatBytes } from "@/cut/components/desktopFolders";
@@ -12,9 +18,9 @@ import { useCutBase } from "@/cut/lib/nav";
 import { cn } from "@/lib/utils";
 import { useStudioByUsername, useStudioDrops } from "@/queries/studio";
 
-// A studio's public profile — avatar, bio, drops grid — plus a Settings
-// entry point for whoever manages it. No avatar/background image upload
-// yet (Studio.avatarImageKey stays null until that's built) — UserAvatar's
+// A studio's public profile — avatar, bio, drops grid — plus edit/manage
+// entry points for whoever runs it. No avatar/background image upload yet
+// (Studio.avatarImageKey stays null until that's built) — UserAvatar's
 // initial-letter fallback covers it in the meantime.
 export default function StudioPage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = use(params);
@@ -22,6 +28,18 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
   const { data, isLoading } = useStudioByUsername(username);
   const drops = useStudioDrops(data?.studio.id ?? "");
   const [posting, setPosting] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access can be denied by the browser — nothing further to
+      // do here.
+    }
+  };
 
   if (isLoading) return null;
   if (!data) {
@@ -38,7 +56,35 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
 
   return (
     <div className="pb-24">
-      <div className="relative h-32 w-full overflow-hidden rounded-b-2xl bg-muted sm:h-40" />
+      <div className="relative h-32 w-full overflow-hidden rounded-b-2xl bg-muted sm:h-40">
+        {isManager && (
+          <div className="absolute right-3 top-3 flex items-center gap-2">
+            <Link
+              href={`${base}/studio/${studio.username}/settings`}
+              aria-label="Edit studio"
+              title="Edit studio"
+              className="grid size-8 place-items-center rounded-full bg-background/80 text-foreground backdrop-blur transition-colors hover:bg-background"
+            >
+              <Pencil className="size-3.5" />
+            </Link>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                aria-label="More actions"
+                title="More actions"
+                className="grid size-8 place-items-center rounded-full bg-background/80 text-foreground backdrop-blur transition-colors hover:bg-background"
+              >
+                <EllipsisVertical className="size-3.5" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => void copyLink()}>
+                  <Link2 className="size-3.5" />
+                  {copied ? "Copied!" : "Copy studio link"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
+      </div>
 
       <div className="mx-auto flex max-w-2xl flex-col items-center px-6 text-center">
         <UserAvatar
@@ -55,16 +101,21 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
         {studio.bio && <p className="mt-3 max-w-sm text-sm text-foreground/90">{studio.bio}</p>}
 
         {isManager && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-4"
-            nativeButton={false}
-            render={<Link href={`${base}/studio/${studio.username}/settings`} />}
-          >
-            <Settings data-icon="inline-start" className="size-3.5" />
-            Settings
-          </Button>
+          <div className="mt-4 flex items-center gap-2">
+            <Button size="sm" onClick={() => setPosting(true)}>
+              <Plus data-icon="inline-start" className="size-3.5" />
+              Add drop
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              render={<Link href={`${base}/studio/${studio.username}/settings`} />}
+            >
+              <Pencil data-icon="inline-start" className="size-3.5" />
+              Edit studio
+            </Button>
+          </div>
         )}
       </div>
 
