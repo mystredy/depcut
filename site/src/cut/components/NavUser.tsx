@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChartColumn,
-  ChevronsUpDown,
   Clapperboard,
   CreditCard,
   EllipsisVertical,
@@ -39,6 +38,7 @@ import { CreatorApplicationDialog } from "@/cut/components/CreatorApplicationDia
 import { FeedbackDialog } from "@/cut/components/FeedbackDialog";
 import { NavStorage } from "@/cut/components/NavStorage";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CreateStudioDialog } from "@/cut/components/StudioSwitcher";
 import { type ThemeChoice, useTheme } from "@/cut/components/ThemeProvider";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { DEFAULT_CREDIT_RATE, formatCredits } from "@/lib/credits/format-credits";
@@ -87,6 +87,7 @@ export function NavUser() {
   const base = useCutBase();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [creatorApplicationOpen, setCreatorApplicationOpen] = useState(false);
+  const [creatingStudio, setCreatingStudio] = useState(false);
   const { data: session } = authClient.useSession();
   // Started unconditionally rather than waiting on the session hook to
   // resolve first — /api/account/profile reads the session cookie itself,
@@ -204,13 +205,13 @@ export function NavUser() {
           </div>
           <NavStorage />
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => router.push(`${base}/studio`)}>
-            {(studios.data?.spaces.length ?? 0) === 0 ? (
-              <>
-                <Video /> New studio <Plus className="ml-auto size-3.5 text-muted-foreground" />
-              </>
-            ) : (
-              <>
+          {(studios.data?.spaces.length ?? 0) === 0 ? (
+            <DropdownMenuItem onClick={() => router.push(`${base}/studio`)}>
+              <Video /> New studio <Plus className="ml-auto size-3.5 text-muted-foreground" />
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
                 <UserAvatar
                   name={studios.data!.spaces[0].name}
                   image={null}
@@ -218,10 +219,29 @@ export function NavUser() {
                   initialClassName="text-[10px]"
                 />
                 <span className="min-w-0 truncate">{studios.data!.spaces[0].name}</span>
-                <ChevronsUpDown className="ml-auto size-3.5 shrink-0 text-muted-foreground" />
-              </>
-            )}
-          </DropdownMenuItem>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                {studios.data!.spaces.map((studio) => (
+                  <DropdownMenuItem
+                    key={studio.id}
+                    onClick={() => router.push(`${base}/studio/${studio.username}`)}
+                  >
+                    <UserAvatar
+                      name={studio.name}
+                      image={null}
+                      className="size-5"
+                      initialClassName="text-[10px]"
+                    />
+                    <span className="min-w-0 truncate">{studio.name}</span>
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setCreatingStudio(true)}>
+                  <Plus /> New studio
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
           <DropdownMenuItem onClick={() => router.push(`${base}/settings`)}>
             <CreditCard /> Billing
           </DropdownMenuItem>
@@ -275,6 +295,7 @@ export function NavUser() {
       {creatorApplicationOpen && (
         <CreatorApplicationDialog onClose={() => setCreatorApplicationOpen(false)} />
       )}
+      {creatingStudio && <CreateStudioDialog onClose={() => setCreatingStudio(false)} />}
     </>
   );
 }
