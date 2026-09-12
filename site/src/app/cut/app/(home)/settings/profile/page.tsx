@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 
 import { AvatarDialog } from "@/app/cut/app/(home)/settings/profile/AvatarDialog";
 import { EmailSection } from "@/app/cut/app/(home)/settings/profile/EmailSection";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CreateStudioDialog } from "@/cut/components/StudioSwitcher";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { useAccountProfile, useUpdateDisplayName, visibleName } from "@/queries/accountProfile";
 
@@ -38,6 +39,7 @@ function ProfileCard() {
   // the user types and again once a save lands.
   const [draft, setDraft] = useState<string | null>(null);
   const [editingAvatar, setEditingAvatar] = useState(false);
+  const [creatingStudio, setCreatingStudio] = useState(false);
 
   if (isPending) {
     return <Skeleton className="h-[9.75rem] w-full rounded-xl" />;
@@ -86,6 +88,15 @@ function ProfileCard() {
             </div>
             <div className="truncate text-sm text-muted-foreground">{profile.email}</div>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto shrink-0"
+            onClick={() => setCreatingStudio(true)}
+          >
+            <Plus data-icon="inline-start" className="size-3.5" />
+            Create studio
+          </Button>
         </div>
 
         <div className="mt-5 border-t pt-5">
@@ -119,6 +130,7 @@ function ProfileCard() {
         onOpenChange={setEditingAvatar}
         hasCustomImage={profile.image?.startsWith("/api/account/avatar") === true}
       />
+      {creatingStudio && <CreateStudioDialog onClose={() => setCreatingStudio(false)} />}
     </>
   );
 }
