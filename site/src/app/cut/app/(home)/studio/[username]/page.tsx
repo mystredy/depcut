@@ -344,13 +344,18 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                     >
                       <EllipsisVertical className="size-3.5" />
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenuContent
+                      align="end"
+                      className="min-w-0 w-auto p-0.5"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <DropdownMenuItem
                         variant="destructive"
                         disabled={removeDrop.isPending}
+                        className="px-2 py-1 text-xs"
                         onClick={() => removeDrop.mutate(drop.id)}
                       >
-                        <Trash2 className="size-3.5" />
+                        <Trash2 className="size-3" />
                         Remove
                       </DropdownMenuItem>
                     </DropdownMenuContent>
