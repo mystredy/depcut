@@ -9,6 +9,7 @@ import {
   CreditCard,
   EllipsisVertical,
   Link2,
+  Loader2,
   LogOut,
   MessageCircleHeart,
   Monitor,
@@ -212,7 +213,11 @@ export function NavUser() {
           </div>
           <NavStorage />
           <DropdownMenuSeparator />
-          {(studios.data?.spaces.length ?? 0) === 0 ? (
+          {studios.isLoading ? (
+            <div className="flex items-center gap-1.5 px-1.5 py-1 text-sm text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" /> Loading studios…
+            </div>
+          ) : (studios.data?.spaces.length ?? 0) === 0 ? (
             <DropdownMenuItem onClick={() => router.push(`${base}/studio`)}>
               <Video /> New studio <Plus className="ml-auto size-3.5 text-muted-foreground" />
             </DropdownMenuItem>
