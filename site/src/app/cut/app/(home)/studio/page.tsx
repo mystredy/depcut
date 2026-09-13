@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Plus, Video } from "lucide-react";
 
 import { UserAvatar } from "@/cut/components/UserAvatar";
-import { useCutBase } from "@/cut/lib/nav";
 import { studioAvatarUrl, useStudios } from "@/queries/studio";
 import { CreateStudioDialog } from "@/cut/components/StudioSwitcher";
 
@@ -14,15 +13,14 @@ import { CreateStudioDialog } from "@/cut/components/StudioSwitcher";
 // or many. Exactly one studio skips straight to it; otherwise this is a
 // picker (2+) or a "create your first one" prompt (0).
 export default function StudioHubPage() {
-  const base = useCutBase();
   const router = useRouter();
   const studios = useStudios();
   const [creating, setCreating] = useState(false);
 
   const list = studios.data?.spaces ?? [];
   useEffect(() => {
-    if (list.length === 1) router.replace(`${base}/studio/${list[0].username}`);
-  }, [list, base, router]);
+    if (list.length === 1) router.replace(`/@${list[0].username}`);
+  }, [list, router]);
 
   if (studios.isLoading || list.length === 1) return null;
 
@@ -55,7 +53,7 @@ export default function StudioHubPage() {
             {list.map((studio) => (
               <a
                 key={studio.id}
-                href={`${base}/studio/${studio.username}`}
+                href={`/@${studio.username}`}
                 className="flex items-center gap-3 rounded-2xl border p-4 text-left transition-colors hover:border-ring hover:bg-muted/40"
               >
                 <UserAvatar name={studio.name} image={studioAvatarUrl(studio)} className="size-11 shrink-0" />

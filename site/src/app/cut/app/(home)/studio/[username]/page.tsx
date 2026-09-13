@@ -79,7 +79,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
       {
         onSuccess: () => {
           setEditingUsername(false);
-          router.replace(`${base}/studio/${value}`);
+          router.replace(`/@${value}`);
         },
       },
     );

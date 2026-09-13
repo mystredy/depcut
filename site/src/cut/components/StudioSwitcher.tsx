@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useCutBase } from "@/cut/lib/nav";
 import { cn } from "@/lib/utils";
 import { useStudios, useCreateStudio } from "@/queries/studio";
 
@@ -24,7 +23,6 @@ import { useStudios, useCreateStudio } from "@/queries/studio";
 // studio is privileged as "the" default; a signed-in account can own zero,
 // one, or many.
 export function StudioSwitcher({ currentUsername }: { currentUsername: string | null }) {
-  const base = useCutBase();
   const studios = useStudios();
   const [creating, setCreating] = useState(false);
 
@@ -33,7 +31,7 @@ export function StudioSwitcher({ currentUsername }: { currentUsername: string | 
       {(studios.data?.spaces ?? []).map((studio) => (
         <Link
           key={studio.id}
-          href={`${base}/studio/${studio.username}`}
+          href={`/@${studio.username}`}
           className={cn(
             "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
             currentUsername === studio.username
@@ -61,7 +59,6 @@ export function StudioSwitcher({ currentUsername }: { currentUsername: string | 
 // Also used by the Space hub page (no studio to switch between yet, but
 // still needs "create your first one").
 export function CreateStudioDialog({ onClose }: { onClose: () => void }) {
-  const base = useCutBase();
   const create = useCreateStudio();
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
@@ -72,7 +69,7 @@ export function CreateStudioDialog({ onClose }: { onClose: () => void }) {
       { name: name.trim(), username: username.trim() },
       {
         onSuccess: ({ studio }) => {
-          window.location.href = `${base}/studio/${studio.username}`;
+          window.location.href = `/@${studio.username}`;
         },
       }
     );

@@ -64,7 +64,7 @@ export default function StudioInvitePage({ params }: { params: Promise<{ token: 
           <p className="text-sm font-medium">
             You now manage <strong>{state.studio.name}</strong>.
           </p>
-          <Button nativeButton={false} render={<Link href={`${base}/studio/${state.studio.username}`} />}>
+          <Button nativeButton={false} render={<Link href={`/@${state.studio.username}`} />}>
             Go to the studio
           </Button>
         </>

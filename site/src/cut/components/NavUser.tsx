@@ -219,7 +219,7 @@ export function NavUser() {
           ) : (
             <>
               <DropdownMenuItem
-                onClick={() => router.push(`${base}/studio/${studios.data!.spaces[0].username}`)}
+                onClick={() => router.push(`/@${studios.data!.spaces[0].username}`)}
               >
                 <UserAvatar
                   name={studios.data!.spaces[0].name}
@@ -254,7 +254,7 @@ export function NavUser() {
                   {studios.data!.spaces.slice(1).map((studio) => (
                     <DropdownMenuItem
                       key={studio.id}
-                      onClick={() => router.push(`${base}/studio/${studio.username}`)}
+                      onClick={() => router.push(`/@${studio.username}`)}
                     >
                       <UserAvatar
                         name={studio.name}

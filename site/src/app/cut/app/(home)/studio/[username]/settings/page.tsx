@@ -28,7 +28,6 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageCropDialog } from "@/cut/components/ImageCropDialog";
 import { UserAvatar } from "@/cut/components/UserAvatar";
-import { useCutBase } from "@/cut/lib/nav";
 import { OAUTH_CAPABLE_PLATFORMS, PUBLISHABLE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
 import { SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
 import { cn } from "@/lib/utils";
@@ -111,7 +110,6 @@ const SECTIONS: { key: Section; label: string }[] = [
 
 export default function StudioSettingsPage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = use(params);
-  const base = useCutBase();
   const { data, isLoading } = useStudioByUsername(username);
   const [section, setSection] = useState<Section>("setup");
 
@@ -129,7 +127,7 @@ export default function StudioSettingsPage({ params }: { params: Promise<{ usern
   return (
     <div className="mx-auto max-w-2xl px-6 pb-24">
       <Link
-        href={`${base}/studio/${studio.username}`}
+        href={`/@${studio.username}`}
         className="mt-4 flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" />
