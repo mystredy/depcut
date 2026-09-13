@@ -184,7 +184,7 @@ export async function grantCredits(input: {
   }
 
   try {
-    return await prisma.$transaction(
+    return await withWriteConflictRetry(() => prisma.$transaction(
       async (tx) => {
         const account = await ensureCreditAccountRecord(tx, input.userId);
         // An account already carrying an overdraft — one that predates the
@@ -250,7 +250,7 @@ export async function grantCredits(input: {
         maxWait: CREDIT_TRANSACTION_MAX_WAIT_MS,
         timeout: CREDIT_TRANSACTION_TIMEOUT_MS,
       },
-    );
+    ));
   } catch (error) {
     if (
       input.sourceId &&
