@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronLeft, CloudUpload, LayoutGrid, Loader2, MessageCircleHeart, Mic, MoreHorizontal, Redo2, Send, Share2, Sparkles, TriangleAlert, Undo2, Upload, Video } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, CloudUpload, Droplet, Loader2, MessageCircleHeart, Mic, MoreHorizontal, Redo2, Send, Share2, Sparkles, TriangleAlert, Undo2, Upload, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -334,7 +334,7 @@ export function TopBar({
         title={exportBlockedTitle ?? (compact ? "Drop" : undefined)}
         onClick={openDropDialog}
       >
-        <LayoutGrid data-icon={compact ? undefined : "inline-start"} />
+        <Droplet data-icon={compact ? undefined : "inline-start"} />
         {!compact && <span className="hidden sm:inline">Drop</span>}
       </Button>
       {cutMode === "cloud" && isArtist && (
@@ -584,7 +584,7 @@ export function TopBar({
                   <Upload /> {exportBlockedTitle ?? "Export"}
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={exportBlocked} onClick={openDropDialog}>
-                  <LayoutGrid /> Drop
+                  <Droplet /> Drop
                 </DropdownMenuItem>
                 {cutMode === "cloud" && isArtist && (
                   <DropdownMenuItem
