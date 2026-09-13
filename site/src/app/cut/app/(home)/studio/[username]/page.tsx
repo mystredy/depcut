@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { DropDialog } from "@/cut/components/DropDialog";
 import { ImageCropDialog } from "@/cut/components/ImageCropDialog";
 import { UserAvatar } from "@/cut/components/UserAvatar";
-import { formatBytes } from "@/cut/components/desktopFolders";
 import { useCutBase } from "@/cut/lib/nav";
 import { cn } from "@/lib/utils";
 import {
@@ -386,9 +385,6 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                   <p className="relative truncate text-[10px] text-muted-foreground">
                     {drop.hashtags.map((t) => `#${t}`).join(" ")}
                   </p>
-                )}
-                {drop.sizeBytes != null && (
-                  <p className="relative text-[10px] text-muted-foreground">{formatBytes(drop.sizeBytes)}</p>
                 )}
               </a>
             ))}
