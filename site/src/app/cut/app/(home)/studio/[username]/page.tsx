@@ -1,9 +1,24 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Camera, Check, EllipsisVertical, Link2, Pencil, Play, Plus, Trash2, Video, X } from "lucide-react";
+import {
+  Camera,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  EllipsisVertical,
+  Link2,
+  Pencil,
+  Play,
+  Plus,
+  Trash2,
+  Video,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +44,7 @@ import {
   useUpdateStudio,
   useUpdateStudioAvatar,
   useUpdateStudioBackground,
+  type StudioDrop,
 } from "@/queries/studio";
 
 // A studio's public profile — avatar, bio, drops grid — plus edit/manage
@@ -49,6 +65,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
   const [nameDraft, setNameDraft] = useState("");
   const [usernameDraft, setUsernameDraft] = useState("");
   const [dropMenuOpenId, setDropMenuOpenId] = useState<string | null>(null);
+  const [viewingIndex, setViewingIndex] = useState<number | null>(null);
 
   const studioId = data?.studio.id ?? "";
   const update = useUpdateStudio(studioId);
@@ -111,6 +128,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
   const { studio } = data;
   const isManager = studio.role != null;
   const visibleDrops = (drops.data?.drops ?? []).filter((d) => d.status !== "error");
+  const playableDrops = visibleDrops.filter((d) => d.status === "complete");
 
   return (
     <div className="pb-24">
@@ -319,13 +337,22 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
         ) : (
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8">
             {visibleDrops.map((drop) => (
-              <a
+              <div
                 key={drop.id}
-                href={drop.status === "complete" ? `/api/drops/${drop.id}/video` : undefined}
-                target="_blank"
-                rel="noreferrer"
+                role="button"
+                tabIndex={drop.status === "complete" ? 0 : -1}
+                onClick={() => {
+                  if (drop.status !== "complete") return;
+                  setViewingIndex(playableDrops.findIndex((d) => d.id === drop.id));
+                }}
+                onKeyDown={(e) => {
+                  if (drop.status !== "complete") return;
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  e.preventDefault();
+                  setViewingIndex(playableDrops.findIndex((d) => d.id === drop.id));
+                }}
                 className={cn(
-                  "group relative flex aspect-[9/16] flex-col justify-end overflow-hidden rounded-xl border bg-muted p-2",
+                  "group relative flex aspect-[9/16] cursor-pointer flex-col justify-end overflow-hidden rounded-xl border bg-muted p-2 text-left",
                   drop.status !== "complete" && "pointer-events-none opacity-60"
                 )}
               >
@@ -394,11 +421,20 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                     {drop.hashtags.map((t) => `#${t}`).join(" ")}
                   </p>
                 )}
-              </a>
+              </div>
             ))}
           </div>
         )}
       </div>
+
+      {viewingIndex !== null && (
+        <DropViewer
+          drops={playableDrops}
+          index={viewingIndex}
+          onClose={() => setViewingIndex(null)}
+          onIndexChange={setViewingIndex}
+        />
+      )}
 
       {posting && <DropDialog projectId={null} studioId={studio.id} onClose={() => setPosting(false)} />}
 
@@ -424,6 +460,152 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
         onSave={(image) => updateBackground.mutateAsync(image).then(() => {})}
         onRemove={() => removeBackground.mutateAsync().then(() => {})}
       />
+    </div>
+  );
+}
+
+// Full-screen player for a drop, opened from the grid — TikTok/Shorts-style:
+// vertical frame, autoplaying with sound, tap to pause, swipe-equivalent
+// up/down between the studio's other playable drops.
+function DropViewer({
+  drops,
+  index,
+  onClose,
+  onIndexChange,
+}: {
+  drops: StudioDrop[];
+  index: number;
+  onClose: () => void;
+  onIndexChange: (index: number) => void;
+}) {
+  const drop = drops[index];
+  const [muted, setMuted] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    setPaused(false);
+    const video = videoRef.current;
+    if (!video) return;
+    // Try with sound first; browsers that block audible autoplay reject the
+    // play() promise (rather than silently muting), so fall back to a muted
+    // attempt — which is always allowed — and reflect that in the UI.
+    video.play().catch(() => {
+      video.muted = true;
+      setMuted(true);
+      void video.play();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires once per drop, not on every mute toggle
+  }, [index]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowUp" && index > 0) onIndexChange(index - 1);
+      else if (e.key === "ArrowDown" && index < drops.length - 1) onIndexChange(index + 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [index, drops.length, onClose, onIndexChange]);
+
+  if (!drop) return null;
+
+  const togglePlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      void video.play();
+      setPaused(false);
+    } else {
+      video.pause();
+      setPaused(true);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95" onClick={onClose}>
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="absolute right-4 top-4 z-10 grid size-9 place-items-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
+      >
+        <X className="size-4" />
+      </button>
+
+      {index > 0 && (
+        <button
+          type="button"
+          aria-label="Previous"
+          onClick={(e) => {
+            e.stopPropagation();
+            onIndexChange(index - 1);
+          }}
+          className="absolute left-1/2 top-4 z-10 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
+        >
+          <ChevronUp className="size-4" />
+        </button>
+      )}
+      {index < drops.length - 1 && (
+        <button
+          type="button"
+          aria-label="Next"
+          onClick={(e) => {
+            e.stopPropagation();
+            onIndexChange(index + 1);
+          }}
+          className="absolute bottom-4 left-1/2 z-10 grid size-9 -translate-x-1/2 place-items-center rounded-full bg-white/10 text-white backdrop-blur transition-colors hover:bg-white/20"
+        >
+          <ChevronDown className="size-4" />
+        </button>
+      )}
+
+      <div
+        className="relative aspect-[9/16] h-full max-h-[92vh] max-w-full overflow-hidden rounded-2xl bg-black"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <video
+          key={drop.id}
+          ref={videoRef}
+          src={`/api/drops/${drop.id}/video`}
+          autoPlay
+          loop
+          muted={muted}
+          playsInline
+          onClick={togglePlay}
+          className="size-full object-contain"
+        />
+
+        {paused && (
+          <span className="pointer-events-none absolute inset-0 grid place-items-center">
+            <span className="grid size-16 place-items-center rounded-full bg-black/50">
+              <Play className="ml-1 size-7 fill-white text-white" />
+            </span>
+          </span>
+        )}
+
+        <button
+          type="button"
+          aria-label={muted ? "Unmute" : "Mute"}
+          onClick={(e) => {
+            e.stopPropagation();
+            setMuted((m) => !m);
+          }}
+          className="absolute right-3 top-3 grid size-8 place-items-center rounded-full bg-black/50 text-white transition-colors hover:bg-black/70"
+        >
+          {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+        </button>
+
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent p-4 pt-10">
+          <p className="text-sm font-semibold text-white">
+            {drop.title || drop.caption || drop.fileName || "Untitled"}
+          </p>
+          {drop.title && drop.caption && <p className="mt-0.5 text-xs text-white/80">{drop.caption}</p>}
+          {drop.hashtags.length > 0 && (
+            <p className="mt-1 text-xs text-white/70">{drop.hashtags.map((t) => `#${t}`).join(" ")}</p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
