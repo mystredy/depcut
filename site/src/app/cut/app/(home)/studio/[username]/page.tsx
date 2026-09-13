@@ -436,7 +436,14 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
         />
       )}
 
-      {posting && <DropDialog projectId={null} studioId={studio.id} onClose={() => setPosting(false)} />}
+      {posting && (
+        <DropDialog
+          projectId={null}
+          studioId={studio.id}
+          studioName={studio.name}
+          onClose={() => setPosting(false)}
+        />
+      )}
 
       <ImageCropDialog
         open={editingAvatar}

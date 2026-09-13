@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -24,10 +25,12 @@ import { cn } from "@/lib/utils";
 export function DropDialog({
   projectId,
   studioId,
+  studioName,
   onClose,
 }: {
   projectId: string | null;
   studioId: string;
+  studioName: string;
   onClose: () => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
@@ -81,6 +84,9 @@ export function DropDialog({
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>New drop</DialogTitle>
+          <DialogDescription>
+            Posting to <span className="font-medium text-foreground">{studioName}</span>
+          </DialogDescription>
         </DialogHeader>
 
         {done ? (

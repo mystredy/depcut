@@ -191,6 +191,7 @@ export function TopBar({
   const [dropOpen, setDropOpen] = useState(false);
   const [choosingStudio, setChoosingStudio] = useState(false);
   const [dropStudioId, setDropStudioId] = useState<string | null>(null);
+  const [dropStudioName, setDropStudioName] = useState<string | null>(null);
   const studios = useStudios();
   // A drop has no implied destination the way a specific studio's own Post
   // button does — resolve it here: straight through with one studio, a
@@ -203,6 +204,7 @@ export function TopBar({
     }
     if (spaces.length === 1) {
       setDropStudioId(spaces[0].id);
+      setDropStudioName(spaces[0].name);
       setDropOpen(true);
       return;
     }
@@ -620,18 +622,20 @@ export function TopBar({
       )}
       {choosingStudio && (
         <ChooseStudioDialog
-          onChoose={(studioId) => {
+          onChoose={(studioId, studioName) => {
             setDropStudioId(studioId);
+            setDropStudioName(studioName);
             setChoosingStudio(false);
             setDropOpen(true);
           }}
           onClose={() => setChoosingStudio(false)}
         />
       )}
-      {dropOpen && dropStudioId && (
+      {dropOpen && dropStudioId && dropStudioName && (
         <DropDialog
           projectId={useEditor.getState().projectId ?? null}
           studioId={dropStudioId}
+          studioName={dropStudioName}
           onClose={() => setDropOpen(false)}
         />
       )}

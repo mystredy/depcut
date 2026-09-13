@@ -10,7 +10,7 @@ export function ChooseStudioDialog({
   onChoose,
   onClose,
 }: {
-  onChoose: (studioId: string) => void;
+  onChoose: (studioId: string, studioName: string) => void;
   onClose: () => void;
 }) {
   const studios = useStudios();
@@ -26,7 +26,7 @@ export function ChooseStudioDialog({
             <button
               key={studio.id}
               type="button"
-              onClick={() => onChoose(studio.id)}
+              onClick={() => onChoose(studio.id, studio.name)}
               className="flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-muted/50"
             >
               {studio.name}
