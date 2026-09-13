@@ -110,6 +110,12 @@ ${footer ? `<div>${footer}</div>` : ""}
 const underPath = (pathname: string, prefix: string) =>
   pathname === prefix || pathname.startsWith(`${prefix}/`);
 
+// A studio's public "@handle" link — /@viralqueens2_0 — same character rule
+// as usernameSchema (lib/username.ts). Resolves to its profile page; a
+// studio's own management surfaces (settings, etc.) stay under /app/studio/…
+// rather than growing sub-paths under the handle.
+const STUDIO_HANDLE = /^\/@([a-z][a-z0-9_]{2,19})\/?$/;
+
 const passesThrough = (pathname: string) =>
   PASSTHROUGH.some((p) => underPath(pathname, p));
 
@@ -147,7 +153,7 @@ async function isSuperUserSafe(headers: Headers): Promise<boolean> {
 }
 
 export async function proxy(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  let { pathname } = req.nextUrl;
   if (isCutApi(pathname)) return cutApi(req);
 
   const host = req.headers.get("host");
@@ -170,6 +176,9 @@ export async function proxy(req: NextRequest) {
   }
 
   if (underPath(pathname, "/api")) return NextResponse.next();
+
+  const handleMatch = STUDIO_HANDLE.exec(pathname);
+  if (handleMatch) pathname = `/app/studio/${handleMatch[1]}`;
 
   // admin/settings/general's Maintenance Mode toggle, enforced here rather
   // than left for each page to check on its own — one gate before the

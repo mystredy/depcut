@@ -87,7 +87,10 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      const url = data
+        ? `${window.location.origin}/@${data.studio.username}`
+        : window.location.href;
+      await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
