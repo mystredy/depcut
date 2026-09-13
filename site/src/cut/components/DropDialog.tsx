@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { FileVideo, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,15 +13,65 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { formatBytes } from "@/cut/components/desktopFolders";
+import { getBackend } from "@/cut/lib/backend";
+import { createExportJob, originalSettings, pollExport } from "@/cut/lib/exportClient";
+import { canRenderInBrowser, renderProjectToMp4 } from "@/cut/lib/exportRender";
+import { useEditor } from "@/cut/lib/store";
 import { studioDropsQueryKey } from "@/queries/studio";
 import { uploadDropVideo, useCreateDrop } from "@/queries/drop";
 import { cn } from "@/lib/utils";
 
-// Posts a finished export to a studio's feed as a drop. Deliberately just
-// "attach the video you already exported" — the same manual drop-a-file
-// step Artist's Submit already uses (there's no render pipeline behind
-// either one; Export is what renders, this just uploads what it produced)
-// — rather than re-rendering the project itself.
+// Renders the current cut and uploads the result — same render pipeline
+// Export uses, just handed straight to the drop instead of landing in the
+// Exports list first. Opened with no project (the studio page's own "Add
+// drop" button) there's no live edit to render, so that path keeps the
+// manual attach-a-file step instead.
+//
+// A qualifying cloud project renders straight to a File in this tab —
+// exactly what Export's in-browser path does, minus its own upload to
+// export storage and the job-registration round trip, since nothing here
+// needs the result to land in the Exports list first. `cleanup`, when
+// present, must run only after the caller is done reading the file (Export's
+// own scratch-space contract).
+async function exportCurrentProject(
+  projectId: string,
+  onProgress: (ratio: number) => void
+): Promise<{ file: File; cleanup?: () => Promise<void> }> {
+  const s = useEditor.getState();
+  const doc = {
+    aspect: s.aspect,
+    assets: s.assets,
+    clips: s.clips,
+    audioClips: s.audioClips,
+    overlays: s.overlays,
+    subtitles: s.subtitles,
+    fadeIn: s.fadeIn,
+    fadeOut: s.fadeOut,
+  };
+  const settings = originalSettings(doc.aspect, doc.clips, doc.assets);
+  const backend = getBackend();
+  const inBrowser = backend.kind === "cloud" && (await canRenderInBrowser(doc, settings));
+
+  if (inBrowser) {
+    const rendered = await renderProjectToMp4(doc, settings, {
+      resolve: (asset) => useEditor.getState().assets.find((a) => a.id === asset.id)?.url ?? asset.url,
+      onProgress: ({ ratio }) => onProgress(ratio),
+    });
+    return { file: rendered.file, cleanup: rendered.discard };
+  }
+
+  // No in-tab render path (a local-Mac project, or one too big/long for the
+  // browser): the engine renders it, so the finished file has to come back
+  // over the wire once the job settles.
+  const jobId = await createExportJob(projectId, doc, settings);
+  await pollExport(jobId, (_stage, ratio) => onProgress(ratio));
+  const res = await backend.fetch(`/api/cut/export/${jobId}/file`);
+  if (!res.ok) throw new Error("Couldn't fetch the rendered video.");
+  const blob = await res.blob();
+  const name = `${s.projectName.replace(/[/\\:*?"<>|]/g, "").trim().slice(0, 60) || "export"}.mp4`;
+  return { file: new File([blob], name, { type: "video/mp4" }) };
+}
+
 export function DropDialog({
   projectId,
   studioId,
@@ -39,10 +89,10 @@ export function DropDialog({
   const [hashtags, setHashtags] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [posting, setPosting] = useState(false);
+  const [phase, setPhase] = useState<"export" | "upload">("upload");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const queryClient = useQueryClient();
   const createDrop = useCreateDrop();
@@ -58,9 +108,10 @@ export function DropDialog({
   };
 
   const post = async () => {
-    if (!file) return;
+    if (!projectId && !file) return;
     setPosting(true);
     setError(null);
+    setProgress(0);
     try {
       const { drop: created } = await createDrop.mutateAsync({
         title: title.trim() || undefined,
@@ -69,7 +120,21 @@ export function DropDialog({
         projectId,
         studioId,
       });
-      await uploadDropVideo(created.id, file, setProgress);
+      let toUpload = file;
+      let cleanupExport: (() => Promise<void>) | undefined;
+      if (projectId) {
+        setPhase("export");
+        const exported = await exportCurrentProject(projectId, setProgress);
+        toUpload = exported.file;
+        cleanupExport = exported.cleanup;
+      }
+      setPhase("upload");
+      setProgress(0);
+      try {
+        await uploadDropVideo(created.id, toUpload!, setProgress);
+      } finally {
+        await cleanupExport?.();
+      }
       void queryClient.invalidateQueries({ queryKey: studioDropsQueryKey(studioId) });
       setDone(true);
       setTimeout(onClose, 900);
@@ -93,37 +158,38 @@ export function DropDialog({
           <p className="py-6 text-center text-sm text-muted-foreground">Posted.</p>
         ) : (
           <>
-            <label
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(false);
-                pick(e.dataTransfer.files[0]);
-              }}
-              className={cn(
-                "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors",
-                dragOver ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
-              )}
-            >
-              <FileVideo className="size-6 text-muted-foreground" />
-              <span className="text-xs font-medium">
-                {file ? file.name : "Drop a video, or click to browse"}
-              </span>
-              {file && (
-                <span className="text-[11px] text-muted-foreground">{formatBytes(file.size)}</span>
-              )}
-              <input
-                ref={inputRef}
-                type="file"
-                accept="video/*"
-                className="hidden"
-                onChange={(e) => pick(e.target.files?.[0])}
-              />
-            </label>
+            {!projectId && (
+              <label
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  pick(e.dataTransfer.files[0]);
+                }}
+                className={cn(
+                  "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors",
+                  dragOver ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
+                )}
+              >
+                <FileVideo className="size-6 text-muted-foreground" />
+                <span className="text-xs font-medium">
+                  {file ? file.name : "Drop a video, or click to browse"}
+                </span>
+                {file && (
+                  <span className="text-[11px] text-muted-foreground">{formatBytes(file.size)}</span>
+                )}
+                <input
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  onChange={(e) => pick(e.target.files?.[0])}
+                />
+              </label>
+            )}
 
             <input
               value={title}
@@ -153,9 +219,15 @@ export function DropDialog({
             {error && <p className="text-sm text-red-600">{error}</p>}
 
             <DialogFooter className="mt-2">
-              <Button disabled={!file || posting} className="w-full" onClick={() => void post()}>
+              <Button
+                disabled={(!projectId && !file) || posting}
+                className="w-full"
+                onClick={() => void post()}
+              >
                 {posting && <Loader2 className="animate-spin" data-icon="inline-start" />}
-                {posting ? `Posting… ${Math.round(progress * 100)}%` : "Post"}
+                {posting
+                  ? `${phase === "export" ? "Exporting" : "Posting"}… ${Math.round(progress * 100)}%`
+                  : "Post"}
               </Button>
             </DialogFooter>
           </>
