@@ -8,21 +8,9 @@ import {
 } from "@/lib/depcut-api-auth";
 import { validationErrorResponse } from "@/lib/inference/responses";
 import { getStudioMembership } from "@/lib/studio/access";
-import { SPACE_STORAGE_LIMIT_BYTES, spaceStorageUsedBytes } from "@/lib/studio/storage";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
-
-// Storage usage against the flat 10GB-per-account quota, summed across
-// every studio the account has dropped to. Each studio's own drop feed is
-// GET /api/studios/[id]/drops — there's no flat cross-studio list anymore.
-export const GET = withDepCutAuth(async (request: DepCutAuthenticatedRequest) => {
-  const usedBytes = await spaceStorageUsedBytes(request.depcut.userId);
-  return NextResponse.json({
-    limitBytes: SPACE_STORAGE_LIMIT_BYTES,
-    usedBytes,
-  });
-});
 
 // Hashtags arrive as free text ("#dance #fun" or "dance, fun") and get
 // split/cleaned here — the client sends one string, not a pre-split array,

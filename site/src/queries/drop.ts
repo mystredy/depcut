@@ -1,20 +1,8 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 
 import { apiFetch } from "@/queries/apiClient";
-
-export const spaceUsageQueryKey = ["space-usage"] as const;
-
-// Storage usage against the flat 10GB-per-account quota — summed across
-// every studio the account drops to. A specific studio's own drops come
-// from useStudioDrops instead; there's no flat cross-studio feed.
-export function useSpaceUsage() {
-  return useQuery({
-    queryFn: () => apiFetch<{ limitBytes: number; usedBytes: number }>("/api/drops"),
-    queryKey: spaceUsageQueryKey,
-  });
-}
 
 export function useCreateDrop() {
   return useMutation({
@@ -34,8 +22,7 @@ export function useCreateDrop() {
 
 // Real object storage: presign a PUT straight to R2, upload there directly
 // (never through our server), then tell us to verify + record it — the same
-// three-step shape as useUploadSubmissionAsset, plus a size on the presign
-// call so the 10GB quota can be checked before any bytes move.
+// three-step shape as useUploadSubmissionAsset.
 function uploadWithProgress(url: string, file: File, onProgress?: (fraction: number) => void) {
   return new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -78,7 +65,6 @@ export async function uploadDropVideo(
       body: JSON.stringify({
         fileName: file.name,
         mime: file.type || "application/octet-stream",
-        size: file.size,
       }),
       method: "POST",
     }

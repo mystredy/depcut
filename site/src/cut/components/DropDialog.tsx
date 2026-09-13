@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { formatBytes } from "@/cut/components/desktopFolders";
 import { studioDropsQueryKey } from "@/queries/studio";
-import { uploadDropVideo, spaceUsageQueryKey, useCreateDrop, useSpaceUsage } from "@/queries/drop";
+import { uploadDropVideo, useCreateDrop } from "@/queries/drop";
 import { cn } from "@/lib/utils";
 
 // Posts a finished export to a studio's feed as a drop. Deliberately just
@@ -42,7 +42,6 @@ export function DropDialog({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const queryClient = useQueryClient();
-  const usage = useSpaceUsage();
   const createDrop = useCreateDrop();
 
   const pick = (f: File | null | undefined) => {
@@ -69,7 +68,6 @@ export function DropDialog({
       });
       await uploadDropVideo(created.id, file, setProgress);
       void queryClient.invalidateQueries({ queryKey: studioDropsQueryKey(studioId) });
-      void queryClient.invalidateQueries({ queryKey: spaceUsageQueryKey });
       setDone(true);
       setTimeout(onClose, 900);
     } catch (e) {
@@ -77,10 +75,6 @@ export function DropDialog({
       setPosting(false);
     }
   };
-
-  const usedBytes = usage.data?.usedBytes ?? 0;
-  const limitBytes = usage.data?.limitBytes ?? 10 * 1024 ** 3;
-  const usagePct = Math.min(100, (usedBytes / limitBytes) * 100);
 
   return (
     <Dialog open onOpenChange={(open) => !open && !posting && onClose()}>
@@ -149,13 +143,6 @@ export function DropDialog({
               maxLength={280}
               className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring"
             />
-
-            <p className="text-[11px] text-muted-foreground">
-              {formatBytes(usedBytes)} of {formatBytes(limitBytes)} used
-            </p>
-            <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-primary" style={{ width: `${usagePct}%` }} />
-            </div>
 
             {error && <p className="text-sm text-red-600">{error}</p>}
 
