@@ -52,6 +52,7 @@ export const studioInvitesQueryKey = (id: string) => ["studio-invites", id] as c
 export const studioActivityQueryKey = (id: string) => ["studio-activity", id] as const;
 export const studioConnectionsQueryKey = (id: string) => ["studio-connections", id] as const;
 export const studioDropsQueryKey = (id: string) => ["studio-drops", id] as const;
+export const studioWorkflowsQueryKey = (id: string) => ["studio-workflows", id] as const;
 
 export function useStudios() {
   return useQuery({
@@ -310,6 +311,77 @@ export function useDisconnectStudioConnection(id: string) {
       apiFetch<{ ok: boolean }>(`/api/studios/${id}/connections/${connectionId}`, { method: "DELETE" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: studioConnectionsQueryKey(id) });
+      queryClient.invalidateQueries({ queryKey: studioActivityQueryKey(id) });
+    },
+  });
+}
+
+export type StudioWorkflowConnection = {
+  id: string;
+  platform: string;
+  accountName: string;
+  accountHandle: string | null;
+};
+
+export type StudioWorkflow = {
+  id: string;
+  name: string;
+  status: "Active" | "Inactive";
+  autoPublish: boolean;
+  sourceConnection: StudioWorkflowConnection;
+  destinationConnection: StudioWorkflowConnection;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function useStudioWorkflows(id: string) {
+  return useQuery({
+    queryFn: () => apiFetch<{ workflows: StudioWorkflow[] }>(`/api/studios/${id}/workflows`),
+    queryKey: studioWorkflowsQueryKey(id),
+  });
+}
+
+export function useCreateStudioWorkflow(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; sourceConnectionId: string; destinationConnectionId: string }) =>
+      apiFetch<{ workflow: StudioWorkflow }>(`/api/studios/${id}/workflows`, {
+        body: JSON.stringify(input),
+        method: "POST",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: studioWorkflowsQueryKey(id) });
+      queryClient.invalidateQueries({ queryKey: studioActivityQueryKey(id) });
+    },
+  });
+}
+
+export function useUpdateStudioWorkflow(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      workflowId,
+      ...input
+    }: {
+      workflowId: string;
+      status?: "Active" | "Inactive";
+      autoPublish?: boolean;
+    }) =>
+      apiFetch<{ workflow: StudioWorkflow }>(`/api/studios/${id}/workflows/${workflowId}`, {
+        body: JSON.stringify(input),
+        method: "PATCH",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: studioWorkflowsQueryKey(id) }),
+  });
+}
+
+export function useDeleteStudioWorkflow(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (workflowId: string) =>
+      apiFetch<{ ok: boolean }>(`/api/studios/${id}/workflows/${workflowId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: studioWorkflowsQueryKey(id) });
       queryClient.invalidateQueries({ queryKey: studioActivityQueryKey(id) });
     },
   });

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  ArrowRight,
   AtSign,
   Camera,
   Ghost,
@@ -37,7 +38,10 @@ import {
   useStudioConnections,
   useStudioInvites,
   useStudioMembers,
+  useStudioWorkflows,
+  useCreateStudioWorkflow,
   useDeleteStudio,
+  useDeleteStudioWorkflow,
   useDisconnectStudioConnection,
   useRemoveStudioAvatar,
   useRemoveStudioBackground,
@@ -49,9 +53,11 @@ import {
   useUpdateStudio,
   useUpdateStudioAvatar,
   useUpdateStudioBackground,
+  useUpdateStudioWorkflow,
   studioAvatarUrl,
   studioBackgroundUrl,
   studioConnectionsQueryKey,
+  type StudioWorkflow,
 } from "@/queries/studio";
 import {
   Dialog,
@@ -98,7 +104,7 @@ const STUDIO_TYPES = [
   "Nonprofits & Activism",
 ];
 
-type Section = "setup" | "access" | "history" | "linked" | "repurpose";
+type Section = "setup" | "access" | "history" | "linked" | "repurpose" | "workflow";
 
 const SECTIONS: { key: Section; label: string }[] = [
   { key: "setup", label: "Studio setup" },
@@ -106,6 +112,7 @@ const SECTIONS: { key: Section; label: string }[] = [
   { key: "history", label: "Management history" },
   { key: "linked", label: "Social accounts" },
   { key: "repurpose", label: "Repurpose" },
+  { key: "workflow", label: "Workflow" },
 ];
 
 export default function StudioSettingsPage({ params }: { params: Promise<{ username: string }> }) {
@@ -159,6 +166,7 @@ export default function StudioSettingsPage({ params }: { params: Promise<{ usern
         {section === "history" && <HistorySection studioId={studio.id} />}
         {section === "linked" && <LinkedAccountsSection studioId={studio.id} linkedAccounts={studio.linkedAccounts} />}
         {section === "repurpose" && <RepurposeSection studioId={studio.id} />}
+        {section === "workflow" && <WorkflowSection studioId={studio.id} />}
       </div>
     </div>
   );
@@ -873,5 +881,262 @@ function RepurposeSection({ studioId }: { studioId: string }) {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function WorkflowConnectionPill({
+  connection,
+}: {
+  connection: { platform: string; accountName: string; accountHandle: string | null };
+}) {
+  const Icon = PLATFORM_ICONS[connection.platform] ?? Link2;
+  return (
+    <div
+      className="flex size-9 items-center justify-center rounded-lg border bg-muted"
+      title={`${connection.accountName}${connection.accountHandle ? ` (${connection.accountHandle})` : ""}`}
+    >
+      <Icon className="size-4" />
+    </div>
+  );
+}
+
+function WorkflowSection({ studioId }: { studioId: string }) {
+  const connections = useStudioConnections(studioId);
+  const workflows = useStudioWorkflows(studioId);
+  const del = useDeleteStudioWorkflow(studioId);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const hasEnoughConnections = (connections.data?.connections.length ?? 0) >= 2;
+
+  return (
+    <div className="max-w-md space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold">Workflows</p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!hasEnoughConnections}
+          onClick={() => setCreating(true)}
+        >
+          <Plus className="size-3.5" />
+          New workflow
+        </Button>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Pair two connected accounts to repurpose content between them. Nothing publishes
+        automatically yet — Auto Publish is stored for when that&apos;s built.
+      </p>
+
+      {!hasEnoughConnections ? (
+        <div className="flex flex-col items-center gap-1.5 rounded-2xl border border-dashed p-8 text-center">
+          <Link2 className="mb-1 size-5 text-muted-foreground" />
+          <p className="text-sm font-semibold">Connect at least two accounts</p>
+          <p className="text-sm text-muted-foreground">Add accounts under Repurpose, then pair them here.</p>
+        </div>
+      ) : (workflows.data?.workflows ?? []).length === 0 ? (
+        <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+          {workflows.isLoading ? "Loading…" : "No workflows yet."}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {workflows.data?.workflows.map((w) => (
+            <WorkflowCard
+              key={w.id}
+              studioId={studioId}
+              workflow={w}
+              menuOpen={menuOpenId === w.id}
+              onToggleMenu={() => setMenuOpenId(menuOpenId === w.id ? null : w.id)}
+              onDelete={() => {
+                del.mutate(w.id);
+                setMenuOpenId(null);
+              }}
+              deleting={del.isPending}
+            />
+          ))}
+        </div>
+      )}
+
+      <CreateWorkflowDialog studioId={studioId} open={creating} onClose={() => setCreating(false)} />
+    </div>
+  );
+}
+
+function WorkflowCard({
+  studioId,
+  workflow,
+  menuOpen,
+  onToggleMenu,
+  onDelete,
+  deleting,
+}: {
+  studioId: string;
+  workflow: StudioWorkflow;
+  menuOpen: boolean;
+  onToggleMenu: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
+  const update = useUpdateStudioWorkflow(studioId);
+
+  return (
+    <div className="space-y-3 rounded-2xl border p-4">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-semibold">{workflow.name}</p>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={onToggleMenu}
+            className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <MoreVertical className="size-4" />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 z-10 mt-1 w-32 rounded-lg border bg-popover p-1 text-xs shadow-md">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={onDelete}
+                className="block w-full rounded px-2 py-1.5 text-left text-destructive hover:bg-destructive/10"
+              >
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <WorkflowConnectionPill connection={workflow.sourceConnection} />
+          <ArrowRight className="size-3.5 text-muted-foreground" />
+          <WorkflowConnectionPill connection={workflow.destinationConnection} />
+        </div>
+        <button
+          type="button"
+          disabled={update.isPending}
+          onClick={() =>
+            update.mutate({
+              status: workflow.status === "Active" ? "Inactive" : "Active",
+              workflowId: workflow.id,
+            })
+          }
+          className={cn(
+            "rounded-full px-2.5 py-1 text-[10px] font-bold uppercase",
+            workflow.status === "Active"
+              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+              : "bg-muted text-muted-foreground"
+          )}
+        >
+          {workflow.status}
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between rounded-xl border bg-muted/20 px-3 py-2">
+        <span className="text-xs font-medium">Auto Publish</span>
+        <Switch
+          checked={workflow.autoPublish}
+          onCheckedChange={(v) => update.mutate({ autoPublish: v, workflowId: workflow.id })}
+          aria-label="Auto publish"
+        />
+      </div>
+    </div>
+  );
+}
+
+function CreateWorkflowDialog({
+  studioId,
+  open,
+  onClose,
+}: {
+  studioId: string;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const connections = useStudioConnections(studioId);
+  const create = useCreateStudioWorkflow(studioId);
+  const [name, setName] = useState("");
+  const [sourceId, setSourceId] = useState("");
+  const [destinationId, setDestinationId] = useState("");
+
+  const options = connections.data?.connections ?? [];
+
+  const submit = () => {
+    if (!name.trim() || !sourceId || !destinationId || sourceId === destinationId) return;
+    create.mutate(
+      { destinationConnectionId: destinationId, name: name.trim(), sourceConnectionId: sourceId },
+      {
+        onSuccess: () => {
+          setName("");
+          setSourceId("");
+          setDestinationId("");
+          onClose();
+        },
+      }
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New workflow</DialogTitle>
+          <DialogDescription>Pair two of this studio&apos;s connected accounts.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Workflow name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Shorts to X" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Repurpose from</Label>
+            <Select value={sourceId} onValueChange={(value) => setSourceId(value ?? "")}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select an account" />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.accountName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Repurpose to</Label>
+            <Select value={destinationId} onValueChange={(value) => setDestinationId(value ?? "")}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select an account" />
+              </SelectTrigger>
+              <SelectContent>
+                {options
+                  .filter((c) => c.id !== sourceId)
+                  .map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.accountName}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {create.isError && (
+            <p className="text-xs text-destructive">
+              {create.error instanceof ApiError ? create.error.message : "Couldn't create that workflow."}
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button disabled={!name.trim() || !sourceId || !destinationId || create.isPending} onClick={submit}>
+            {create.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
+            Create workflow
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
