@@ -25,6 +25,7 @@ export function CutLanding() {
         color: TEXT,
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         WebkitFontSmoothing: "antialiased",
+        overflowX: "hidden",
       }}
     >
       {/* The root layout's own background (the cream system's default) is a
@@ -34,8 +35,12 @@ export function CutLanding() {
           that needs dark instead, so it sets `<body>` directly rather than
           touching the shared global theme every other route still uses.
           A plain style tag (not a JS effect) so it's part of the very
-          first paint — no flash of the light background before hydration. */}
-      <style>{`html, body { background: ${BG}; }`}</style>
+          first paint — no flash of the light background before hydration.
+          overflow-x: hidden on html/body clips the hero/CTA glow divs, which
+          are wider than the viewport by design so their blur doesn't show a
+          hard edge — without this they widen the page's scrollable area and
+          mobile browsers respond by rendering the whole page zoomed out. */}
+      <style>{`html, body { background: ${BG}; overflow-x: hidden; }`}</style>
       <CutTopNav />
       <CutHero />
       <CutFeatures />
