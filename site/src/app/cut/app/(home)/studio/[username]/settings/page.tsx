@@ -937,7 +937,7 @@ function WorkflowSection({ studioId }: { studioId: string }) {
   const hasEnoughConnections = (connections.data?.connections.length ?? 0) >= 2;
 
   return (
-    <div className="max-w-md space-y-4">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold">Workflows</p>
         <Button
