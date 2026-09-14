@@ -180,10 +180,14 @@ function connectionHealth(c: StudioConnection): { ok: boolean; label: string } {
     return { label: "Token expired or invalid", ok: false };
   }
   // A refresh token means an expired access token is routine, not a
-  // problem — the platform issues a fresh one silently on next use, so a
-  // raw access-token expiry isn't worth alarming the studio owner over.
+  // problem — the platform issues a fresh one silently on next use, so
+  // it's never shown as an error. Still show the real expiry, just as
+  // plain info rather than a warning.
   if (c.hasRefreshToken) {
-    return { label: "Connected", ok: true };
+    return {
+      label: c.tokenExpiresAt ? `Token expires ${new Date(c.tokenExpiresAt).toLocaleString()}` : "Connected",
+      ok: true,
+    };
   }
   if (!c.tokenExpiresAt) {
     return { label: "No expiration date", ok: true };
