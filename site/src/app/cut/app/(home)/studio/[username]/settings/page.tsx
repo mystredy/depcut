@@ -104,14 +104,14 @@ const STUDIO_TYPES = [
   "Nonprofits & Activism",
 ];
 
-type Section = "setup" | "access" | "history" | "linked" | "repurpose" | "workflow";
+type Section = "setup" | "access" | "history" | "linked" | "connections" | "workflow";
 
 const SECTIONS: { key: Section; label: string }[] = [
   { key: "setup", label: "Studio setup" },
   { key: "access", label: "Studio access" },
   { key: "history", label: "Management history" },
   { key: "linked", label: "Social accounts" },
-  { key: "repurpose", label: "Repurpose" },
+  { key: "connections", label: "Connections" },
   { key: "workflow", label: "Workflow" },
 ];
 
@@ -165,7 +165,7 @@ export default function StudioSettingsPage({ params }: { params: Promise<{ usern
         {section === "access" && <AccessSection studioId={studio.id} isOwner={studio.role === "owner"} />}
         {section === "history" && <HistorySection studioId={studio.id} />}
         {section === "linked" && <LinkedAccountsSection studioId={studio.id} linkedAccounts={studio.linkedAccounts} />}
-        {section === "repurpose" && <RepurposeSection studioId={studio.id} />}
+        {section === "connections" && <ConnectionsSection studioId={studio.id} />}
         {section === "workflow" && <WorkflowSection studioId={studio.id} />}
       </div>
     </div>
@@ -746,7 +746,7 @@ function LinkedAccountsSection({
   );
 }
 
-function RepurposeSection({ studioId }: { studioId: string }) {
+function ConnectionsSection({ studioId }: { studioId: string }) {
   const connections = useStudioConnections(studioId);
   const disconnect = useDisconnectStudioConnection(studioId);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -933,7 +933,7 @@ function WorkflowSection({ studioId }: { studioId: string }) {
         <div className="flex flex-col items-center gap-1.5 rounded-2xl border border-dashed p-8 text-center">
           <Link2 className="mb-1 size-5 text-muted-foreground" />
           <p className="text-sm font-semibold">Connect at least two accounts</p>
-          <p className="text-sm text-muted-foreground">Add accounts under Repurpose, then pair them here.</p>
+          <p className="text-sm text-muted-foreground">Add accounts under Connections, then pair them here.</p>
         </div>
       ) : (workflows.data?.workflows ?? []).length === 0 ? (
         <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
