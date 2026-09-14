@@ -15,7 +15,8 @@ import { fetchPublicSiteSettings } from "@/lib/siteSettings";
 // host gets the same mapping — "/" → landing, "/app/…" → editor app (generic
 // "/…" → "/cut/…" rewrite) — with depcut.com as the one production host.
 // The auth pages (/sign-in, /sign-up), "/install", "/depcutvision", and the
-// legal pages are real root-level routes and pass through the rewrite.
+// legal pages (including "/unsubscribe") are real root-level routes and pass
+// through the rewrite.
 // www. 308s to the apex; retired domains redirect to depcut.com at the
 // edge (Cloudflare) and never reach this app.
 //
@@ -68,6 +69,7 @@ const PASSTHROUGH = [
   "/install",
   "/privacy",
   "/terms",
+  "/unsubscribe",
   "/sign-in",
   "/sign-up",
   "/depcutvision",
