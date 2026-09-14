@@ -900,7 +900,11 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
             Add account
           </Button>
         </div>
-        {(connections.data?.connections ?? []).length === 0 ? (
+        {connections.isLoading ? (
+          <div className="mt-3 rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+            Loading…
+          </div>
+        ) : (connections.data?.connections ?? []).length === 0 ? (
           <div className="mt-3 flex flex-col items-center gap-1.5 rounded-2xl border border-dashed p-8 text-center">
             <Link2 className="mb-1 size-5 text-muted-foreground" />
             <p className="text-sm font-semibold">No accounts connected</p>
@@ -1165,7 +1169,11 @@ function WorkflowSection({ studioId }: { studioId: string }) {
         automatically yet — Auto Publish is stored for when that&apos;s built.
       </p>
 
-      {!hasEnoughConnections ? (
+      {connections.isLoading ? (
+        <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+          Loading…
+        </div>
+      ) : !hasEnoughConnections ? (
         <div className="flex flex-col items-center gap-1.5 rounded-2xl border border-dashed p-8 text-center">
           <Link2 className="mb-1 size-5 text-muted-foreground" />
           <p className="text-sm font-semibold">Connect at least two accounts</p>
