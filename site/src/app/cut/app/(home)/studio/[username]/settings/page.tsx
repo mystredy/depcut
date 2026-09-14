@@ -189,10 +189,7 @@ function connectionHealth(c: StudioConnection): { ok: boolean; label: string } {
   // that's expected, not a sign anything's wrong.
   if (c.hasRefreshToken) {
     return {
-      label:
-        days !== null && days > 0
-          ? `Token expires in ${days} day${days === 1 ? "" : "s"}`
-          : "Token refreshes automatically",
+      label: days !== null && days > 0 ? `Token expires in ${days} day${days === 1 ? "" : "s"}` : "No expiration date",
       ok: true,
     };
   }
