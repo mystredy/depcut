@@ -8,6 +8,7 @@ type FooterLink = { href: string; label: string };
 type FooterColumn = { title: string; links: FooterLink[] };
 
 const DISCORD_URL = "https://discord.gg/CPQu5XXmw";
+const TELEGRAM_URL = "https://t.me/DepCutbot";
 
 // Cut's own footer, on the dark landing system. Kept self-contained (not
 // the shared _components/landing/Footer) since DepCut Vision, the auth
@@ -16,7 +17,10 @@ export function CutFooter() {
   const linkGroups: FooterColumn[] = [
     {
       title: "Product",
-      links: [{ href: DISCORD_URL, label: "Discord" }],
+      links: [
+        { href: DISCORD_URL, label: "Discord" },
+        { href: TELEGRAM_URL, label: "Telegram" },
+      ],
     },
     {
       title: "Legal",
