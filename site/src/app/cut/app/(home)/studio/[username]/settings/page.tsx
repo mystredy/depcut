@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useState, type ComponentType } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -11,17 +11,12 @@ import {
   CircleCheck,
   CircleX,
   Ghost,
-  Hash,
   Info,
   Link2,
   Loader2,
-  MessageCircle,
   MoreVertical,
   Plus,
   Send,
-  Share2,
-  Video,
-  type LucideIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -73,15 +68,107 @@ import {
 } from "@/components/ui/dialog";
 import { ApiError } from "@/queries/apiClient";
 
-const PLATFORM_ICONS: Record<string, LucideIcon> = {
-  facebook: MessageCircle,
-  instagram: Camera,
-  snapchat: Ghost,
-  telegram: Send,
-  threads: AtSign,
-  tiktok: Share2,
-  x: Hash,
-  youtube: Video,
+// Real per-platform brand marks for the connection cards and picker, each a
+// self-contained rounded-square badge (background + glyph) sized entirely by
+// the className passed in — a caller just renders <Icon className="size-8" />
+// with no extra wrapper. Facebook/Instagram/X/TikTok/YouTube get a drawn
+// glyph; Threads/Snapchat/Telegram reuse their closest Lucide stand-in on the
+// platform's real brand color, since their marks aren't simple shapes.
+function FacebookIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <rect width="24" height="24" rx="6" fill="#1877F2" />
+      <text x="12" y="17.5" textAnchor="middle" fontSize="14" fontWeight="700" fontStyle="italic" fill="#fff">
+        f
+      </text>
+    </svg>
+  );
+}
+
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <rect width="24" height="24" rx="6" fill="#000" />
+      <text x="12" y="16.5" textAnchor="middle" fontSize="12" fontWeight="700" fill="#fff">
+        X
+      </text>
+    </svg>
+  );
+}
+
+function YouTubeIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <rect width="24" height="24" rx="6" fill="#FF0000" />
+      <polygon points="9.5,7.5 9.5,16.5 17,12" fill="#fff" />
+    </svg>
+  );
+}
+
+function TikTokIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <rect width="24" height="24" rx="6" fill="#000" />
+      <circle cx="10" cy="16" r="2.3" fill="#fff" />
+      <rect x="12" y="5" width="1.8" height="11" fill="#fff" />
+      <path d="M13.8 5c.3 2 1.8 3.4 3.7 3.6v2c-1.4-.1-2.7-.6-3.7-1.4V5Z" fill="#fff" />
+    </svg>
+  );
+}
+
+function InstagramIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <defs>
+        <linearGradient id="ig-badge-grad" x1="0" y1="24" x2="24" y2="0">
+          <stop offset="0%" stopColor="#feda75" />
+          <stop offset="25%" stopColor="#fa7e1e" />
+          <stop offset="50%" stopColor="#d62976" />
+          <stop offset="75%" stopColor="#962fbf" />
+          <stop offset="100%" stopColor="#4f5bd5" />
+        </linearGradient>
+      </defs>
+      <rect width="24" height="24" rx="6" fill="url(#ig-badge-grad)" />
+      <rect x="6.5" y="6.5" width="11" height="11" rx="3" fill="none" stroke="#fff" strokeWidth="1.6" />
+      <circle cx="12" cy="12" r="3" fill="none" stroke="#fff" strokeWidth="1.6" />
+      <circle cx="15.7" cy="8.3" r="1" fill="#fff" />
+    </svg>
+  );
+}
+
+function ThreadsIcon({ className }: { className?: string }) {
+  return (
+    <div className={cn("flex items-center justify-center rounded-[25%] bg-black", className)}>
+      <AtSign className="size-[60%] text-white" />
+    </div>
+  );
+}
+
+function SnapchatIcon({ className }: { className?: string }) {
+  return (
+    <div className={cn("flex items-center justify-center rounded-[25%] bg-[#FFFC00]", className)}>
+      <Ghost className="size-[60%] text-black" />
+    </div>
+  );
+}
+
+function TelegramIcon({ className }: { className?: string }) {
+  return (
+    <div className={cn("flex items-center justify-center rounded-[25%] bg-[#26A5E4]", className)}>
+      <Send className="size-[55%] text-white" />
+    </div>
+  );
+}
+
+const PLATFORM_ICONS: Record<string, ComponentType<{ className?: string }>> = {
+  facebook: FacebookIcon,
+  instagram: InstagramIcon,
+  snapchat: SnapchatIcon,
+  telegram: TelegramIcon,
+  threads: ThreadsIcon,
+  tiktok: TikTokIcon,
+  x: XIcon,
+  youtube: YouTubeIcon,
 };
 
 // A connection is only good for posting if its token is set, active, and
@@ -813,14 +900,14 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
                 <div key={c.id} className="relative flex flex-col gap-2.5 rounded-2xl border p-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
-                        {c.profileImage ? (
-                          // eslint-disable-next-line @next/next/no-img-element -- external platform avatar
+                      {c.profileImage ? (
+                        <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
+                          {/* eslint-disable-next-line @next/next/no-img-element -- external platform avatar */}
                           <img src={c.profileImage} alt="" className="size-full object-cover" />
-                        ) : (
-                          <Icon className="size-4" />
-                        )}
-                      </div>
+                        </div>
+                      ) : (
+                        <Icon className="size-8 shrink-0 rounded-[25%]" />
+                      )}
                       <div className="min-w-0">
                         <p className="flex items-center gap-1 truncate text-sm font-medium">
                           <span className="truncate">{c.accountName}</span>
@@ -900,9 +987,7 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
                     }}
                     className="flex items-center gap-2.5 rounded-xl border p-3 text-left transition-colors hover:border-ring hover:bg-muted/40"
                   >
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
-                      <Icon className="size-4" />
-                    </div>
+                    <Icon className="size-9 shrink-0 rounded-[25%]" />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{s.label}</p>
                       <p className="text-[11px] text-muted-foreground">{canPublish ? "Publish" : "Connect"}</p>
@@ -966,12 +1051,12 @@ function WorkflowConnectionPill({
 }) {
   const Icon = PLATFORM_ICONS[connection.platform] ?? Link2;
   return (
-    <div
-      className="flex size-9 items-center justify-center rounded-lg border bg-muted"
+    <span
+      className="inline-flex"
       title={`${connection.accountName}${connection.accountHandle ? ` (${connection.accountHandle})` : ""}`}
     >
-      <Icon className="size-4" />
-    </div>
+      <Icon className="size-9 rounded-[25%]" />
+    </span>
   );
 }
 
