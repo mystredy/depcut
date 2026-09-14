@@ -603,6 +603,7 @@ function AccessSection({ studioId, isOwner }: { studioId: string; isOwner: boole
       <div>
         <p className="text-sm font-semibold">Managers</p>
         <div className="mt-3 space-y-2">
+          {members.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
           {(members.data?.members ?? []).map((m) => (
             <div key={m.id} className="flex items-center justify-between rounded-xl border px-3 py-2">
               <div>
@@ -827,7 +828,9 @@ function HistorySection({ studioId }: { studioId: string }) {
       <p className="text-sm text-muted-foreground">
         A history of management actions taken by people who manage this studio.
       </p>
-      {(activity.data?.activity ?? []).length === 0 ? (
+      {activity.isLoading ? (
+        <p className="pt-4 text-sm text-muted-foreground">Loading…</p>
+      ) : (activity.data?.activity ?? []).length === 0 ? (
         <p className="pt-4 text-sm text-muted-foreground">No activity yet.</p>
       ) : (
         <div className="mt-3 space-y-2">
