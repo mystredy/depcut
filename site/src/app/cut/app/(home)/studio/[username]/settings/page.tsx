@@ -179,20 +179,26 @@ function connectionHealth(c: StudioConnection): { ok: boolean; label: string } {
   if (!c.hasToken || c.status !== "active") {
     return { label: "Token expired or invalid", ok: false };
   }
+  const days = c.tokenExpiresAt
+    ? Math.ceil((new Date(c.tokenExpiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+    : null;
   // A refresh token means an expired access token is routine, not a
   // problem — the platform issues a fresh one silently on next use, so
-  // it's never shown as an error. Still show the real expiry, just as
-  // plain info rather than a warning.
+  // it's never shown as an error. Access tokens are usually short-lived
+  // (an hour, for Google), so days is typically already <= 0 here —
+  // that's expected, not a sign anything's wrong.
   if (c.hasRefreshToken) {
     return {
-      label: c.tokenExpiresAt ? `Token expires ${new Date(c.tokenExpiresAt).toLocaleString()}` : "Connected",
+      label:
+        days !== null && days > 0
+          ? `Token expires in ${days} day${days === 1 ? "" : "s"}`
+          : "Token refreshes automatically",
       ok: true,
     };
   }
-  if (!c.tokenExpiresAt) {
+  if (days === null) {
     return { label: "No expiration date", ok: true };
   }
-  const days = Math.ceil((new Date(c.tokenExpiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
   if (days <= 0) {
     return { label: "Token expired or invalid", ok: false };
   }
