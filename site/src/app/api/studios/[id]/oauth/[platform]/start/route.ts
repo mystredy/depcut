@@ -49,9 +49,13 @@ export const GET = withDepCutAuth(async (request: DepCutAuthenticatedRequest, co
     });
   }
 
+  const { searchParams } = new URL(request.url);
+  const label = searchParams.get("name")?.trim().slice(0, 160) || undefined;
+
   const redirectUri = `${new URL(request.url).origin}/api/admin/oauth/${platform}/callback`;
   const pkce = provider.usesPkce ? generatePkcePair() : null;
   const state = signOAuthState({
+    label,
     ownerType: "studio",
     platform,
     role: "destination",

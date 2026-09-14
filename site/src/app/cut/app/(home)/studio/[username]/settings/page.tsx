@@ -718,6 +718,8 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
   const disconnect = useDisconnectStudioConnection(studioId);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [showConnectOptions, setShowConnectOptions] = useState(false);
+  const [connectPlatform, setConnectPlatform] = useState<string | null>(null);
+  const [accountName, setAccountName] = useState("");
   const queryClient = useQueryClient();
 
   // The OAuth popup posts this back once a real connection is saved
@@ -733,12 +735,19 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
     return () => window.removeEventListener("message", onMessage);
   }, [queryClient, studioId]);
 
-  const connect = (platform: string) => {
+  const connect = (platform: string, name: string) => {
+    const params = new URLSearchParams({ name });
     window.open(
-      `/api/studios/${studioId}/oauth/${platform}/start`,
+      `/api/studios/${studioId}/oauth/${platform}/start?${params}`,
       "oauth-connect",
       "width=520,height=680"
     );
+  };
+
+  const closeConnectDialog = () => {
+    setShowConnectOptions(false);
+    setConnectPlatform(null);
+    setAccountName("");
   };
 
   return (
@@ -815,36 +824,73 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
         )}
       </div>
 
-      <Dialog open={showConnectOptions} onOpenChange={setShowConnectOptions}>
+      <Dialog open={showConnectOptions} onOpenChange={(open) => !open && closeConnectDialog()}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Connect a new account</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-2.5">
-            {SOCIAL_APP_SEED.filter((s) => OAUTH_CAPABLE_PLATFORMS.includes(s.platform)).map((s) => {
-              const Icon = PLATFORM_ICONS[s.platform] ?? Link2;
-              const canPublish = PUBLISHABLE_PLATFORMS.includes(s.platform);
+          {!connectPlatform ? (
+            <div className="grid grid-cols-2 gap-2.5">
+              {SOCIAL_APP_SEED.filter((s) => OAUTH_CAPABLE_PLATFORMS.includes(s.platform)).map((s) => {
+                const Icon = PLATFORM_ICONS[s.platform] ?? Link2;
+                const canPublish = PUBLISHABLE_PLATFORMS.includes(s.platform);
+                return (
+                  <button
+                    key={s.platform}
+                    type="button"
+                    onClick={() => {
+                      setConnectPlatform(s.platform);
+                      setAccountName("");
+                    }}
+                    className="flex items-center gap-2.5 rounded-xl border p-3 text-left transition-colors hover:border-ring hover:bg-muted/40"
+                  >
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
+                      <Icon className="size-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{s.label}</p>
+                      <p className="text-[11px] text-muted-foreground">{canPublish ? "Publish" : "Connect"}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            (() => {
+              const spec = SOCIAL_APP_SEED.find((s) => s.platform === connectPlatform);
+              if (!spec) return null;
               return (
-                <button
-                  key={s.platform}
-                  type="button"
-                  onClick={() => {
-                    connect(s.platform);
-                    setShowConnectOptions(false);
-                  }}
-                  className="flex items-center gap-2.5 rounded-xl border p-3 text-left transition-colors hover:border-ring hover:bg-muted/40"
-                >
-                  <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
-                    <Icon className="size-4" />
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => setConnectPlatform(null)}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    ← Change platform
+                  </button>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Name this connection</Label>
+                    <Input
+                      value={accountName}
+                      onChange={(e) => setAccountName(e.target.value)}
+                      placeholder={spec.label}
+                      autoFocus
+                    />
                   </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{s.label}</p>
-                    <p className="text-[11px] text-muted-foreground">{canPublish ? "Publish" : "Connect"}</p>
-                  </div>
-                </button>
+                  <Button
+                    className="w-full"
+                    disabled={!accountName.trim()}
+                    onClick={() => {
+                      connect(connectPlatform, accountName.trim());
+                      closeConnectDialog();
+                    }}
+                  >
+                    Connect via {spec.label}
+                  </Button>
+                </div>
               );
-            })}
-          </div>
+            })()
+          )}
         </DialogContent>
       </Dialog>
     </div>
