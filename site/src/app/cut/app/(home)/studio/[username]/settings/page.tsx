@@ -104,13 +104,19 @@ const STUDIO_TYPES = [
   "Nonprofits & Activism",
 ];
 
-type Section = "setup" | "access" | "history" | "linked" | "connections" | "workflow";
+type Section = "setup" | "access" | "history" | "linked" | "repurpose";
 
 const SECTIONS: { key: Section; label: string }[] = [
   { key: "setup", label: "Studio setup" },
   { key: "access", label: "Studio access" },
   { key: "history", label: "Management history" },
   { key: "linked", label: "Social accounts" },
+  { key: "repurpose", label: "Repurpose" },
+];
+
+type RepurposeTab = "connections" | "workflow";
+
+const REPURPOSE_TABS: { key: RepurposeTab; label: string }[] = [
   { key: "connections", label: "Connections" },
   { key: "workflow", label: "Workflow" },
 ];
@@ -119,6 +125,7 @@ export default function StudioSettingsPage({ params }: { params: Promise<{ usern
   const { username } = use(params);
   const { data, isLoading } = useStudioByUsername(username);
   const [section, setSection] = useState<Section>("setup");
+  const [repurposeTab, setRepurposeTab] = useState<RepurposeTab>("connections");
 
   if (isLoading) return null;
   if (!data || !data.studio.role) {
@@ -160,13 +167,33 @@ export default function StudioSettingsPage({ params }: { params: Promise<{ usern
         ))}
       </div>
 
+      {section === "repurpose" && (
+        <div className="mt-4 flex flex-wrap gap-1 border-b border-border">
+          {REPURPOSE_TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setRepurposeTab(t.key)}
+              className={cn(
+                "border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+                repurposeTab === t.key
+                  ? "border-foreground text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="pt-6">
         {section === "setup" && <SetupSection studioId={studio.id} studio={studio} />}
         {section === "access" && <AccessSection studioId={studio.id} isOwner={studio.role === "owner"} />}
         {section === "history" && <HistorySection studioId={studio.id} />}
         {section === "linked" && <LinkedAccountsSection studioId={studio.id} linkedAccounts={studio.linkedAccounts} />}
-        {section === "connections" && <ConnectionsSection studioId={studio.id} />}
-        {section === "workflow" && <WorkflowSection studioId={studio.id} />}
+        {section === "repurpose" && repurposeTab === "connections" && <ConnectionsSection studioId={studio.id} />}
+        {section === "repurpose" && repurposeTab === "workflow" && <WorkflowSection studioId={studio.id} />}
       </div>
     </div>
   );
