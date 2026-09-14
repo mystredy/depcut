@@ -342,6 +342,7 @@ function SetupSection({
     avatarImageKey: string | null;
     backgroundImageKey: string | null;
     updatedAt: string;
+    role: "owner" | "manager" | null;
   };
 }) {
   const update = useUpdateStudio(studioId);
@@ -483,6 +484,7 @@ function SetupSection({
         Save
       </Button>
 
+      {studio.role === "owner" && (
       <div className="mt-10 rounded-xl border border-destructive/30 p-4">
         <p className="text-sm font-medium text-destructive">Delete this studio</p>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -563,6 +565,7 @@ function SetupSection({
           </Button>
         )}
       </div>
+      )}
     </div>
     <ImageCropDialog
       open={editingAvatar}
