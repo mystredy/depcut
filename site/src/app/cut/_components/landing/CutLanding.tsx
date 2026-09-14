@@ -5,7 +5,6 @@ import { CutFeatures } from "@/app/cut/_components/landing/CutFeatures";
 import { CutFinalCTA } from "@/app/cut/_components/landing/CutFinalCTA";
 import { CutFooter } from "@/app/cut/_components/landing/CutFooter";
 import { CutHero } from "@/app/cut/_components/landing/CutHero";
-import { CutOpenSource } from "@/app/cut/_components/landing/CutOpenSource";
 import { CutPricing } from "@/app/cut/_components/landing/CutPricing";
 import { CutTopNav } from "@/app/cut/_components/landing/CutTopNav";
 import { CutWorksWith } from "@/app/cut/_components/landing/CutWorksWith";
@@ -46,7 +45,6 @@ export function CutLanding() {
       <CutFeatures />
       <CutWorksWith />
       <CutPricing />
-      <CutOpenSource />
       <CutFinalCTA />
       <CutFooter />
     </main>
