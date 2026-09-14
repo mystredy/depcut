@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-import { TopNav } from "@/app/_components/landing/TopNav";
 import { CutFooter } from "@/app/cut/_components/landing/CutFooter";
+import { CutTopNav } from "@/app/cut/_components/landing/CutTopNav";
+import { GlassCard } from "@/app/cut/_components/landing/dark/DarkPrimitives";
+import { BG, GRADIENT_TEXT, TEXT, TEXT_FAINT, TEXT_MUTED } from "@/app/cut/_components/landing/dark/theme";
 import { AFFILIATE_REF_COOKIE } from "@/lib/affiliate/constants";
 import { authClient, useHydrationSafeSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
@@ -26,9 +28,10 @@ const copy = {
     alternateLabel: "Create account",
     alternateLead: "New to DepCut?",
     googleAlt: "Sign in with Google",
-    googleSrc: "/google/dark-sign-in-with-google.svg",
+    googleSrc: "/google/sign-in-with-google.svg",
     googleWidth: 175,
-    heading: "Send DepCut back to work.",
+    headingLead: "Send DepCut",
+    headingHighlight: "back to work.",
     title: "Log in",
   },
   "sign-up": {
@@ -36,9 +39,10 @@ const copy = {
     alternateLabel: "Log in",
     alternateLead: "Already have an account?",
     googleAlt: "Sign up with Google",
-    googleSrc: "/google/dark-sign-up-with-google.svg",
+    googleSrc: "/google/sign-up-with-google.svg",
     googleWidth: 179,
-    heading: "Put DepCut to Work",
+    headingLead: "Put DepCut",
+    headingHighlight: "to Work",
     title: "Sign up",
   },
 } satisfies Record<
@@ -50,7 +54,8 @@ const copy = {
     googleAlt: string;
     googleSrc: string;
     googleWidth: number;
-    heading: string;
+    headingLead: string;
+    headingHighlight: string;
     title: string;
   }
 >;
@@ -118,9 +123,9 @@ export function AuthScreen({ mode }: Props) {
 
   // Once the session resolves signed-in, the redirect effect above is about
   // to navigate away — the form swaps out so there's nothing left to click
-  // through during that window, same as TopNav's own signed-in swap.
+  // through during that window, same as CutTopNav's own signed-in swap.
   const formContent = session ? (
-    <p className="text-sm leading-normal text-[#555]">
+    <p className="text-sm leading-normal" style={{ color: TEXT_MUTED }}>
       You&apos;re already signed in — redirecting…
     </p>
   ) : (
@@ -146,31 +151,28 @@ export function AuthScreen({ mode }: Props) {
           style={{ width: googleButtonWidth }}
         />
       </button>
-      <p className="mt-[18px] text-sm leading-normal text-[#555]">
+      <p className="mt-[18px] text-sm leading-normal" style={{ color: TEXT_MUTED }}>
         {screenCopy.alternateLead}{" "}
         <Link
           href={screenCopy.alternateHref}
-          className="font-semibold text-ink underline underline-offset-[3px]"
+          className="font-semibold text-white underline underline-offset-[3px]"
         >
           {screenCopy.alternateLabel}
         </Link>
       </p>
-      <p className="mt-[18px] text-xs leading-normal text-[#555]">
+      <p className="mt-[18px] text-xs leading-normal" style={{ color: TEXT_FAINT }}>
         By continuing, you agree to the{" "}
-        <Link href="/terms" className="font-semibold text-ink">
+        <Link href="/terms" className="font-semibold text-white/80 hover:text-white">
           Terms of Use
         </Link>{" "}
         and{" "}
-        <Link href="/privacy" className="font-semibold text-ink">
+        <Link href="/privacy" className="font-semibold text-white/80 hover:text-white">
           Privacy Policy
         </Link>
         .
       </p>
       {statusMessage ? (
-        <div
-          role="status"
-          className="mt-[14px] text-[13px] font-semibold leading-[1.4] text-[#4a403d]"
-        >
+        <div role="status" className="mt-[14px] text-[13px] font-semibold leading-[1.4] text-rose-300">
           {statusMessage}
         </div>
       ) : null}
@@ -178,25 +180,43 @@ export function AuthScreen({ mode }: Props) {
   );
 
   return (
-    <main className="min-h-screen w-full bg-background font-system text-ink antialiased">
+    <main
+      style={{
+        minHeight: "100vh",
+        width: "100%",
+        background: BG,
+        color: TEXT,
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        WebkitFontSmoothing: "antialiased",
+        overflowX: "hidden",
+      }}
+    >
+      {/* Same html/body override + overflow guard as the Cut landing page
+          (CutLanding.tsx) — see its comment for why both are needed. */}
+      <style>{`html, body { background: ${BG}; overflow-x: hidden; }`}</style>
       {/* Auth serves same-host on depcut.com, so the chrome is Cut's. */}
-      <TopNav
-        wordmark="DepCut"
+      <CutTopNav
         authToggle={{
           href: screenCopy.alternateHref,
           label: copy[otherMode].title,
         }}
       />
-      <section className="mx-auto grid w-full max-w-[1400px] grid-cols-1 justify-items-center gap-16 px-6 pt-[44px] pb-[240px] text-center min-[900px]:gap-24 min-[900px]:px-12 min-[900px]:pt-[72px] min-[900px]:pb-[360px]">
-        <div>
-          <h1 className="max-w-[920px] text-[33px] leading-[0.9] font-semibold break-words min-[900px]:text-[69px]">
-            {screenCopy.heading}
-          </h1>
-        </div>
-
-        <div className="flex flex-col items-center justify-self-center text-center">
-          {formContent}
-        </div>
+      <section className="relative mx-auto flex w-full max-w-[1400px] flex-col items-center px-6 pt-16 pb-24 text-center md:px-12 md:pt-20 md:pb-32">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-0 -z-10 h-[520px] w-[900px] -translate-x-1/2 opacity-40"
+          style={{
+            background:
+              "radial-gradient(closest-side, rgba(139,92,246,0.35), rgba(59,130,246,0.18) 45%, transparent 70%)",
+            filter: "blur(60px)",
+          }}
+        />
+        <h1 className="max-w-[720px] text-[clamp(34px,6vw,64px)] font-semibold leading-[1.05] tracking-[-0.02em] text-white">
+          {screenCopy.headingLead} <span style={GRADIENT_TEXT}>{screenCopy.headingHighlight}</span>
+        </h1>
+        <GlassCard className="mt-12 w-full max-w-[420px]" tint="violet">
+          <div className="flex flex-col items-center px-8 py-10 text-center">{formContent}</div>
+        </GlassCard>
       </section>
       <CutFooter />
     </main>

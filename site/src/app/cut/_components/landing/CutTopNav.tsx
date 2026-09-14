@@ -13,12 +13,19 @@ import { cn } from "@/lib/utils";
 
 const NAV_ICON_SIZE = 40;
 
+type Props = {
+  // The auth screens toggle between sign-in/sign-up instead of showing the
+  // default signed-out cluster — same idea as the cream TopNav's own
+  // authToggle prop.
+  authToggle?: { href: string; label: string };
+};
+
 // The dark landing's own nav: same auth logic as the shared cream TopNav
 // (useHydrationSafeSession decides signed-in vs signed-out, authHrefFor
 // carries the callback target), but styled for a dark, glassy header instead
-// of reusing the shared component directly — DepCut Vision, the auth
-// screens, and the legal pages still render that one on the cream system.
-export function CutTopNav() {
+// of reusing the shared component directly — DepCut Vision and the legal
+// pages still render that one on the cream system.
+export function CutTopNav({ authToggle }: Props) {
   const { data: session } = useHydrationSafeSession();
   const isSignedIn = Boolean(session);
 
@@ -55,6 +62,13 @@ export function CutTopNav() {
             <GradientButton href="/app" variant="ghost" size="sm">
               Go to App
             </GradientButton>
+          ) : authToggle ? (
+            <a
+              href={authToggle.href}
+              className="whitespace-nowrap text-sm font-semibold text-white/80 no-underline hover:text-white"
+            >
+              {authToggle.label}
+            </a>
           ) : (
             <>
               <a
