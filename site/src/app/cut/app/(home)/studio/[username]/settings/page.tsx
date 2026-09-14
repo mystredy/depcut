@@ -80,8 +80,6 @@ const PLATFORM_ICONS: Record<string, LucideIcon> = {
   youtube: Video,
 };
 
-const LINKED_ACCOUNT_PLATFORMS = ["facebook", "instagram", "x", "tiktok", "youtube", "threads", "snapchat"];
-
 // Content categories, matching the taxonomy platforms like YouTube use for a
 // channel's primary topic. "Creator" stays first as the generic default —
 // every studio is created with it, and not every studio fits a niche.
@@ -104,13 +102,12 @@ const STUDIO_TYPES = [
   "Nonprofits & Activism",
 ];
 
-type Section = "setup" | "access" | "history" | "linked" | "repurpose";
+type Section = "setup" | "access" | "history" | "repurpose";
 
 const SECTIONS: { key: Section; label: string }[] = [
   { key: "setup", label: "Studio setup" },
   { key: "access", label: "Studio access" },
   { key: "history", label: "Management history" },
-  { key: "linked", label: "Social accounts" },
   { key: "repurpose", label: "Repurpose" },
 ];
 
@@ -191,7 +188,6 @@ export default function StudioSettingsPage({ params }: { params: Promise<{ usern
         {section === "setup" && <SetupSection studioId={studio.id} studio={studio} />}
         {section === "access" && <AccessSection studioId={studio.id} isOwner={studio.role === "owner"} />}
         {section === "history" && <HistorySection studioId={studio.id} />}
-        {section === "linked" && <LinkedAccountsSection studioId={studio.id} linkedAccounts={studio.linkedAccounts} />}
         {section === "repurpose" && repurposeTab === "connections" && <ConnectionsSection studioId={studio.id} />}
         {section === "repurpose" && repurposeTab === "workflow" && <WorkflowSection studioId={studio.id} />}
       </div>
@@ -713,62 +709,6 @@ function HistorySection({ studioId }: { studioId: string }) {
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function LinkedAccountsSection({
-  studioId,
-  linkedAccounts,
-}: {
-  studioId: string;
-  linkedAccounts: Record<string, string>;
-}) {
-  const update = useUpdateStudio(studioId);
-  // The parent only renders this section once the studio has loaded, so
-  // linkedAccounts is already its final value at mount — no effect needed
-  // to keep it in sync.
-  const [handles, setHandles] = useState<Record<string, string>>(linkedAccounts);
-
-  const normalize = (record: Record<string, string>) =>
-    JSON.stringify(
-      Object.entries(record)
-        .filter(([, v]) => v.trim())
-        .map(([k, v]) => [k, v.trim()])
-        .sort(([a], [b]) => a.localeCompare(b)),
-    );
-  const dirty = normalize(handles) !== normalize(linkedAccounts);
-
-  return (
-    <div className="max-w-md space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Public handles shown on this studio&apos;s profile — display text only, not a real connection.
-      </p>
-      {LINKED_ACCOUNT_PLATFORMS.map((platform) => {
-        const Icon = PLATFORM_ICONS[platform] ?? Link2;
-        const spec = SOCIAL_APP_SEED.find((s) => s.platform === platform);
-        return (
-          <div key={platform} className="flex items-center gap-2">
-            <Icon className="size-4 shrink-0 text-muted-foreground" />
-            <Input
-              value={handles[platform] ?? ""}
-              onChange={(e) => setHandles((prev) => ({ ...prev, [platform]: e.target.value }))}
-              placeholder={`${spec?.label ?? platform} username`}
-            />
-          </div>
-        );
-      })}
-      <Button
-        disabled={!dirty || update.isPending}
-        onClick={() =>
-          update.mutate({
-            linkedAccounts: Object.fromEntries(Object.entries(handles).filter(([, v]) => v.trim())),
-          })
-        }
-      >
-        {update.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
-        Save
-      </Button>
     </div>
   );
 }
