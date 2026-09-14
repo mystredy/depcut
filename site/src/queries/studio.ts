@@ -294,6 +294,7 @@ export type StudioConnection = {
   profileImage: string | null;
   status: "active" | "inactive";
   hasToken: boolean;
+  hasRefreshToken: boolean;
   tokenExpiresAt: string | null;
 };
 

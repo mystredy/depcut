@@ -29,6 +29,7 @@ export const GET = withDepCutAuth(async (request: DepCutAuthenticatedRequest, co
     connections: connections.map(({ accessToken, refreshToken, ...c }) => ({
       ...c,
       createdAt: c.createdAt.toISOString(),
+      hasRefreshToken: Boolean(refreshToken),
       hasToken: Boolean(accessToken),
       tokenExpiresAt: c.tokenExpiresAt?.toISOString() ?? null,
       updatedAt: c.updatedAt.toISOString(),

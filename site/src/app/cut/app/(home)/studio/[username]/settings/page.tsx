@@ -178,6 +178,12 @@ function connectionHealth(c: StudioConnection): { ok: boolean; label: string } {
   if (!c.hasToken || c.status !== "active") {
     return { label: "Token expired or invalid", ok: false };
   }
+  // A refresh token means an expired access token is routine, not a
+  // problem — the platform issues a fresh one silently on next use, so a
+  // raw access-token expiry isn't worth alarming the studio owner over.
+  if (c.hasRefreshToken) {
+    return { label: "Connected", ok: true };
+  }
   if (!c.tokenExpiresAt) {
     return { label: "No expiration date", ok: true };
   }
@@ -901,9 +907,12 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2.5">
                       {c.profileImage ? (
-                        <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
-                          {/* eslint-disable-next-line @next/next/no-img-element -- external platform avatar */}
-                          <img src={c.profileImage} alt="" className="size-full object-cover" />
+                        <div className="relative size-8 shrink-0">
+                          <div className="size-8 overflow-hidden rounded-full bg-muted">
+                            {/* eslint-disable-next-line @next/next/no-img-element -- external platform avatar */}
+                            <img src={c.profileImage} alt="" className="size-full object-cover" />
+                          </div>
+                          <Icon className="absolute -right-1 -bottom-1 size-3.5 rounded-[25%] ring-2 ring-background" />
                         </div>
                       ) : (
                         <Icon className="size-8 shrink-0 rounded-[25%]" />
