@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ArrowRight,
   AtSign,
+  Calendar as CalendarIcon,
   Camera,
   CircleCheck,
   CircleX,
@@ -258,11 +259,12 @@ const SECTIONS: { key: Section; label: string }[] = [
   { key: "repurpose", label: "Repurpose" },
 ];
 
-type RepurposeTab = "connections" | "workflow";
+type RepurposeTab = "connections" | "workflow" | "calendar";
 
 const REPURPOSE_TABS: { key: RepurposeTab; label: string }[] = [
   { key: "connections", label: "Connections" },
   { key: "workflow", label: "Workflow" },
+  { key: "calendar", label: "Calendar" },
 ];
 
 export default function StudioSettingsPage({ params }: { params: Promise<{ username: string }> }) {
@@ -337,6 +339,7 @@ export default function StudioSettingsPage({ params }: { params: Promise<{ usern
         {section === "history" && <HistorySection studioId={studio.id} />}
         {section === "repurpose" && repurposeTab === "connections" && <ConnectionsSection studioId={studio.id} />}
         {section === "repurpose" && repurposeTab === "workflow" && <WorkflowSection studioId={studio.id} />}
+        {section === "repurpose" && repurposeTab === "calendar" && <CalendarSection studioId={studio.id} />}
       </div>
     </div>
   );
@@ -1491,5 +1494,52 @@ function CreateWorkflowDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Shows the studio's "Repurpose existing content" workflows and their
+// configured cadence — the only real, stored schedule data there is today.
+// No publish pipeline runs yet, so this doesn't (and shouldn't) show actual
+// dated events.
+function CalendarSection({ studioId }: { studioId: string }) {
+  const workflows = useStudioWorkflows(studioId);
+  const scheduled = (workflows.data?.workflows ?? []).filter((w) => !w.autoPublish && w.postsPerDay);
+
+  return (
+    <div className="max-w-md space-y-4">
+      <p className="text-sm text-muted-foreground">
+        The posting cadence for workflows set to repurpose existing content. Nothing publishes
+        automatically yet — no real schedule runs against these.
+      </p>
+      {workflows.isLoading ? (
+        <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+          Loading…
+        </div>
+      ) : scheduled.length === 0 ? (
+        <div className="flex flex-col items-center gap-1.5 rounded-2xl border border-dashed p-8 text-center">
+          <CalendarIcon className="mb-1 size-5 text-muted-foreground" />
+          <p className="text-sm font-semibold">Nothing scheduled</p>
+          <p className="text-sm text-muted-foreground">
+            Set a workflow to &quot;Repurpose existing content&quot; under Workflow to configure a cadence.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {scheduled.map((w) => (
+            <div key={w.id} className="flex items-center justify-between gap-3 rounded-xl border p-3">
+              <div className="flex items-center gap-2.5">
+                <WorkflowConnectionPill connection={w.sourceConnection} />
+                <ArrowRight className="size-3.5 text-muted-foreground" />
+                <WorkflowConnectionPill connection={w.destinationConnection} />
+                <p className="text-sm font-medium">{w.name}</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-[10px] font-bold uppercase text-muted-foreground">
+                {w.postsPerDay}/day
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
