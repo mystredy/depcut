@@ -1,33 +1,9 @@
-import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
-import { BG, BLACK } from "@/app/_components/landing/theme";
-import { CutFooter } from "@/app/cut/_components/landing/CutFooter";
-import { CutTopNav } from "@/app/cut/_components/landing/CutTopNav";
-import { InstallInstructions } from "@/app/install/_components/InstallInstructions";
-import { DEPCUT_CANONICAL } from "@/cut/lib/hosts";
-
-export const metadata: Metadata = {
-  title: "Install DepCut",
-  description: "Download DepCut for macOS and install it with the standard drag-to-Applications flow.",
-  alternates: { canonical: `${DEPCUT_CANONICAL}/install` },
-};
-
-// The install page is passed through by src/proxy.ts and wears the Cut site's
-// header and footer.
-export default function InstallPage() {
-  return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: BG,
-        color: BLACK,
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        WebkitFontSmoothing: "antialiased",
-      }}
-    >
-      <CutTopNav />
-      <InstallInstructions />
-      <CutFooter />
-    </main>
-  );
+// The Mac app isn't promoted or installable from the site right now — this
+// route 404s instead of serving install instructions. Still passed through
+// by src/proxy.ts (see PASSTHROUGH there), so it 404s cleanly rather than
+// falling into the generic "/…" → "/cut/…" rewrite.
+export default function InstallPage(): never {
+  notFound();
 }

@@ -12,11 +12,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     {
-      url: `${DEPCUT_CANONICAL}/install`,
-      changeFrequency: "monthly",
-      priority: 0.8,
-    },
-    {
       url: `${DEPCUT_CANONICAL}/depcutvision`,
       changeFrequency: "monthly",
       priority: 0.6,
