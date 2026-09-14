@@ -44,6 +44,7 @@ import {
   useRemoveStudioAvatar,
   useRemoveStudioBackground,
   useRemoveStudioMember,
+  useRenameStudioConnection,
   useRequestStudioDeleteCode,
   useRequestStudioInviteCode,
   useRevokeStudioInvite,
@@ -840,10 +841,13 @@ function HistorySection({ studioId }: { studioId: string }) {
 function ConnectionsSection({ studioId }: { studioId: string }) {
   const connections = useStudioConnections(studioId);
   const disconnect = useDisconnectStudioConnection(studioId);
+  const rename = useRenameStudioConnection(studioId);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [showConnectOptions, setShowConnectOptions] = useState(false);
   const [connectPlatform, setConnectPlatform] = useState<string | null>(null);
   const [accountName, setAccountName] = useState("");
+  const [renaming, setRenaming] = useState<StudioConnection | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const queryClient = useQueryClient();
 
   // The OAuth popup posts this back once a real connection is saved
@@ -941,6 +945,27 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
                         <div className="absolute right-0 z-10 mt-1 w-32 rounded-lg border bg-popover p-1 text-xs shadow-md">
                           <button
                             type="button"
+                            onClick={() => {
+                              setRenaming(c);
+                              setRenameValue(c.accountName);
+                              setMenuOpenId(null);
+                            }}
+                            className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                          >
+                            Rename
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              connect(c.platform, c.accountName);
+                              setMenuOpenId(null);
+                            }}
+                            className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+                          >
+                            Reconnect
+                          </button>
+                          <button
+                            type="button"
                             disabled={disconnect.isPending}
                             onClick={() => {
                               disconnect.mutate(c.id);
@@ -948,7 +973,7 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
                             }}
                             className="block w-full rounded px-2 py-1.5 text-left text-destructive hover:bg-destructive/10"
                           >
-                            Disconnect
+                            Delete
                           </button>
                         </div>
                       )}
@@ -1047,6 +1072,41 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
               );
             })()
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={renaming !== null} onOpenChange={(open) => !open && setRenaming(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename connection</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Name</Label>
+            <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} autoFocus />
+          </div>
+          {rename.isError && (
+            <p className="text-xs text-destructive">
+              {rename.error instanceof ApiError ? rename.error.message : "Couldn't rename that connection."}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenaming(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!renameValue.trim() || rename.isPending}
+              onClick={() => {
+                if (!renaming) return;
+                rename.mutate(
+                  { accountName: renameValue.trim(), connectionId: renaming.id },
+                  { onSuccess: () => setRenaming(null) },
+                );
+              }}
+            >
+              {rename.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
+              Save
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

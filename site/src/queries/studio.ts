@@ -305,6 +305,21 @@ export function useStudioConnections(id: string) {
   });
 }
 
+export function useRenameStudioConnection(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ connectionId, accountName }: { connectionId: string; accountName: string }) =>
+      apiFetch<{ connection: StudioConnection }>(`/api/studios/${id}/connections/${connectionId}`, {
+        body: JSON.stringify({ accountName }),
+        method: "PATCH",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: studioConnectionsQueryKey(id) });
+      queryClient.invalidateQueries({ queryKey: studioActivityQueryKey(id) });
+    },
+  });
+}
+
 export function useDisconnectStudioConnection(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
