@@ -268,7 +268,7 @@ export default function StudioSettingsPage({ params }: { params: Promise<{ usern
   const { studio } = data;
 
   return (
-    <div className="mx-auto max-w-2xl px-6 pb-24">
+    <div className="w-full px-6 pb-24">
       <Link
         href={`/@${studio.username}`}
         className="mt-4 flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
