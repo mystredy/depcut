@@ -8,6 +8,8 @@ import {
   ArrowRight,
   AtSign,
   Camera,
+  CircleCheck,
+  CircleX,
   Ghost,
   Hash,
   Info,
@@ -58,6 +60,7 @@ import {
   studioAvatarUrl,
   studioBackgroundUrl,
   studioConnectionsQueryKey,
+  type StudioConnection,
   type StudioWorkflow,
 } from "@/queries/studio";
 import {
@@ -80,6 +83,23 @@ const PLATFORM_ICONS: Record<string, LucideIcon> = {
   x: Hash,
   youtube: Video,
 };
+
+// A connection is only good for posting if its token is set, active, and
+// (when the platform gave one) not past its expiry — the token itself never
+// reaches the client, so this is read off what the API already tells us.
+function connectionHealth(c: StudioConnection): { ok: boolean; label: string } {
+  if (!c.hasToken || c.status !== "active") {
+    return { label: "Token expired or invalid", ok: false };
+  }
+  if (!c.tokenExpiresAt) {
+    return { label: "No expiration date", ok: true };
+  }
+  const days = Math.ceil((new Date(c.tokenExpiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+  if (days <= 0) {
+    return { label: "Token expired or invalid", ok: false };
+  }
+  return { label: `Token expires in ${days} day${days === 1 ? "" : "s"}`, ok: true };
+}
 
 // Facebook/Instagram OAuth connects the main account, not the destination
 // itself — the callback resolves which Page (and, for Instagram, its linked
@@ -788,44 +808,69 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {connections.data?.connections.map((c) => {
               const Icon = PLATFORM_ICONS[c.platform] ?? Link2;
+              const health = connectionHealth(c);
               return (
-                <div key={c.id} className="relative flex items-center justify-between gap-3 rounded-2xl border p-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
-                      {c.profileImage ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- external platform avatar
-                        <img src={c.profileImage} alt="" className="size-full object-cover" />
-                      ) : (
-                        <Icon className="size-4" />
+                <div key={c.id} className="relative flex flex-col gap-2.5 rounded-2xl border p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
+                        {c.profileImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- external platform avatar
+                          <img src={c.profileImage} alt="" className="size-full object-cover" />
+                        ) : (
+                          <Icon className="size-4" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="flex items-center gap-1 truncate text-sm font-medium">
+                          <span className="truncate">{c.accountName}</span>
+                          {health.ok ? (
+                            <CircleCheck className="size-3.5 shrink-0 text-emerald-500" />
+                          ) : (
+                            <CircleX className="size-3.5 shrink-0 text-destructive" />
+                          )}
+                        </p>
+                        {c.accountHandle && <p className="text-xs text-muted-foreground">{c.accountHandle}</p>}
+                      </div>
+                    </div>
+                    <div className="relative shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setMenuOpenId(menuOpenId === c.id ? null : c.id)}
+                        className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <MoreVertical className="size-4" />
+                      </button>
+                      {menuOpenId === c.id && (
+                        <div className="absolute right-0 z-10 mt-1 w-32 rounded-lg border bg-popover p-1 text-xs shadow-md">
+                          <button
+                            type="button"
+                            disabled={disconnect.isPending}
+                            onClick={() => {
+                              disconnect.mutate(c.id);
+                              setMenuOpenId(null);
+                            }}
+                            className="block w-full rounded px-2 py-1.5 text-left text-destructive hover:bg-destructive/10"
+                          >
+                            Disconnect
+                          </button>
+                        </div>
                       )}
                     </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{c.accountName}</p>
-                      {c.accountHandle && <p className="text-xs text-muted-foreground">{c.accountHandle}</p>}
-                    </div>
                   </div>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setMenuOpenId(menuOpenId === c.id ? null : c.id)}
-                      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    >
-                      <MoreVertical className="size-4" />
-                    </button>
-                    {menuOpenId === c.id && (
-                      <div className="absolute right-0 z-10 mt-1 w-32 rounded-lg border bg-popover p-1 text-xs shadow-md">
-                        <button
-                          type="button"
-                          disabled={disconnect.isPending}
-                          onClick={() => {
-                            disconnect.mutate(c.id);
-                            setMenuOpenId(null);
-                          }}
-                          className="block w-full rounded px-2 py-1.5 text-left text-destructive hover:bg-destructive/10"
-                        >
-                          Disconnect
-                        </button>
-                      </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className={cn("text-xs", health.ok ? "text-muted-foreground" : "text-destructive")}>
+                      {health.label}
+                    </p>
+                    {!health.ok && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => connect(c.platform, c.accountName)}
+                      >
+                        Reconnect
+                      </Button>
                     )}
                   </div>
                 </div>
