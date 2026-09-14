@@ -6,8 +6,9 @@ import {
   withDepCutAuth,
   type DepCutAuthenticatedRequest,
 } from "@/lib/depcut-api-auth";
+import { STUDIO_SOURCE_CONNECTION_ID } from "@/lib/marketplace/oauth-providers";
 import { prisma } from "@/lib/prisma";
-import { getStudioMembership, logStudioActivity } from "@/lib/studio/access";
+import { ensureStudioSourceConnection, getStudioMembership, logStudioActivity } from "@/lib/studio/access";
 
 export const dynamic = "force-dynamic";
 
@@ -80,9 +81,11 @@ export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest, c
     );
   }
 
-  const { name, sourceConnectionId, destinationConnectionId } = parsed.data;
+  const { name, destinationConnectionId } = parsed.data;
   const [source, destination] = await Promise.all([
-    prisma.socialConnection.findUnique({ where: { id: sourceConnectionId } }),
+    parsed.data.sourceConnectionId === STUDIO_SOURCE_CONNECTION_ID
+      ? ensureStudioSourceConnection(id)
+      : prisma.socialConnection.findUnique({ where: { id: parsed.data.sourceConnectionId } }),
     prisma.socialConnection.findUnique({ where: { id: destinationConnectionId } }),
   ]);
   if (!source || source.studioId !== id || !destination || destination.studioId !== id) {
@@ -90,7 +93,7 @@ export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest, c
   }
 
   const workflow = await prisma.socialWorkflow.create({
-    data: { destinationConnectionId, name, sourceConnectionId },
+    data: { destinationConnectionId, name, sourceConnectionId: source.id },
     include: {
       destinationConnection: { select: connectionSelect },
       sourceConnection: { select: connectionSelect },

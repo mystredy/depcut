@@ -197,3 +197,14 @@ export const YOUTUBE_PLATFORMS = ["youtube"];
 // /api/admin/social-connections/[id]/publish). Snapchat has no public API
 // for posting to a connected account at all.
 export const PUBLISHABLE_PLATFORMS = ["youtube", "tiktok", "x", "facebook", "instagram", "threads"];
+
+// A studio workflow's source can be the studio's own content (its Drops)
+// instead of another connected platform. Represented as a real
+// SocialConnection row (platform === this value, studioId set, no real
+// OAuth token) so SocialWorkflow.sourceConnectionId — a required foreign
+// key — never needs to allow null. lib/studio/access.ts creates that row
+// lazily the first time a studio picks itself as a source; the studio
+// settings UI filters this platform out of the Connections tab and treats
+// this exact id as the "This studio" option in the New workflow dialog.
+export const STUDIO_SOURCE_PLATFORM = "studio";
+export const STUDIO_SOURCE_CONNECTION_ID = "studio";

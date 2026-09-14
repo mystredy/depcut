@@ -10,6 +10,7 @@ import {
   Camera,
   CircleCheck,
   CircleX,
+  Film,
   Ghost,
   Info,
   Link2,
@@ -27,7 +28,12 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageCropDialog } from "@/cut/components/ImageCropDialog";
 import { UserAvatar } from "@/cut/components/UserAvatar";
-import { OAUTH_CAPABLE_PLATFORMS, PUBLISHABLE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
+import {
+  OAUTH_CAPABLE_PLATFORMS,
+  PUBLISHABLE_PLATFORMS,
+  STUDIO_SOURCE_CONNECTION_ID,
+  STUDIO_SOURCE_PLATFORM,
+} from "@/lib/marketplace/oauth-providers";
 import { SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
 import { cn } from "@/lib/utils";
 import {
@@ -161,10 +167,19 @@ function TelegramIcon({ className }: { className?: string }) {
   );
 }
 
+function StudioSourceIcon({ className }: { className?: string }) {
+  return (
+    <div className={cn("flex items-center justify-center rounded-[25%] bg-primary", className)}>
+      <Film className="size-[55%] text-primary-foreground" />
+    </div>
+  );
+}
+
 const PLATFORM_ICONS: Record<string, ComponentType<{ className?: string }>> = {
   facebook: FacebookIcon,
   instagram: InstagramIcon,
   snapchat: SnapchatIcon,
+  [STUDIO_SOURCE_PLATFORM]: StudioSourceIcon,
   telegram: TelegramIcon,
   threads: ThreadsIcon,
   tiktok: TikTokIcon,
@@ -891,6 +906,12 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
     setAccountName("");
   };
 
+  // The studio's own pseudo-connection (a workflow source, not a real
+  // platform account) never shows up as something to manage here.
+  const realConnections = (connections.data?.connections ?? []).filter(
+    (c) => c.platform !== STUDIO_SOURCE_PLATFORM
+  );
+
   return (
     <div className="space-y-6">
       <div>
@@ -910,7 +931,7 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
           <div className="mt-3 rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
             Loading…
           </div>
-        ) : (connections.data?.connections ?? []).length === 0 ? (
+        ) : realConnections.length === 0 ? (
           <div className="mt-3 flex flex-col items-center gap-1.5 rounded-2xl border border-dashed p-8 text-center">
             <Link2 className="mb-1 size-5 text-muted-foreground" />
             <p className="text-sm font-semibold">No accounts connected</p>
@@ -920,7 +941,7 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
           </div>
         ) : (
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {connections.data?.connections.map((c) => {
+            {realConnections.map((c) => {
               const Icon = PLATFORM_ICONS[c.platform] ?? Link2;
               const health = connectionHealth(c);
               return (
@@ -1153,7 +1174,12 @@ function WorkflowSection({ studioId }: { studioId: string }) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const hasEnoughConnections = (connections.data?.connections.length ?? 0) >= 2;
+  // A workflow's source can be the studio's own content instead of another
+  // connection, so only the destination side needs a real connected account.
+  const realConnectionCount = (connections.data?.connections ?? []).filter(
+    (c) => c.platform !== STUDIO_SOURCE_PLATFORM
+  ).length;
+  const hasEnoughConnections = realConnectionCount >= 1;
 
   return (
     <div className="space-y-4">
@@ -1171,8 +1197,8 @@ function WorkflowSection({ studioId }: { studioId: string }) {
         </Button>
       </div>
       <p className="text-sm text-muted-foreground">
-        Pair two connected accounts to repurpose content between them. Nothing publishes
-        automatically yet — Auto Publish is stored for when that&apos;s built.
+        Repurpose this studio&apos;s own content, or a connected account, to another connected account.
+        Nothing publishes automatically yet — Auto Publish is stored for when that&apos;s built.
       </p>
 
       {connections.isLoading ? (
@@ -1182,8 +1208,8 @@ function WorkflowSection({ studioId }: { studioId: string }) {
       ) : !hasEnoughConnections ? (
         <div className="flex flex-col items-center gap-1.5 rounded-2xl border border-dashed p-8 text-center">
           <Link2 className="mb-1 size-5 text-muted-foreground" />
-          <p className="text-sm font-semibold">Connect at least two accounts</p>
-          <p className="text-sm text-muted-foreground">Add accounts under Connections, then pair them here.</p>
+          <p className="text-sm font-semibold">Connect at least one account</p>
+          <p className="text-sm text-muted-foreground">Add a destination under Connections, then pair it here.</p>
         </div>
       ) : (workflows.data?.workflows ?? []).length === 0 ? (
         <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
@@ -1310,7 +1336,13 @@ function CreateWorkflowDialog({
   const [sourceId, setSourceId] = useState("");
   const [destinationId, setDestinationId] = useState("");
 
-  const options = connections.data?.connections ?? [];
+  const realConnections = (connections.data?.connections ?? []).filter(
+    (c) => c.platform !== STUDIO_SOURCE_PLATFORM
+  );
+  const sourceOptions = [
+    { accountName: "This studio", id: STUDIO_SOURCE_CONNECTION_ID },
+    ...realConnections,
+  ];
 
   const submit = () => {
     if (!name.trim() || !sourceId || !destinationId || sourceId === destinationId) return;
@@ -1332,7 +1364,9 @@ function CreateWorkflowDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>New workflow</DialogTitle>
-          <DialogDescription>Pair two of this studio&apos;s connected accounts.</DialogDescription>
+          <DialogDescription>
+            Repurpose this studio&apos;s own content, or a connected account, to another connected account.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
@@ -1343,10 +1377,12 @@ function CreateWorkflowDialog({
             <Label className="text-xs">Repurpose from</Label>
             <Select value={sourceId} onValueChange={(value) => setSourceId(value ?? "")}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select an account" />
+                <SelectValue placeholder="Select an account">
+                  {(value: string) => sourceOptions.find((c) => c.id === value)?.accountName ?? "Select an account"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {options.map((c) => (
+                {sourceOptions.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.accountName}
                   </SelectItem>
@@ -1358,10 +1394,12 @@ function CreateWorkflowDialog({
             <Label className="text-xs">Repurpose to</Label>
             <Select value={destinationId} onValueChange={(value) => setDestinationId(value ?? "")}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select an account" />
+                <SelectValue placeholder="Select an account">
+                  {(value: string) => realConnections.find((c) => c.id === value)?.accountName ?? "Select an account"}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {options
+                {realConnections
                   .filter((c) => c.id !== sourceId)
                   .map((c) => (
                     <SelectItem key={c.id} value={c.id}>
