@@ -56,6 +56,9 @@ const createSchema = z
     sourceConnectionId: z.string().trim().min(1),
     destinationConnectionId: z.string().trim().min(1),
     autoPublish: z.boolean().default(true),
+    // Only meaningful in "Repurpose existing content" mode (autoPublish
+    // false) — how many of the source's existing posts to publish per day.
+    postsPerDay: z.number().int().min(1).max(50).nullable().optional(),
   })
   .strict()
   .refine((data) => data.sourceConnectionId !== data.destinationConnectionId, {
@@ -82,7 +85,7 @@ export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest, c
     );
   }
 
-  const { name, destinationConnectionId, autoPublish } = parsed.data;
+  const { name, destinationConnectionId, autoPublish, postsPerDay } = parsed.data;
   const [source, destination] = await Promise.all([
     parsed.data.sourceConnectionId === STUDIO_SOURCE_CONNECTION_ID
       ? ensureStudioSourceConnection(id)
@@ -94,7 +97,13 @@ export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest, c
   }
 
   const workflow = await prisma.socialWorkflow.create({
-    data: { autoPublish, destinationConnectionId, name, sourceConnectionId: source.id },
+    data: {
+      autoPublish,
+      destinationConnectionId,
+      name,
+      postsPerDay: autoPublish ? null : postsPerDay ?? null,
+      sourceConnectionId: source.id,
+    },
     include: {
       destinationConnection: { select: connectionSelect },
       sourceConnection: { select: connectionSelect },

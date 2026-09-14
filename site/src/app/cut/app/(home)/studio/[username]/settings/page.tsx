@@ -1317,6 +1317,11 @@ function WorkflowCard({
           aria-label="Auto publish"
         />
       </div>
+      {!workflow.autoPublish && workflow.postsPerDay && (
+        <p className="text-xs text-muted-foreground">
+          Repurposing existing content — {workflow.postsPerDay} post{workflow.postsPerDay === 1 ? "" : "s"}/day.
+        </p>
+      )}
     </div>
   );
 }
@@ -1336,6 +1341,7 @@ function CreateWorkflowDialog({
   const [sourceId, setSourceId] = useState("");
   const [destinationId, setDestinationId] = useState("");
   const [autoPublish, setAutoPublish] = useState(true);
+  const [postsPerDay, setPostsPerDay] = useState("3");
 
   const realConnections = (connections.data?.connections ?? []).filter(
     (c) => c.platform !== STUDIO_SOURCE_PLATFORM
@@ -1345,16 +1351,26 @@ function CreateWorkflowDialog({
     ...realConnections,
   ];
 
+  const postsPerDayValue = Number.parseInt(postsPerDay, 10);
+  const postsPerDayValid = autoPublish || (Number.isInteger(postsPerDayValue) && postsPerDayValue >= 1 && postsPerDayValue <= 50);
+
   const submit = () => {
-    if (!name.trim() || !sourceId || !destinationId || sourceId === destinationId) return;
+    if (!name.trim() || !sourceId || !destinationId || sourceId === destinationId || !postsPerDayValid) return;
     create.mutate(
-      { autoPublish, destinationConnectionId: destinationId, name: name.trim(), sourceConnectionId: sourceId },
+      {
+        autoPublish,
+        destinationConnectionId: destinationId,
+        name: name.trim(),
+        postsPerDay: autoPublish ? null : postsPerDayValue,
+        sourceConnectionId: sourceId,
+      },
       {
         onSuccess: () => {
           setName("");
           setSourceId("");
           setDestinationId("");
           setAutoPublish(true);
+          setPostsPerDay("3");
           onClose();
         },
       }
@@ -1437,11 +1453,24 @@ function CreateWorkflowDialog({
               >
                 <p className="text-sm font-medium">Repurpose existing content</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Repurpose your existing posts to the destination whenever you choose to.
+                  Publish from your existing posts to the destination on a schedule.
                 </p>
               </button>
             </div>
           </div>
+          {!autoPublish && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Posts per day</Label>
+              <Input
+                type="number"
+                min={1}
+                max={50}
+                value={postsPerDay}
+                onChange={(e) => setPostsPerDay(e.target.value)}
+                className="w-24"
+              />
+            </div>
+          )}
           {create.isError && (
             <p className="text-xs text-destructive">
               {create.error instanceof ApiError ? create.error.message : "Couldn't create that workflow."}
@@ -1452,7 +1481,10 @@ function CreateWorkflowDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button disabled={!name.trim() || !sourceId || !destinationId || create.isPending} onClick={submit}>
+          <Button
+            disabled={!name.trim() || !sourceId || !destinationId || !postsPerDayValid || create.isPending}
+            onClick={submit}
+          >
             {create.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
             Create workflow
           </Button>

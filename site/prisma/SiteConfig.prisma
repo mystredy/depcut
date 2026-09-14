@@ -170,6 +170,10 @@ model SocialWorkflow {
   destinationConnection SocialConnection @relation("WorkflowDestination", fields: [destinationConnectionId], references: [id], onDelete: Cascade)
   status                String           @default("Active")
   autoPublish           Boolean          @default(true)
+  // Only meaningful when autoPublish is false ("Repurpose existing content"
+  // mode) — how many of the source's existing posts to publish per day.
+  // Null in "Repurpose new posts" mode.
+  postsPerDay           Int?
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
 

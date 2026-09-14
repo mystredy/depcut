@@ -344,6 +344,7 @@ export type StudioWorkflow = {
   name: string;
   status: "Active" | "Inactive";
   autoPublish: boolean;
+  postsPerDay: number | null;
   sourceConnection: StudioWorkflowConnection;
   destinationConnection: StudioWorkflowConnection;
   createdAt: string;
@@ -365,6 +366,7 @@ export function useCreateStudioWorkflow(id: string) {
       sourceConnectionId: string;
       destinationConnectionId: string;
       autoPublish?: boolean;
+      postsPerDay?: number | null;
     }) =>
       apiFetch<{ workflow: StudioWorkflow }>(`/api/studios/${id}/workflows`, {
         body: JSON.stringify(input),
