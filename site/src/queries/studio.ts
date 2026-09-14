@@ -360,7 +360,12 @@ export function useStudioWorkflows(id: string) {
 export function useCreateStudioWorkflow(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { name: string; sourceConnectionId: string; destinationConnectionId: string }) =>
+    mutationFn: (input: {
+      name: string;
+      sourceConnectionId: string;
+      destinationConnectionId: string;
+      autoPublish?: boolean;
+    }) =>
       apiFetch<{ workflow: StudioWorkflow }>(`/api/studios/${id}/workflows`, {
         body: JSON.stringify(input),
         method: "POST",

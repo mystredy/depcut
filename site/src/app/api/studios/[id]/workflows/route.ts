@@ -55,6 +55,7 @@ const createSchema = z
     name: z.string().trim().min(1).max(160),
     sourceConnectionId: z.string().trim().min(1),
     destinationConnectionId: z.string().trim().min(1),
+    autoPublish: z.boolean().default(true),
   })
   .strict()
   .refine((data) => data.sourceConnectionId !== data.destinationConnectionId, {
@@ -81,7 +82,7 @@ export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest, c
     );
   }
 
-  const { name, destinationConnectionId } = parsed.data;
+  const { name, destinationConnectionId, autoPublish } = parsed.data;
   const [source, destination] = await Promise.all([
     parsed.data.sourceConnectionId === STUDIO_SOURCE_CONNECTION_ID
       ? ensureStudioSourceConnection(id)
@@ -93,7 +94,7 @@ export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest, c
   }
 
   const workflow = await prisma.socialWorkflow.create({
-    data: { destinationConnectionId, name, sourceConnectionId: source.id },
+    data: { autoPublish, destinationConnectionId, name, sourceConnectionId: source.id },
     include: {
       destinationConnection: { select: connectionSelect },
       sourceConnection: { select: connectionSelect },

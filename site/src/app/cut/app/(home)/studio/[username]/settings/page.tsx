@@ -1335,6 +1335,7 @@ function CreateWorkflowDialog({
   const [name, setName] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [destinationId, setDestinationId] = useState("");
+  const [autoPublish, setAutoPublish] = useState(true);
 
   const realConnections = (connections.data?.connections ?? []).filter(
     (c) => c.platform !== STUDIO_SOURCE_PLATFORM
@@ -1347,12 +1348,13 @@ function CreateWorkflowDialog({
   const submit = () => {
     if (!name.trim() || !sourceId || !destinationId || sourceId === destinationId) return;
     create.mutate(
-      { destinationConnectionId: destinationId, name: name.trim(), sourceConnectionId: sourceId },
+      { autoPublish, destinationConnectionId: destinationId, name: name.trim(), sourceConnectionId: sourceId },
       {
         onSuccess: () => {
           setName("");
           setSourceId("");
           setDestinationId("");
+          setAutoPublish(true);
           onClose();
         },
       }
@@ -1408,6 +1410,37 @@ function CreateWorkflowDialog({
                   ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs">How would you like to use this workflow?</Label>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setAutoPublish(true)}
+                className={cn(
+                  "w-full rounded-xl border p-3 text-left transition-colors",
+                  autoPublish ? "border-ring bg-muted/40" : "hover:border-ring hover:bg-muted/40"
+                )}
+              >
+                <p className="text-sm font-medium">Repurpose new posts</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Every time you publish here, repurpose it to the destination automatically.
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAutoPublish(false)}
+                className={cn(
+                  "w-full rounded-xl border p-3 text-left transition-colors",
+                  !autoPublish ? "border-ring bg-muted/40" : "hover:border-ring hover:bg-muted/40"
+                )}
+              >
+                <p className="text-sm font-medium">Repurpose existing content</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Repurpose your existing posts to the destination whenever you choose to.
+                </p>
+              </button>
+            </div>
           </div>
           {create.isError && (
             <p className="text-xs text-destructive">
