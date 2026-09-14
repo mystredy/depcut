@@ -10,6 +10,7 @@ import {
   Camera,
   Ghost,
   Hash,
+  Info,
   Link2,
   Loader2,
   MessageCircle,
@@ -78,6 +79,16 @@ const PLATFORM_ICONS: Record<string, LucideIcon> = {
   tiktok: Share2,
   x: Hash,
   youtube: Video,
+};
+
+// Facebook/Instagram OAuth connects the main account, not the destination
+// itself — the callback resolves which Page (and, for Instagram, its linked
+// Business Account) to post through, auto-picking the only candidate or
+// showing a picker for more than one. Told upfront so naming this
+// connection after the account, not a specific Page, doesn't read as a bug.
+const META_PICKER_NOTES: Record<string, string> = {
+  facebook: "This is your main Facebook account. You can choose a Page to publish from when you create a workflow later.",
+  instagram: "This is your main Facebook account. You can choose the linked Instagram Business Account to publish from when you create a workflow later.",
 };
 
 // Content categories, matching the taxonomy platforms like YouTube use for a
@@ -877,6 +888,12 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
                       autoFocus
                     />
                   </div>
+                  {META_PICKER_NOTES[connectPlatform] && (
+                    <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                      <Info className="mt-0.5 size-3.5 shrink-0" />
+                      {META_PICKER_NOTES[connectPlatform]}
+                    </p>
+                  )}
                   <Button
                     className="w-full"
                     disabled={!accountName.trim()}
