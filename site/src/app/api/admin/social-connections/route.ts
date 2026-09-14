@@ -22,6 +22,7 @@ export const GET = withDepCutAuth(async (request) => {
   return NextResponse.json({
     connections: connections.map(({ accessToken, refreshToken, ...c }) => ({
       ...c,
+      hasRefreshToken: Boolean(refreshToken),
       hasToken: Boolean(accessToken),
       tokenExpiresAt: c.tokenExpiresAt?.toISOString() ?? null,
       createdAt: c.createdAt.toISOString(),

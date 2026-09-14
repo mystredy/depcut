@@ -188,11 +188,17 @@ function ConnectionCard({ connection }: { connection: AdminSocialConnection }) {
   const isYoutube = YOUTUBE_PLATFORMS.includes(connection.platform);
   const isPublishable = PUBLISHABLE_PLATFORMS.includes(connection.platform);
 
-  const expiryLabel = connection.tokenExpiresAt
-    ? new Date(connection.tokenExpiresAt) < new Date()
-      ? "Token expired"
-      : `Token expires ${new Date(connection.tokenExpiresAt).toLocaleDateString()}`
-    : "No expiration date";
+  // A refresh token means an expired access token is routine, not a
+  // problem — the platform issues a fresh one silently on next use, so a
+  // raw access-token expiry isn't worth showing as broken.
+  const expiryLabel =
+    connection.status === "active" && connection.hasRefreshToken
+      ? "Connected"
+      : connection.tokenExpiresAt
+        ? new Date(connection.tokenExpiresAt) < new Date()
+          ? "Token expired"
+          : `Token expires ${new Date(connection.tokenExpiresAt).toLocaleDateString()}`
+        : "No expiration date";
 
   return (
     <div className="relative flex items-start justify-between gap-3 rounded-2xl border bg-card p-4">

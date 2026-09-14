@@ -55,6 +55,7 @@ export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
   return NextResponse.json({
     connection: {
       ...connection,
+      hasRefreshToken: Boolean(refreshToken),
       hasToken: Boolean(accessToken),
       tokenExpiresAt: connection.tokenExpiresAt?.toISOString() ?? null,
       createdAt: connection.createdAt.toISOString(),

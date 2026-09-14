@@ -289,6 +289,7 @@ export type AdminSocialConnection = {
   role: "source" | "destination";
   status: "active" | "inactive";
   hasToken: boolean;
+  hasRefreshToken: boolean;
   tokenExpiresAt: string | null;
   brandId: string | null;
   // Set when a DepCut user connected this account themselves; null for the
