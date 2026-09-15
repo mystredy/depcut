@@ -86,7 +86,7 @@ export function UserCreditsTable() {
                 <TableHead className="w-20">Balance</TableHead>
                 <TableHead className="w-28">Spent</TableHead>
                 <TableHead className="w-28">Received</TableHead>
-                <TableHead className="w-16 text-right">Add Fund</TableHead>
+                <TableHead className="w-16 text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -122,7 +122,7 @@ export function UserCreditsTable() {
                         <EllipsisVertical className="size-4" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setGrantTarget(u)}>Grant</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setGrantTarget(u)}>Add fund</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setUsageTarget(u)}>Usage</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
