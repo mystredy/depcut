@@ -1,14 +1,14 @@
 import { hostedPost } from "./hosted";
 
-export type VisualGenerationRecordBase = {
+export type ImageGenerationRecordBase = {
   prompt: string;
   aspect: string;
   tier: string;
 };
 
-export type VisualGenerationRecord =
-  | (VisualGenerationRecordBase & { status: "succeeded"; blob: Blob; durationSeconds?: number })
-  | (VisualGenerationRecordBase & { status: "failed"; errorMessage: string });
+export type ImageGenerationRecord =
+  | (ImageGenerationRecordBase & { status: "succeeded"; blob: Blob })
+  | (ImageGenerationRecordBase & { status: "failed"; errorMessage: string });
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -22,23 +22,23 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-/** Best-effort: save a just-settled Text to Video take (succeeded or failed)
+/** Best-effort: save a just-settled Text to Image take (succeeded or failed)
  * to the database. Called once per take, right after it settles, alongside
  * — not instead of — the browser-local Recent History entry. A failure here
  * never surfaces to the user: they already have their render (or error)
  * either way. */
-export async function persistVisualGeneration(record: VisualGenerationRecord): Promise<void> {
+export async function persistImageGeneration(record: ImageGenerationRecord): Promise<void> {
   try {
     if (record.status === "failed") {
-      await hostedPost("/api/visual-generations", record);
+      await hostedPost("/api/image-generations", record);
       return;
     }
     const { blob, ...rest } = record;
     const dataBase64 = await blobToBase64(blob);
-    await hostedPost("/api/visual-generations", {
+    await hostedPost("/api/image-generations", {
       ...rest,
       dataBase64,
-      mimeType: blob.type || "video/mp4",
+      mimeType: blob.type || "image/png",
     });
   } catch {
     // Best-effort — see doc comment above.

@@ -325,7 +325,6 @@ export default function TextToVideoPage() {
           prompt: text,
           status: "succeeded",
           tier,
-          tool: "text-to-video",
         });
       }
       if (failed.length > 0) {
@@ -347,7 +346,6 @@ export default function TextToVideoPage() {
           prompt: text,
           status: "failed",
           tier,
-          tool: "text-to-video",
         });
       }
     } catch (e) {
@@ -365,7 +363,6 @@ export default function TextToVideoPage() {
         prompt: text,
         status: "failed",
         tier,
-        tool: "text-to-video",
       });
     } finally {
       setBusy(false);

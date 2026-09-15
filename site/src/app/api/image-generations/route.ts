@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { createVisualGeneration } from "@/lib/visualGenerations/db";
+import { createImageGeneration } from "@/lib/imageGenerations/db";
 import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { resolveInferenceBlobs } from "@/lib/inference/blobs";
 import type { JsonValue } from "@/lib/inference/providers";
@@ -21,7 +21,6 @@ const createSchema = z.discriminatedUnion("status", [
       status: z.literal("succeeded"),
       dataBase64: z.string().min(1),
       mimeType: z.string().min(1).max(100),
-      durationSeconds: z.number().min(0).optional(),
     })
     .strict(),
   z
@@ -33,12 +32,12 @@ const createSchema = z.discriminatedUnion("status", [
     .strict(),
 ]);
 
-// Called once per take, right after a Text to Video render settles
-// client-side (see cut/lib/visualGenerationPersist.ts). Best-effort from the
+// Called once per take, right after a Text to Image render settles
+// client-side (see cut/lib/imageGenerationPersist.ts). Best-effort from the
 // caller's side: a failure here never blocks the user from seeing or
 // downloading their own render.
 export const POST = withDepCutAuth(async (request) => {
-  // A rendered video travels as a stored-blob placeholder rather than
+  // A rendered image can travel as a stored-blob placeholder rather than
   // inline base64 once past MIN_OFFLOAD_BYTES — see hostedBlobs.ts. Resolve
   // it back to dataBase64 before validating; a small payload that never got
   // offloaded passes through unchanged.
@@ -51,7 +50,7 @@ export const POST = withDepCutAuth(async (request) => {
   const body = parsed.data;
 
   if (body.status === "failed") {
-    const row = await createVisualGeneration({
+    const row = await createImageGeneration({
       aspect: body.aspect,
       errorMessage: body.errorMessage,
       prompt: body.prompt,
@@ -67,10 +66,9 @@ export const POST = withDepCutAuth(async (request) => {
     return NextResponse.json({ error: "Invalid request", message: "Empty media." }, { status: 400 });
   }
 
-  const row = await createVisualGeneration({
+  const row = await createImageGeneration({
     aspect: body.aspect,
     bytes,
-    durationSeconds: body.durationSeconds,
     mime: body.mimeType,
     prompt: body.prompt,
     status: "succeeded",

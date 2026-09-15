@@ -1,0 +1,29 @@
+// A durable record of every standalone Text to Image render — split out from
+// VisualGeneration (now Text to Video only) so each tool owns its own table.
+// Before this, the tool kept output only in the browser's own local tool
+// history (see lib/toolHistory.ts) and, in the user's Library if they
+// explicitly clicked "Add to library." A multi-take submit (count > 1)
+// writes one row per take, independent status, matching how the page itself
+// already splits the submit (Promise.allSettled). Only a SUCCEEDED render's
+// row carries output; a failed one has no media to store. Media bytes live
+// in R2 under this row's own outputKey (see cut/server/cloud/r2.ts's
+// imageGenerationKey), same split as AudioGeneration/VisualGeneration. A
+// plain userId (better-auth id) with no FK keeps the table self-contained.
+model ImageGeneration {
+  id     String @id @default(cuid())
+  userId String
+
+  prompt String
+  aspect String
+  tier   String
+
+  status       String // succeeded | failed
+  errorMessage String?
+
+  outputKey  String?
+  outputMime String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}

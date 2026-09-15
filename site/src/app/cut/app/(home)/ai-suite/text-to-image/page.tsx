@@ -12,8 +12,8 @@ import { promptAndImages } from "@/cut/lib/generate";
 import { creditsUrl, NO_CREDITS_MESSAGE, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { hostedPost } from "@/cut/lib/hosted";
 import { IMAGE_MODELS, type ImageModelOption, type ImageTier } from "@/cut/lib/imageModels";
+import { persistImageGeneration } from "@/cut/lib/imageGenerationPersist";
 import type { InlineImage } from "@/cut/lib/refMedia";
-import { persistVisualGeneration } from "@/cut/lib/visualGenerationPersist";
 import { useToolHistory } from "@/lib/toolHistory";
 import { useBlobUrl } from "@/lib/useBlobUrl";
 import { cn } from "@/lib/utils";
@@ -184,13 +184,12 @@ export default function TextToImagePage() {
           status: "succeeded",
           summary: text.slice(0, 80),
         });
-        void persistVisualGeneration({
+        void persistImageGeneration({
           aspect,
           blob: s.value.blob,
           prompt: text,
           status: "succeeded",
           tier,
-          tool: "text-to-image",
         });
       }
       if (failed.length > 0) {
@@ -206,13 +205,12 @@ export default function TextToImagePage() {
           status: "failed",
           summary: text.slice(0, 80),
         });
-        void persistVisualGeneration({
+        void persistImageGeneration({
           aspect,
           errorMessage: message,
           prompt: text,
           status: "failed",
           tier,
-          tool: "text-to-image",
         });
       }
     } catch (e) {
@@ -224,13 +222,12 @@ export default function TextToImagePage() {
         status: "failed",
         summary: text.slice(0, 80),
       });
-      void persistVisualGeneration({
+      void persistImageGeneration({
         aspect,
         errorMessage: message,
         prompt: text,
         status: "failed",
         tier,
-        tool: "text-to-image",
       });
     } finally {
       setBusy(false);
