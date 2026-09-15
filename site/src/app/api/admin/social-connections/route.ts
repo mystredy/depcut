@@ -17,13 +17,23 @@ export const GET = withDepCutAuth(async (request) => {
     );
   }
 
-  const connections = await prisma.socialConnection.findMany({ orderBy: { createdAt: "desc" } });
+  const connections = await prisma.socialConnection.findMany({
+    include: {
+      studio: { select: { name: true, owner: { select: { displayName: true, name: true } } } },
+      user: { select: { displayName: true, name: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
 
   return NextResponse.json({
-    connections: connections.map(({ accessToken, refreshToken, ...c }) => ({
+    connections: connections.map(({ accessToken, refreshToken, studio, user, ...c }) => ({
       ...c,
       hasRefreshToken: Boolean(refreshToken),
       hasToken: Boolean(accessToken),
+      // A studio-owned connection shows its studio and owner; the rare
+      // directly user-owned one (no studio) falls back to that user.
+      ownerName: studio ? (studio.owner.displayName ?? studio.owner.name) : (user ? (user.displayName ?? user.name) : null),
+      studioName: studio?.name ?? null,
       tokenExpiresAt: c.tokenExpiresAt?.toISOString() ?? null,
       createdAt: c.createdAt.toISOString(),
       updatedAt: c.updatedAt.toISOString(),

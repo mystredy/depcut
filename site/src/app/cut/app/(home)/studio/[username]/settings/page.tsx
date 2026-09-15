@@ -79,9 +79,11 @@ import { ApiError } from "@/queries/apiClient";
 // Real per-platform brand marks for the connection cards and picker, each a
 // self-contained rounded-square badge (background + glyph) sized entirely by
 // the className passed in — a caller just renders <Icon className="size-8" />
-// with no extra wrapper. Facebook/Instagram/X/TikTok/YouTube get a drawn
-// glyph; Threads/Snapchat/Telegram reuse their closest Lucide stand-in on the
-// platform's real brand color, since their marks aren't simple shapes.
+// with no extra wrapper. Facebook/Instagram/X/TikTok get a drawn glyph;
+// YouTube renders Google's actual icon asset, since its API terms require
+// the unmodified mark; Threads/Snapchat/Telegram reuse their closest Lucide
+// stand-in on the platform's real brand color, since their marks aren't
+// simple shapes.
 function FacebookIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
@@ -104,13 +106,11 @@ function XIcon({ className }: { className?: string }) {
   );
 }
 
+// YouTube's API Services terms require the real mark, not a drawn stand-in
+// — see /cut/onboarding/youtube.svg, Google's official icon asset.
 function YouTubeIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <rect width="24" height="24" rx="6" fill="#FF0000" />
-      <polygon points="9.5,7.5 9.5,16.5 17,12" fill="#fff" />
-    </svg>
-  );
+  // eslint-disable-next-line @next/next/no-img-element -- fixed-color brand mark, not an optimizable local asset
+  return <img src="/cut/onboarding/youtube.svg" alt="" className={className} />;
 }
 
 function TikTokIcon({ className }: { className?: string }) {
@@ -914,6 +914,9 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
   const realConnections = (connections.data?.connections ?? []).filter(
     (c) => c.platform !== STUDIO_SOURCE_PLATFORM
   );
+  // One account per platform per studio — a platform already connected here
+  // drops out of "Connect a new account" until it's removed.
+  const connectedPlatforms = new Set(realConnections.map((c) => c.platform));
 
   return (
     <div className="space-y-6">
@@ -1049,7 +1052,9 @@ function ConnectionsSection({ studioId }: { studioId: string }) {
           </DialogHeader>
           {!connectPlatform ? (
             <div className="grid grid-cols-2 gap-2.5">
-              {SOCIAL_APP_SEED.filter((s) => OAUTH_CAPABLE_PLATFORMS.includes(s.platform)).map((s) => {
+              {SOCIAL_APP_SEED.filter(
+                (s) => OAUTH_CAPABLE_PLATFORMS.includes(s.platform) && !connectedPlatforms.has(s.platform)
+              ).map((s) => {
                 const Icon = PLATFORM_ICONS[s.platform] ?? Link2;
                 const canPublish = PUBLISHABLE_PLATFORMS.includes(s.platform);
                 return (

@@ -296,6 +296,11 @@ export type AdminSocialConnection = {
   // Set when a DepCut user connected this account themselves; null for the
   // admin-managed shared pool.
   userId: string | null;
+  studioId: string | null;
+  studioName: string | null;
+  // The studio's owner for a studio-owned connection, else the direct user
+  // above; null for the admin-managed shared pool (no studio, no user).
+  ownerName: string | null;
   createdAt: string;
   updatedAt: string;
 };

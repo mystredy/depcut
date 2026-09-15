@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   AtSign,
   Camera,
+  Film,
   Ghost,
   Hash,
   Link2,
@@ -15,7 +16,6 @@ import {
   Search,
   Send,
   Share2,
-  Video,
   type LucideIcon,
 } from "lucide-react";
 
@@ -41,6 +41,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   OAUTH_CAPABLE_PLATFORMS,
   PUBLISHABLE_PLATFORMS,
+  STUDIO_SOURCE_PLATFORM,
   YOUTUBE_PLATFORMS,
 } from "@/lib/marketplace/oauth-providers";
 import { SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
@@ -58,15 +59,18 @@ import {
 } from "@/queries/admin";
 
 // lucide-react dropped brand/logo icons — these are generic stand-ins.
+// YouTube is the exception: its API Services terms require the real mark
+// wherever a connection or "Connect" button identifies it, so that one
+// renders the official asset (see PlatformIcon) instead of a stand-in.
 const PLATFORM_ICONS: Record<string, LucideIcon> = {
   facebook: MessageCircle,
   instagram: Camera,
   snapchat: Ghost,
+  [STUDIO_SOURCE_PLATFORM]: Film,
   telegram: Send,
   threads: AtSign,
   tiktok: Share2,
   x: Hash,
-  youtube: Video,
 };
 
 type Filter = "all" | "source" | "destination" | "inactive";
@@ -184,16 +188,15 @@ function ConnectionCard({ connection }: { connection: AdminSocialConnection }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [posting, setPosting] = useState(false);
   const [viewingAnalytics, setViewingAnalytics] = useState(false);
-  const Icon = PLATFORM_ICONS[connection.platform] ?? Link2;
   const isYoutube = YOUTUBE_PLATFORMS.includes(connection.platform);
   const isPublishable = PUBLISHABLE_PLATFORMS.includes(connection.platform);
 
   // A refresh token means an expired access token is routine, not a
-  // problem — the platform issues a fresh one silently on next use, so a
-  // raw access-token expiry isn't worth showing as broken.
+  // problem — the platform issues a fresh one silently on next use, so it
+  // reads the same as a connection with no expiry at all.
   const expiryLabel =
     connection.status === "active" && connection.hasRefreshToken
-      ? "Connected"
+      ? "No expiration date"
       : connection.tokenExpiresAt
         ? new Date(connection.tokenExpiresAt) < new Date()
           ? "Token expired"
@@ -208,7 +211,7 @@ function ConnectionCard({ connection }: { connection: AdminSocialConnection }) {
             // eslint-disable-next-line @next/next/no-img-element -- external platform avatar, not an optimizable local asset
             <img src={connection.profileImage} alt="" className="size-full object-cover" />
           ) : (
-            <Icon className="size-4" />
+            <PlatformIcon platform={connection.platform} className="size-4" />
           )}
         </div>
         <div>
@@ -224,6 +227,12 @@ function ConnectionCard({ connection }: { connection: AdminSocialConnection }) {
           </div>
           {connection.accountHandle && (
             <p className="text-xs text-muted-foreground">{connection.accountHandle}</p>
+          )}
+          {(connection.studioName ?? connection.ownerName) && (
+            <p className="text-xs text-muted-foreground">
+              {connection.studioName ?? "No studio"}
+              {connection.ownerName && ` · ${connection.ownerName}`}
+            </p>
           )}
           <p className="mt-1.5 text-xs text-muted-foreground">{expiryLabel}</p>
         </div>
@@ -563,7 +572,6 @@ function AddConnectionDialog({ open, onClose }: { open: boolean; onClose: () => 
         {!spec ? (
           <div className="grid grid-cols-2 gap-2.5">
             {SOCIAL_APP_SEED.filter((s) => OAUTH_CAPABLE_PLATFORMS.includes(s.platform)).map((s) => {
-              const Icon = PLATFORM_ICONS[s.platform] ?? Link2;
               return (
                 <button
                   key={s.platform}
@@ -572,7 +580,7 @@ function AddConnectionDialog({ open, onClose }: { open: boolean; onClose: () => 
                   className="flex items-center gap-2.5 rounded-xl border p-3 text-left transition-colors hover:border-ring hover:bg-muted/40"
                 >
                   <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
-                    <Icon className="size-4" />
+                    <PlatformIcon platform={s.platform} className="size-4" />
                   </div>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">{s.label}</p>
@@ -657,6 +665,10 @@ function AddConnectionDialog({ open, onClose }: { open: boolean; onClose: () => 
 }
 
 function PlatformIcon({ platform, className }: { platform: string; className?: string }) {
+  if (platform === "youtube") {
+    // eslint-disable-next-line @next/next/no-img-element -- fixed-color brand mark, not an optimizable local asset
+    return <img src="/cut/onboarding/youtube.svg" alt="" className={className} />;
+  }
   const Icon = PLATFORM_ICONS[platform] ?? Link2;
   return <Icon className={className} />;
 }
