@@ -139,7 +139,7 @@ export default function MyProjectsPage() {
   }, [submissions, searchQuery, selectedStatus, selectedTab]);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6" id="projects-view">
+    <div className="w-full space-y-6 p-6" id="projects-view">
       <div className="flex flex-col gap-4 border-b pb-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Submitted Projects</h1>
