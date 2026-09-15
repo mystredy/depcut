@@ -56,6 +56,17 @@ function srtTimestamp(t: number): string {
   )},${pad(ms % 1000, 3)}`;
 }
 
+const HISTORY_SENTENCE_COUNT = 6;
+
+// The row's title, once real content exists to name it with — the first few
+// sentences of what was actually said, not the source URL/filename it came
+// from.
+function summaryFromTranscript(cues: SubtitleCue[]): string {
+  const text = cues.map((c) => c.text).join(" ").trim();
+  const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
+  return sentences.slice(0, HISTORY_SENTENCE_COUNT).join(" ") || text;
+}
+
 function toSrt(cues: SubtitleCue[]): string {
   return cues
     .map((c, i) => `${i + 1}\n${srtTimestamp(c.start)} --> ${srtTimestamp(c.end)}\n${c.text}\n`)
@@ -259,6 +270,7 @@ export default function SpeechToTextPage() {
           result: { data: { cues: result }, kind: "text", text: result.map((c) => c.text).join(" ") },
           status: "succeeded",
         },
+        summary: summaryFromTranscript(result),
       });
     } catch (e) {
       const message =

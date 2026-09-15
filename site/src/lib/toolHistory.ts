@@ -95,7 +95,7 @@ function putEntry(entry: ToolHistoryEntry): Promise<void> {
   );
 }
 
-function resolveHistoryEntry(id: string, outcome: ToolHistoryResolution): Promise<void> {
+function resolveHistoryEntry(id: string, outcome: ToolHistoryResolution, summary?: string): Promise<void> {
   return openDb().then(
     (db) =>
       new Promise((resolve, reject) => {
@@ -104,7 +104,7 @@ function resolveHistoryEntry(id: string, outcome: ToolHistoryResolution): Promis
         const req = store.get(id);
         req.onsuccess = () => {
           const entry = req.result as ToolHistoryEntry | undefined;
-          if (entry) store.put({ ...entry, ...outcome });
+          if (entry) store.put({ ...entry, ...outcome, ...(summary !== undefined ? { summary } : {}) });
         };
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error as unknown as Error);
@@ -199,8 +199,8 @@ export function useToolHistory(tool: ToolHistoryTool) {
   });
 
   const resolveEntry = useMutation({
-    mutationFn: ({ id, outcome }: { id: string; outcome: ToolHistoryResolution }) =>
-      resolveHistoryEntry(id, outcome),
+    mutationFn: ({ id, outcome, summary }: { id: string; outcome: ToolHistoryResolution; summary?: string }) =>
+      resolveHistoryEntry(id, outcome, summary),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKey(tool) }),
   });
 
