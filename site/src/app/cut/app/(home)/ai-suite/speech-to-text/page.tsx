@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Clipboard, Download, FileText, Mic, Pause, Play, Trash2, X } from "lucide-react";
+import { ChevronRight, Clipboard, Download, FileText, Mic, Pause, Play, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -136,6 +136,7 @@ export default function SpeechToTextPage() {
   const [error, setError] = useState<{ text: string; credits?: boolean } | null>(null);
   const [cues, setCues] = useState<SubtitleCue[] | null>(null);
   const [copied, setCopied] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const mic = useMicRecorder();
   const history = useToolHistory("speech-to-text");
@@ -430,90 +431,103 @@ export default function SpeechToTextPage() {
 
         <div className="h-px shrink-0 bg-border" />
 
-        <div className="space-y-1">
-          <SectionTitle>Settings</SectionTitle>
-          <div className="rounded-2xl border p-4">
-            <div className="flex items-center justify-between gap-3 py-2">
-              <div className="min-w-0">
-                <p className="text-[12.5px] font-medium">Language</p>
-                <p className="text-[10.5px] text-muted-foreground">The primary language spoken in the clip.</p>
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen((v) => !v)}
+          className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ChevronRight className={cn("size-3.5 transition-transform", advancedOpen && "rotate-90")} />
+          Advanced settings
+        </button>
+
+        {advancedOpen && (
+          <>
+            <div className="space-y-1">
+              <SectionTitle>Settings</SectionTitle>
+              <div className="rounded-2xl border p-4">
+                <div className="flex items-center justify-between gap-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-[12.5px] font-medium">Language</p>
+                    <p className="text-[10.5px] text-muted-foreground">The primary language spoken in the clip.</p>
+                  </div>
+                  <Select value={language} onValueChange={(value) => setLanguage(value ?? "auto")}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue placeholder="Detect">
+                        {(value: string | null) => SCRIBE_LANGUAGES.find((l) => l.id === value)?.label ?? null}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SCRIBE_LANGUAGES.map((l) => (
+                        <SelectItem key={l.id} value={l.id}>
+                          {l.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="divide-y">
+                  <SettingRow
+                    label="Tag audio events"
+                    description="Note events like (laughter) or (footsteps) in the transcript."
+                    checked={tagAudioEvents}
+                    onChange={setTagAudioEvents}
+                  />
+                  <SettingRow
+                    label="No verbatim"
+                    description="Clean up filler words, false starts, and repetitions."
+                    checked={noVerbatim}
+                    onChange={setNoVerbatim}
+                  />
+                  <SettingRow
+                    label="Label speakers"
+                    description="Split the transcript into per-speaker turns."
+                    checked={assignSpeakers}
+                    onChange={setAssignSpeakers}
+                  />
+                </div>
               </div>
-              <Select value={language} onValueChange={(value) => setLanguage(value ?? "auto")}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Detect">
-                    {(value: string | null) => SCRIBE_LANGUAGES.find((l) => l.id === value)?.label ?? null}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {SCRIBE_LANGUAGES.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>
-                      {l.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
 
-            <div className="divide-y">
-              <SettingRow
-                label="Tag audio events"
-                description="Note events like (laughter) or (footsteps) in the transcript."
-                checked={tagAudioEvents}
-                onChange={setTagAudioEvents}
-              />
-              <SettingRow
-                label="No verbatim"
-                description="Clean up filler words, false starts, and repetitions."
-                checked={noVerbatim}
-                onChange={setNoVerbatim}
-              />
-              <SettingRow
-                label="Label speakers"
-                description="Split the transcript into per-speaker turns."
-                checked={assignSpeakers}
-                onChange={setAssignSpeakers}
-              />
+            <div className="space-y-1.5">
+              <SectionTitle>Boosted keyterms (optional)</SectionTitle>
+              <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-input bg-transparent p-1.5">
+                {keyterms.map((term) => (
+                  <span
+                    key={term}
+                    className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium"
+                  >
+                    {term}
+                    <button
+                      type="button"
+                      onClick={() => removeKeyterm(term)}
+                      className="text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  value={keytermDraft}
+                  onChange={(e) => setKeytermDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      addKeyterm();
+                    } else if (e.key === "Backspace" && !keytermDraft && keyterms.length > 0) {
+                      removeKeyterm(keyterms[keyterms.length - 1]);
+                    }
+                  }}
+                  placeholder={keyterms.length ? "" : "Type a term and press Enter"}
+                  className="min-w-24 flex-1 border-0 bg-transparent px-1 py-0.5 text-[12.5px] outline-none placeholder:text-muted-foreground"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Words or phrases the model should recognize more accurately.
+              </p>
             </div>
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <SectionTitle>Boosted keyterms (optional)</SectionTitle>
-          <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-input bg-transparent p-1.5">
-            {keyterms.map((term) => (
-              <span
-                key={term}
-                className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium"
-              >
-                {term}
-                <button
-                  type="button"
-                  onClick={() => removeKeyterm(term)}
-                  className="text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <X className="size-3" />
-                </button>
-              </span>
-            ))}
-            <input
-              value={keytermDraft}
-              onChange={(e) => setKeytermDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === ",") {
-                  e.preventDefault();
-                  addKeyterm();
-                } else if (e.key === "Backspace" && !keytermDraft && keyterms.length > 0) {
-                  removeKeyterm(keyterms[keyterms.length - 1]);
-                }
-              }}
-              placeholder={keyterms.length ? "" : "Type a term and press Enter"}
-              className="min-w-24 flex-1 border-0 bg-transparent px-1 py-0.5 text-[12.5px] outline-none placeholder:text-muted-foreground"
-            />
-          </div>
-          <p className="text-[10px] text-muted-foreground">
-            Words or phrases the model should recognize more accurately.
-          </p>
-        </div>
+          </>
+        )}
 
         <Button
           className="w-full"
