@@ -109,11 +109,16 @@ export const FLOW_PREFIX = "flows/";
 export const flowMediaKey = (userId: string, flowId: string, fileName: string) =>
   `${FLOW_PREFIX}${userId}/${flowId}/${fileName}`;
 
-/** Text to Speech and Dubbing's persisted output — same "own top-level
- * prefix, outside a user's project media" split as FLOW_PREFIX above. */
+/** Text to Speech's persisted output — same "own top-level prefix, outside a
+ * user's project media" split as FLOW_PREFIX above. */
 export const AUDIO_GENERATION_PREFIX = "audio-generations/";
 export const audioGenerationKey = (userId: string, id: string, fileName: string) =>
   `${AUDIO_GENERATION_PREFIX}${userId}/${id}/${fileName}`;
+
+/** Dubbing's persisted output — same split as AUDIO_GENERATION_PREFIX above. */
+export const DUBBING_GENERATION_PREFIX = "dubbing-generations/";
+export const dubbingGenerationKey = (userId: string, id: string, fileName: string) =>
+  `${DUBBING_GENERATION_PREFIX}${userId}/${id}/${fileName}`;
 
 /** The standalone Text to Video page's persisted output — same split as
  * AUDIO_GENERATION_PREFIX above, kept separate from FLOW_PREFIX since it

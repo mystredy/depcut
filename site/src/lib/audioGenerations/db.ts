@@ -9,7 +9,7 @@ export type AudioTool = "text-to-speech" | "dubbing";
  * this can read) — every clip here comes from tts.ts's own assembleWav, a
  * fixed 44-byte PCM header, so no need for ffprobe the way Flow's arbitrary
  * provider video output needs it (see cut/server/frames.ts). */
-function wavDurationSeconds(bytes: Buffer): number {
+export function wavDurationSeconds(bytes: Buffer): number {
   if (bytes.length < 44 || bytes.toString("ascii", 0, 4) !== "RIFF" || bytes.toString("ascii", 8, 12) !== "WAVE") {
     return 0;
   }
@@ -23,21 +23,17 @@ function wavDurationSeconds(bytes: Buffer): number {
 
 export type CreateAudioGenerationInput = {
   userId: string;
-  tool: AudioTool;
   script: string;
   direction?: string;
   voice: string;
   language?: string;
-  sourceLabel?: string;
-  transcript?: string;
-  targetLanguage?: string;
   bytes: Buffer;
   mime: string;
   durationSeconds?: number;
 };
 
 /** Upload the already-rendered clip to R2 and record the row — called once,
- * right after a Text to Speech or Dubbing render succeeds client-side (see
+ * right after a Text to Speech render succeeds client-side (see
  * cut/lib/audioGenerationPersist.ts). Never called for a failed render: the
  * client only has bytes to send once generation actually worked, so unlike
  * FlowGeneration there is no "failed" status to track here. */
@@ -51,14 +47,10 @@ export async function createAudioGeneration(input: CreateAudioGenerationInput): 
     data: {
       id,
       userId: input.userId,
-      tool: input.tool,
       script: input.script,
       direction: input.direction,
       voice: input.voice,
       language: input.language,
-      sourceLabel: input.sourceLabel,
-      transcript: input.transcript,
-      targetLanguage: input.targetLanguage,
       outputKey: key,
       outputMime: input.mime,
       durationSeconds: input.durationSeconds ?? (wavDurationSeconds(input.bytes) || null),
@@ -71,7 +63,7 @@ export async function createAudioGeneration(input: CreateAudioGenerationInput): 
 export type AudioGenerationView = {
   id: string;
   userId: string;
-  tool: string;
+  tool: AudioTool;
   script: string;
   direction: string | null;
   voice: string;
@@ -88,15 +80,27 @@ export type AudioGenerationView = {
 const ADMIN_PAGE_SIZE = 50;
 
 /** Most recent audio generations across every account — the admin Content →
- * Audio list. `tool` narrows to just Text to Speech or just Dubbing rows. */
+ * Audio list. `tool` narrows to just Text to Speech or just Dubbing; "All"
+ * (tool omitted) merges both tables in application code and re-sorts, since
+ * each tool now owns its own table (AudioGeneration/DubbingGeneration) —
+ * there is no single table left to query and page directly. */
 export async function listAudioGenerationsForAdmin(tool?: AudioTool): Promise<AudioGenerationView[]> {
-  const rows = await prisma.audioGeneration.findMany({
-    orderBy: { createdAt: "desc" },
-    take: ADMIN_PAGE_SIZE,
-    where: tool ? { tool } : undefined,
-  });
+  const [audioRows, dubbingRows] = await Promise.all([
+    tool === "dubbing"
+      ? []
+      : prisma.audioGeneration.findMany({ orderBy: { createdAt: "desc" }, take: ADMIN_PAGE_SIZE }),
+    tool === "text-to-speech"
+      ? []
+      : prisma.dubbingGeneration.findMany({ orderBy: { createdAt: "desc" }, take: ADMIN_PAGE_SIZE }),
+  ]);
+
+  const merged = [
+    ...audioRows.map((r) => ({ ...r, tool: "text-to-speech" as const, sourceLabel: null, transcript: null, targetLanguage: null })),
+    ...dubbingRows.map((r) => ({ ...r, tool: "dubbing" as const })),
+  ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, ADMIN_PAGE_SIZE);
+
   return Promise.all(
-    rows.map(async (r) => ({
+    merged.map(async (r) => ({
       id: r.id,
       userId: r.userId,
       tool: r.tool,

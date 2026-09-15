@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { createAudioGeneration } from "@/lib/audioGenerations/db";
+import { createDubbingGeneration } from "@/lib/dubbingGenerations/db";
 import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { resolveInferenceBlobs } from "@/lib/inference/blobs";
 import type { JsonValue } from "@/lib/inference/providers";
@@ -14,14 +14,17 @@ const createSchema = z
     direction: z.string().max(2_000).optional(),
     voice: z.string().min(1).max(100),
     language: z.string().max(20).optional(),
+    sourceLabel: z.string().max(500).optional(),
+    transcript: z.string().max(20_000).optional(),
+    targetLanguage: z.string().max(20).optional(),
     dataBase64: z.string().min(1),
     mimeType: z.string().min(1).max(100),
   })
   .strict();
 
-// Called once, right after a Text to Speech render finishes successfully
+// Called once, right after a Dubbing render finishes successfully
 // client-side (renderSpeechClip already has the finished WAV in hand) — see
-// cut/lib/audioGenerationPersist.ts. Best-effort from the caller's side: a
+// cut/lib/dubbingGenerationPersist.ts. Best-effort from the caller's side: a
 // failure here never blocks the user from hearing or downloading their own
 // clip, it just means that render won't show up in the admin's Content →
 // Audio list.
@@ -42,12 +45,15 @@ export const POST = withDepCutAuth(async (request) => {
     return NextResponse.json({ error: "Invalid request", message: "Empty clip." }, { status: 400 });
   }
 
-  const row = await createAudioGeneration({
+  const row = await createDubbingGeneration({
     userId: request.depcut.userId,
     script: body.script,
     direction: body.direction,
     voice: body.voice,
     language: body.language,
+    sourceLabel: body.sourceLabel,
+    transcript: body.transcript,
+    targetLanguage: body.targetLanguage,
     bytes,
     mime: body.mimeType,
   });

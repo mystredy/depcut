@@ -79,7 +79,6 @@ export default function TextToSpeechPage() {
       });
       setLibraryState("idle");
       void persistAudioGeneration(blob, {
-        tool: "text-to-speech",
         script: text,
         voice,
         direction: direction.trim() || undefined,

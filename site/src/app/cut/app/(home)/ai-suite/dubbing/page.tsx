@@ -18,7 +18,7 @@ import { SubTabs } from "@/cut/components/SubTabs";
 import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { useSpeakerVoice, VoicePicker } from "@/cut/components/VoicePicker";
 import { formatBytes } from "@/cut/components/desktopFolders";
-import { persistAudioGeneration } from "@/cut/lib/audioGenerationPersist";
+import { persistDubbingGeneration } from "@/cut/lib/dubbingGenerationPersist";
 import { creditsUrl, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { cloudTranscribeRecording, transcribeSourceUrl } from "@/cut/lib/cloudTranscribe";
 import { NoCreditsError, renderSpeechClip, SPEECH_LANGUAGES } from "@/cut/lib/tts";
@@ -156,8 +156,7 @@ export default function DubbingPage() {
         language: target.id,
       });
       setResult({ url: URL.createObjectURL(blob) });
-      void persistAudioGeneration(blob, {
-        tool: "dubbing",
+      void persistDubbingGeneration(blob, {
         // The line actually spoken — renderSpeechClip translates it from
         // `text` internally (planVoiceover, in tts.ts), so layout carries
         // the real dubbed line where the caller only has the original.

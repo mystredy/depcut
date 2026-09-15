@@ -1,0 +1,34 @@
+// A durable record of every Dubbing render — split out from AudioGeneration
+// (now Text to Speech only, see AudioGenerations.prisma) so each tool owns
+// its own table. Only a SUCCESSFUL render is ever written — there is no
+// in-progress or failed row, since the client already has the finished clip
+// in hand before it calls the persistence endpoint
+// (dubbingGenerations/db.ts's create). Media bytes live in R2 under this
+// row's own outputKey (see cut/server/cloud/r2.ts's dubbingGenerationKey),
+// same split as AudioGeneration/FlowGeneration. A plain userId (better-auth
+// id) with no FK keeps the table self-contained.
+model DubbingGeneration {
+  id     String @id @default(cuid())
+  userId String
+
+  // The line actually spoken — the translated line, not the
+  // original-language transcript (see `transcript` below).
+  script    String
+  direction String?
+  voice     String
+  language  String?
+
+  // The original file's name or the pasted link.
+  sourceLabel String?
+  // The original-language text before translation.
+  transcript     String?
+  targetLanguage String?
+
+  outputKey       String
+  outputMime      String
+  durationSeconds Float?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
