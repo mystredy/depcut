@@ -1335,6 +1335,13 @@ function WorkflowCard({
               </button>
               <button
                 type="button"
+                onClick={onEdit}
+                className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+              >
+                Settings
+              </button>
+              <button
+                type="button"
                 onClick={onRename}
                 className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
               >
