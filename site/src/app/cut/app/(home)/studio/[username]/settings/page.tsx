@@ -1506,7 +1506,7 @@ function CalendarSection({ studioId }: { studioId: string }) {
   const scheduled = (workflows.data?.workflows ?? []).filter((w) => !w.autoPublish && w.postsPerDay);
 
   return (
-    <div className="max-w-md space-y-4">
+    <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
         The posting cadence for workflows set to repurpose existing content. Nothing publishes
         automatically yet — no real schedule runs against these.
