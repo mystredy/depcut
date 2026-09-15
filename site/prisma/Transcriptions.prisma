@@ -1,0 +1,33 @@
+// A durable record of every Speech to Text run, mirroring how
+// AudioGenerations.prisma persists Text to Speech/Dubbing renders — before
+// this, a transcript existed only in the browser's own local tool history
+// (see lib/toolHistory.ts) and nothing landed here automatically. Unlike
+// AudioGeneration, both a succeeded and a failed run are written — status
+// distinguishes them, same as the client-side ToolHistoryEntry shape this
+// mirrors. A plain userId (better-auth id) with no FK, same as
+// AudioGeneration, keeps the table self-contained.
+model TranscriptionGeneration {
+  id     String @id @default(cuid())
+  userId String
+
+  // Which input tab produced this row, and what was fed in.
+  sourceType    String // upload | record | social | source
+  sourceLabel   String // filename, recording label, or URL
+  fileMime      String?
+  fileSizeBytes Int?
+
+  // The transcription settings actually used.
+  language       String?
+  tagAudioEvents Boolean  @default(false)
+  noVerbatim     Boolean  @default(false)
+  diarize        Boolean  @default(false)
+  keyterms       String[]
+
+  status       String // succeeded | failed
+  transcript   String?
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}

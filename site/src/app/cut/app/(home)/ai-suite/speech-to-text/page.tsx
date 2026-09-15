@@ -14,6 +14,7 @@ import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { NoCreditsError, transcribeBlob, transcribeSourceUrl, type TranscribeSettings } from "@/cut/lib/cloudTranscribe";
 import { creditsUrl, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { useMicRecorder } from "@/cut/hooks/useMicRecorder";
+import { persistTranscription } from "@/cut/lib/transcriptionPersist";
 import type { SubtitleCue } from "@/cut/lib/types";
 import { cn } from "@/lib/utils";
 import { useToolHistory } from "@/lib/toolHistory";
@@ -273,6 +274,18 @@ export default function SpeechToTextPage() {
           : tab === "social"
             ? () => transcribeSourceUrl(socialUrl.trim(), languageCode, settings)
             : () => transcribeSourceUrl(sourceUrlInput.trim(), languageCode, settings);
+    const sourceFile = tab === "upload" ? file : tab === "record" ? recordedBlob : null;
+    const persistBase = {
+      diarize: assignSpeakers,
+      fileMime: sourceFile?.type || undefined,
+      fileSizeBytes: sourceFile?.size,
+      keyterms,
+      language: languageCode,
+      noVerbatim,
+      sourceLabel: summary,
+      sourceType: tab,
+      tagAudioEvents,
+    };
 
     // A file or recording can't round-trip through this lightweight
     // inputs-as-plain-values pattern, so only the URL tabs carry enough to
@@ -305,11 +318,17 @@ export default function SpeechToTextPage() {
         },
         summary: summaryFromTranscript(result),
       });
+      void persistTranscription({
+        ...persistBase,
+        status: "succeeded",
+        transcript: result.map((c) => c.text).join(" "),
+      });
     } catch (e) {
       const message =
         e instanceof NoCreditsError || e instanceof Error ? e.message : "Transcription failed.";
       setError({ credits: e instanceof NoCreditsError, text: message });
       history.resolveEntry({ id, outcome: { errorMessage: message, status: "failed" } });
+      void persistTranscription({ ...persistBase, errorMessage: message, status: "failed" });
     }
   };
 
