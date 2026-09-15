@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Search } from "lucide-react";
+import { EllipsisVertical, Loader2, Search } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,8 +13,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -26,13 +41,14 @@ import {
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { formatUsd } from "@/lib/credits/format-usd";
 import { creditTopUpPresetsDollars, maxCreditGrantDollars } from "@/lib/credits/top-up";
-import { type AdminUser, useAdminUsers } from "@/queries/admin";
+import { type AdminUser, useAdminUserUsage, useAdminUsers } from "@/queries/admin";
 import { useGrantCredits } from "@/queries/credits";
 
 export function UserCreditsTable() {
   const [query, setQuery] = useState("");
   const users = useAdminUsers(query);
   const [grantTarget, setGrantTarget] = useState<AdminUser | null>(null);
+  const [usageTarget, setUsageTarget] = useState<AdminUser | null>(null);
 
   return (
     <div className="space-y-4">
@@ -97,14 +113,19 @@ export function UserCreditsTable() {
                     {formatUsd(u.lifetimeGranted)}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      title="Grant credits"
-                      onClick={() => setGrantTarget(u)}
-                    >
-                      Grant
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        aria-label="Actions"
+                        title="Actions"
+                        className="ml-auto grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        <EllipsisVertical className="size-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setGrantTarget(u)}>Grant</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setUsageTarget(u)}>Usage</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
@@ -121,6 +142,7 @@ export function UserCreditsTable() {
       </div>
 
       <GrantCreditsDialog target={grantTarget} onClose={() => setGrantTarget(null)} />
+      <UserUsageDialog target={usageTarget} onClose={() => setUsageTarget(null)} />
     </div>
   );
 }
@@ -195,6 +217,118 @@ function GrantCreditsDialog({
             Grant ${Number.isFinite(amountDollars) ? amountDollars : 0}
           </Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const USAGE_ROWS_PER_PAGE = 25;
+const USAGE_MAX_PAGES = 5;
+
+// Same Date/Kind/Model/Cost/Status table as the self-service Usage tab
+// (components/UsageHistoryCard.tsx), minus the Vision API split and
+// conversation grouping — this is a flat admin review of one account.
+function UserUsageDialog({
+  target,
+  onClose,
+}: {
+  target: AdminUser | null;
+  onClose: () => void;
+}) {
+  const usage = useAdminUserUsage(target?.id ?? null);
+  const [page, setPage] = useState(1);
+
+  const events = usage.data?.events ?? [];
+  const totalPages = Math.min(USAGE_MAX_PAGES, Math.max(1, Math.ceil(events.length / USAGE_ROWS_PER_PAGE)));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * USAGE_ROWS_PER_PAGE;
+  const pageEvents = events.slice(pageStart, pageStart + USAGE_ROWS_PER_PAGE);
+
+  return (
+    <Dialog
+      open={target !== null}
+      onOpenChange={(o) => {
+        if (!o) {
+          onClose();
+          setPage(1);
+        }
+      }}
+    >
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Usage</DialogTitle>
+          <DialogDescription>
+            <span className="font-medium">{target?.email}</span>&apos;s recent inference usage.
+          </DialogDescription>
+        </DialogHeader>
+
+        {usage.isLoading ? (
+          <Skeleton className="h-64 w-full" />
+        ) : usage.isError ? (
+          <p className="text-sm text-destructive">Couldn&apos;t load usage. Try again.</p>
+        ) : events.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No usage yet.</p>
+        ) : (
+          <div className="space-y-3">
+            <div className="max-h-96 overflow-y-auto rounded-lg border">
+              <Table>
+                <TableHeader className="sticky top-0 bg-card">
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Kind</TableHead>
+                    <TableHead>Model</TableHead>
+                    <TableHead className="text-right">Cost</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pageEvents.map((event, i) => (
+                    <TableRow key={`${event.createdAt}-${i}`}>
+                      <TableCell className="text-xs">{new Date(event.createdAt).toLocaleString()}</TableCell>
+                      <TableCell className="text-xs">{event.requestKind}</TableCell>
+                      <TableCell className="text-xs">{event.model}</TableCell>
+                      <TableCell className="text-right font-mono text-xs">
+                        {formatUsd(event.costCredits)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={event.status === "succeeded" ? "secondary" : "destructive"}>
+                          {event.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {totalPages > 1 && (
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      aria-disabled={currentPage <= 1}
+                      className={currentPage <= 1 ? "pointer-events-none opacity-50" : undefined}
+                      onClick={() => setPage(Math.max(1, currentPage - 1))}
+                    />
+                  </PaginationItem>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+                    <PaginationItem key={n}>
+                      <PaginationLink isActive={n === currentPage} onClick={() => setPage(n)}>
+                        {n}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext
+                      aria-disabled={currentPage >= totalPages}
+                      className={currentPage >= totalPages ? "pointer-events-none opacity-50" : undefined}
+                      onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

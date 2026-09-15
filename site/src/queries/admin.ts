@@ -7,6 +7,7 @@ import { categoriesQueryKey } from "@/queries/categories";
 
 export const adminUsersQueryKey = (q?: string) => ["admin", "users", q ?? ""] as const;
 export const adminUsageQueryKey = ["admin", "usage"] as const;
+export const adminUserUsageQueryKey = (userId: string) => ["admin", "user-usage", userId] as const;
 export const adminContentProjectsQueryKeyBase = ["admin", "content-projects"] as const;
 export const adminContentProjectsQueryKey = (filters: AdminContentProjectFilters = {}) =>
   [...adminContentProjectsQueryKeyBase, filters] as const;
@@ -577,6 +578,26 @@ export function useAdminUsers(q: string) {
         `/api/admin/users${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`,
       ),
     queryKey: adminUsersQueryKey(q.trim()),
+  });
+}
+
+export type AdminUserUsageEvent = {
+  createdAt: string;
+  requestKind: string;
+  model: string;
+  costCredits: string;
+  status: string;
+  errorCode: string | null;
+};
+
+// One account's own inference usage — the "..." menu's "Usage" item on the
+// AI Credits balances table. `enabled: !!userId` so the dialog only fetches
+// once a target row is picked.
+export function useAdminUserUsage(userId: string | null) {
+  return useQuery({
+    enabled: !!userId,
+    queryFn: () => apiFetch<{ events: AdminUserUsageEvent[] }>(`/api/admin/users/${userId}/usage`),
+    queryKey: adminUserUsageQueryKey(userId ?? ""),
   });
 }
 
