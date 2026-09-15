@@ -13,6 +13,7 @@ import { creditsUrl, NO_CREDITS_MESSAGE, signInUrl, useSignedIn } from "@/cut/li
 import { hostedPost } from "@/cut/lib/hosted";
 import { IMAGE_MODELS, type ImageModelOption, type ImageTier } from "@/cut/lib/imageModels";
 import type { InlineImage } from "@/cut/lib/refMedia";
+import { persistVisualGeneration } from "@/cut/lib/visualGenerationPersist";
 import { useToolHistory } from "@/lib/toolHistory";
 import { useBlobUrl } from "@/lib/useBlobUrl";
 import { cn } from "@/lib/utils";
@@ -183,6 +184,14 @@ export default function TextToImagePage() {
           status: "succeeded",
           summary: text.slice(0, 80),
         });
+        void persistVisualGeneration({
+          aspect,
+          blob: s.value.blob,
+          prompt: text,
+          status: "succeeded",
+          tier,
+          tool: "text-to-image",
+        });
       }
       if (failed.length > 0) {
         const first = failed[0].reason;
@@ -197,6 +206,14 @@ export default function TextToImagePage() {
           status: "failed",
           summary: text.slice(0, 80),
         });
+        void persistVisualGeneration({
+          aspect,
+          errorMessage: message,
+          prompt: text,
+          status: "failed",
+          tier,
+          tool: "text-to-image",
+        });
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : "Image generation failed.";
@@ -206,6 +223,14 @@ export default function TextToImagePage() {
         inputs: baseInputs(),
         status: "failed",
         summary: text.slice(0, 80),
+      });
+      void persistVisualGeneration({
+        aspect,
+        errorMessage: message,
+        prompt: text,
+        status: "failed",
+        tier,
+        tool: "text-to-image",
       });
     } finally {
       setBusy(false);

@@ -27,6 +27,7 @@ import {
   type VideoResolution,
   type VideoTier,
 } from "@/cut/lib/videoModels";
+import { persistVisualGeneration } from "@/cut/lib/visualGenerationPersist";
 import { useToolHistory } from "@/lib/toolHistory";
 import { useBlobUrl } from "@/lib/useBlobUrl";
 import { cn } from "@/lib/utils";
@@ -317,6 +318,15 @@ export default function TextToVideoPage() {
           status: "succeeded",
           summary: text.slice(0, 80),
         });
+        void persistVisualGeneration({
+          aspect: effAspect,
+          blob: s.value.blob,
+          durationSeconds: effDurationSeconds,
+          prompt: text,
+          status: "succeeded",
+          tier,
+          tool: "text-to-video",
+        });
       }
       if (failed.length > 0) {
         const first = failed[0].reason;
@@ -331,6 +341,14 @@ export default function TextToVideoPage() {
           status: "failed",
           summary: text.slice(0, 80),
         });
+        void persistVisualGeneration({
+          aspect: effAspect,
+          errorMessage: message,
+          prompt: text,
+          status: "failed",
+          tier,
+          tool: "text-to-video",
+        });
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : "Video generation failed.";
@@ -340,6 +358,14 @@ export default function TextToVideoPage() {
         inputs: baseInputs(),
         status: "failed",
         summary: text.slice(0, 80),
+      });
+      void persistVisualGeneration({
+        aspect: effAspect,
+        errorMessage: message,
+        prompt: text,
+        status: "failed",
+        tier,
+        tool: "text-to-video",
       });
     } finally {
       setBusy(false);
