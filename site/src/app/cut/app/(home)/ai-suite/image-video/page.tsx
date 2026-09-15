@@ -95,7 +95,7 @@ export default function ImageVideoGalleryPage() {
   const isFiltering = !!debouncedSearch.trim() || filter !== "all";
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6">
+    <div className="w-full space-y-6 p-6">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold">Image & Video</h1>
