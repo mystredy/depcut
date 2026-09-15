@@ -16,6 +16,7 @@ import { SectionTitle } from "@/cut/components/SectionTitle";
 import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { creditsUrl, NO_CREDITS_MESSAGE, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { hostedPost } from "@/cut/lib/hosted";
+import { persistScript } from "@/cut/lib/scriptPersist";
 import { useToolHistory } from "@/lib/toolHistory";
 
 const DURATIONS = ["15 seconds", "30 seconds", "60 seconds", "2–3 minutes", "5+ minutes"];
@@ -99,6 +100,7 @@ export default function ScriptingPage() {
         status: "succeeded",
         summary: text.slice(0, 80),
       });
+      void persistScript({ duration, platform, script: reply, status: "succeeded", tone, topic: text });
     } catch (e) {
       const message = e instanceof Error ? e.message : "Script generation failed.";
       setError({ text: message, credits: message === NO_CREDITS_MESSAGE });
@@ -108,6 +110,7 @@ export default function ScriptingPage() {
         status: "failed",
         summary: text.slice(0, 80),
       });
+      void persistScript({ duration, errorMessage: message, platform, status: "failed", tone, topic: text });
     } finally {
       setBusy(false);
     }
