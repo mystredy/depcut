@@ -254,7 +254,7 @@ function UserUsageDialog({
         }
       }}
     >
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="min-w-0 max-w-3xl">
         <DialogHeader>
           <DialogTitle>Usage</DialogTitle>
           <DialogDescription>
@@ -269,8 +269,8 @@ function UserUsageDialog({
         ) : events.length === 0 ? (
           <p className="text-sm text-muted-foreground">No usage yet.</p>
         ) : (
-          <div className="space-y-3">
-            <div className="max-h-96 overflow-y-auto rounded-lg border">
+          <div className="min-w-0 space-y-3">
+            <div className="min-w-0 max-h-96 overflow-y-auto overflow-x-auto rounded-lg border">
               <Table>
                 <TableHeader className="sticky top-0 bg-card">
                   <TableRow>
