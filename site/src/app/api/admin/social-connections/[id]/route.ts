@@ -6,7 +6,27 @@ import {
   notFoundResponse,
   withDepCutAuth,
 } from "@/lib/depcut-api-auth";
+import { getOAuthProvider } from "@/lib/marketplace/oauth-providers";
 import { prisma } from "@/lib/prisma";
+
+// Best-effort: revokes the grant at the provider (e.g. Google) so a
+// disconnected account can't still be used with a copy of the token held
+// elsewhere. Never blocks deletion — the row is the source of truth for
+// whether DepCut can use the account, and we delete it regardless.
+async function revokeAtProvider(platform: string, token: string | null): Promise<void> {
+  if (!token) return;
+  const provider = getOAuthProvider(platform);
+  if (!provider?.revokeUrl) return;
+  try {
+    await fetch(provider.revokeUrl, {
+      body: new URLSearchParams({ token }),
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      method: "POST",
+    });
+  } catch {
+    // Best-effort — see doc comment above.
+  }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -73,11 +93,15 @@ export const DELETE = withDepCutAuth(async (request, context: RouteContext) => {
   }
 
   const { id } = await context.params;
-  const existing = await prisma.socialConnection.findUnique({ select: { id: true }, where: { id } });
+  const existing = await prisma.socialConnection.findUnique({
+    select: { accessToken: true, id: true, platform: true, refreshToken: true },
+    where: { id },
+  });
   if (!existing) {
     return notFoundResponse();
   }
 
+  await revokeAtProvider(existing.platform, existing.refreshToken ?? existing.accessToken);
   await prisma.socialConnection.delete({ where: { id } });
 
   return NextResponse.json({ ok: true });

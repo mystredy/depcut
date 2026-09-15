@@ -11,6 +11,11 @@ export type OAuthProviderConfig = {
   clientSecretField: string;
   authorizeUrl: string;
   tokenUrl: string;
+  // Revokes the whole grant server-side (not just deletes our copy of the
+  // token) so a disconnected account actually stops being usable at the
+  // provider, not just in our DB. Optional — only set where the provider
+  // has one; revocation on disconnect is best-effort where it exists.
+  revokeUrl?: string;
   scope: string;
   usesPkce: boolean;
   tokenAuthStyle: TokenAuthStyle;
@@ -171,6 +176,7 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
       };
     },
     platform: "youtube",
+    revokeUrl: "https://oauth2.googleapis.com/revoke",
     scope:
       "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/yt-analytics.readonly",
     tokenAuthStyle: "form_post",
