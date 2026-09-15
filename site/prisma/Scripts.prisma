@@ -1,0 +1,23 @@
+// A durable record of every Scripting run, same "state stays on the client"
+// exception and shape as Transcriptions.prisma — before this, a script
+// existed only in the browser's own local tool history (see
+// lib/toolHistory.ts). Both a succeeded and a failed run are written. A
+// plain userId (better-auth id) with no FK, same as AudioGeneration, keeps
+// the table self-contained.
+model ScriptGeneration {
+  id     String @id @default(cuid())
+  userId String
+
+  topic    String
+  duration String
+  platform String
+  tone     String?
+
+  status       String // succeeded | failed
+  script       String?
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}

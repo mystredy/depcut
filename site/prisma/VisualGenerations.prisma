@@ -1,0 +1,33 @@
+// A durable record of every standalone Text to Image/Video render, mirroring
+// how AudioGenerations.prisma persists Text to Speech/Dubbing — before this,
+// these tools kept output only in the browser's own local tool history (see
+// lib/toolHistory.ts) and, for images/videos, in the user's Library if they
+// explicitly clicked "Add to library." A multi-take submit (count > 1)
+// writes one row per take, independent status, matching how the page itself
+// already splits the submit (Promise.allSettled). Only a SUCCEEDED render's
+// row carries output; a failed one has no media to store. Media bytes live
+// in R2 under this row's own outputKey (see cut/server/cloud/r2.ts's
+// visualGenerationKey), same split as AudioGeneration/FlowGeneration. A
+// plain userId (better-auth id) with no FK keeps the table self-contained.
+model VisualGeneration {
+  id     String @id @default(cuid())
+  userId String
+
+  tool String // text-to-image | text-to-video
+
+  prompt String
+  aspect String
+  tier   String
+
+  status       String // succeeded | failed
+  errorMessage String?
+
+  outputKey       String?
+  outputMime      String?
+  durationSeconds Float? // video only
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([tool, createdAt])
+}

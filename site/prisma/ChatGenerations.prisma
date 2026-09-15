@@ -1,0 +1,19 @@
+// A durable record of every AI Chatbot conversation — this tool had no
+// history at all before this, not even the browser-local tool history the
+// other AI Suite pages use (a chat is open-ended, not a single request/
+// response). One row per conversation, its `messages` array replaced in
+// place after each turn rather than appended as separate rows, so the row
+// always holds the full running transcript. A plain userId (better-auth id)
+// with no FK, same as AudioGeneration, keeps the table self-contained.
+model ChatGeneration {
+  id     String @id @default(cuid())
+  userId String
+
+  // ChatMessage[] — { role: "user" | "assistant", content: string }[]
+  messages Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, updatedAt])
+}

@@ -115,6 +115,13 @@ export const AUDIO_GENERATION_PREFIX = "audio-generations/";
 export const audioGenerationKey = (userId: string, id: string, fileName: string) =>
   `${AUDIO_GENERATION_PREFIX}${userId}/${id}/${fileName}`;
 
+/** The standalone Text to Image/Video pages' persisted output — same split
+ * as AUDIO_GENERATION_PREFIX above, kept separate from FLOW_PREFIX since
+ * these aren't part of a Flow. */
+export const VISUAL_GENERATION_PREFIX = "visual-generations/";
+export const visualGenerationKey = (userId: string, id: string, fileName: string) =>
+  `${VISUAL_GENERATION_PREFIX}${userId}/${id}/${fileName}`;
+
 /** admin/settings/general's Branding section: the site's own logo marks.
  * Overwritten in place on each upload (see the site logo route's GET) rather
  * than content-addressed like stock media, since there's no database row to
