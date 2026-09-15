@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bot, Loader2, Send, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { persistChat } from "@/cut/lib/chatGenerationPersist";
 import { creditsUrl, NO_CREDITS_MESSAGE, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { hostedPost } from "@/cut/lib/hosted";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,10 @@ export default function AiChatbotPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; credits?: boolean } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  // Set once the conversation's row exists (after its first successful
+  // turn) so every later turn updates that same row instead of creating a
+  // new one — see cut/lib/chatGenerationPersist.ts.
+  const conversationIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
@@ -59,7 +64,11 @@ export default function AiChatbotPage() {
       const data = (await res.json()) as ChatCompletion;
       const reply = data.choices[0]?.message.content?.trim();
       if (!reply) throw new Error("The assistant returned an empty reply.");
-      setMessages((cur) => [...cur, { role: "assistant", content: reply }]);
+      const withReply: ChatMessage[] = [...next, { role: "assistant", content: reply }];
+      setMessages(withReply);
+      void persistChat(withReply, conversationIdRef.current).then((id) => {
+        if (id) conversationIdRef.current = id;
+      });
     } catch (e) {
       setError(
         e instanceof Error
