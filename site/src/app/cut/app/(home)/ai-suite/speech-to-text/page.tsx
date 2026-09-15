@@ -258,6 +258,14 @@ export default function SpeechToTextPage() {
 
     const id = await history.createPending({ inputs: {}, summary });
 
+    // job() already closed over this render's file/recordedBlob/socialUrl/
+    // sourceUrlInput, so clearing the input here is safe — it frees the form
+    // for the next submission without touching the job in flight.
+    if (tab === "upload") clearFile();
+    else if (tab === "record") setRecordedBlob(null);
+    else if (tab === "social") setSocialUrl("");
+    else setSourceUrlInput("");
+
     try {
       const result = await job();
       if (!result) throw new Error("Transcription was interrupted.");
