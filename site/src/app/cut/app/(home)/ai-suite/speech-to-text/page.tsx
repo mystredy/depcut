@@ -205,6 +205,24 @@ export default function SpeechToTextPage() {
     await mic.start();
   };
 
+  const reuse = (inputs: Record<string, unknown>) => {
+    const reuseTab: "social" | "source" | null =
+      inputs.tab === "social" ? "social" : inputs.tab === "source" ? "source" : null;
+    if (!reuseTab) return;
+    switchTab(reuseTab);
+    if (typeof inputs.sourceLabel === "string") {
+      if (reuseTab === "social") setSocialUrl(inputs.sourceLabel);
+      else setSourceUrlInput(inputs.sourceLabel);
+    }
+    if (typeof inputs.language === "string") setLanguage(inputs.language);
+    if (typeof inputs.tagAudioEvents === "boolean") setTagAudioEvents(inputs.tagAudioEvents);
+    if (typeof inputs.noVerbatim === "boolean") setNoVerbatim(inputs.noVerbatim);
+    if (typeof inputs.assignSpeakers === "boolean") setAssignSpeakers(inputs.assignSpeakers);
+    if (Array.isArray(inputs.keyterms)) {
+      setKeyterms(inputs.keyterms.filter((k): k is string => typeof k === "string"));
+    }
+  };
+
   const addKeyterm = () => {
     const term = keytermDraft.trim();
     setKeytermDraft("");
@@ -256,7 +274,14 @@ export default function SpeechToTextPage() {
             ? () => transcribeSourceUrl(socialUrl.trim(), languageCode, settings)
             : () => transcribeSourceUrl(sourceUrlInput.trim(), languageCode, settings);
 
-    const id = await history.createPending({ inputs: {}, summary });
+    // A file or recording can't round-trip through this lightweight
+    // inputs-as-plain-values pattern, so only the URL tabs carry enough to
+    // meaningfully refill the form on "Use again" — see reuse() below.
+    const inputs =
+      tab === "social" || tab === "source"
+        ? { assignSpeakers, keyterms, language, noVerbatim, sourceLabel: summary, tab, tagAudioEvents }
+        : {};
+    const id = await history.createPending({ inputs, summary });
 
     // job() already closed over this render's file/recordedBlob/socialUrl/
     // sourceUrlInput, so clearing the input here is safe — it frees the form
@@ -626,10 +651,7 @@ export default function SpeechToTextPage() {
 
       <ToolHistoryList
         tool="speech-to-text"
-        onReuse={() => {
-          // No source is kept, so there's nothing to refill — the row still
-          // exists to read or re-download a past transcript.
-        }}
+        onReuse={reuse}
         renderPreview={(entry) => {
           const entryCues =
             entry.result.kind === "text" &&
