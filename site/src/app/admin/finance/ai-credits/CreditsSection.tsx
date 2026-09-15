@@ -42,17 +42,17 @@ export function CreditsSection() {
   }
 
   return (
-    <div className="max-w-2xl space-y-5 rounded-2xl border bg-card p-6">
+    <div className="max-w-2xl space-y-2 rounded-2xl border bg-card p-3">
       <div>
         <h2 className="text-sm font-semibold">Display rate</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-0.5 text-xs text-muted-foreground">
           How the pay-as-you-go balance displays as &quot;credits&quot; — a display-only
           conversion. Stripe still charges and the ledger still stores real dollars; this
           only sets the number shown on screen.
         </p>
       </div>
       <div className="flex flex-wrap items-end gap-3 text-sm text-muted-foreground">
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           <Label htmlFor="credit-rate-credits">Credits</Label>
           <Input
             className="w-28"
@@ -63,8 +63,8 @@ export function CreditsSection() {
             value={rateCredits}
           />
         </div>
-        <span className="pb-2.5">=</span>
-        <div className="space-y-1.5">
+        <span className="pb-2">=</span>
+        <div className="space-y-1">
           <Label htmlFor="credit-rate-dollars">Dollars</Label>
           <Input
             className="w-24"
@@ -75,14 +75,12 @@ export function CreditsSection() {
             value={rateDollars}
           />
         </div>
-      </div>
-      {!valid ? <p className="text-sm text-destructive">Both values must be positive whole numbers.</p> : null}
-      <div className="flex justify-end pt-2">
-        <Button disabled={update.isPending || !dirty || !valid} onClick={save}>
+        <Button className="ml-auto" disabled={update.isPending || !dirty || !valid} onClick={save}>
           {update.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
           Save
         </Button>
       </div>
+      {!valid ? <p className="text-sm text-destructive">Both values must be positive whole numbers.</p> : null}
     </div>
   );
 }
