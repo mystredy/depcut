@@ -1174,8 +1174,12 @@ function WorkflowSection({ studioId }: { studioId: string }) {
   const connections = useStudioConnections(studioId);
   const workflows = useStudioWorkflows(studioId);
   const del = useDeleteStudioWorkflow(studioId);
+  const rename = useUpdateStudioWorkflow(studioId);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<StudioWorkflow | null>(null);
+  const [renaming, setRenaming] = useState<StudioWorkflow | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   // A workflow's source can be the studio's own content instead of another
   // connection, so only the destination side needs a real connected account.
@@ -1227,6 +1231,15 @@ function WorkflowSection({ studioId }: { studioId: string }) {
               workflow={w}
               menuOpen={menuOpenId === w.id}
               onToggleMenu={() => setMenuOpenId(menuOpenId === w.id ? null : w.id)}
+              onEdit={() => {
+                setEditing(w);
+                setMenuOpenId(null);
+              }}
+              onRename={() => {
+                setRenaming(w);
+                setRenameValue(w.name);
+                setMenuOpenId(null);
+              }}
               onDelete={() => {
                 del.mutate(w.id);
                 setMenuOpenId(null);
@@ -1237,7 +1250,43 @@ function WorkflowSection({ studioId }: { studioId: string }) {
         </div>
       )}
 
-      <CreateWorkflowDialog studioId={studioId} open={creating} onClose={() => setCreating(false)} />
+      <WorkflowFormDialog studioId={studioId} open={creating} workflow={null} onClose={() => setCreating(false)} />
+      <WorkflowFormDialog studioId={studioId} open={editing !== null} workflow={editing} onClose={() => setEditing(null)} />
+
+      <Dialog open={renaming !== null} onOpenChange={(open) => !open && setRenaming(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename workflow</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label className="text-xs">Name</Label>
+            <Input value={renameValue} onChange={(e) => setRenameValue(e.target.value)} autoFocus />
+          </div>
+          {rename.isError && (
+            <p className="text-xs text-destructive">
+              {rename.error instanceof ApiError ? rename.error.message : "Couldn't rename that workflow."}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenaming(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!renameValue.trim() || rename.isPending}
+              onClick={() => {
+                if (!renaming) return;
+                rename.mutate(
+                  { name: renameValue.trim(), workflowId: renaming.id },
+                  { onSuccess: () => setRenaming(null) },
+                );
+              }}
+            >
+              {rename.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1247,6 +1296,8 @@ function WorkflowCard({
   workflow,
   menuOpen,
   onToggleMenu,
+  onEdit,
+  onRename,
   onDelete,
   deleting,
 }: {
@@ -1254,6 +1305,8 @@ function WorkflowCard({
   workflow: StudioWorkflow;
   menuOpen: boolean;
   onToggleMenu: () => void;
+  onEdit: () => void;
+  onRename: () => void;
   onDelete: () => void;
   deleting: boolean;
 }) {
@@ -1273,6 +1326,20 @@ function WorkflowCard({
           </button>
           {menuOpen && (
             <div className="absolute right-0 z-10 mt-1 w-32 rounded-lg border bg-popover p-1 text-xs shadow-md">
+              <button
+                type="button"
+                onClick={onEdit}
+                className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={onRename}
+                className="block w-full rounded px-2 py-1.5 text-left hover:bg-muted"
+              >
+                Rename
+              </button>
               <button
                 type="button"
                 disabled={deleting}
@@ -1329,22 +1396,52 @@ function WorkflowCard({
   );
 }
 
-function CreateWorkflowDialog({
+function WorkflowFormDialog({
   studioId,
   open,
+  workflow,
   onClose,
 }: {
   studioId: string;
   open: boolean;
+  workflow: StudioWorkflow | null;
   onClose: () => void;
 }) {
   const connections = useStudioConnections(studioId);
   const create = useCreateStudioWorkflow(studioId);
-  const [name, setName] = useState("");
-  const [sourceId, setSourceId] = useState(STUDIO_SOURCE_CONNECTION_ID);
-  const [destinationId, setDestinationId] = useState("");
-  const [autoPublish, setAutoPublish] = useState(true);
-  const [postsPerDay, setPostsPerDay] = useState("3");
+  const update = useUpdateStudioWorkflow(studioId);
+  const isEditing = workflow !== null;
+  const mutation = isEditing ? update : create;
+
+  const initialSourceId = (w: StudioWorkflow | null) =>
+    w === null
+      ? STUDIO_SOURCE_CONNECTION_ID
+      : w.sourceConnection.platform === STUDIO_SOURCE_PLATFORM
+        ? STUDIO_SOURCE_CONNECTION_ID
+        : w.sourceConnection.id;
+
+  const [name, setName] = useState(workflow?.name ?? "");
+  const [sourceId, setSourceId] = useState(initialSourceId(workflow));
+  const [destinationId, setDestinationId] = useState(workflow?.destinationConnection.id ?? "");
+  const [autoPublish, setAutoPublish] = useState(workflow?.autoPublish ?? true);
+  const [postsPerDay, setPostsPerDay] = useState(String(workflow?.postsPerDay ?? 3));
+
+  // Re-populate every time the dialog opens — covers a different workflow to
+  // edit, switching between editing and creating, and reopening "New
+  // workflow" fresh after a previous create. Same reset-in-render pattern as
+  // InviteManagerDialog below, keyed on the open transition rather than the
+  // target id since two consecutive creates both have workflow === null.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setName(workflow?.name ?? "");
+      setSourceId(initialSourceId(workflow));
+      setDestinationId(workflow?.destinationConnection.id ?? "");
+      setAutoPublish(workflow?.autoPublish ?? true);
+      setPostsPerDay(String(workflow?.postsPerDay ?? 3));
+    }
+  }
 
   const realConnections = (connections.data?.connections ?? []).filter(
     (c) => c.platform !== STUDIO_SOURCE_PLATFORM
@@ -1359,32 +1456,26 @@ function CreateWorkflowDialog({
 
   const submit = () => {
     if (!name.trim() || !sourceId || !destinationId || sourceId === destinationId || !postsPerDayValid) return;
-    create.mutate(
-      {
-        autoPublish,
-        destinationConnectionId: destinationId,
-        name: name.trim(),
-        postsPerDay: autoPublish ? null : postsPerDayValue,
-        sourceConnectionId: sourceId,
-      },
-      {
-        onSuccess: () => {
-          setName("");
-          setSourceId(STUDIO_SOURCE_CONNECTION_ID);
-          setDestinationId("");
-          setAutoPublish(true);
-          setPostsPerDay("3");
-          onClose();
-        },
-      }
-    );
+    const fields = {
+      autoPublish,
+      destinationConnectionId: destinationId,
+      name: name.trim(),
+      postsPerDay: autoPublish ? null : postsPerDayValue,
+      sourceConnectionId: sourceId,
+    };
+    const onSuccess = () => onClose();
+    if (workflow) {
+      update.mutate({ ...fields, workflowId: workflow.id }, { onSuccess });
+    } else {
+      create.mutate(fields, { onSuccess });
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>New workflow</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit workflow" : "New workflow"}</DialogTitle>
           <DialogDescription>
             Repurpose this studio&apos;s own content, or a connected account, to another connected account.
           </DialogDescription>
@@ -1474,9 +1565,11 @@ function CreateWorkflowDialog({
               />
             </div>
           )}
-          {create.isError && (
+          {mutation.isError && (
             <p className="text-xs text-destructive">
-              {create.error instanceof ApiError ? create.error.message : "Couldn't create that workflow."}
+              {mutation.error instanceof ApiError
+                ? mutation.error.message
+                : `Couldn't ${isEditing ? "save" : "create"} that workflow.`}
             </p>
           )}
         </div>
@@ -1485,11 +1578,11 @@ function CreateWorkflowDialog({
             Cancel
           </Button>
           <Button
-            disabled={!name.trim() || !sourceId || !destinationId || !postsPerDayValid || create.isPending}
+            disabled={!name.trim() || !sourceId || !destinationId || !postsPerDayValid || mutation.isPending}
             onClick={submit}
           >
-            {create.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
-            Create workflow
+            {mutation.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
+            {isEditing ? "Save changes" : "Create workflow"}
           </Button>
         </DialogFooter>
       </DialogContent>

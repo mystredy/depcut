@@ -387,8 +387,12 @@ export function useUpdateStudioWorkflow(id: string) {
       ...input
     }: {
       workflowId: string;
+      name?: string;
       status?: "Active" | "Inactive";
       autoPublish?: boolean;
+      sourceConnectionId?: string;
+      destinationConnectionId?: string;
+      postsPerDay?: number | null;
     }) =>
       apiFetch<{ workflow: StudioWorkflow }>(`/api/studios/${id}/workflows/${workflowId}`, {
         body: JSON.stringify(input),

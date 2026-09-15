@@ -6,8 +6,10 @@ import {
   withDepCutAuth,
   type DepCutAuthenticatedRequest,
 } from "@/lib/depcut-api-auth";
+import { Prisma } from "@/generated/prisma/client";
+import { STUDIO_SOURCE_CONNECTION_ID } from "@/lib/marketplace/oauth-providers";
 import { prisma } from "@/lib/prisma";
-import { getStudioMembership, logStudioActivity } from "@/lib/studio/access";
+import { ensureStudioSourceConnection, getStudioMembership, logStudioActivity } from "@/lib/studio/access";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +38,9 @@ const updateSchema = z
     name: z.string().trim().min(1).max(160).optional(),
     status: z.enum(["Active", "Inactive"]).optional(),
     autoPublish: z.boolean().optional(),
+    sourceConnectionId: z.string().trim().min(1).optional(),
+    destinationConnectionId: z.string().trim().min(1).optional(),
+    postsPerDay: z.number().int().min(1).max(50).nullable().optional(),
   })
   .strict();
 
@@ -61,8 +66,41 @@ export const PATCH = withDepCutAuth(async (request: DepCutAuthenticatedRequest, 
     );
   }
 
+  const { sourceConnectionId, destinationConnectionId, postsPerDay, ...rest } = parsed.data;
+  const data: Prisma.SocialWorkflowUncheckedUpdateInput = { ...rest };
+
+  if (sourceConnectionId !== undefined) {
+    const source =
+      sourceConnectionId === STUDIO_SOURCE_CONNECTION_ID
+        ? await ensureStudioSourceConnection(id)
+        : await prisma.socialConnection.findUnique({ where: { id: sourceConnectionId } });
+    if (!source || source.studioId !== id) return notFoundResponse();
+    data.sourceConnectionId = source.id;
+  }
+  if (destinationConnectionId !== undefined) {
+    const destination = await prisma.socialConnection.findUnique({ where: { id: destinationConnectionId } });
+    if (!destination || destination.studioId !== id) return notFoundResponse();
+    data.destinationConnectionId = destination.id;
+  }
+
+  const effectiveSourceId = (data.sourceConnectionId as string | undefined) ?? existing.sourceConnectionId;
+  const effectiveDestinationId = (data.destinationConnectionId as string | undefined) ?? existing.destinationConnectionId;
+  if (effectiveSourceId === effectiveDestinationId) {
+    return NextResponse.json(
+      { error: "Invalid request", issues: [{ path: "destinationConnectionId", message: "Source and destination must be different connections." }] },
+      { status: 400 },
+    );
+  }
+
+  const effectiveAutoPublish = rest.autoPublish ?? existing.autoPublish;
+  if (postsPerDay !== undefined) {
+    data.postsPerDay = effectiveAutoPublish ? null : postsPerDay;
+  } else if (rest.autoPublish === true) {
+    data.postsPerDay = null;
+  }
+
   const workflow = await prisma.socialWorkflow.update({
-    data: parsed.data,
+    data,
     include: {
       destinationConnection: { select: connectionSelect },
       sourceConnection: { select: connectionSelect },
