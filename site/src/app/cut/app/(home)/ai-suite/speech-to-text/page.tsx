@@ -342,7 +342,7 @@ export default function SpeechToTextPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-6">
+    <div className="w-full space-y-6 p-6">
       <div>
         <h1 className="text-lg font-semibold">Speech to Text</h1>
         <p className="mt-1 text-sm text-muted-foreground">
