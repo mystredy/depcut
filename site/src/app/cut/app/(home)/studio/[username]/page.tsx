@@ -325,7 +325,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
       </div>
 
       <div className="px-6 pt-6">
-        {visibleDrops.length === 0 ? (
+        {drops.isLoading ? null : visibleDrops.length === 0 ? (
           <div className="grid min-h-[30vh] place-items-center">
             <div className="flex flex-col items-center gap-4 text-center">
               <div className="grid size-14 place-items-center rounded-2xl bg-muted">
