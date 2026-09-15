@@ -1341,7 +1341,7 @@ function CreateWorkflowDialog({
   const connections = useStudioConnections(studioId);
   const create = useCreateStudioWorkflow(studioId);
   const [name, setName] = useState("");
-  const [sourceId, setSourceId] = useState("");
+  const [sourceId, setSourceId] = useState(STUDIO_SOURCE_CONNECTION_ID);
   const [destinationId, setDestinationId] = useState("");
   const [autoPublish, setAutoPublish] = useState(true);
   const [postsPerDay, setPostsPerDay] = useState("3");
@@ -1370,7 +1370,7 @@ function CreateWorkflowDialog({
       {
         onSuccess: () => {
           setName("");
-          setSourceId("");
+          setSourceId(STUDIO_SOURCE_CONNECTION_ID);
           setDestinationId("");
           setAutoPublish(true);
           setPostsPerDay("3");
