@@ -134,6 +134,7 @@ export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest, c
     );
   }
   if (sourceIsStudio && autoPublish && !isConnectionUsable({
+    hasRefreshToken: Boolean(realConnection.refreshToken),
     hasToken: Boolean(realConnection.accessToken),
     status: realConnection.status,
     tokenExpiresAt: realConnection.tokenExpiresAt,

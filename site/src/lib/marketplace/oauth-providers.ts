@@ -226,16 +226,21 @@ export const STUDIO_SOURCE_PLATFORM = "studio";
 export const STUDIO_SOURCE_CONNECTION_ID = "studio";
 
 // Whether a connection can actually be used for a live automated action
-// ("Repurpose new posts") right now: still holds a token, not marked
-// inactive, and not past its expiry. "Repurpose existing content" tolerates
-// a stale connection failing one run; an automated publish on every new post
-// doesn't, so it's gated on this instead.
+// ("Repurpose new posts") right now: still holds a token and isn't marked
+// inactive. A short-lived access token past its tokenExpiresAt is still
+// usable as long as a refresh token is on file — getValidAccessToken
+// (oauth-token-refresh.ts) refreshes it transparently on next use, and
+// flips status to "inactive" itself if that refresh ever fails. Only a
+// connection with no refresh token (the Meta family, which issues
+// long-lived tokens instead — see oauth-token-refresh.ts) actually needs
+// its own tokenExpiresAt to still be in the future.
 export function isConnectionUsable(connection: {
   status: string;
   hasToken: boolean;
+  hasRefreshToken: boolean;
   tokenExpiresAt: string | Date | null;
 }): boolean {
   if (!connection.hasToken || connection.status !== "active") return false;
-  if (!connection.tokenExpiresAt) return true;
+  if (connection.hasRefreshToken || !connection.tokenExpiresAt) return true;
   return new Date(connection.tokenExpiresAt).getTime() > Date.now();
 }

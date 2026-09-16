@@ -210,26 +210,16 @@ function ConnectionLabel({ c }: { c: { accountName: string; platform?: string } 
 // A connection is only good for posting if its token is set, active, and
 // (when the platform gave one) not past its expiry — the token itself never
 // reaches the client, so this is read off what the API already tells us.
+// The ok/not-ok call itself is isConnectionUsable; this just adds the
+// day-count label the Connections tab shows.
 function connectionHealth(c: StudioConnection): { ok: boolean; label: string } {
-  if (!c.hasToken || c.status !== "active") {
+  if (!isConnectionUsable(c)) {
     return { label: "Token expired or invalid", ok: false };
   }
-  // A refresh token means the access token's own expiry is routine, not a
-  // problem — the platform issues a fresh one silently on next use, so it
-  // reads the same as a connection with no expiry at all, regardless of
-  // what the current access token's raw tokenExpiresAt happens to be.
-  if (c.hasRefreshToken) {
+  if (c.hasRefreshToken || !c.tokenExpiresAt) {
     return { label: "No expiration date", ok: true };
   }
-  const days = c.tokenExpiresAt
-    ? Math.ceil((new Date(c.tokenExpiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
-    : null;
-  if (days === null) {
-    return { label: "No expiration date", ok: true };
-  }
-  if (days <= 0) {
-    return { label: "Token expired or invalid", ok: false };
-  }
+  const days = Math.ceil((new Date(c.tokenExpiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
   return { label: `Token expires in ${days} day${days === 1 ? "" : "s"}`, ok: true };
 }
 
@@ -1289,20 +1279,15 @@ function WorkflowSection({ studioId }: { studioId: string }) {
 
   // A workflow's source can be the studio's own content instead of another
   // connection, so only the destination side needs a real connected account.
-  const realConnectionCount = (connections.data?.connections ?? []).filter(
+  const realConnections = (connections.data?.connections ?? []).filter(
     (c) => c.platform !== STUDIO_SOURCE_PLATFORM
-  ).length;
-  const hasEnoughConnections = realConnectionCount >= 1;
-  const connectionUsableById = new Map(
-    (connections.data?.connections ?? []).map((c) => [c.id, isConnectionUsable(c)])
   );
+  const hasEnoughConnections = realConnections.length >= 1;
 
-  const newPostWorkflows = (workflows.data?.workflows ?? []).filter((w) => w.autoPublish);
   const existingContentWorkflows = (workflows.data?.workflows ?? []).filter((w) => !w.autoPublish);
 
   const cardProps = (w: StudioWorkflow) => ({
     deleting: del.isPending,
-    destinationUsable: connectionUsableById.get(w.destinationConnection.id) ?? false,
     menuOpen: menuOpenId === w.id,
     onDelete: () => {
       del.mutate(w.id);
@@ -1324,19 +1309,7 @@ function WorkflowSection({ studioId }: { studioId: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold">Workflows</p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={!hasEnoughConnections}
-          onClick={() => setCreating(true)}
-        >
-          <Plus className="size-3.5" />
-          New workflow
-        </Button>
-      </div>
+      <p className="text-sm font-semibold">Workflows</p>
       <p className="text-sm text-muted-foreground">
         Repurpose this studio&apos;s own content out to a connected account, or pull an Instagram or
         Facebook account&apos;s existing posts in.
@@ -1358,31 +1331,39 @@ function WorkflowSection({ studioId }: { studioId: string }) {
             <div>
               <p className="text-sm font-medium">Repurpose new posts</p>
               <p className="text-xs text-muted-foreground">
-                Every time this studio publishes, send it to a connected platform automatically. The
-                destination account has to stay connected, active, and unexpired.
+                Every time this studio publishes, send it to a connected platform automatically. Each
+                platform switches on once it&apos;s connected, active, and unexpired.
               </p>
             </div>
-            {newPostWorkflows.length === 0 ? (
-              <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                {workflows.isLoading ? "Loading…" : "No automatic workflows yet."}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {newPostWorkflows.map((w) => (
-                  <WorkflowCard key={w.id} {...cardProps(w)} />
-                ))}
-              </div>
-            )}
+            <div className="space-y-3">
+              {realConnections.map((c) => (
+                <NewPostsPresetRow
+                  key={c.id}
+                  studioId={studioId}
+                  connection={c}
+                  workflow={(workflows.data?.workflows ?? []).find(
+                    (w) =>
+                      w.autoPublish &&
+                      w.sourceConnection.platform === STUDIO_SOURCE_PLATFORM &&
+                      w.destinationConnection.id === c.id
+                  )}
+                />
+              ))}
+            </div>
           </div>
 
           <div className="space-y-3">
-            <div>
+            <div className="flex items-center justify-between">
               <p className="text-sm font-medium">Repurpose existing content</p>
-              <p className="text-xs text-muted-foreground">
-                Work through a backlog on a schedule, a few posts a day — this studio&apos;s own content
-                out, or an Instagram/Facebook account&apos;s existing posts in.
-              </p>
+              <Button type="button" variant="outline" size="sm" onClick={() => setCreating(true)}>
+                <Plus className="size-3.5" />
+                New workflow
+              </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Work through a backlog on a schedule, a few posts a day — this studio&apos;s own content
+              out, or an Instagram/Facebook account&apos;s existing posts in.
+            </p>
             {existingContentWorkflows.length === 0 ? (
               <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
                 {workflows.isLoading ? "Loading…" : "No scheduled workflows yet."}
@@ -1439,10 +1420,75 @@ function WorkflowSection({ studioId }: { studioId: string }) {
   );
 }
 
+// One row per connected platform — the studio → platform "new posts"
+// pairing is a fixed preset, not something a manager names or configures,
+// so the switch alone creates, reactivates, or deactivates the underlying
+// workflow. Reuses whichever matching workflow already exists (by source =
+// this studio, destination = this connection, autoPublish) instead of
+// creating a second one, so flipping the switch off and back on can't
+// produce a duplicate.
+function NewPostsPresetRow({
+  studioId,
+  connection,
+  workflow,
+}: {
+  studioId: string;
+  connection: StudioConnection;
+  workflow: StudioWorkflow | undefined;
+}) {
+  const create = useCreateStudioWorkflow(studioId);
+  const update = useUpdateStudioWorkflow(studioId);
+  const usable = isConnectionUsable(connection);
+  const isOn = workflow?.status === "Active";
+  const pending = create.isPending || update.isPending;
+  const mutationError = create.isError ? create.error : update.isError ? update.error : null;
+
+  const toggle = (v: boolean) => {
+    if (v && !usable) return;
+    if (workflow) {
+      update.mutate({ status: v ? "Active" : "Inactive", workflowId: workflow.id });
+    } else if (v) {
+      create.mutate({
+        autoPublish: true,
+        destinationConnectionId: connection.id,
+        name: `New posts to ${connection.accountName}`,
+        sourceConnectionId: STUDIO_SOURCE_CONNECTION_ID,
+      });
+    }
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between rounded-2xl border p-4">
+        <div className="flex items-center gap-3">
+          <WorkflowConnectionPill connection={connection} />
+          <div>
+            <p className="text-sm font-medium">{connection.accountName}</p>
+            {connection.accountHandle && (
+              <p className="text-xs text-muted-foreground">{connection.accountHandle}</p>
+            )}
+          </div>
+        </div>
+        <Switch
+          checked={isOn}
+          disabled={pending || (!isOn && !usable)}
+          onCheckedChange={toggle}
+          aria-label={`Auto publish to ${connection.accountName}`}
+        />
+      </div>
+      {!usable && <p className="px-1 text-xs text-muted-foreground">Reconnect this account to turn this on.</p>}
+      {mutationError && (
+        <p className="px-1 text-xs text-destructive">
+          {mutationError instanceof ApiError ? mutationError.message : "Couldn't update that."}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function WorkflowCard({
   studioId,
   workflow,
-  destinationUsable,
   menuOpen,
   onToggleMenu,
   onEdit,
@@ -1452,7 +1498,6 @@ function WorkflowCard({
 }: {
   studioId: string;
   workflow: StudioWorkflow;
-  destinationUsable: boolean;
   menuOpen: boolean;
   onToggleMenu: () => void;
   onEdit: () => void;
@@ -1461,11 +1506,6 @@ function WorkflowCard({
   deleting: boolean;
 }) {
   const update = useUpdateStudioWorkflow(studioId);
-  // "Repurpose new posts" only ever runs from this studio's own content —
-  // an import direction has no per-post trigger, only a daily list to work
-  // through — and needs the destination to actually be usable right now.
-  const isImportDirection = workflow.sourceConnection.platform !== STUDIO_SOURCE_PLATFORM;
-  const canEnableAutoPublish = !isImportDirection && destinationUsable;
 
   return (
     <div className="space-y-3 rounded-2xl border p-4">
@@ -1541,26 +1581,7 @@ function WorkflowCard({
         </button>
       </div>
 
-      <div className="flex items-center justify-between rounded-xl border bg-muted/20 px-3 py-2">
-        <span className="text-xs font-medium">Auto Publish</span>
-        <Switch
-          checked={workflow.autoPublish}
-          disabled={!workflow.autoPublish && !canEnableAutoPublish}
-          onCheckedChange={(v) => {
-            if (v && !canEnableAutoPublish) return;
-            update.mutate({ autoPublish: v, workflowId: workflow.id });
-          }}
-          aria-label="Auto publish"
-        />
-      </div>
-      {!workflow.autoPublish && !canEnableAutoPublish && (
-        <p className="text-xs text-muted-foreground">
-          {isImportDirection
-            ? "Only this studio's own content can auto-publish — imports run on a schedule instead."
-            : "Reconnect the destination account to turn this on."}
-        </p>
-      )}
-      {!workflow.autoPublish && workflow.postsPerDay && (
+      {workflow.postsPerDay && (
         <p className="text-xs text-muted-foreground">
           Repurposing existing content — {workflow.postsPerDay} post{workflow.postsPerDay === 1 ? "" : "s"}/day.
         </p>
@@ -1596,7 +1617,6 @@ function WorkflowFormDialog({
   const [name, setName] = useState(workflow?.name ?? "");
   const [sourceId, setSourceId] = useState(initialSourceId(workflow));
   const [destinationId, setDestinationId] = useState(workflow?.destinationConnection.id ?? "");
-  const [autoPublish, setAutoPublish] = useState(workflow?.autoPublish ?? true);
   const [postsPerDay, setPostsPerDay] = useState(String(workflow?.postsPerDay ?? 3));
   // The studio is the source for every workflow that actually works today —
   // shown as a fixed row, not a dropdown implying a free choice. "Change"
@@ -1615,7 +1635,6 @@ function WorkflowFormDialog({
       setName(workflow?.name ?? "");
       setSourceId(initialSourceId(workflow));
       setDestinationId(workflow?.destinationConnection.id ?? "");
-      setAutoPublish(workflow?.autoPublish ?? true);
       setPostsPerDay(String(workflow?.postsPerDay ?? 3));
       setEditingSource(initialSourceId(workflow) !== STUDIO_SOURCE_CONNECTION_ID);
     }
@@ -1630,7 +1649,7 @@ function WorkflowFormDialog({
   ];
 
   const postsPerDayValue = Number.parseInt(postsPerDay, 10);
-  const postsPerDayValid = autoPublish || (Number.isInteger(postsPerDayValue) && postsPerDayValue >= 1 && postsPerDayValue <= 50);
+  const postsPerDayValid = Number.isInteger(postsPerDayValue) && postsPerDayValue >= 1 && postsPerDayValue <= 50;
   // The only two valid directions: studio → a platform, or an
   // Instagram/Facebook connection → the studio (importing its existing
   // posts in — see IMPORTABLE_PLATFORMS). Platform → platform is never
@@ -1642,21 +1661,16 @@ function WorkflowFormDialog({
   const validDirection = isStudioSource || isImportableSource;
   const sourcePlatformLabel = SOCIAL_APP_SEED.find((s) => s.platform === sourcePlatform)?.label ?? sourcePlatform;
 
-  // "Repurpose new posts" only ever runs from this studio's own content out
-  // to a destination that's actually usable right now — an import has no
-  // per-post trigger, and a stale destination would fail every time.
-  const destinationConnection = realConnections.find((c) => c.id === destinationId);
-  const destinationUsable = !!destinationConnection && isConnectionUsable(destinationConnection);
-  const canEnableAutoPublish = isStudioSource && destinationUsable;
-  const autoPublishValid = !autoPublish || canEnableAutoPublish;
-
+  // Always "Repurpose existing content" — the studio → platform "new posts"
+  // pairing is a fixed preset (see NewPostsPresetRow), not something created
+  // here.
   const submit = () => {
-    if (!name.trim() || !sourceId || !validDirection || !destinationId || !postsPerDayValid || !autoPublishValid) return;
+    if (!name.trim() || !sourceId || !validDirection || !destinationId || !postsPerDayValid) return;
     const fields = {
-      autoPublish,
+      autoPublish: false,
       destinationConnectionId: destinationId,
       name: name.trim(),
-      postsPerDay: autoPublish ? null : postsPerDayValue,
+      postsPerDay: postsPerDayValue,
       sourceConnectionId: sourceId,
     };
     const onSuccess = () => onClose();
@@ -1673,8 +1687,8 @@ function WorkflowFormDialog({
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit workflow" : "New workflow"}</DialogTitle>
           <DialogDescription>
-            Repurpose this studio&apos;s own content out to a connected account, or pull an Instagram or
-            Facebook account&apos;s existing posts in.
+            Work through a backlog on a schedule — this studio&apos;s own content out, or an
+            Instagram/Facebook account&apos;s existing posts in.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -1692,7 +1706,6 @@ function WorkflowFormDialog({
                   const platform = sourceOptions.find((c) => c.id === value)?.platform;
                   const importable = !!platform && IMPORTABLE_PLATFORMS.includes(platform);
                   setDestinationId(importable ? STUDIO_SOURCE_CONNECTION_ID : "");
-                  if (importable) setAutoPublish(false);
                 }}
               >
                 <SelectTrigger className="w-full">
@@ -1739,14 +1752,7 @@ function WorkflowFormDialog({
                 {`${sourcePlatformLabel} doesn't offer a way to pull existing posts out through its API, so importing from it isn't possible.`}
               </p>
             ) : (
-              <Select
-                value={destinationId}
-                onValueChange={(value) => {
-                  setDestinationId(value ?? "");
-                  const conn = realConnections.find((c) => c.id === value);
-                  if (conn && !isConnectionUsable(conn)) setAutoPublish(false);
-                }}
-              >
+              <Select value={destinationId} onValueChange={(value) => setDestinationId(value ?? "")}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select an account">
                     {(value: string) => {
@@ -1766,60 +1772,16 @@ function WorkflowFormDialog({
             )}
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">How would you like to use this workflow?</Label>
-            <div className="space-y-2">
-              <button
-                type="button"
-                disabled={!autoPublish && !canEnableAutoPublish}
-                onClick={() => canEnableAutoPublish && setAutoPublish(true)}
-                className={cn(
-                  "w-full rounded-xl border p-3 text-left transition-colors",
-                  autoPublish
-                    ? "border-ring bg-muted/40"
-                    : canEnableAutoPublish
-                      ? "hover:border-ring hover:bg-muted/40"
-                      : "cursor-not-allowed opacity-50"
-                )}
-              >
-                <p className="text-sm font-medium">Repurpose new posts</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {isImportableSource
-                    ? "Only available when this studio is the source — imports run on a schedule instead."
-                    : destinationConnection && !destinationUsable
-                      ? "Reconnect the destination account to turn this on."
-                      : "Every time you publish here, repurpose it to the destination automatically."}
-                </p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setAutoPublish(false)}
-                className={cn(
-                  "w-full rounded-xl border p-3 text-left transition-colors",
-                  !autoPublish ? "border-ring bg-muted/40" : "hover:border-ring hover:bg-muted/40"
-                )}
-              >
-                <p className="text-sm font-medium">Repurpose existing content</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {isImportableSource
-                    ? "Work through its existing posts as a backlog, a few a day."
-                    : "Publish from your existing posts to the destination on a schedule."}
-                </p>
-              </button>
-            </div>
+            <Label className="text-xs">Posts per day</Label>
+            <Input
+              type="number"
+              min={1}
+              max={50}
+              value={postsPerDay}
+              onChange={(e) => setPostsPerDay(e.target.value)}
+              className="w-24"
+            />
           </div>
-          {!autoPublish && (
-            <div className="space-y-1.5">
-              <Label className="text-xs">Posts per day</Label>
-              <Input
-                type="number"
-                min={1}
-                max={50}
-                value={postsPerDay}
-                onChange={(e) => setPostsPerDay(e.target.value)}
-                className="w-24"
-              />
-            </div>
-          )}
           {mutation.isError && (
             <p className="text-xs text-destructive">
               {mutation.error instanceof ApiError
@@ -1833,14 +1795,7 @@ function WorkflowFormDialog({
             Cancel
           </Button>
           <Button
-            disabled={
-              !name.trim() ||
-              !sourceId ||
-              !destinationId ||
-              !postsPerDayValid ||
-              !autoPublishValid ||
-              mutation.isPending
-            }
+            disabled={!name.trim() || !sourceId || !destinationId || !postsPerDayValid || mutation.isPending}
             onClick={submit}
           >
             {mutation.isPending ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}

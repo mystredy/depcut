@@ -127,6 +127,7 @@ export const PATCH = withDepCutAuth(async (request: DepCutAuthenticatedRequest, 
     );
   }
   if (sourceIsStudio && effectiveAutoPublish && !isConnectionUsable({
+    hasRefreshToken: Boolean(resolvedDestination.refreshToken),
     hasToken: Boolean(resolvedDestination.accessToken),
     status: resolvedDestination.status,
     tokenExpiresAt: resolvedDestination.tokenExpiresAt,
