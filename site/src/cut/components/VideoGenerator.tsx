@@ -1,13 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, ChevronDown, Download, Loader2, VideoIcon } from "lucide-react";
+import {
+  ArrowUp,
+  Clock,
+  Download,
+  Film,
+  Layers,
+  Loader2,
+  Scaling,
+  SlidersHorizontal,
+  Sparkles,
+  VideoIcon,
+} from "lucide-react";
 import { SectionTitle } from "@/cut/components/SectionTitle";
 import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { AddRefButton, MentionTextarea, RefChips } from "@/cut/components/AssetRefs";
 import {
   COUNT_OPTIONS,
   DURATION_OPTIONS,
+  IconSelect,
   OMNI_BEST_EFFORT_NOTE,
   REF_MODE_OPTIONS,
   RESOLUTION_OPTIONS,
@@ -201,6 +213,7 @@ export function VideoGenerator({ className }: { className?: string }) {
   const aspectOptions = model.aspects.map((a) => ({ value: a, label: VIDEO_ASPECT_LABEL[a].split(" ")[0] }));
   const effAspect = model.aspects.includes(aspect) ? aspect : model.aspects[0];
   const acceptsReferences = model.maxReferenceImages > 0;
+  const refModeOption = REF_MODE_OPTIONS.find((o) => o.value === refMode) ?? REF_MODE_OPTIONS[0];
 
   // A model switch that drops reference support clears any staged refs
   // rather than leave an attachment the next request would just ignore.
@@ -459,51 +472,97 @@ export function VideoGenerator({ className }: { className?: string }) {
               <SegRow title="Number of takes" value={count} onChange={setCount} options={COUNT_OPTIONS} />
             </div>
           )}
-          <div className="flex items-center justify-between gap-2">
-            {acceptsReferences ? (
-              <AddRefButton
-                onPick={addRef}
-                onUploadFiles={(files) => {
-                  for (const file of files) addRef(refFromLocalFile(file));
-                }}
-                prompt={prompt}
-                onPromptChange={setPrompt}
-                inputRef={promptRef}
-                accept="image/*,video/*"
-              />
-            ) : (
-              <span />
-            )}
-            <div className="flex min-w-0 items-center gap-1.5">
+          <div className="flex items-center justify-between gap-1">
+            <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
               <button
                 type="button"
-                title="Generation settings"
-                aria-label="Generation settings"
+                title="More settings"
+                aria-label="More settings"
                 aria-pressed={settingsOpen}
                 onClick={() => setSettingsOpen((v) => !v)}
                 className={cn(
-                  "flex min-w-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition-colors",
+                  "grid size-7 shrink-0 place-items-center rounded-full transition-colors",
                   settingsOpen
-                    ? "border-ring bg-muted text-foreground"
-                    : "border-input text-muted-foreground hover:text-foreground"
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
-                <span className="truncate">{model.model}</span>
-                {effResolution}
-                {count > 1 && <span>x{count}</span>}
-                <ChevronDown className="size-3.5 shrink-0" />
+                <SlidersHorizontal className="size-4" />
               </button>
-              <button
-                type="button"
-                title="Generate video"
-                aria-label="Generate video"
-                disabled={!prompt.trim() || signedOut || busy}
-                onClick={() => void generate()}
-                className="grid size-8 shrink-0 place-items-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90 disabled:opacity-40"
-              >
-                {busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowRight className="size-4" />}
-              </button>
+              <div className="mx-0.5 h-4 w-px shrink-0 bg-border" />
+              {acceptsReferences && (
+                <AddRefButton
+                  onPick={addRef}
+                  onUploadFiles={(files) => {
+                    for (const file of files) addRef(refFromLocalFile(file));
+                  }}
+                  prompt={prompt}
+                  onPromptChange={setPrompt}
+                  inputRef={promptRef}
+                  accept="image/*,video/*"
+                />
+              )}
+              <IconSelect
+                icon={Film}
+                title="Model"
+                value={tier}
+                display={model.model}
+                options={selectableModels.map((m) => ({ value: m.tier, label: m.model }))}
+                onChange={setTier}
+              />
+              <IconSelect
+                icon={Sparkles}
+                title="Resolution"
+                value={effResolution}
+                display={effResolution}
+                options={resolutionOptions}
+                onChange={setResolution}
+              />
+              {acceptsReferences && (
+                <IconSelect
+                  icon={refModeOption.icon}
+                  title="How references are used"
+                  value={refMode}
+                  display={refModeOption.label}
+                  options={REF_MODE_OPTIONS}
+                  onChange={setRefMode}
+                />
+              )}
+              <IconSelect
+                icon={Layers}
+                title="Number of takes"
+                value={count}
+                display={`x${count}`}
+                options={COUNT_OPTIONS}
+                onChange={setCount}
+              />
+              <IconSelect
+                icon={Clock}
+                title="Duration"
+                value={effDurationSeconds}
+                display={`${effDurationSeconds}s`}
+                options={durationOptions}
+                onChange={setDurationSeconds}
+              />
+              <IconSelect
+                icon={Scaling}
+                title="Aspect ratio"
+                value={effAspect}
+                display={effAspect}
+                options={aspectOptions}
+                onChange={setAspect}
+              />
             </div>
+            <button
+              type="button"
+              title="Generate video"
+              aria-label="Generate video"
+              disabled={!prompt.trim() || signedOut || busy}
+              onClick={() => void generate()}
+              className="grid size-8 shrink-0 place-items-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90 disabled:opacity-40"
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
+            </button>
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { NewProjectLauncher } from "@/cut/components/NewProjectLauncher";
 import { VideoGenerator } from "@/cut/components/VideoGenerator";
 import { GROUPS } from "@/cut/lib/navData";
 import { useCutBase } from "@/cut/lib/nav";
+import { cn } from "@/lib/utils";
 
 const STUDIO_TOOLS = GROUPS.find((g) => g.key === "ai-suite")!.children;
 
@@ -13,8 +14,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5 p-6">
-      <VideoGenerator />
-      <NewProjectLauncher source="dashboard" className="w-full sm:w-auto" />
       <div className="space-y-5 rounded-3xl border bg-card p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -25,20 +24,38 @@ export default function DashboardPage() {
           </span>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {STUDIO_TOOLS.map(({ slug, label, icon: Icon }) => (
-            <Link
-              key={slug}
-              href={`${base}/ai-suite/${slug}`}
-              className="flex h-12 items-center gap-2.5 rounded-2xl border bg-background px-3.5 text-sm font-medium transition-colors hover:border-primary/50 hover:bg-muted"
-            >
-              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-primary">
-                <Icon className="size-4" />
-              </span>
-              {label}
-            </Link>
-          ))}
+          {STUDIO_TOOLS.map(({ slug, label, icon: Icon }) => {
+            // The generate box right below this grid already is Text to
+            // Video — shown selected here instead of just another link to it.
+            const selected = slug === "text-to-video";
+            return (
+              <Link
+                key={slug}
+                href={`${base}/ai-suite/${slug}`}
+                aria-current={selected ? "page" : undefined}
+                className={cn(
+                  "flex h-12 items-center gap-2.5 rounded-2xl border px-3.5 text-sm font-medium transition-colors",
+                  selected
+                    ? "border-primary/50 bg-primary/10 text-primary"
+                    : "border-border bg-background hover:border-primary/50 hover:bg-muted"
+                )}
+              >
+                <span
+                  className={cn(
+                    "grid size-8 shrink-0 place-items-center rounded-lg",
+                    selected ? "bg-primary/15 text-primary" : "bg-muted text-primary"
+                  )}
+                >
+                  <Icon className="size-4" />
+                </span>
+                {label}
+              </Link>
+            );
+          })}
         </div>
       </div>
+      <VideoGenerator />
+      <NewProjectLauncher source="dashboard" className="w-full sm:w-auto" />
     </div>
   );
 }
