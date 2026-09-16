@@ -6,11 +6,21 @@ import {
   withDepCutAuth,
   type DepCutAuthenticatedRequest,
 } from "@/lib/depcut-api-auth";
+import { Prisma } from "@/generated/prisma/client";
 import { IMPORTABLE_PLATFORMS, isConnectionUsable, STUDIO_SOURCE_CONNECTION_ID } from "@/lib/marketplace/oauth-providers";
 import { prisma } from "@/lib/prisma";
 import { ensureStudioSourceConnection, getStudioMembership, logStudioActivity } from "@/lib/studio/access";
 
 export const dynamic = "force-dynamic";
+
+/** True for a Prisma unique-constraint violation — same pattern
+ * api/studios/route.ts uses for its own uniqueness check. Backs
+ * SocialWorkflow's @@unique([sourceConnectionId, destinationConnectionId]):
+ * two workflows between the same pair would otherwise both fire on every
+ * new post, double-publishing it. */
+function isUniqueConstraintError(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -184,19 +194,33 @@ export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest, c
     }
   }
 
-  const workflow = await prisma.socialWorkflow.create({
-    data: {
-      autoPublish,
-      destinationConnectionId: destination.id,
-      name,
-      postsPerDay: autoPublish ? null : postsPerDay ?? null,
-      sourceConnectionId: source.id,
-    },
-    include: {
-      destinationConnection: { select: connectionSelect },
-      sourceConnection: { select: connectionSelect },
-    },
-  });
+  let workflow;
+  try {
+    workflow = await prisma.socialWorkflow.create({
+      data: {
+        autoPublish,
+        destinationConnectionId: destination.id,
+        name,
+        postsPerDay: autoPublish ? null : postsPerDay ?? null,
+        sourceConnectionId: source.id,
+      },
+      include: {
+        destinationConnection: { select: connectionSelect },
+        sourceConnection: { select: connectionSelect },
+      },
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return NextResponse.json(
+        {
+          error: "Unsupported workflow",
+          message: `A workflow between ${source.accountName} and ${destination.accountName} already exists.`,
+        },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
 
   await logStudioActivity({
     action: `Created workflow "${name}" (${source.accountName} → ${destination.accountName})`,

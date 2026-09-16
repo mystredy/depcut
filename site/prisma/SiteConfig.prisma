@@ -177,6 +177,7 @@ model SocialWorkflow {
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
 
+  @@unique([sourceConnectionId, destinationConnectionId])
   @@index([sourceConnectionId])
   @@index([destinationConnectionId])
   @@map("social_workflow")

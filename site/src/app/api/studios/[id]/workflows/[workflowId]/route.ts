@@ -13,6 +13,11 @@ import { ensureStudioSourceConnection, getStudioMembership, logStudioActivity } 
 
 export const dynamic = "force-dynamic";
 
+/** True for a Prisma unique-constraint violation — see workflows/route.ts. */
+function isUniqueConstraintError(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
 type RouteContext = { params: Promise<{ id: string; workflowId: string }> };
 
 const connectionSelect = {
@@ -147,14 +152,28 @@ export const PATCH = withDepCutAuth(async (request: DepCutAuthenticatedRequest, 
     data.postsPerDay = null;
   }
 
-  const workflow = await prisma.socialWorkflow.update({
-    data,
-    include: {
-      destinationConnection: { select: connectionSelect },
-      sourceConnection: { select: connectionSelect },
-    },
-    where: { id: workflowId },
-  });
+  let workflow;
+  try {
+    workflow = await prisma.socialWorkflow.update({
+      data,
+      include: {
+        destinationConnection: { select: connectionSelect },
+        sourceConnection: { select: connectionSelect },
+      },
+      where: { id: workflowId },
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return NextResponse.json(
+        {
+          error: "Unsupported workflow",
+          message: `A workflow between ${resolvedSource.accountName} and ${resolvedDestination.accountName} already exists.`,
+        },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
 
   return NextResponse.json({
     workflow: { ...workflow, createdAt: workflow.createdAt.toISOString(), updatedAt: workflow.updatedAt.toISOString() },
