@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileVideo, Loader2 } from "lucide-react";
+import { FileVideo, Link2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -18,7 +18,7 @@ import { createExportJob, originalSettings, pollExport } from "@/cut/lib/exportC
 import { canRenderInBrowser, renderProjectToMp4 } from "@/cut/lib/exportRender";
 import { useEditor } from "@/cut/lib/store";
 import { STUDIO_SOURCE_PLATFORM } from "@/lib/marketplace/oauth-providers";
-import { SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
+import { PLATFORM_ICONS } from "@/lib/marketplace/platform-icons";
 import { studioDropsQueryKey, useStudioWorkflows } from "@/queries/studio";
 import { uploadDropVideo, useCreateDrop } from "@/queries/drop";
 import { cn } from "@/lib/utils";
@@ -101,13 +101,9 @@ export function DropDialog({
   const workflows = useStudioWorkflows(studioId);
   // The exact set social-workflow-publish.ts reads when this Drop finishes
   // uploading — shown so posting isn't a surprise about where it lands.
-  const autoPublishTargets = (workflows.data?.workflows ?? [])
-    .filter((w) => w.autoPublish && w.status === "Active" && w.sourceConnection.platform === STUDIO_SOURCE_PLATFORM)
-    .map((w) => {
-      const label = SOCIAL_APP_SEED.find((s) => s.platform === w.destinationConnection.platform)?.label
-        ?? w.destinationConnection.platform;
-      return `${label} (${w.destinationConnection.accountName})`;
-    });
+  const autoPublishTargets = (workflows.data?.workflows ?? []).filter(
+    (w) => w.autoPublish && w.status === "Active" && w.sourceConnection.platform === STUDIO_SOURCE_PLATFORM
+  );
 
   const pick = (f: File | null | undefined) => {
     if (!f) return;
@@ -163,13 +159,31 @@ export function DropDialog({
           <DialogTitle>New drop</DialogTitle>
           <DialogDescription>
             Posting to <span className="font-medium text-foreground">{studioName}</span>
-            {autoPublishTargets.length > 0 && (
-              <>
-                {" "}— auto-publishes to{" "}
-                <span className="font-medium text-foreground">{autoPublishTargets.join(", ")}</span>
-              </>
-            )}
           </DialogDescription>
+          {autoPublishTargets.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              {autoPublishTargets.map((w) => {
+                const c = w.destinationConnection;
+                const Icon = PLATFORM_ICONS[c.platform] ?? Link2;
+                return (
+                  <div key={w.id} className="flex items-center gap-1.5">
+                    {c.profileImage ? (
+                      <div className="relative size-6 shrink-0">
+                        <div className="size-6 overflow-hidden rounded-full bg-muted">
+                          {/* eslint-disable-next-line @next/next/no-img-element -- external platform avatar */}
+                          <img src={c.profileImage} alt="" className="size-full object-cover" />
+                        </div>
+                        <Icon className="absolute -right-1 -bottom-1 size-3 rounded-[25%] ring-2 ring-background" />
+                      </div>
+                    ) : (
+                      <Icon className="size-6 shrink-0 rounded-[25%]" />
+                    )}
+                    <span className="text-xs font-medium text-foreground">{c.accountName}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </DialogHeader>
 
         {done ? (

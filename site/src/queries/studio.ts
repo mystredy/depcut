@@ -356,6 +356,7 @@ export type StudioWorkflowConnection = {
   platform: string;
   accountName: string;
   accountHandle: string | null;
+  profileImage: string | null;
 };
 
 export type StudioWorkflow = {

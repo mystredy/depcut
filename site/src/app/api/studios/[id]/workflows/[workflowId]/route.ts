@@ -20,6 +20,7 @@ const connectionSelect = {
   accountName: true,
   id: true,
   platform: true,
+  profileImage: true,
 } as const;
 
 async function loadOwnedWorkflow(studioId: string, workflowId: string) {

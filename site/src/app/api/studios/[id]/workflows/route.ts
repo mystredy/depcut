@@ -19,6 +19,7 @@ const connectionSelect = {
   accountName: true,
   id: true,
   platform: true,
+  profileImage: true,
 } as const;
 
 // Managers only. Pairs the studio with one of its own connections, in
