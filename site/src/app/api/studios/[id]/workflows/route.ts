@@ -152,6 +152,38 @@ export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest, c
   const source = sourceIsStudio ? studioConnection : realConnection;
   const destination = sourceIsStudio ? realConnection : studioConnection;
 
+  // The "new posts" preset (see NewPostsPresetRow) is one toggle per
+  // destination, not a thing a manager names — reuse whichever workflow
+  // already covers this exact pairing instead of creating a second one, so
+  // a stale client (workflows not loaded yet, or a second tab) can't
+  // produce a duplicate the way SocialWorkflow's lack of a DB-level
+  // constraint would otherwise allow.
+  if (sourceIsStudio && autoPublish) {
+    const existing = await prisma.socialWorkflow.findFirst({
+      include: {
+        destinationConnection: { select: connectionSelect },
+        sourceConnection: { select: connectionSelect },
+      },
+      where: { autoPublish: true, destinationConnectionId: destination.id, sourceConnectionId: source.id },
+    });
+    if (existing) {
+      const workflow =
+        existing.status === "Active"
+          ? existing
+          : await prisma.socialWorkflow.update({
+              data: { status: "Active" },
+              include: {
+                destinationConnection: { select: connectionSelect },
+                sourceConnection: { select: connectionSelect },
+              },
+              where: { id: existing.id },
+            });
+      return NextResponse.json({
+        workflow: { ...workflow, createdAt: workflow.createdAt.toISOString(), updatedAt: workflow.updatedAt.toISOString() },
+      });
+    }
+  }
+
   const workflow = await prisma.socialWorkflow.create({
     data: {
       autoPublish,

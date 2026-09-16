@@ -1232,6 +1232,7 @@ function WorkflowSection({ studioId }: { studioId: string }) {
                       w.sourceConnection.platform === STUDIO_SOURCE_PLATFORM &&
                       w.destinationConnection.id === c.id
                   )}
+                  workflowsLoading={workflows.isLoading}
                 />
               ))}
             </div>
@@ -1316,10 +1317,12 @@ function NewPostsPresetRow({
   studioId,
   connection,
   workflow,
+  workflowsLoading,
 }: {
   studioId: string;
   connection: StudioConnection;
   workflow: StudioWorkflow | undefined;
+  workflowsLoading: boolean;
 }) {
   const create = useCreateStudioWorkflow(studioId);
   const update = useUpdateStudioWorkflow(studioId);
@@ -1329,6 +1332,10 @@ function NewPostsPresetRow({
   const mutationError = create.isError ? create.error : update.isError ? update.error : null;
 
   const toggle = (v: boolean) => {
+    // Before workflows have loaded, we can't yet tell whether a matching row
+    // already exists — toggling on here would risk creating a duplicate
+    // instead of reactivating it (see WorkflowSection).
+    if (workflowsLoading) return;
     if (v && !usable) return;
     if (workflow) {
       update.mutate({ status: v ? "Active" : "Inactive", workflowId: workflow.id });
@@ -1356,7 +1363,7 @@ function NewPostsPresetRow({
         </div>
         <Switch
           checked={isOn}
-          disabled={pending || (!isOn && !usable)}
+          disabled={pending || workflowsLoading || (!isOn && !usable)}
           onCheckedChange={toggle}
           aria-label={`Auto publish to ${connection.accountName}`}
         />
