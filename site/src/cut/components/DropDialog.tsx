@@ -113,10 +113,15 @@ export function DropDialog({
     }
     setError(null);
     setFile(f);
+    // Start uploading the moment a file is picked, instead of waiting for a
+    // separate "Post" click — post() below reads the passed-in file directly
+    // rather than the file state, which wouldn't be updated yet on this pass.
+    void post(f);
   };
 
-  const post = async () => {
-    if (!projectId && !file) return;
+  const post = async (pickedFile?: File) => {
+    const toPost = pickedFile ?? file;
+    if (!projectId && !toPost) return;
     setPosting(true);
     setError(null);
     setProgress(0);
@@ -128,7 +133,7 @@ export function DropDialog({
         projectId,
         studioId,
       });
-      let toUpload = file;
+      let toUpload = toPost;
       let cleanupExport: (() => Promise<void>) | undefined;
       if (projectId) {
         setPhase("export");
@@ -194,16 +199,17 @@ export function DropDialog({
               <label
                 onDragOver={(e) => {
                   e.preventDefault();
-                  setDragOver(true);
+                  if (!posting) setDragOver(true);
                 }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={(e) => {
                   e.preventDefault();
                   setDragOver(false);
-                  pick(e.dataTransfer.files[0]);
+                  if (!posting) pick(e.dataTransfer.files[0]);
                 }}
                 className={cn(
-                  "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors",
+                  "flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors",
+                  posting ? "cursor-not-allowed opacity-60" : "cursor-pointer",
                   dragOver ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
                 )}
               >
@@ -218,6 +224,7 @@ export function DropDialog({
                   type="file"
                   accept="video/*"
                   className="hidden"
+                  disabled={posting}
                   onChange={(e) => pick(e.target.files?.[0])}
                 />
               </label>
@@ -228,7 +235,8 @@ export function DropDialog({
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Title (optional)"
               maxLength={100}
-              className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring"
+              disabled={posting}
+              className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring disabled:opacity-60"
             />
 
             <textarea
@@ -237,7 +245,8 @@ export function DropDialog({
               placeholder="Description (optional)"
               maxLength={280}
               rows={2}
-              className="w-full resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring"
+              disabled={posting}
+              className="w-full resize-none rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring disabled:opacity-60"
             />
 
             <input
@@ -245,7 +254,8 @@ export function DropDialog({
               onChange={(e) => setHashtags(e.target.value)}
               placeholder="Hashtags, space or comma separated (optional)"
               maxLength={280}
-              className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring"
+              disabled={posting}
+              className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring disabled:opacity-60"
             />
 
             {error && <p className="text-sm text-red-600">{error}</p>}
