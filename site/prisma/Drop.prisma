@@ -60,19 +60,21 @@ model Drop {
   @@map("drop")
 }
 
-// One row per attempt to push a Drop to a workflow's destination — written
-// by social-workflow-publish.ts right after it calls publishToConnection.
-// The durable record of what happened, including the platform's own post
-// id, since the AsyncJob row the publish ran under isn't meant to be
-// queried as history. destinationConnectionId is a plain field, not a
-// relation, so this row survives the connection being removed or
-// reconnected — the platform/account name here are copied at publish time
-// for exactly that reason.
+// One row per attempt to push a Drop to a destination — written by
+// publishDropToConnection (dropPublish.ts) right after it calls
+// publishToConnection. The durable record of what happened, including the
+// platform's own post id, since the AsyncJob row an automated publish ran
+// under isn't meant to be queried as history. destinationConnectionId is a
+// plain field, not a relation, so this row survives the connection being
+// removed or reconnected — the platform/account name here are copied at
+// publish time for exactly that reason. workflowId is null for a manual
+// one-off repurpose (see /api/studios/[id]/drops/[dropId]/repurpose),
+// which has no SocialWorkflow behind it.
 model DropPublication {
   id                      String   @id @default(cuid())
   dropId                  String
   drop                    Drop     @relation(fields: [dropId], references: [id], onDelete: Cascade)
-  workflowId              String
+  workflowId              String?
   destinationConnectionId String
   platform                String
   destinationAccountName  String

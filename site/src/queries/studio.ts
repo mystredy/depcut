@@ -472,6 +472,20 @@ export function useDropAnalytics(studioId: string) {
   });
 }
 
+// A manual, one-off publish of an already-posted drop to a connected
+// platform right now — see /api/studios/[id]/drops/[dropId]/repurpose.
+export function useRepurposeDrop(studioId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dropId, destinationConnectionId }: { dropId: string; destinationConnectionId: string }) =>
+      apiFetch<{ ok: boolean }>(`/api/studios/${studioId}/drops/${dropId}/repurpose`, {
+        body: JSON.stringify({ destinationConnectionId }),
+        method: "POST",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: studioDropsQueryKey(studioId) }),
+  });
+}
+
 export function useRemoveStudioDrop(id: string) {
   const queryClient = useQueryClient();
   return useMutation({

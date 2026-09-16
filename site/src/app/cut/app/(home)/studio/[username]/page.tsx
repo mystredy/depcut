@@ -11,9 +11,11 @@ import {
   ChevronUp,
   EllipsisVertical,
   Link2,
+  Loader2,
   Pencil,
   Play,
   Plus,
+  Repeat2,
   Share2,
   Trash2,
   Video,
@@ -52,7 +54,7 @@ import { DropDialog } from "@/cut/components/DropDialog";
 import { ImageCropDialog } from "@/cut/components/ImageCropDialog";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { useCutBase } from "@/cut/lib/nav";
-import { YOUTUBE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
+import { isConnectionUsable, STUDIO_SOURCE_PLATFORM, YOUTUBE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
 import { PLATFORM_ICONS } from "@/lib/marketplace/platform-icons";
 import { SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
 import { cn } from "@/lib/utils";
@@ -64,7 +66,9 @@ import {
   useRemoveStudioAvatar,
   useRemoveStudioBackground,
   useRemoveStudioDrop,
+  useRepurposeDrop,
   useStudioByUsername,
+  useStudioConnections,
   useStudioDrops,
   useUpdateStudio,
   useUpdateStudioAvatar,
@@ -97,6 +101,8 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
   const [resumingDrop, setResumingDrop] = useState<StudioDrop | null>(null);
   const [analyticsDrop, setAnalyticsDrop] = useState<StudioDrop | null>(null);
   const [redirectTo, setRedirectTo] = useState<StudioDropPublication | null>(null);
+  const [deletingDrop, setDeletingDrop] = useState<StudioDrop | null>(null);
+  const [repurposingDrop, setRepurposingDrop] = useState<StudioDrop | null>(null);
 
   // Deep link from a copied "Share" link (?drop=<id>) — opens straight to
   // that post in the viewer once the drops list has loaded.
@@ -447,6 +453,15 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                           {copiedDropId === drop.id ? "Link copied!" : "Share"}
                         </DropdownMenuItem>
                       )}
+                      {drop.status === "complete" && (
+                        <DropdownMenuItem
+                          className="px-2 py-1 text-xs"
+                          onClick={() => setRepurposingDrop(drop)}
+                        >
+                          <Repeat2 className="size-3" />
+                          Repurpose
+                        </DropdownMenuItem>
+                      )}
                       {drop.publications.some((p) => YOUTUBE_PLATFORMS.includes(p.platform) && p.externalPostId) && (
                         <DropdownMenuItem
                           className="px-2 py-1 text-xs"
@@ -458,9 +473,11 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                       )}
                       <DropdownMenuItem
                         variant="destructive"
-                        disabled={removeDrop.isPending}
                         className="px-2 py-1 text-xs"
-                        onClick={() => removeDrop.mutate(drop.id)}
+                        onClick={() => {
+                          setDeletingDrop(drop);
+                          setDropMenuOpenId(null);
+                        }}
                       >
                         <Trash2 className="size-3" />
                         Delete
@@ -564,6 +581,8 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
 
       <DropAnalyticsDialog studioId={studio.id} drop={analyticsDrop} onClose={() => setAnalyticsDrop(null)} />
 
+      <RepurposeDialog studioId={studio.id} drop={repurposingDrop} onClose={() => setRepurposingDrop(null)} />
+
       <AlertDialog open={redirectTo !== null} onOpenChange={(open) => !open && setRedirectTo(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -583,6 +602,34 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
               }}
             >
               Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deletingDrop !== null} onOpenChange={(open) => !open && setDeletingDrop(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete “{deletingDrop?.title || deletingDrop?.caption || deletingDrop?.fileName || "this drop"}”?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingDrop && deletingDrop.publications.length > 0
+                ? "This can't be undone. It stays up on the platforms it was already published to — this only removes it from DepCut."
+                : "This can't be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive/10 text-destructive hover:bg-destructive/20"
+              disabled={removeDrop.isPending}
+              onClick={() => {
+                if (!deletingDrop) return;
+                removeDrop.mutate(deletingDrop.id, { onSuccess: () => setDeletingDrop(null) });
+              }}
+            >
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -611,6 +658,98 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
         onRemove={() => removeBackground.mutateAsync().then(() => {})}
       />
     </div>
+  );
+}
+
+// Manual, one-off publish of an already-posted drop to a connected platform
+// right now — see /api/studios/[id]/drops/[dropId]/repurpose. Distinct from
+// the "Repurpose new posts" preset in studio settings, which is a standing
+// rule for future drops instead of a single action on this one.
+function RepurposeDialog({
+  studioId,
+  drop,
+  onClose,
+}: {
+  studioId: string;
+  drop: StudioDrop | null;
+  onClose: () => void;
+}) {
+  const connections = useStudioConnections(studioId);
+  const repurpose = useRepurposeDrop(studioId);
+  const [chosenId, setChosenId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (drop) {
+      setChosenId(null);
+      repurpose.reset();
+    }
+    // Reset only when a different drop opens, not on every mutation state change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drop?.id]);
+
+  const realConnections = (connections.data?.connections ?? []).filter((c) => c.platform !== STUDIO_SOURCE_PLATFORM);
+
+  return (
+    <Dialog open={drop !== null} onOpenChange={(open) => !open && !repurpose.isPending && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Repurpose “{drop?.title || drop?.caption || drop?.fileName || "this drop"}”</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">Publish it to a connected platform right now.</p>
+        {realConnections.length === 0 ? (
+          <p className="rounded-lg border border-dashed px-2.5 py-2 text-xs text-muted-foreground">
+            Connect a platform under Connections first.
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            {realConnections.map((c) => {
+              const Icon = PLATFORM_ICONS[c.platform] ?? Link2;
+              const usable = isConnectionUsable(c);
+              const pending = repurpose.isPending && chosenId === c.id;
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  disabled={!usable || repurpose.isPending}
+                  onClick={() => {
+                    if (!drop) return;
+                    setChosenId(c.id);
+                    repurpose.mutate(
+                      { destinationConnectionId: c.id, dropId: drop.id },
+                      { onSuccess: onClose },
+                    );
+                  }}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-2 rounded-xl border p-3 text-left transition-colors",
+                    usable ? "hover:border-ring hover:bg-muted/40" : "cursor-not-allowed opacity-50"
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <Icon className="size-7 rounded-[25%]" />
+                    <span className="text-sm font-medium">{c.accountName}</span>
+                  </span>
+                  {pending ? (
+                    <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+                  ) : (
+                    !usable && <span className="shrink-0 text-xs text-muted-foreground">Reconnect</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {repurpose.isError && (
+          <p className="text-xs text-destructive">
+            {repurpose.error instanceof ApiError ? repurpose.error.message : "Couldn't repurpose that drop."}
+          </p>
+        )}
+        <DialogFooter>
+          <Button variant="outline" disabled={repurpose.isPending} onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
