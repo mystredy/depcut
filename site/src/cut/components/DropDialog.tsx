@@ -17,7 +17,9 @@ import { getBackend } from "@/cut/lib/backend";
 import { createExportJob, originalSettings, pollExport } from "@/cut/lib/exportClient";
 import { canRenderInBrowser, renderProjectToMp4 } from "@/cut/lib/exportRender";
 import { useEditor } from "@/cut/lib/store";
-import { studioDropsQueryKey } from "@/queries/studio";
+import { STUDIO_SOURCE_PLATFORM } from "@/lib/marketplace/oauth-providers";
+import { SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
+import { studioDropsQueryKey, useStudioWorkflows } from "@/queries/studio";
 import { uploadDropVideo, useCreateDrop } from "@/queries/drop";
 import { cn } from "@/lib/utils";
 
@@ -96,6 +98,16 @@ export function DropDialog({
 
   const queryClient = useQueryClient();
   const createDrop = useCreateDrop();
+  const workflows = useStudioWorkflows(studioId);
+  // The exact set social-workflow-publish.ts reads when this Drop finishes
+  // uploading — shown so posting isn't a surprise about where it lands.
+  const autoPublishTargets = (workflows.data?.workflows ?? [])
+    .filter((w) => w.autoPublish && w.status === "Active" && w.sourceConnection.platform === STUDIO_SOURCE_PLATFORM)
+    .map((w) => {
+      const label = SOCIAL_APP_SEED.find((s) => s.platform === w.destinationConnection.platform)?.label
+        ?? w.destinationConnection.platform;
+      return `${label} (${w.destinationConnection.accountName})`;
+    });
 
   const pick = (f: File | null | undefined) => {
     if (!f) return;
@@ -151,6 +163,12 @@ export function DropDialog({
           <DialogTitle>New drop</DialogTitle>
           <DialogDescription>
             Posting to <span className="font-medium text-foreground">{studioName}</span>
+            {autoPublishTargets.length > 0 && (
+              <>
+                {" "}— auto-publishes to{" "}
+                <span className="font-medium text-foreground">{autoPublishTargets.join(", ")}</span>
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
