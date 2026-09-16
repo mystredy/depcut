@@ -452,6 +452,22 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                         <Trash2 className="size-3" />
                         Delete
                       </DropdownMenuItem>
+                      {drop.publications.length > 0 && (
+                        <div className="mt-0.5 space-y-0.5 border-t pt-0.5">
+                          {[...new Map(drop.publications.map((p) => [p.platform, p])).values()].map((p) => {
+                            const Icon = PLATFORM_ICONS[p.platform] ?? Link2;
+                            return (
+                              <div
+                                key={p.platform}
+                                className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground"
+                              >
+                                <Icon className="size-3.5 rounded-[25%]" />
+                                {p.destinationAccountName}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
@@ -472,29 +488,11 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                     />
                     <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-black/0" />
                     {drop.status === "complete" ? (
-                      <>
-                        <span className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
-                          <span className="grid size-9 place-items-center rounded-full bg-white/95">
-                            <Play className="ml-0.5 size-4 fill-ink text-ink" />
-                          </span>
+                      <span className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
+                        <span className="grid size-9 place-items-center rounded-full bg-white/95">
+                          <Play className="ml-0.5 size-4 fill-ink text-ink" />
                         </span>
-                        {drop.publications.length > 0 && (
-                          <div className="absolute left-1.5 top-1.5 flex items-center gap-1">
-                            {[...new Map(drop.publications.map((p) => [p.platform, p])).values()].map((p) => {
-                              const Icon = PLATFORM_ICONS[p.platform] ?? Link2;
-                              return (
-                                <span
-                                  key={p.platform}
-                                  title={`Published to ${p.destinationAccountName}`}
-                                  className="inline-flex"
-                                >
-                                  <Icon className="size-5 rounded-[25%] ring-1 ring-background" />
-                                </span>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </>
+                      </span>
                     ) : (
                       <span className="absolute left-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white backdrop-blur">
                         Draft
