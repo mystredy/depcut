@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import type React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronRight, Shield, X } from "lucide-react";
@@ -23,18 +22,11 @@ export function AppSidebar() {
   const visibleLinks = LINKS.filter((l) => l.tab !== "showcase" || account.data?.superUser === true);
   const { isMobile, open: mobileOpen, setOpen: setMobileOpen } = useMobileSidebar();
   const [collapsed, setCollapsed] = useState(false);
-  // Mobile always shows the narrow icon rail — there's no room for the
-  // labelled panel on a phone-width screen, and the rail's own overlay
-  // (show/hide) already does the job the desktop expand/collapse toggle does.
-  const showRail = isMobile || collapsed;
-  // The rail stays mounted (just translated off-screen) between opens, so a
-  // flyout left open from a previous visit needs clearing here too — else it
-  // would show at a stale position next time the rail opens.
-  const [mobileFlyout, setMobileFlyout] = useState<{ key: string; top: number } | null>(null);
-  const closeMobile = () => {
-    setMobileOpen(false);
-    setMobileFlyout(null);
-  };
+  // Mobile is a fixed overlay with its own backdrop, not part of the page's
+  // flex layout, so it can afford the full labelled panel — the icon-only
+  // rail below is a desktop-only collapse state.
+  const showRail = !isMobile && collapsed;
+  const closeMobile = () => setMobileOpen(false);
   const closeOnMobile = () => {
     if (isMobile) closeMobile();
   };
@@ -50,43 +42,20 @@ export function AppSidebar() {
       return next;
     });
 
-  // Collapsed rail: a group has no page of its own, so its icon expands the
-  // sidebar and opens straight to its children instead of navigating. Mobile
-  // has no expanded width to grow into, so its rail is permanent — the icon
-  // instead pops the group's children as a flyout beside it. The flyout is
-  // positioned fixed (not absolute, inside the rail's own scroll container)
-  // so a scrolled rail never clips it.
-  const openGroupExpanded = (key: string, e?: React.MouseEvent<HTMLButtonElement>) => {
-    if (isMobile) {
-      // Read the button's position now — by the time a state updater runs,
-      // React has already cleared the synthetic event's fields.
-      const top = e?.currentTarget.getBoundingClientRect().top ?? 0;
-      setMobileFlyout((prev) => (prev?.key === key ? null : { key, top }));
-      return;
-    }
+  // Collapsed rail (desktop only): a group has no page of its own, so its
+  // icon expands the sidebar back out and opens straight to its children.
+  const openGroupExpanded = (key: string) => {
     setCollapsed(false);
     setOpenGroups((prev) => new Set(prev).add(key));
   };
 
-  // Rail icon size steps down on mobile — a phone-width overlay has no room
-  // for the desktop rail's 64px, so it sits closer to 50px with tighter gaps.
-  const railBtn = cn(
-    "grid shrink-0 place-items-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
-    isMobile ? "size-9" : "size-10"
-  );
+  const railBtn =
+    "grid size-10 shrink-0 place-items-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground";
 
-  // Rail group: no room for a label, so the icon pops its children as a
-  // fixed-position flyout (rendered separately, see below) instead of an
-  // inline expanding list.
+  // Rail group: no room for a label, so the icon un-collapses the sidebar
+  // and opens this group instead of showing an inline expanding list.
   const renderRailGroup = ({ key, label, icon: Icon }: NavGroup) => (
-    <button
-      key={key}
-      type="button"
-      onClick={(e) => openGroupExpanded(key, e)}
-      aria-label={label}
-      title={label}
-      className={cn(railBtn, mobileFlyout?.key === key && "bg-sidebar-accent text-sidebar-foreground")}
-    >
+    <button key={key} type="button" onClick={() => openGroupExpanded(key)} aria-label={label} title={label} className={railBtn}>
       <Icon className="size-4" />
     </button>
   );
@@ -132,8 +101,6 @@ export function AppSidebar() {
     );
   };
 
-  const flyoutGroup = mobileFlyout && ALL_GROUPS.find((g) => g.key === mobileFlyout.key);
-
   return (
     <>
       {isMobile && mobileOpen && (
@@ -143,47 +110,23 @@ export function AppSidebar() {
         className={cn(
           "dark border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-200",
           isMobile
-            ? cn(
-                "fixed inset-y-0 left-0 z-50 w-14 shadow-xl",
-                mobileOpen ? "translate-x-0" : "-translate-x-full"
-              )
+            ? cn("fixed inset-y-0 left-0 z-50 w-60 shadow-xl", mobileOpen ? "translate-x-0" : "-translate-x-full")
             : cn("shrink-0 overflow-hidden", showRail ? "w-16" : "w-60")
         )}
       >
         {showRail ? (
-          <div
-            className={cn(
-              "flex h-full flex-col items-center overflow-y-auto",
-              isMobile ? "w-14 gap-0.5 py-3" : "w-16 gap-1 py-4"
-            )}
-          >
-            {isMobile ? (
-              <button
-                type="button"
-                onClick={closeMobile}
-                aria-label="Close menu"
-                title="Close menu"
-                className="mb-3 grid size-9 shrink-0 place-items-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-foreground transition-colors hover:bg-sidebar-accent/70"
-              >
-                <X className="size-4" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setCollapsed(false)}
-                aria-label="Expand sidebar"
-                title="Expand sidebar"
-                className="group relative mb-4 size-9 shrink-0 transition-transform hover:scale-105"
-              >
-                <SiteLogo
-                  width={36}
-                  height={36}
-                  compact
-                  className="transition-opacity group-hover:opacity-0"
-                />
-                <ChevronRight className="absolute inset-0 m-auto size-4 text-sidebar-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-              </button>
-            )}
+          // Desktop only — mobile always renders the labelled panel below.
+          <div className="flex h-full w-16 flex-col items-center gap-1 overflow-y-auto py-4">
+            <button
+              type="button"
+              onClick={() => setCollapsed(false)}
+              aria-label="Expand sidebar"
+              title="Expand sidebar"
+              className="group relative mb-4 size-9 shrink-0 transition-transform hover:scale-105"
+            >
+              <SiteLogo width={36} height={36} compact className="transition-opacity group-hover:opacity-0" />
+              <ChevronRight className="absolute inset-0 m-auto size-4 text-sidebar-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+            </button>
             {visibleLinks.map(({ tab, label, icon: Icon }) => {
               const href = homeHref(base, tab);
               const active = pathname === href;
@@ -191,13 +134,9 @@ export function AppSidebar() {
                 <Link
                   key={tab}
                   href={href}
-                  onClick={closeOnMobile}
                   aria-label={label}
                   title={label}
-                  className={cn(
-                    railBtn,
-                    active && "bg-sidebar-accent text-sidebar-foreground"
-                  )}
+                  className={cn(railBtn, active && "bg-sidebar-accent text-sidebar-foreground")}
                 >
                   <Icon className="size-4" />
                 </Link>
@@ -205,24 +144,15 @@ export function AppSidebar() {
             })}
             {GROUPS.map(renderRailGroup)}
             {account.data?.isArtist && (
-              <div className={cn("border-t border-sidebar-border", isMobile ? "mt-3 pt-3" : "mt-4 pt-4")}>
-                {renderRailGroup(ARTIST_GROUP)}
-              </div>
+              <div className="mt-4 border-t border-sidebar-border pt-4">{renderRailGroup(ARTIST_GROUP)}</div>
             )}
             {account.data?.superUser && (
-              <Link
-                href="/admin"
-                onClick={closeOnMobile}
-                aria-label="Admin"
-                title="Admin"
-                className={railBtn}
-              >
+              <Link href="/admin" aria-label="Admin" title="Admin" className={railBtn}>
                 <Shield className="size-4" />
               </Link>
             )}
           </div>
         ) : (
-          // Desktop only — mobile always renders the rail above.
           <div className="flex h-full w-60 flex-col px-3 py-4">
             <div className="mb-5 flex items-center justify-between gap-2.5 px-2">
               <div className="flex items-center gap-2.5">
@@ -230,15 +160,27 @@ export function AppSidebar() {
                 <span className="text-[17px] font-semibold tracking-tight">DepCut</span>
                 <BetaBadge />
               </div>
-              <button
-                type="button"
-                onClick={() => setCollapsed(true)}
-                aria-label="Collapse sidebar"
-                title="Collapse sidebar"
-                className="grid size-8 shrink-0 place-items-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-foreground transition-colors hover:bg-sidebar-accent/70"
-              >
-                <ChevronRight className="size-4 rotate-180" />
-              </button>
+              {isMobile ? (
+                <button
+                  type="button"
+                  onClick={closeMobile}
+                  aria-label="Close menu"
+                  title="Close menu"
+                  className="grid size-8 shrink-0 place-items-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-foreground transition-colors hover:bg-sidebar-accent/70"
+                >
+                  <X className="size-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setCollapsed(true)}
+                  aria-label="Collapse sidebar"
+                  title="Collapse sidebar"
+                  className="grid size-8 shrink-0 place-items-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-foreground transition-colors hover:bg-sidebar-accent/70"
+                >
+                  <ChevronRight className="size-4 rotate-180" />
+                </button>
+              )}
             </div>
 
             <nav className="flex flex-col gap-0.5">
@@ -249,6 +191,7 @@ export function AppSidebar() {
                   <Link
                     key={tab}
                     href={href}
+                    onClick={closeOnMobile}
                     className={cn(
                       "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
                       active && "bg-sidebar-accent text-sidebar-foreground"
@@ -268,6 +211,7 @@ export function AppSidebar() {
               <div className="mt-4 border-t border-sidebar-border pt-4">
                 <Link
                   href="/admin"
+                  onClick={closeOnMobile}
                   className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
                 >
                   <Shield className="size-4" />
@@ -278,31 +222,6 @@ export function AppSidebar() {
           </div>
         )}
       </aside>
-      {isMobile && flyoutGroup && mobileFlyout && (
-        <div
-          className="dark fixed z-[60] w-48 rounded-lg border border-sidebar-border bg-sidebar p-1.5 text-sidebar-foreground shadow-xl"
-          style={{ top: mobileFlyout.top, left: 60 }}
-        >
-          {flyoutGroup.children.map(({ slug, label: childLabel, icon: ChildIcon, href: childHref }) => {
-            const href = childHref ?? `${base}/${flyoutGroup.key}/${slug}`;
-            const active = pathname === href;
-            return (
-              <Link
-                key={slug}
-                href={href}
-                onClick={closeOnMobile}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                  active && "bg-sidebar-accent text-sidebar-foreground"
-                )}
-              >
-                <ChildIcon className="size-3.5 shrink-0" />
-                {childLabel}
-              </Link>
-            );
-          })}
-        </div>
-      )}
     </>
   );
 }
