@@ -62,3 +62,29 @@ export async function publishInstagramVideo(opts: {
     url: (permalinkData?.permalink as string | undefined) ?? `https://www.instagram.com/reel/${mediaId}/`,
   };
 }
+
+export type InstagramMedia = { id: string; mediaUrl: string; caption?: string; timestamp: string };
+
+// The read side of an import workflow (see social-workflow-import.ts) — the
+// account's own video/Reels posts, newest first. media_url is a short-lived
+// signed CDN link, so this is meant to be called right before downloading
+// it, not cached.
+export async function listInstagramMedia(igUserId: string, accessToken: string): Promise<InstagramMedia[]> {
+  const res = await fetch(
+    `https://graph.facebook.com/v21.0/${igUserId}/media?fields=id,media_type,media_url,caption,timestamp&access_token=${encodeURIComponent(accessToken)}`,
+  );
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new InstagramApiError(`Instagram rejected the media list: ${data?.error?.message ?? res.status}`);
+  }
+  const items = (data?.data ?? []) as Array<{
+    id: string;
+    media_type?: string;
+    media_url?: string;
+    caption?: string;
+    timestamp: string;
+  }>;
+  return items
+    .filter((item) => (item.media_type === "VIDEO" || item.media_type === "REELS") && item.media_url)
+    .map((item) => ({ caption: item.caption, id: item.id, mediaUrl: item.media_url!, timestamp: item.timestamp }));
+}

@@ -204,6 +204,16 @@ export const YOUTUBE_PLATFORMS = ["youtube"];
 // for posting to a connected account at all.
 export const PUBLISHABLE_PLATFORMS = ["youtube", "tiktok", "x", "facebook", "instagram", "threads"];
 
+// Platforms a studio workflow can use as an import *source* (destination =
+// the studio itself) — the reverse of PUBLISHABLE_PLATFORMS. Deliberately
+// much shorter: YouTube, TikTok, and Threads expose no official API for a
+// creator's own uploaded video file at all (metadata/embed links only), and
+// X gates its read API behind a paid tier. Instagram's Graph API returns a
+// real, directly fetchable media_url for owned video content; Facebook's
+// video `source` field does too, but only once Meta approves the relevant
+// App Review for that permission — see facebook-api.ts's listFacebookVideos.
+export const IMPORTABLE_PLATFORMS = ["instagram", "facebook"];
+
 // A studio workflow's source can be the studio's own content (its Drops)
 // instead of another connected platform. Represented as a real
 // SocialConnection row (platform === this value, studioId set, no real
