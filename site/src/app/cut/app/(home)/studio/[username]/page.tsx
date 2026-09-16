@@ -438,7 +438,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                         e.preventDefault();
                         e.stopPropagation();
                       }}
-                      className="pointer-events-auto absolute right-1.5 top-1.5 z-10 grid size-6 place-items-center rounded-full bg-black/60 text-white backdrop-blur transition-colors hover:bg-black/80"
+                      className="pointer-events-auto absolute right-1.5 top-1.5 z-10 grid size-6 place-items-center rounded-full text-white drop-shadow-md transition-opacity hover:opacity-75"
                     >
                       <EllipsisVertical className="size-3.5" />
                     </DropdownMenuTrigger>
