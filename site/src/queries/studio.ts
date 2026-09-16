@@ -332,6 +332,25 @@ export function useDisconnectStudioConnection(id: string) {
   });
 }
 
+export type StudioConnectionAnalyticsRow = {
+  day: string;
+  views: number;
+  estimatedMinutesWatched: number;
+  likes: number;
+  subscribersGained: number;
+};
+
+// Fetched on demand (not a background query) since it calls YouTube live —
+// see /api/studios/[id]/connections/[connectionId]/analytics.
+export function useStudioConnectionAnalytics(id: string) {
+  return useMutation({
+    mutationFn: ({ connectionId, days }: { connectionId: string; days?: number }) =>
+      apiFetch<{ rows: StudioConnectionAnalyticsRow[] }>(
+        `/api/studios/${id}/connections/${connectionId}/analytics${days ? `?days=${days}` : ""}`,
+      ),
+  });
+}
+
 export type StudioWorkflowConnection = {
   id: string;
   platform: string;
