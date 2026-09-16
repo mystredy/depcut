@@ -49,7 +49,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import { DropDialog } from "@/cut/components/DropDialog";
 import { ImageCropDialog } from "@/cut/components/ImageCropDialog";
 import { UserAvatar } from "@/cut/components/UserAvatar";
@@ -73,6 +75,7 @@ import {
   useUpdateStudio,
   useUpdateStudioAvatar,
   useUpdateStudioBackground,
+  type StudioConnection,
   type StudioDrop,
   type StudioDropPublication,
 } from "@/queries/studio";
@@ -665,6 +668,13 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
 // right now — see /api/studios/[id]/drops/[dropId]/repurpose. Distinct from
 // the "Repurpose new posts" preset in studio settings, which is a standing
 // rule for future drops instead of a single action on this one.
+//
+// A real, irreversible post to a third-party platform doesn't get a single
+// click — pick platform, then review/amend the title & caption, then a
+// final confirm screen that says plainly what's about to happen. Any step
+// can still go back or cancel outright.
+type RepurposeStep = "pick" | "edit" | "confirm" | "done";
+
 function RepurposeDialog({
   studioId,
   drop,
@@ -676,11 +686,19 @@ function RepurposeDialog({
 }) {
   const connections = useStudioConnections(studioId);
   const repurpose = useRepurposeDrop(studioId);
-  const [chosenId, setChosenId] = useState<string | null>(null);
+  const [step, setStep] = useState<RepurposeStep>("pick");
+  const [chosen, setChosen] = useState<StudioConnection | null>(null);
+  const [title, setTitle] = useState("");
+  const [caption, setCaption] = useState("");
+  const [hashtags, setHashtags] = useState("");
 
   useEffect(() => {
     if (drop) {
-      setChosenId(null);
+      setStep("pick");
+      setChosen(null);
+      setTitle(drop.title ?? "");
+      setCaption(drop.caption ?? "");
+      setHashtags(drop.hashtags.map((t) => `#${t}`).join(" "));
       repurpose.reset();
     }
     // Reset only when a different drop opens, not on every mutation state change.
@@ -688,66 +706,161 @@ function RepurposeDialog({
   }, [drop?.id]);
 
   const realConnections = (connections.data?.connections ?? []).filter((c) => c.platform !== STUDIO_SOURCE_PLATFORM);
+  const alreadyPostedIds = new Set((drop?.publications ?? []).map((p) => p.destinationConnectionId));
+  const chosenLabel = chosen && (SOCIAL_APP_SEED.find((s) => s.platform === chosen.platform)?.label ?? chosen.platform);
+
+  const close = () => {
+    if (repurpose.isPending) return;
+    onClose();
+  };
 
   return (
-    <Dialog open={drop !== null} onOpenChange={(open) => !open && !repurpose.isPending && onClose()}>
+    <Dialog open={drop !== null} onOpenChange={(open) => !open && close()}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Repurpose “{drop?.title || drop?.caption || drop?.fileName || "this drop"}”</DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">Publish it to a connected platform right now.</p>
-        {realConnections.length === 0 ? (
-          <p className="rounded-lg border border-dashed px-2.5 py-2 text-xs text-muted-foreground">
-            Connect a platform under Connections first.
-          </p>
+
+        {step === "done" ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">Posted.</p>
+        ) : step === "pick" ? (
+          <>
+            <p className="text-sm text-muted-foreground">Publish it to a connected platform right now.</p>
+            {realConnections.length === 0 ? (
+              <p className="rounded-lg border border-dashed px-2.5 py-2 text-xs text-muted-foreground">
+                Connect a platform under Connections first.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {realConnections.map((c) => {
+                  const Icon = PLATFORM_ICONS[c.platform] ?? Link2;
+                  const usable = isConnectionUsable(c);
+                  const posted = alreadyPostedIds.has(c.id);
+                  const disabled = !usable || posted;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        setChosen(c);
+                        setStep("edit");
+                      }}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-2 rounded-xl border p-3 text-left transition-colors",
+                        disabled ? "cursor-not-allowed opacity-50" : "hover:border-ring hover:bg-muted/40"
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Icon className="size-7 rounded-[25%]" />
+                        <span className="text-sm font-medium">{c.accountName}</span>
+                      </span>
+                      {posted ? (
+                        <span className="shrink-0 text-xs text-muted-foreground">Already posted</span>
+                      ) : (
+                        !usable && <span className="shrink-0 text-xs text-muted-foreground">Reconnect</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={close}>
+                Close
+              </Button>
+            </DialogFooter>
+          </>
+        ) : step === "edit" ? (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Reviewing before it posts to {chosen?.accountName} on {chosenLabel}. Amend anything below if you want.
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Title</Label>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                maxLength={100}
+                placeholder="Title (optional)"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Description</Label>
+              <Textarea
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                maxLength={280}
+                rows={2}
+                placeholder="Description (optional)"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Hashtags</Label>
+              <Input
+                value={hashtags}
+                onChange={(e) => setHashtags(e.target.value)}
+                maxLength={280}
+                placeholder="Hashtags, space or comma separated (optional)"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setStep("pick")}>
+                Back
+              </Button>
+              <Button onClick={() => setStep("confirm")}>Next</Button>
+            </DialogFooter>
+          </>
         ) : (
-          <div className="space-y-1.5">
-            {realConnections.map((c) => {
-              const Icon = PLATFORM_ICONS[c.platform] ?? Link2;
-              const usable = isConnectionUsable(c);
-              const pending = repurpose.isPending && chosenId === c.id;
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  disabled={!usable || repurpose.isPending}
-                  onClick={() => {
-                    if (!drop) return;
-                    setChosenId(c.id);
-                    repurpose.mutate(
-                      { destinationConnectionId: c.id, dropId: drop.id },
-                      { onSuccess: onClose },
-                    );
-                  }}
-                  className={cn(
-                    "flex w-full items-center justify-between gap-2 rounded-xl border p-3 text-left transition-colors",
-                    usable ? "hover:border-ring hover:bg-muted/40" : "cursor-not-allowed opacity-50"
-                  )}
-                >
-                  <span className="flex items-center gap-2">
-                    <Icon className="size-7 rounded-[25%]" />
-                    <span className="text-sm font-medium">{c.accountName}</span>
-                  </span>
-                  {pending ? (
-                    <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-                  ) : (
-                    !usable && <span className="shrink-0 text-xs text-muted-foreground">Reconnect</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          <>
+            <p className="text-sm">
+              You&apos;re about to publish{" "}
+              <span className="font-medium text-foreground">
+                {title || caption || drop?.fileName || "this drop"}
+              </span>{" "}
+              to <span className="font-medium text-foreground">{chosenLabel}</span> (
+              <span className="font-medium text-foreground">{chosen?.accountName}</span>) right now.
+            </p>
+            <p className="text-sm text-muted-foreground">This can&apos;t be undone.</p>
+            {repurpose.isError && (
+              <p className="text-xs text-destructive">
+                {repurpose.error instanceof ApiError ? repurpose.error.message : "Couldn't repurpose that drop."}
+              </p>
+            )}
+            <DialogFooter>
+              <Button variant="outline" disabled={repurpose.isPending} onClick={() => setStep("edit")}>
+                Back
+              </Button>
+              <Button variant="outline" disabled={repurpose.isPending} onClick={close}>
+                Cancel
+              </Button>
+              <Button
+                disabled={repurpose.isPending}
+                onClick={() => {
+                  if (!drop || !chosen) return;
+                  repurpose.mutate(
+                    {
+                      caption: caption.trim() || undefined,
+                      destinationConnectionId: chosen.id,
+                      dropId: drop.id,
+                      hashtags: hashtags.trim() || undefined,
+                      title: title.trim() || undefined,
+                    },
+                    {
+                      onSuccess: () => {
+                        setStep("done");
+                        setTimeout(onClose, 900);
+                      },
+                    },
+                  );
+                }}
+              >
+                {repurpose.isPending && <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" />}
+                Confirm &amp; post
+              </Button>
+            </DialogFooter>
+          </>
         )}
-        {repurpose.isError && (
-          <p className="text-xs text-destructive">
-            {repurpose.error instanceof ApiError ? repurpose.error.message : "Couldn't repurpose that drop."}
-          </p>
-        )}
-        <DialogFooter>
-          <Button variant="outline" disabled={repurpose.isPending} onClick={onClose}>
-            Close
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

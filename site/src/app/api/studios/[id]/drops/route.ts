@@ -32,7 +32,13 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
       // Which platforms this drop actually reached — drives the grid card's
       // platform badges and whether "View analytics" applies at all.
       publications: {
-        select: { destinationAccountName: true, externalPostId: true, externalUrl: true, platform: true },
+        select: {
+          destinationAccountName: true,
+          destinationConnectionId: true,
+          externalPostId: true,
+          externalUrl: true,
+          platform: true,
+        },
         where: { status: "success" },
       },
       sizeBytes: true,

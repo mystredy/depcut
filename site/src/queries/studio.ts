@@ -437,6 +437,7 @@ export function useDeleteStudioWorkflow(id: string) {
 export type StudioDropPublication = {
   platform: string;
   destinationAccountName: string;
+  destinationConnectionId: string;
   externalPostId: string | null;
   externalUrl: string | null;
 };
@@ -477,9 +478,21 @@ export function useDropAnalytics(studioId: string) {
 export function useRepurposeDrop(studioId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ dropId, destinationConnectionId }: { dropId: string; destinationConnectionId: string }) =>
+    mutationFn: ({
+      dropId,
+      destinationConnectionId,
+      title,
+      caption,
+      hashtags,
+    }: {
+      dropId: string;
+      destinationConnectionId: string;
+      title?: string;
+      caption?: string;
+      hashtags?: string;
+    }) =>
       apiFetch<{ ok: boolean }>(`/api/studios/${studioId}/drops/${dropId}/repurpose`, {
-        body: JSON.stringify({ destinationConnectionId }),
+        body: JSON.stringify({ caption, destinationConnectionId, hashtags, title }),
         method: "POST",
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: studioDropsQueryKey(studioId) }),

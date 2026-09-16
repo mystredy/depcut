@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
+import { hashtagsSchema } from "@/app/api/drops/schemas";
 import { isConnectionUsable, PUBLISHABLE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
 import { validationErrorResponse } from "@/lib/inference/responses";
 import { prisma } from "@/lib/prisma";
@@ -14,6 +15,9 @@ type RouteContext = { params: Promise<{ id: string; dropId: string }> };
 
 const repurposeSchema = z.object({
   destinationConnectionId: z.string().trim().min(1),
+  title: z.string().trim().max(100).optional(),
+  caption: z.string().trim().max(280).optional(),
+  hashtags: hashtagsSchema,
 });
 
 // Managers only. A manual, one-off publish of an already-posted Drop to a
@@ -43,6 +47,16 @@ export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   });
   if (!destination || destination.studioId !== id) return notFoundResponse();
 
+  const alreadyPosted = await prisma.dropPublication.findFirst({
+    where: { destinationConnectionId: destination.id, dropId, status: "success" },
+  });
+  if (alreadyPosted) {
+    return NextResponse.json(
+      { error: "Already posted", message: `This drop is already posted to ${destination.accountName}.` },
+      { status: 409 },
+    );
+  }
+
   if (!PUBLISHABLE_PLATFORMS.includes(destination.platform)) {
     return NextResponse.json(
       { error: "Unsupported platform", message: `Publishing to ${destination.platform} isn't supported.` },
@@ -61,7 +75,14 @@ export const POST = withDepCutAuth(async (request, context: RouteContext) => {
     );
   }
 
-  const outcome = await publishDropToConnection(drop, destination, null);
+  const caption = [
+    parsed.data.caption || null,
+    parsed.data.hashtags.length ? parsed.data.hashtags.map((h) => `#${h}`).join(" ") : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n") || undefined;
+
+  const outcome = await publishDropToConnection(drop, destination, null, { caption, title: parsed.data.title });
   if (!outcome.ok) {
     return NextResponse.json({ error: "Repurpose failed", message: outcome.error }, { status: 502 });
   }
