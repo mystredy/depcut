@@ -70,11 +70,17 @@ export const PATCH = withDepCutAuth(async (request: DepCutAuthenticatedRequest, 
   const data: Prisma.SocialWorkflowUncheckedUpdateInput = { ...rest };
 
   if (sourceConnectionId !== undefined) {
-    const source =
-      sourceConnectionId === STUDIO_SOURCE_CONNECTION_ID
-        ? await ensureStudioSourceConnection(id)
-        : await prisma.socialConnection.findUnique({ where: { id: sourceConnectionId } });
-    if (!source || source.studioId !== id) return notFoundResponse();
+    // Same rule as creating a workflow — see workflows/route.ts.
+    if (sourceConnectionId !== STUDIO_SOURCE_CONNECTION_ID) {
+      return NextResponse.json(
+        {
+          error: "Unsupported workflow",
+          message: "A workflow's source must be this studio — repurposing from a connected account isn't available yet.",
+        },
+        { status: 400 },
+      );
+    }
+    const source = await ensureStudioSourceConnection(id);
     data.sourceConnectionId = source.id;
   }
   if (destinationConnectionId !== undefined) {

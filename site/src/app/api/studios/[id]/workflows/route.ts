@@ -21,9 +21,11 @@ const connectionSelect = {
   platform: true,
 } as const;
 
-// Managers only. Pairs two of this studio's own connections to repurpose
-// content between them. No real publish pipeline reads these yet —
-// autoPublish is a stored preference, same as the admin-level workflows.
+// Managers only. Pairs the studio with one of its own connections to
+// repurpose content to it. An Active, autoPublish workflow is read by
+// social-workflow-publish.ts whenever a Drop completes; postsPerDay
+// ("Repurpose existing content" mode) is still just a stored preference —
+// nothing schedules that drip-feed yet.
 export const GET = withDepCutAuth(async (request: DepCutAuthenticatedRequest, context: RouteContext) => {
   const { id } = await context.params;
   const membership = await getStudioMembership(request.depcut.userId, id);
@@ -85,11 +87,22 @@ export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest, c
     );
   }
 
+  // The only supported direction today: studio → a platform. Platform →
+  // platform is never valid, and platform → studio (importing existing
+  // posts in) has no execution pipeline yet — see social-workflow-publish.ts.
+  if (parsed.data.sourceConnectionId !== STUDIO_SOURCE_CONNECTION_ID) {
+    return NextResponse.json(
+      {
+        error: "Unsupported workflow",
+        message: "A workflow's source must be this studio — repurposing from a connected account isn't available yet.",
+      },
+      { status: 400 },
+    );
+  }
+
   const { name, destinationConnectionId, autoPublish, postsPerDay } = parsed.data;
   const [source, destination] = await Promise.all([
-    parsed.data.sourceConnectionId === STUDIO_SOURCE_CONNECTION_ID
-      ? ensureStudioSourceConnection(id)
-      : prisma.socialConnection.findUnique({ where: { id: parsed.data.sourceConnectionId } }),
+    ensureStudioSourceConnection(id),
     prisma.socialConnection.findUnique({ where: { id: destinationConnectionId } }),
   ]);
   if (!source || source.studioId !== id || !destination || destination.studioId !== id) {

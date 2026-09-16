@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { head } from "@/cut/server/cloud/r2";
+import { enqueueJob } from "@/lib/jobs/queue";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +43,10 @@ export const POST = withDepCutAuth(async (request, context: RouteContext) => {
     data: { error: null, sizeBytes: info.bytes, status: "complete" },
     where: { id },
   });
+
+  // Fans out to any of this studio's "Repurpose new posts" workflows — see
+  // social-workflow-publish.ts. No-ops fast when there are none.
+  await enqueueJob("social-workflow-publish", { dropId: id }, userId);
 
   return NextResponse.json({ ok: true });
 });

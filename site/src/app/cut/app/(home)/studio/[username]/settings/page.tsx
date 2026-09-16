@@ -188,6 +188,19 @@ const PLATFORM_ICONS: Record<string, ComponentType<{ className?: string }>> = {
   youtube: YouTubeIcon,
 };
 
+// A studio can only have one connection per platform (see connectedPlatforms
+// below), so accountName alone ("VV") doesn't say which platform it's on —
+// workflow pickers show the platform's icon alongside it.
+function ConnectionLabel({ c }: { c: { accountName: string; platform?: string } }) {
+  const Icon = c.platform ? PLATFORM_ICONS[c.platform] : undefined;
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      {Icon && <Icon className="size-3.5 shrink-0 rounded-[25%]" />}
+      <span className="truncate">{c.accountName}</span>
+    </span>
+  );
+}
+
 // A connection is only good for posting if its token is set, active, and
 // (when the platform gave one) not past its expiry — the token itself never
 // reaches the client, so this is read off what the API already tells us.
@@ -195,20 +208,16 @@ function connectionHealth(c: StudioConnection): { ok: boolean; label: string } {
   if (!c.hasToken || c.status !== "active") {
     return { label: "Token expired or invalid", ok: false };
   }
+  // A refresh token means the access token's own expiry is routine, not a
+  // problem — the platform issues a fresh one silently on next use, so it
+  // reads the same as a connection with no expiry at all, regardless of
+  // what the current access token's raw tokenExpiresAt happens to be.
+  if (c.hasRefreshToken) {
+    return { label: "No expiration date", ok: true };
+  }
   const days = c.tokenExpiresAt
     ? Math.ceil((new Date(c.tokenExpiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
     : null;
-  // A refresh token means an expired access token is routine, not a
-  // problem — the platform issues a fresh one silently on next use, so
-  // it's never shown as an error. Access tokens are usually short-lived
-  // (an hour, for Google), so days is typically already <= 0 here —
-  // that's expected, not a sign anything's wrong.
-  if (c.hasRefreshToken) {
-    return {
-      label: days !== null && days > 0 ? `Token expires in ${days} day${days === 1 ? "" : "s"}` : "No expiration date",
-      ok: true,
-    };
-  }
   if (days === null) {
     return { label: "No expiration date", ok: true };
   }
@@ -1209,8 +1218,9 @@ function WorkflowSection({ studioId }: { studioId: string }) {
         </Button>
       </div>
       <p className="text-sm text-muted-foreground">
-        Repurpose this studio&apos;s own content, or a connected account, to another connected account.
-        Nothing publishes automatically yet — Auto Publish is stored for when that&apos;s built.
+        Repurpose this studio&apos;s own content out to a connected account. A "Repurpose new posts"
+        workflow publishes automatically as soon as you post here; "Repurpose existing content" is
+        still just a stored preference — nothing schedules that yet.
       </p>
 
       {connections.isLoading ? (
@@ -1437,6 +1447,10 @@ function WorkflowFormDialog({
   const [destinationId, setDestinationId] = useState(workflow?.destinationConnection.id ?? "");
   const [autoPublish, setAutoPublish] = useState(workflow?.autoPublish ?? true);
   const [postsPerDay, setPostsPerDay] = useState(String(workflow?.postsPerDay ?? 3));
+  // The studio is the source for every workflow that actually works today —
+  // shown as a fixed row, not a dropdown implying a free choice. "Change"
+  // reveals the picker for the small number of legacy/advanced cases.
+  const [editingSource, setEditingSource] = useState(initialSourceId(workflow) !== STUDIO_SOURCE_CONNECTION_ID);
 
   // Re-populate every time the dialog opens — covers a different workflow to
   // edit, switching between editing and creating, and reopening "New
@@ -1452,6 +1466,7 @@ function WorkflowFormDialog({
       setDestinationId(workflow?.destinationConnection.id ?? "");
       setAutoPublish(workflow?.autoPublish ?? true);
       setPostsPerDay(String(workflow?.postsPerDay ?? 3));
+      setEditingSource(initialSourceId(workflow) !== STUDIO_SOURCE_CONNECTION_ID);
     }
   }
 
@@ -1465,9 +1480,14 @@ function WorkflowFormDialog({
 
   const postsPerDayValue = Number.parseInt(postsPerDay, 10);
   const postsPerDayValid = autoPublish || (Number.isInteger(postsPerDayValue) && postsPerDayValue >= 1 && postsPerDayValue <= 50);
+  // The only two valid directions: studio → a platform, or a platform → the
+  // studio. Platform → platform is never valid, and importing a platform's
+  // posts into the studio isn't built yet — so for now, a platform source
+  // has no valid destination to pick here.
+  const isStudioSource = sourceId === STUDIO_SOURCE_CONNECTION_ID;
 
   const submit = () => {
-    if (!name.trim() || !sourceId || !destinationId || sourceId === destinationId || !postsPerDayValid) return;
+    if (!name.trim() || !sourceId || !isStudioSource || !destinationId || !postsPerDayValid) return;
     const fields = {
       autoPublish,
       destinationConnectionId: destinationId,
@@ -1489,7 +1509,7 @@ function WorkflowFormDialog({
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit workflow" : "New workflow"}</DialogTitle>
           <DialogDescription>
-            Repurpose this studio&apos;s own content, or a connected account, to another connected account.
+            Repurpose this studio&apos;s own content out to a connected account.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -1499,39 +1519,62 @@ function WorkflowFormDialog({
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Repurpose from</Label>
-            <Select value={sourceId} onValueChange={(value) => setSourceId(value ?? "")}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select an account">
-                  {(value: string) => sourceOptions.find((c) => c.id === value)?.accountName ?? "Select an account"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {sourceOptions.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.accountName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {editingSource ? (
+              <Select value={sourceId} onValueChange={(value) => setSourceId(value ?? "")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select an account">
+                    {(value: string) => {
+                      const c = sourceOptions.find((c) => c.id === value);
+                      return c ? <ConnectionLabel c={c} /> : "Select an account";
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {sourceOptions.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      <ConnectionLabel c={c} />
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="flex items-center justify-between rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm">
+                <span>This studio</span>
+                <button
+                  type="button"
+                  onClick={() => setEditingSource(true)}
+                  className="text-xs font-medium text-primary hover:underline"
+                >
+                  Change
+                </button>
+              </div>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Repurpose to</Label>
-            <Select value={destinationId} onValueChange={(value) => setDestinationId(value ?? "")}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select an account">
-                  {(value: string) => realConnections.find((c) => c.id === value)?.accountName ?? "Select an account"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {realConnections
-                  .filter((c) => c.id !== sourceId)
-                  .map((c) => (
+            {sourceId && !isStudioSource ? (
+              <p className="rounded-lg border border-dashed px-2.5 py-2 text-xs text-muted-foreground">
+                Importing a platform's existing posts into this studio isn't available yet.
+              </p>
+            ) : (
+              <Select value={destinationId} onValueChange={(value) => setDestinationId(value ?? "")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select an account">
+                    {(value: string) => {
+                      const c = realConnections.find((c) => c.id === value);
+                      return c ? <ConnectionLabel c={c} /> : "Select an account";
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {realConnections.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.accountName}
+                      <ConnectionLabel c={c} />
                     </SelectItem>
                   ))}
-              </SelectContent>
-            </Select>
+                </SelectContent>
+              </Select>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">How would you like to use this workflow?</Label>

@@ -6,31 +6,13 @@ import {
   notFoundResponse,
   withDepCutAuth,
 } from "@/lib/depcut-api-auth";
-import { publishFacebookVideo, FacebookApiError } from "@/lib/marketplace/facebook-api";
-import { publishInstagramVideo, InstagramApiError } from "@/lib/marketplace/instagram-api";
-import { getStoredPageAccessToken, MetaPagesError } from "@/lib/marketplace/meta-pages";
-import { PUBLISHABLE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
-import { getValidAccessToken, SocialConnectionError } from "@/lib/marketplace/oauth-token-refresh";
-import { getValidThreadsAccessToken, publishThreadsVideo, ThreadsApiError } from "@/lib/marketplace/threads-api";
-import { publishTiktokVideo, TiktokApiError } from "@/lib/marketplace/tiktok-api";
-import { publishXPost, XApiError } from "@/lib/marketplace/x-api";
-import { publishYoutubeVideo, YoutubeApiError } from "@/lib/marketplace/youtube-api";
-import { prisma } from "@/lib/prisma";
-
-// Facebook/Instagram Page tokens have no refresh_token grant at all (see
-// meta-pages.ts) — read as stored, not refreshed. Threads has its own
-// long-lived-token refresh, distinct from the standard OAuth2 grant the
-// remaining platforms use — see oauth-token-refresh.ts vs threads-api.ts.
-const META_PLATFORMS = new Set(["facebook", "instagram"]);
+import { publishToConnection, PublishError } from "@/lib/marketplace/publish";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-// A superset of every platform's fields — the route picks what each
-// platform actually needs and 400s if something required is missing for
-// that platform, rather than every platform sharing one rigid shape.
 const publishSchema = z
   .object({
     videoUrl: z.string().trim().url().optional(),
@@ -53,18 +35,6 @@ export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   }
 
   const { id } = await context.params;
-  const connection = await prisma.socialConnection.findUnique({ where: { id } });
-  if (!connection) return notFoundResponse();
-
-  if (!PUBLISHABLE_PLATFORMS.includes(connection.platform)) {
-    return NextResponse.json(
-      {
-        error: "Unsupported platform",
-        message: `Publishing isn't wired up for ${connection.platform} connections yet.`,
-      },
-      { status: 400 },
-    );
-  }
 
   const parsed = publishSchema.safeParse(await request.json());
   if (!parsed.success) {
@@ -79,111 +49,15 @@ export const POST = withDepCutAuth(async (request, context: RouteContext) => {
       { status: 400 },
     );
   }
-  const { videoUrl, title, description, privacyStatus } = parsed.data;
 
   try {
-    const accessToken = META_PLATFORMS.has(connection.platform)
-      ? await getStoredPageAccessToken(id)
-      : connection.platform === "threads"
-        ? await getValidThreadsAccessToken(id)
-        : await getValidAccessToken(id);
-
-    if (connection.platform === "threads") {
-      if (!videoUrl) {
-        return NextResponse.json(
-          { error: "Invalid request", message: "videoUrl is required for Threads." },
-          { status: 400 },
-        );
-      }
-      if (!connection.platformAccountId) {
-        return NextResponse.json(
-          {
-            error: "Connection needs reconnecting",
-            message: "This connection predates the current Threads linking — remove it and connect again.",
-          },
-          { status: 400 },
-        );
-      }
-      const published = await publishThreadsVideo({
-        accessToken,
-        text: title,
-        threadsUserId: connection.platformAccountId,
-        videoUrl,
-      });
-      return NextResponse.json({ published });
-    }
-
-    if (connection.platform === "facebook" || connection.platform === "instagram") {
-      if (!videoUrl) {
-        return NextResponse.json(
-          { error: "Invalid request", message: `videoUrl is required for ${connection.platform}.` },
-          { status: 400 },
-        );
-      }
-      if (!connection.platformAccountId) {
-        return NextResponse.json(
-          {
-            error: "Connection needs reconnecting",
-            message: "This connection predates Page linking — remove it and connect again.",
-          },
-          { status: 400 },
-        );
-      }
-      const published =
-        connection.platform === "facebook"
-          ? await publishFacebookVideo({ accessToken, description: title, pageId: connection.platformAccountId, videoUrl })
-          : await publishInstagramVideo({
-              accessToken,
-              caption: title,
-              igUserId: connection.platformAccountId,
-              videoUrl,
-            });
-      return NextResponse.json({ published });
-    }
-
-    if (connection.platform === "youtube") {
-      if (!videoUrl) {
-        return NextResponse.json(
-          { error: "Invalid request", message: "videoUrl is required for YouTube." },
-          { status: 400 },
-        );
-      }
-      const published = await publishYoutubeVideo({ accessToken, description, privacyStatus, title, videoUrl });
-      return NextResponse.json({ published });
-    }
-
-    if (connection.platform === "tiktok") {
-      if (!videoUrl) {
-        return NextResponse.json(
-          { error: "Invalid request", message: "videoUrl is required for TikTok." },
-          { status: 400 },
-        );
-      }
-      const published = await publishTiktokVideo({ accessToken, caption: title, videoUrl });
-      return NextResponse.json({ published });
-    }
-
-    if (connection.platform === "x") {
-      const published = await publishXPost({ accessToken, text: title, videoUrl });
-      return NextResponse.json({ published });
-    }
-
-    return NextResponse.json(
-      { error: "Unsupported platform", message: `No publish handler wired for ${connection.platform}.` },
-      { status: 400 },
-    );
+    const published = await publishToConnection(id, parsed.data);
+    return NextResponse.json({ published });
   } catch (error) {
-    if (
-      error instanceof SocialConnectionError ||
-      error instanceof YoutubeApiError ||
-      error instanceof TiktokApiError ||
-      error instanceof XApiError ||
-      error instanceof FacebookApiError ||
-      error instanceof InstagramApiError ||
-      error instanceof MetaPagesError ||
-      error instanceof ThreadsApiError
-    ) {
-      return NextResponse.json({ error: "Publish failed", message: error.message }, { status: 502 });
+    if (error instanceof PublishError) {
+      const status = error.message === "Connection not found." ? 404 : 502;
+      if (status === 404) return notFoundResponse();
+      return NextResponse.json({ error: "Publish failed", message: error.message }, { status });
     }
     throw error;
   }
