@@ -104,3 +104,29 @@ export async function getYoutubeChannelAnalytics(opts: {
     }),
   );
 }
+
+// A single published video's own totals — what "View analytics" on a Drop
+// shows, distinct from getYoutubeChannelAnalytics's daily channel-wide
+// rows. Needs only the public statistics part, no yt-analytics scope.
+export async function getYoutubeVideoStats(opts: {
+  accessToken: string;
+  videoId: string;
+}): Promise<{ views: number; likes: number; comments: number }> {
+  const res = await fetch(
+    `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${encodeURIComponent(opts.videoId)}`,
+    { headers: { Authorization: `Bearer ${opts.accessToken}` } },
+  );
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new YoutubeApiError(`YouTube rejected the request: ${data?.error?.message ?? res.status}`);
+  }
+  const stats = data?.items?.[0]?.statistics;
+  if (!stats) {
+    throw new YoutubeApiError("That video isn't on YouTube anymore.");
+  }
+  return {
+    comments: Number(stats.commentCount ?? 0),
+    likes: Number(stats.likeCount ?? 0),
+    views: Number(stats.viewCount ?? 0),
+  };
+}

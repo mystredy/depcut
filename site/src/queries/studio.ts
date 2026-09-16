@@ -434,6 +434,12 @@ export function useDeleteStudioWorkflow(id: string) {
   });
 }
 
+export type StudioDropPublication = {
+  platform: string;
+  destinationAccountName: string;
+  externalPostId: string | null;
+};
+
 export type StudioDrop = {
   id: string;
   title: string | null;
@@ -445,12 +451,23 @@ export type StudioDrop = {
   sizeBytes: number | null;
   status: "pending" | "uploading" | "draft" | "complete" | "error";
   thumbnailKey: string | null;
+  publications: StudioDropPublication[];
 };
 
 export function useStudioDrops(id: string) {
   return useQuery({
     queryFn: () => apiFetch<{ drops: StudioDrop[] }>(`/api/studios/${id}/drops`),
     queryKey: studioDropsQueryKey(id),
+  });
+}
+
+export type DropAnalytics = { accountName: string; views: number; likes: number; comments: number };
+
+// Fetched on demand, not a background query — it calls YouTube live.
+export function useDropAnalytics(studioId: string) {
+  return useMutation({
+    mutationFn: (dropId: string) =>
+      apiFetch<DropAnalytics>(`/api/studios/${studioId}/drops/${dropId}/analytics`),
   });
 }
 

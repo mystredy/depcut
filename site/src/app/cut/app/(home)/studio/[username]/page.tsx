@@ -2,9 +2,10 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Camera,
+  ChartColumn,
   Check,
   ChevronDown,
   ChevronUp,
@@ -13,6 +14,7 @@ import {
   Pencil,
   Play,
   Plus,
+  Share2,
   Trash2,
   Video,
   Volume2,
@@ -22,20 +24,32 @@ import {
 
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { DropDialog } from "@/cut/components/DropDialog";
 import { ImageCropDialog } from "@/cut/components/ImageCropDialog";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { useCutBase } from "@/cut/lib/nav";
+import { YOUTUBE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
+import { PLATFORM_ICONS } from "@/lib/marketplace/platform-icons";
 import { cn } from "@/lib/utils";
+import { ApiError } from "@/queries/apiClient";
 import {
   studioAvatarUrl,
   studioBackgroundUrl,
+  useDropAnalytics,
   useRemoveStudioAvatar,
   useRemoveStudioBackground,
   useRemoveStudioDrop,
@@ -53,10 +67,12 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
   const { username } = use(params);
   const base = useCutBase();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data, isLoading } = useStudioByUsername(username);
   const drops = useStudioDrops(data?.studio.id ?? "");
   const [posting, setPosting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedDropId, setCopiedDropId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editingAvatar, setEditingAvatar] = useState(false);
   const [editingBackground, setEditingBackground] = useState(false);
@@ -67,6 +83,18 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
   const [dropMenuOpenId, setDropMenuOpenId] = useState<string | null>(null);
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
   const [resumingDrop, setResumingDrop] = useState<StudioDrop | null>(null);
+  const [analyticsDrop, setAnalyticsDrop] = useState<StudioDrop | null>(null);
+
+  // Deep link from a copied "Share" link (?drop=<id>) — opens straight to
+  // that post in the viewer once the drops list has loaded.
+  useEffect(() => {
+    const dropParam = searchParams.get("drop");
+    if (!dropParam) return;
+    const complete = (drops.data?.drops ?? []).filter((d) => d.status === "complete");
+    const index = complete.findIndex((d) => d.id === dropParam);
+    if (index !== -1) setViewingIndex(index);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when the drops list itself changes
+  }, [drops.data]);
 
   const studioId = data?.studio.id ?? "";
   const update = useUpdateStudio(studioId);
@@ -114,6 +142,19 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
     } catch {
       // Clipboard access can be denied by the browser — nothing further to
       // do here.
+    }
+  };
+
+  // The studio-profile link with ?drop=<id> — the deep-link effect above
+  // opens straight to it once the page loads.
+  const copyDropLink = async (dropId: string) => {
+    if (!data) return;
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/@${data.studio.username}?drop=${dropId}`);
+      setCopiedDropId(dropId);
+      setTimeout(() => setCopiedDropId(null), 2000);
+    } catch {
+      // Clipboard access can be denied by the browser — nothing further to do here.
     }
   };
 
@@ -384,6 +425,24 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                       className="min-w-0 w-auto p-0.5"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {drop.status === "complete" && (
+                        <DropdownMenuItem
+                          className="px-2 py-1 text-xs"
+                          onClick={() => void copyDropLink(drop.id)}
+                        >
+                          <Share2 className="size-3" />
+                          {copiedDropId === drop.id ? "Link copied!" : "Share"}
+                        </DropdownMenuItem>
+                      )}
+                      {drop.publications.some((p) => YOUTUBE_PLATFORMS.includes(p.platform) && p.externalPostId) && (
+                        <DropdownMenuItem
+                          className="px-2 py-1 text-xs"
+                          onClick={() => setAnalyticsDrop(drop)}
+                        >
+                          <ChartColumn className="size-3" />
+                          View analytics
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem
                         variant="destructive"
                         disabled={removeDrop.isPending}
@@ -391,7 +450,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                         onClick={() => removeDrop.mutate(drop.id)}
                       >
                         <Trash2 className="size-3" />
-                        Remove
+                        Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -413,11 +472,29 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                     />
                     <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-black/0" />
                     {drop.status === "complete" ? (
-                      <span className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
-                        <span className="grid size-9 place-items-center rounded-full bg-white/95">
-                          <Play className="ml-0.5 size-4 fill-ink text-ink" />
+                      <>
+                        <span className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
+                          <span className="grid size-9 place-items-center rounded-full bg-white/95">
+                            <Play className="ml-0.5 size-4 fill-ink text-ink" />
+                          </span>
                         </span>
-                      </span>
+                        {drop.publications.length > 0 && (
+                          <div className="absolute left-1.5 top-1.5 flex items-center gap-1">
+                            {[...new Map(drop.publications.map((p) => [p.platform, p])).values()].map((p) => {
+                              const Icon = PLATFORM_ICONS[p.platform] ?? Link2;
+                              return (
+                                <span
+                                  key={p.platform}
+                                  title={`Published to ${p.destinationAccountName}`}
+                                  className="inline-flex"
+                                >
+                                  <Icon className="size-5 rounded-[25%] ring-1 ring-background" />
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <span className="absolute left-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white backdrop-blur">
                         Draft
@@ -469,6 +546,8 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
         />
       )}
 
+      <DropAnalyticsDialog studioId={studio.id} drop={analyticsDrop} onClose={() => setAnalyticsDrop(null)} />
+
       <ImageCropDialog
         open={editingAvatar}
         onOpenChange={setEditingAvatar}
@@ -492,6 +571,65 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
         onRemove={() => removeBackground.mutateAsync().then(() => {})}
       />
     </div>
+  );
+}
+
+const DROP_ANALYTICS_METRICS = [
+  { key: "views", label: "Views" },
+  { key: "likes", label: "Likes" },
+  { key: "comments", label: "Comments" },
+] as const;
+
+// A single drop's own view/like/comment totals off the platform it was
+// published to — YouTube only today, see /api/studios/[id]/drops/[dropId]/analytics.
+function DropAnalyticsDialog({
+  studioId,
+  drop,
+  onClose,
+}: {
+  studioId: string;
+  drop: StudioDrop | null;
+  onClose: () => void;
+}) {
+  const analytics = useDropAnalytics(studioId);
+
+  useEffect(() => {
+    if (drop) analytics.mutate(drop.id);
+    // Re-fetch fresh each time a drop is opened; not on every analytics identity change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drop?.id]);
+
+  return (
+    <Dialog open={drop !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{drop?.title || drop?.caption || drop?.fileName || "Drop"} — analytics</DialogTitle>
+        </DialogHeader>
+        {analytics.isPending ? (
+          <div className="space-y-2">
+            <Skeleton className="h-16 w-full" />
+          </div>
+        ) : analytics.isError ? (
+          <p className="text-sm text-destructive">
+            {analytics.error instanceof ApiError ? analytics.error.message : "Couldn't load analytics."}
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            {DROP_ANALYTICS_METRICS.map(({ key, label }) => (
+              <div key={key} className="rounded-xl border bg-muted/20 p-3">
+                <p className="text-xs text-muted-foreground">{label}</p>
+                <p className="text-lg font-semibold">{(analytics.data?.[key] ?? 0).toLocaleString()}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
