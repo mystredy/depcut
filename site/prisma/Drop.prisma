@@ -46,9 +46,43 @@ model Drop {
   error        String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  publications DropPublication[]
+  // Set only for a Drop created by social-workflow-import.ts instead of a
+  // real upload — the source platform + its post id, so a re-run of the
+  // import sweep can tell it's already been pulled in and skip it.
+  importedPlatform   String?
+  importedExternalId String?
 
   @@index([userId])
   @@index([status])
   @@index([studioId])
+  @@index([studioId, importedPlatform, importedExternalId])
   @@map("drop")
+}
+
+// One row per attempt to push a Drop to a workflow's destination — written
+// by social-workflow-publish.ts right after it calls publishToConnection.
+// The durable record of what happened, including the platform's own post
+// id, since the AsyncJob row the publish ran under isn't meant to be
+// queried as history. destinationConnectionId is a plain field, not a
+// relation, so this row survives the connection being removed or
+// reconnected — the platform/account name here are copied at publish time
+// for exactly that reason.
+model DropPublication {
+  id                      String   @id @default(cuid())
+  dropId                  String
+  drop                    Drop     @relation(fields: [dropId], references: [id], onDelete: Cascade)
+  workflowId              String
+  destinationConnectionId String
+  platform                String
+  destinationAccountName  String
+  status                  String // "success" | "failed"
+  externalPostId          String?
+  externalUrl             String?
+  error                   String?
+  createdAt               DateTime @default(now())
+
+  @@index([dropId])
+  @@index([destinationConnectionId])
+  @@map("drop_publication")
 }
