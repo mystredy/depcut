@@ -22,6 +22,16 @@ import {
   X,
 } from "lucide-react";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -44,6 +54,7 @@ import { UserAvatar } from "@/cut/components/UserAvatar";
 import { useCutBase } from "@/cut/lib/nav";
 import { YOUTUBE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
 import { PLATFORM_ICONS } from "@/lib/marketplace/platform-icons";
+import { SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/queries/apiClient";
 import {
@@ -59,6 +70,7 @@ import {
   useUpdateStudioAvatar,
   useUpdateStudioBackground,
   type StudioDrop,
+  type StudioDropPublication,
 } from "@/queries/studio";
 
 // A studio's public profile — avatar, bio, drops grid — plus edit/manage
@@ -84,6 +96,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
   const [resumingDrop, setResumingDrop] = useState<StudioDrop | null>(null);
   const [analyticsDrop, setAnalyticsDrop] = useState<StudioDrop | null>(null);
+  const [redirectTo, setRedirectTo] = useState<StudioDropPublication | null>(null);
 
   // Deep link from a copied "Share" link (?drop=<id>) — opens straight to
   // that post in the viewer once the drops list has loaded.
@@ -457,13 +470,18 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                           {[...new Map(drop.publications.map((p) => [p.platform, p])).values()].map((p) => {
                             const Icon = PLATFORM_ICONS[p.platform] ?? Link2;
                             return (
-                              <div
+                              <DropdownMenuItem
                                 key={p.platform}
-                                className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground"
+                                disabled={!p.externalUrl}
+                                className="px-2 py-1 text-xs text-muted-foreground"
+                                onClick={() => {
+                                  setRedirectTo(p);
+                                  setDropMenuOpenId(null);
+                                }}
                               >
                                 <Icon className="size-3.5 rounded-[25%]" />
                                 {p.destinationAccountName}
-                              </div>
+                              </DropdownMenuItem>
                             );
                           })}
                         </div>
@@ -545,6 +563,30 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
       )}
 
       <DropAnalyticsDialog studioId={studio.id} drop={analyticsDrop} onClose={() => setAnalyticsDrop(null)} />
+
+      <AlertDialog open={redirectTo !== null} onOpenChange={(open) => !open && setRedirectTo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave DepCut?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`You'll be redirected to `}
+              {redirectTo && (SOCIAL_APP_SEED.find((s) => s.platform === redirectTo.platform)?.label ?? redirectTo.platform)}
+              {` to view this video on ${redirectTo?.destinationAccountName}.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (redirectTo?.externalUrl) window.open(redirectTo.externalUrl, "_blank", "noopener,noreferrer");
+                setRedirectTo(null);
+              }}
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ImageCropDialog
         open={editingAvatar}

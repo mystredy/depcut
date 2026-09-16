@@ -438,6 +438,7 @@ export type StudioDropPublication = {
   platform: string;
   destinationAccountName: string;
   externalPostId: string | null;
+  externalUrl: string | null;
 };
 
 export type StudioDrop = {
