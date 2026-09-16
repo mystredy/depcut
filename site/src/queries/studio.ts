@@ -443,7 +443,7 @@ export type StudioDrop = {
   error: string | null;
   fileName: string | null;
   sizeBytes: number | null;
-  status: "pending" | "uploading" | "complete" | "error";
+  status: "pending" | "uploading" | "draft" | "complete" | "error";
   thumbnailKey: string | null;
 };
 

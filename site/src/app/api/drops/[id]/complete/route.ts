@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 
 import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { head } from "@/cut/server/cloud/r2";
-import { enqueueJob } from "@/lib/jobs/queue";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +11,10 @@ type RouteContext = { params: Promise<{ id: string }> };
 // Verifies the upload actually landed in R2, same pattern as submissions'
 // complete route — the browser only reports "the bytes are up"; this is
 // what decides whether that's true, and it's also where sizeBytes (what the
-// storage quota sums over) comes from: R2's own HEAD, never the client.
+// storage quota sums over) comes from: R2's own HEAD, never the client. This
+// only gets the drop to "draft" — a manager reaching this point may still be
+// typing a caption, so nothing fans out to Repurpose workflows until they
+// explicitly post it (see publish/route.ts).
 export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
   const userId = request.depcut.userId;
@@ -40,13 +42,9 @@ export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   }
 
   await prisma.drop.update({
-    data: { error: null, sizeBytes: info.bytes, status: "complete" },
+    data: { error: null, sizeBytes: info.bytes, status: "draft" },
     where: { id },
   });
-
-  // Fans out to any of this studio's "Repurpose new posts" workflows — see
-  // social-workflow-publish.ts. No-ops fast when there are none.
-  await enqueueJob("social-workflow-publish", { dropId: id }, userId);
 
   return NextResponse.json({ ok: true });
 });

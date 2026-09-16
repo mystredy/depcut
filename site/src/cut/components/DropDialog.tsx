@@ -20,7 +20,7 @@ import { useEditor } from "@/cut/lib/store";
 import { STUDIO_SOURCE_PLATFORM } from "@/lib/marketplace/oauth-providers";
 import { PLATFORM_ICONS } from "@/lib/marketplace/platform-icons";
 import { studioDropsQueryKey, useStudioWorkflows } from "@/queries/studio";
-import { uploadDropVideo, useCreateDrop } from "@/queries/drop";
+import { publishDrop, uploadDropVideo, useCreateDrop } from "@/queries/drop";
 import { cn } from "@/lib/utils";
 
 // Renders the current cut and uploads the result — same render pipeline
@@ -78,20 +78,31 @@ export function DropDialog({
   projectId,
   studioId,
   studioName,
+  resumeDrop,
   onClose,
 }: {
   projectId: string | null;
   studioId: string;
   studioName: string;
+  // A drop already uploaded to "draft" (see /api/drops/[id]/complete) —
+  // picked up from the studio grid's Draft card to finish posting it,
+  // instead of starting a new upload.
+  resumeDrop?: { id: string; title: string | null; caption: string | null; hashtags: string[]; fileName: string | null };
   onClose: () => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
-  const [title, setTitle] = useState("");
-  const [caption, setCaption] = useState("");
-  const [hashtags, setHashtags] = useState("");
+  const [title, setTitle] = useState(resumeDrop?.title ?? "");
+  const [caption, setCaption] = useState(resumeDrop?.caption ?? "");
+  const [hashtags, setHashtags] = useState(resumeDrop?.hashtags.map((t) => `#${t}`).join(" ") ?? "");
   const [dragOver, setDragOver] = useState(false);
+  // dropId/uploadState track the background upload kicked off by pick() —
+  // separate from posting, which is only the explicit "Post" (finalize) call.
+  const [dropId, setDropId] = useState<string | null>(resumeDrop?.id ?? null);
+  const [uploadState, setUploadState] = useState<"idle" | "uploading" | "ready" | "error">(
+    resumeDrop ? "ready" : "idle"
+  );
   const [posting, setPosting] = useState(false);
-  const [phase, setPhase] = useState<"export" | "upload">("upload");
+  const [phase, setPhase] = useState<"export" | "upload" | "finalize">("upload");
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -105,6 +116,18 @@ export function DropDialog({
     (w) => w.autoPublish && w.status === "Active" && w.sourceConnection.platform === STUDIO_SOURCE_PLATFORM
   );
 
+  const currentFields = () => ({
+    title: title.trim() || undefined,
+    caption: caption.trim() || undefined,
+    hashtags: hashtags.trim() || undefined,
+  });
+
+  // Start uploading to R2 the moment a file is picked or dropped — this is
+  // *not* posting it. The drop lands as "draft" (see complete/route.ts) and
+  // stays that way, playable from the studio's grid as a Draft card, until
+  // the explicit "Post" click below actually publishes it. Closing this
+  // dialog (or reloading the page) mid-upload doesn't lose anything — the
+  // upload keeps running and the drop is already a real draft once it lands.
   const pick = (f: File | null | undefined) => {
     if (!f) return;
     if (!f.type.startsWith("video/")) {
@@ -113,40 +136,50 @@ export function DropDialog({
     }
     setError(null);
     setFile(f);
-    // Start uploading the moment a file is picked, instead of waiting for a
-    // separate "Post" click — post() below reads the passed-in file directly
-    // rather than the file state, which wouldn't be updated yet on this pass.
-    void post(f);
+    void startUpload(f);
   };
 
-  const post = async (pickedFile?: File) => {
-    const toPost = pickedFile ?? file;
-    if (!projectId && !toPost) return;
-    setPosting(true);
-    setError(null);
+  const startUpload = async (f: File) => {
+    setUploadState("uploading");
     setProgress(0);
     try {
-      const { drop: created } = await createDrop.mutateAsync({
-        title: title.trim() || undefined,
-        caption: caption.trim() || undefined,
-        hashtags: hashtags.trim() || undefined,
-        projectId,
-        studioId,
-      });
-      let toUpload = toPost;
-      let cleanupExport: (() => Promise<void>) | undefined;
-      if (projectId) {
+      const { drop: created } = await createDrop.mutateAsync({ ...currentFields(), projectId: null, studioId });
+      setDropId(created.id);
+      await uploadDropVideo(created.id, f, setProgress);
+      setUploadState("ready");
+      void queryClient.invalidateQueries({ queryKey: studioDropsQueryKey(studioId) });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't upload that video — try again.");
+      setUploadState("error");
+    }
+  };
+
+  const post = async () => {
+    setPosting(true);
+    setError(null);
+    try {
+      if (dropId) {
+        // The video already finished uploading in the background (or this
+        // is a resumed draft) — just finalize it with whatever's typed now.
+        setPhase("finalize");
+        await publishDrop(dropId, currentFields());
+      } else {
+        // Editor "Post to Space" flow: no earlier pick() to have started
+        // this, so render, upload, and finalize in one shot.
+        if (!projectId) return;
+        const { drop: created } = await createDrop.mutateAsync({ ...currentFields(), projectId, studioId });
         setPhase("export");
+        setProgress(0);
         const exported = await exportCurrentProject(projectId, setProgress);
-        toUpload = exported.file;
-        cleanupExport = exported.cleanup;
-      }
-      setPhase("upload");
-      setProgress(0);
-      try {
-        await uploadDropVideo(created.id, toUpload!, setProgress);
-      } finally {
-        await cleanupExport?.();
+        setPhase("upload");
+        setProgress(0);
+        try {
+          await uploadDropVideo(created.id, exported.file, setProgress);
+        } finally {
+          await exported.cleanup?.();
+        }
+        setPhase("finalize");
+        await publishDrop(created.id, currentFields());
       }
       void queryClient.invalidateQueries({ queryKey: studioDropsQueryKey(studioId) });
       setDone(true);
@@ -157,11 +190,16 @@ export function DropDialog({
     }
   };
 
+  const canPost = projectId !== null || uploadState === "ready";
+  // Blocked while a file is already uploading or done — open again on error
+  // so a failed upload can be retried by dropping the file in again.
+  const dropzoneDisabled = posting || uploadState === "uploading" || uploadState === "ready";
+
   return (
     <Dialog open onOpenChange={(open) => !open && !posting && onClose()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>New drop</DialogTitle>
+          <DialogTitle>{resumeDrop ? "Finish this drop" : "New drop"}</DialogTitle>
           <DialogDescription>
             Posting to <span className="font-medium text-foreground">{studioName}</span>
           </DialogDescription>
@@ -199,32 +237,42 @@ export function DropDialog({
               <label
                 onDragOver={(e) => {
                   e.preventDefault();
-                  if (!posting) setDragOver(true);
+                  if (!dropzoneDisabled) setDragOver(true);
                 }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={(e) => {
                   e.preventDefault();
                   setDragOver(false);
-                  if (!posting) pick(e.dataTransfer.files[0]);
+                  if (!dropzoneDisabled) pick(e.dataTransfer.files[0]);
                 }}
                 className={cn(
                   "flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors",
-                  posting ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+                  dropzoneDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
                   dragOver ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
                 )}
               >
                 <FileVideo className="size-6 text-muted-foreground" />
                 <span className="text-xs font-medium">
-                  {file ? file.name : "Drop a video, or click to browse"}
+                  {file
+                    ? file.name
+                    : resumeDrop
+                      ? resumeDrop.fileName ?? "Video uploaded"
+                      : "Drop a video, or click to browse"}
                 </span>
-                {file && (
-                  <span className="text-[11px] text-muted-foreground">{formatBytes(file.size)}</span>
+                {uploadState === "uploading" ? (
+                  <span className="text-[11px] text-muted-foreground">Uploading… {Math.round(progress * 100)}%</span>
+                ) : uploadState === "ready" ? (
+                  <span className="text-[11px] text-muted-foreground">Uploaded — ready to post</span>
+                ) : uploadState === "error" ? (
+                  <span className="text-[11px] text-destructive">Upload failed — drop it again to retry</span>
+                ) : (
+                  file && <span className="text-[11px] text-muted-foreground">{formatBytes(file.size)}</span>
                 )}
                 <input
                   type="file"
                   accept="video/*"
                   className="hidden"
-                  disabled={posting}
+                  disabled={dropzoneDisabled}
                   onChange={(e) => pick(e.target.files?.[0])}
                 />
               </label>
@@ -261,15 +309,19 @@ export function DropDialog({
             {error && <p className="text-sm text-red-600">{error}</p>}
 
             <DialogFooter className="mt-2">
-              <Button
-                disabled={(!projectId && !file) || posting}
-                className="w-full"
-                onClick={() => void post()}
-              >
-                {posting && <Loader2 className="animate-spin" data-icon="inline-start" />}
+              <Button disabled={!canPost || posting} className="w-full" onClick={() => void post()}>
+                {(posting || uploadState === "uploading") && (
+                  <Loader2 className="animate-spin" data-icon="inline-start" />
+                )}
                 {posting
-                  ? `${phase === "export" ? "Exporting" : "Posting"}… ${Math.round(progress * 100)}%`
-                  : "Post"}
+                  ? phase === "export"
+                    ? `Exporting… ${Math.round(progress * 100)}%`
+                    : phase === "upload"
+                      ? `Uploading… ${Math.round(progress * 100)}%`
+                      : "Posting…"
+                  : uploadState === "uploading"
+                    ? `Uploading… ${Math.round(progress * 100)}%`
+                    : "Post"}
               </Button>
             </DialogFooter>
           </>

@@ -66,6 +66,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
   const [usernameDraft, setUsernameDraft] = useState("");
   const [dropMenuOpenId, setDropMenuOpenId] = useState<string | null>(null);
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
+  const [resumingDrop, setResumingDrop] = useState<StudioDrop | null>(null);
 
   const studioId = data?.studio.id ?? "";
   const update = useUpdateStudio(studioId);
@@ -340,20 +341,27 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
               <div
                 key={drop.id}
                 role="button"
-                tabIndex={drop.status === "complete" ? 0 : -1}
+                tabIndex={drop.status === "complete" || drop.status === "draft" ? 0 : -1}
                 onClick={() => {
-                  if (drop.status !== "complete") return;
-                  setViewingIndex(playableDrops.findIndex((d) => d.id === drop.id));
+                  if (drop.status === "complete") {
+                    setViewingIndex(playableDrops.findIndex((d) => d.id === drop.id));
+                  } else if (drop.status === "draft") {
+                    setResumingDrop(drop);
+                  }
                 }}
                 onKeyDown={(e) => {
-                  if (drop.status !== "complete") return;
+                  if (drop.status !== "complete" && drop.status !== "draft") return;
                   if (e.key !== "Enter" && e.key !== " ") return;
                   e.preventDefault();
-                  setViewingIndex(playableDrops.findIndex((d) => d.id === drop.id));
+                  if (drop.status === "complete") {
+                    setViewingIndex(playableDrops.findIndex((d) => d.id === drop.id));
+                  } else {
+                    setResumingDrop(drop);
+                  }
                 }}
                 className={cn(
                   "group relative flex aspect-[9/16] cursor-pointer flex-col justify-end overflow-hidden rounded-xl border bg-muted p-2 text-left",
-                  drop.status !== "complete" && "pointer-events-none opacity-60"
+                  drop.status !== "complete" && drop.status !== "draft" && "pointer-events-none opacity-60"
                 )}
               >
                 {isManager && (
@@ -388,7 +396,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
-                {drop.status === "complete" && (
+                {(drop.status === "complete" || drop.status === "draft") && (
                   <>
                     <video
                       src={`/api/drops/${drop.id}/video`}
@@ -404,11 +412,17 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                       className="absolute inset-0 size-full object-cover"
                     />
                     <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-black/0" />
-                    <span className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
-                      <span className="grid size-9 place-items-center rounded-full bg-white/95">
-                        <Play className="ml-0.5 size-4 fill-ink text-ink" />
+                    {drop.status === "complete" ? (
+                      <span className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
+                        <span className="grid size-9 place-items-center rounded-full bg-white/95">
+                          <Play className="ml-0.5 size-4 fill-ink text-ink" />
+                        </span>
                       </span>
-                    </span>
+                    ) : (
+                      <span className="absolute left-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white backdrop-blur">
+                        Draft
+                      </span>
+                    )}
                   </>
                 )}
                 <p className="relative truncate text-[11px] font-medium text-foreground">
@@ -442,6 +456,16 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
           studioId={studio.id}
           studioName={studio.name}
           onClose={() => setPosting(false)}
+        />
+      )}
+
+      {resumingDrop && (
+        <DropDialog
+          projectId={null}
+          studioId={studio.id}
+          studioName={studio.name}
+          resumeDrop={resumingDrop}
+          onClose={() => setResumingDrop(null)}
         />
       )}
 

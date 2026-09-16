@@ -84,3 +84,14 @@ export async function uploadDropVideo(
 
   await apiFetch<{ ok: boolean }>(`/api/drops/${dropId}/complete`, { method: "POST" });
 }
+
+// Turns an uploaded draft into a real post — see /api/drops/[id]/publish.
+export function publishDrop(
+  dropId: string,
+  input: { title?: string; caption?: string; hashtags?: string }
+): Promise<void> {
+  return apiFetch<{ ok: boolean }>(`/api/drops/${dropId}/publish`, {
+    body: JSON.stringify(input),
+    method: "POST",
+  }).then(() => undefined);
+}

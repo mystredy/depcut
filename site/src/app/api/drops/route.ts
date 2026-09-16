@@ -6,27 +6,12 @@ import {
   withDepCutAuth,
   type DepCutAuthenticatedRequest,
 } from "@/lib/depcut-api-auth";
+import { hashtagsSchema } from "@/app/api/drops/schemas";
 import { validationErrorResponse } from "@/lib/inference/responses";
 import { getStudioMembership } from "@/lib/studio/access";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
-
-// Hashtags arrive as free text ("#dance #fun" or "dance, fun") and get
-// split/cleaned here — the client sends one string, not a pre-split array,
-// so this is the one place that decides what counts as a tag.
-const hashtagsSchema = z
-  .string()
-  .trim()
-  .max(280)
-  .optional()
-  .transform((raw) =>
-    (raw ?? "")
-      .split(/[,\s]+/)
-      .map((t) => t.replace(/^#/, "").trim())
-      .filter(Boolean)
-      .slice(0, 30)
-  );
 
 const createDropSchema = z.object({
   title: z.string().trim().max(100).nullable().optional(),
