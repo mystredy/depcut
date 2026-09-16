@@ -7,7 +7,7 @@ import {
   type DepCutAuthenticatedRequest,
 } from "@/lib/depcut-api-auth";
 import { Prisma } from "@/generated/prisma/client";
-import { STUDIO_SOURCE_CONNECTION_ID } from "@/lib/marketplace/oauth-providers";
+import { IMPORTABLE_PLATFORMS, isConnectionUsable, STUDIO_SOURCE_CONNECTION_ID, STUDIO_SOURCE_PLATFORM } from "@/lib/marketplace/oauth-providers";
 import { prisma } from "@/lib/prisma";
 import { ensureStudioSourceConnection, getStudioMembership, logStudioActivity } from "@/lib/studio/access";
 
@@ -69,36 +69,76 @@ export const PATCH = withDepCutAuth(async (request: DepCutAuthenticatedRequest, 
   const { sourceConnectionId, destinationConnectionId, postsPerDay, ...rest } = parsed.data;
   const data: Prisma.SocialWorkflowUncheckedUpdateInput = { ...rest };
 
+  // Same rule as creating a workflow — see workflows/route.ts — applied to
+  // the *effective* final state, since a PATCH can touch just one side.
+  let resolvedSource = existing.sourceConnection;
+  let resolvedDestination = existing.destinationConnection;
+
   if (sourceConnectionId !== undefined) {
-    // Same rule as creating a workflow — see workflows/route.ts.
-    if (sourceConnectionId !== STUDIO_SOURCE_CONNECTION_ID) {
-      return NextResponse.json(
-        {
-          error: "Unsupported workflow",
-          message: "A workflow's source must be this studio — repurposing from a connected account isn't available yet.",
-        },
-        { status: 400 },
-      );
-    }
-    const source = await ensureStudioSourceConnection(id);
+    const source =
+      sourceConnectionId === STUDIO_SOURCE_CONNECTION_ID
+        ? await ensureStudioSourceConnection(id)
+        : await prisma.socialConnection.findUnique({ where: { id: sourceConnectionId } });
+    if (!source || source.studioId !== id) return notFoundResponse();
+    resolvedSource = source;
     data.sourceConnectionId = source.id;
   }
   if (destinationConnectionId !== undefined) {
-    const destination = await prisma.socialConnection.findUnique({ where: { id: destinationConnectionId } });
+    const destination =
+      destinationConnectionId === STUDIO_SOURCE_CONNECTION_ID
+        ? await ensureStudioSourceConnection(id)
+        : await prisma.socialConnection.findUnique({ where: { id: destinationConnectionId } });
     if (!destination || destination.studioId !== id) return notFoundResponse();
+    resolvedDestination = destination;
     data.destinationConnectionId = destination.id;
   }
 
-  const effectiveSourceId = (data.sourceConnectionId as string | undefined) ?? existing.sourceConnectionId;
-  const effectiveDestinationId = (data.destinationConnectionId as string | undefined) ?? existing.destinationConnectionId;
-  if (effectiveSourceId === effectiveDestinationId) {
+  const sourceIsStudio = resolvedSource.platform === STUDIO_SOURCE_PLATFORM;
+  const destinationIsStudio = resolvedDestination.platform === STUDIO_SOURCE_PLATFORM;
+  if (sourceIsStudio === destinationIsStudio) {
     return NextResponse.json(
-      { error: "Invalid request", issues: [{ path: "destinationConnectionId", message: "Source and destination must be different connections." }] },
+      {
+        error: "Unsupported workflow",
+        message: "A workflow needs exactly one side to be this studio — the other must be a connected account.",
+      },
+      { status: 400 },
+    );
+  }
+  if (!sourceIsStudio && !IMPORTABLE_PLATFORMS.includes(resolvedSource.platform)) {
+    return NextResponse.json(
+      {
+        error: "Unsupported workflow",
+        message: `Importing existing posts from ${resolvedSource.platform} isn't supported.`,
+      },
       { status: 400 },
     );
   }
 
   const effectiveAutoPublish = rest.autoPublish ?? existing.autoPublish;
+
+  // Same rule as creating a workflow — see workflows/route.ts.
+  if (!sourceIsStudio && effectiveAutoPublish) {
+    return NextResponse.json(
+      {
+        error: "Unsupported workflow",
+        message: "Repurpose new posts only works from this studio's own content — use Repurpose existing content to import on a schedule instead.",
+      },
+      { status: 400 },
+    );
+  }
+  if (sourceIsStudio && effectiveAutoPublish && !isConnectionUsable({
+    hasToken: Boolean(resolvedDestination.accessToken),
+    status: resolvedDestination.status,
+    tokenExpiresAt: resolvedDestination.tokenExpiresAt,
+  })) {
+    return NextResponse.json(
+      {
+        error: "Unsupported workflow",
+        message: `${resolvedDestination.accountName} needs to be connected, active, and unexpired before you can turn on Repurpose new posts.`,
+      },
+      { status: 400 },
+    );
+  }
   if (postsPerDay !== undefined) {
     data.postsPerDay = effectiveAutoPublish ? null : postsPerDay;
   } else if (rest.autoPublish === true) {

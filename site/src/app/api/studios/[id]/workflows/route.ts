@@ -6,7 +6,7 @@ import {
   withDepCutAuth,
   type DepCutAuthenticatedRequest,
 } from "@/lib/depcut-api-auth";
-import { STUDIO_SOURCE_CONNECTION_ID } from "@/lib/marketplace/oauth-providers";
+import { IMPORTABLE_PLATFORMS, isConnectionUsable, STUDIO_SOURCE_CONNECTION_ID } from "@/lib/marketplace/oauth-providers";
 import { prisma } from "@/lib/prisma";
 import { ensureStudioSourceConnection, getStudioMembership, logStudioActivity } from "@/lib/studio/access";
 
@@ -21,11 +21,12 @@ const connectionSelect = {
   platform: true,
 } as const;
 
-// Managers only. Pairs the studio with one of its own connections to
-// repurpose content to it. An Active, autoPublish workflow is read by
-// social-workflow-publish.ts whenever a Drop completes; postsPerDay
-// ("Repurpose existing content" mode) is still just a stored preference —
-// nothing schedules that drip-feed yet.
+// Managers only. Pairs the studio with one of its own connections, in
+// either direction: studio → platform (publish) or Instagram/Facebook →
+// studio (import). An Active, autoPublish, studio-sourced workflow is read
+// by social-workflow-publish.ts whenever a Drop completes; any other
+// Active workflow (either direction, autoPublish or postsPerDay backlog) is
+// read daily by social-workflow-drip.ts / social-workflow-import.ts.
 export const GET = withDepCutAuth(async (request: DepCutAuthenticatedRequest, context: RouteContext) => {
   const { id } = await context.params;
   const membership = await getStudioMembership(request.depcut.userId, id);
@@ -87,32 +88,72 @@ export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest, c
     );
   }
 
-  // The only supported direction today: studio → a platform. Platform →
-  // platform is never valid, and platform → studio (importing existing
-  // posts in) has no execution pipeline yet — see social-workflow-publish.ts.
-  if (parsed.data.sourceConnectionId !== STUDIO_SOURCE_CONNECTION_ID) {
+  // Exactly two directions are valid: studio → a platform (publish), or an
+  // Instagram/Facebook connection → the studio (import — see
+  // social-workflow-import.ts; the only platforms with a real "list my
+  // existing posts" API, see IMPORTABLE_PLATFORMS). Platform → platform and
+  // studio → studio are both rejected below by construction.
+  const { name, sourceConnectionId, destinationConnectionId, autoPublish, postsPerDay } = parsed.data;
+  const sourceIsStudio = sourceConnectionId === STUDIO_SOURCE_CONNECTION_ID;
+  const destinationIsStudio = destinationConnectionId === STUDIO_SOURCE_CONNECTION_ID;
+  if (sourceIsStudio === destinationIsStudio) {
     return NextResponse.json(
       {
         error: "Unsupported workflow",
-        message: "A workflow's source must be this studio — repurposing from a connected account isn't available yet.",
+        message: "A workflow needs exactly one side to be this studio — the other must be a connected account.",
       },
       { status: 400 },
     );
   }
 
-  const { name, destinationConnectionId, autoPublish, postsPerDay } = parsed.data;
-  const [source, destination] = await Promise.all([
-    ensureStudioSourceConnection(id),
-    prisma.socialConnection.findUnique({ where: { id: destinationConnectionId } }),
-  ]);
-  if (!source || source.studioId !== id || !destination || destination.studioId !== id) {
-    return notFoundResponse();
+  const studioConnection = await ensureStudioSourceConnection(id);
+  const realConnectionId = sourceIsStudio ? destinationConnectionId : sourceConnectionId;
+  const realConnection = await prisma.socialConnection.findUnique({ where: { id: realConnectionId } });
+  if (!realConnection || realConnection.studioId !== id) return notFoundResponse();
+
+  if (!sourceIsStudio && !IMPORTABLE_PLATFORMS.includes(realConnection.platform)) {
+    return NextResponse.json(
+      {
+        error: "Unsupported workflow",
+        message: `Importing existing posts from ${realConnection.platform} isn't supported.`,
+      },
+      { status: 400 },
+    );
   }
+
+  // "Repurpose new posts" only ever fires off this studio's own content —
+  // an import direction has no per-post trigger to react to, only a daily
+  // list to work through, so it belongs to "Repurpose existing content".
+  if (!sourceIsStudio && autoPublish) {
+    return NextResponse.json(
+      {
+        error: "Unsupported workflow",
+        message: "Repurpose new posts only works from this studio's own content — use Repurpose existing content to import on a schedule instead.",
+      },
+      { status: 400 },
+    );
+  }
+  if (sourceIsStudio && autoPublish && !isConnectionUsable({
+    hasToken: Boolean(realConnection.accessToken),
+    status: realConnection.status,
+    tokenExpiresAt: realConnection.tokenExpiresAt,
+  })) {
+    return NextResponse.json(
+      {
+        error: "Unsupported workflow",
+        message: `${realConnection.accountName} needs to be connected, active, and unexpired before you can turn on Repurpose new posts.`,
+      },
+      { status: 400 },
+    );
+  }
+
+  const source = sourceIsStudio ? studioConnection : realConnection;
+  const destination = sourceIsStudio ? realConnection : studioConnection;
 
   const workflow = await prisma.socialWorkflow.create({
     data: {
       autoPublish,
-      destinationConnectionId,
+      destinationConnectionId: destination.id,
       name,
       postsPerDay: autoPublish ? null : postsPerDay ?? null,
       sourceConnectionId: source.id,

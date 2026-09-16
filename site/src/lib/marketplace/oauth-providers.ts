@@ -224,3 +224,18 @@ export const IMPORTABLE_PLATFORMS = ["instagram", "facebook"];
 // this exact id as the "This studio" option in the New workflow dialog.
 export const STUDIO_SOURCE_PLATFORM = "studio";
 export const STUDIO_SOURCE_CONNECTION_ID = "studio";
+
+// Whether a connection can actually be used for a live automated action
+// ("Repurpose new posts") right now: still holds a token, not marked
+// inactive, and not past its expiry. "Repurpose existing content" tolerates
+// a stale connection failing one run; an automated publish on every new post
+// doesn't, so it's gated on this instead.
+export function isConnectionUsable(connection: {
+  status: string;
+  hasToken: boolean;
+  tokenExpiresAt: string | Date | null;
+}): boolean {
+  if (!connection.hasToken || connection.status !== "active") return false;
+  if (!connection.tokenExpiresAt) return true;
+  return new Date(connection.tokenExpiresAt).getTime() > Date.now();
+}
