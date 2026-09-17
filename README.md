@@ -55,7 +55,7 @@ When the app is running, cloud projects can also use your Mac for transcription.
 
 Describe a shot in chat and keep iterating until you get what you want.
 
-These are the two example projects from the [landing page](https://depcut.com). The prompts are included below.
+These are the two example projects from the [landing page](https://depcut.app). The prompts are included below.
 
 **The Railway Mystery** is a 1920s comic-style chase. It uses three generated shots with a brass-and-strings score.
 

@@ -29,7 +29,7 @@ DEPCUT_APP_BUILD="2" \
 ```
 
 The app has no account and makes no authenticated calls; the menu bar's "Go to
-App" opens DepCut at `https://depcut.com/app`.
+App" opens DepCut at `https://depcut.app/app`.
 
 Launch the packaged app with `open dist/DepCut.app`; test the installer flow
 with `open dist/DepCut.dmg`.
@@ -56,7 +56,7 @@ user driver and surfaces the update itself in the menu bar, so Sparkle's standar
 update windows are never shown.
 
 The public Sparkle feed lives in `site/public/appcast.xml`, served as
-`https://depcut.com/appcast.xml`. Appcast enclosure URLs point to the
+`https://depcut.app/appcast.xml`. Appcast enclosure URLs point to the
 numeric GitHub Release asset URL, not a moving `latest` or `-latest` URL. Do
 not use the Supabase Storage `/release` bucket for release binaries or appcast
 hosting.
@@ -66,7 +66,7 @@ Configure Sparkle when packaging:
 ```bash
 DEPCUT_APP_VERSION="0.1.1" \
 DEPCUT_APP_BUILD="2" \
-DEPCUT_SPARKLE_FEED_URL="https://depcut.com/appcast.xml" \
+DEPCUT_SPARKLE_FEED_URL="https://depcut.app/appcast.xml" \
 DEPCUT_SPARKLE_PUBLIC_ED_KEY="..." \
 ./scripts/package-depcut-app.sh
 ```
