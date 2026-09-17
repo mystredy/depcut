@@ -379,7 +379,7 @@ stage_bundled_tools() {
   echo "Baked bundled tools from $source_dir into $dest_dir."
 }
 
-# The DepCut engine — the local server behind depcut.com — is version-locked to the
+# The DepCut engine — the local server behind depcut.app — is version-locked to the
 # app and built here as part of packaging, so one command produces a complete app. Set
 # DEPCUT_CUT_ENGINE_BIN to reuse a prebuilt binary (e.g. a cross-arch or cached CI build) instead.
 stage_cut_engine() {

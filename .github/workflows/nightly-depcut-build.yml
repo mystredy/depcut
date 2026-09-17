@@ -91,7 +91,7 @@ jobs:
 
       # The bundled CLI tools (ffmpeg, ffprobe, yt-dlp) ship inside the app; packaging stages them
       # itself, fetching the artifact published by the Publish Bundled Tools workflow. The DepCut
-      # engine (the local server behind depcut.com) is likewise built and bundled by
+      # engine (the local server behind depcut.app) is likewise built and bundled by
       # package-depcut-app.sh — no separate step for either.
       - name: Package DepCut
         if: steps.changes.outputs.should_build == 'true'

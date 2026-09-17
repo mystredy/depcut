@@ -279,7 +279,7 @@ jobs:
         env:
           DEPCUT_APP_VERSION: ${{ steps.release.outputs.version }}
           DEPCUT_APP_BUILD: ${{ steps.release.outputs.build }}
-          DEPCUT_SPARKLE_FEED_URL: https://depcut.com/appcast.xml
+          DEPCUT_SPARKLE_FEED_URL: https://depcut.app/appcast.xml
           DEPCUT_SPARKLE_PUBLIC_ED_KEY: ${{ secrets.DEPCUT_SPARKLE_PUBLIC_ED_KEY }}
           DEPCUT_APP_SIGN_IDENTITY: ${{ steps.signing.outputs.identity }}
           DEPCUT_SIGN_KEYCHAIN: ${{ steps.signing.outputs.keychain }}

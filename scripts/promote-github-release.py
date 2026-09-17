@@ -206,7 +206,7 @@ def write_appcast(path: Path, version: Version, build: str, signature: str, rele
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
     <title>DepCut Updates</title>
-    <link>https://depcut.com/appcast.xml</link>
+    <link>https://depcut.app/appcast.xml</link>
     <description>DepCut macOS app updates.</description>
     <language>en</language>
     <item>
