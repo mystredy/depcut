@@ -10,7 +10,7 @@ type FeatureLineProps = {
 export function ApiSection() {
   return (
     <section
-      className="border-b-2 border-[#0F0E0D] bg-[#FAF6EC] py-20"
+      className="border-b-2 border-[#0F0E0D] bg-[#F2FAFE] py-20"
       id="api"
     >
       <div className="mx-auto max-w-[1400px] px-6 md:px-12">

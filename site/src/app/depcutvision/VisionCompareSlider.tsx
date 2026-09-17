@@ -24,7 +24,7 @@ export function VisionCompareSlider({ dataset }: { dataset: VisionDataset }) {
   }, []);
 
   return (
-    <div className="relative w-full max-w-full overflow-hidden rounded-lg border-2 border-[#0F0E0D] bg-[#FAF6EC]">
+    <div className="relative w-full max-w-full overflow-hidden rounded-lg border-2 border-[#0F0E0D] bg-[#F2FAFE]">
       <div className="flex items-center justify-between border-b-2 border-[#0F0E0D] bg-white px-4 py-[9px]">
         <div className="flex items-center gap-2">
           <span className="h-3 w-3 rounded-full border-2 border-[#0F0E0D] bg-[#EC7868]" />

@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
-export const BG = "#F5EFE0";
-export const CREAM = "#FAF6EC";
+export const BG = "#E6F4FC";
+export const CREAM = "#F2FAFE";
 export const CORAL = "#EC7868";
 export const BLACK = "#0F0E0D";
 
@@ -12,7 +12,7 @@ export const CARD = {
   pink: "#F2B5C4",
   mint: "#B7E4C7",
   purple: "#C8BEE5",
-  cream: "#FAF6EC",
+  cream: "#F2FAFE",
   white: "#FFFFFF",
 } as const;
 

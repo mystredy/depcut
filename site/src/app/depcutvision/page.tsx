@@ -61,7 +61,7 @@ const structuredData = {
 
 export default function DepCutVisionPage() {
   return (
-    <main className="min-h-screen w-full overflow-x-clip bg-[#F5EFE0] font-[-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] text-[#0F0E0D]">
+    <main className="min-h-screen w-full overflow-x-clip bg-[#E6F4FC] font-[-apple-system,BlinkMacSystemFont,'Segoe_UI',sans-serif] text-[#0F0E0D]">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
