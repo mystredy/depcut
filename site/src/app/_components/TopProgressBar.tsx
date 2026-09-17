@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 type Phase = "idle" | "loading" | "done";
@@ -14,20 +14,32 @@ const GROW_DELAY_MS = 120;
 const FADE_DELAY_MS = 150;
 const FADE_DURATION_MS = 250;
 
-// Clicking a link that's about to do real work (a cold server render, a
-// full-page reload through one of the auth/proxy passthrough routes) gave no
-// feedback until the destination painted — a slow click looked like a dead
-// one. This starts a thin top bar the instant a same-tab internal link is
-// clicked, and finishes it the moment the route actually changes.
+// Clicking something that's about to do real work (a cold server render, a
+// full-page reload through one of the auth/proxy passthrough routes, a
+// settings-menu item that navigates via router.push with no <a> in sight)
+// gave no feedback until the destination painted — a slow click looked like
+// a dead one. This starts a thin top bar the instant that happens, and
+// finishes it the moment the route actually changes.
 //
-// Covers both client-side <Link> navigation and the plain <a> full-page
-// reloads some routes still need (see CutTopNav's isAuthPassthroughHref) —
-// both render as a real <a> in the DOM, so one document-level click
-// listener sees them the same way. Programmatic router.push/replace calls
-// with no click (e.g. AuthScreen's already-signed-in redirect) aren't
-// covered — the render-time check below still resolves the bar if one
-// happened to be running, but nothing starts one for those.
+// Two independent triggers, since no single browser or Next.js API covers
+// both real navigations this app makes:
+//  - A document-level click listener catches <a> elements — both next/link's
+//    client-side navigation and the plain <a> full-page reloads some routes
+//    still need (see CutTopNav's isAuthPassthroughHref). Both render as a
+//    real <a> in the DOM.
+//  - Patching router.push/router.replace on the shared AppRouterInstance
+//    (the same object every useRouter() call in the app receives from
+//    context) catches programmatic navigation with no <a> involved at all —
+//    e.g. NavUser's dropdown menu items (Billing, Usage, Studio…), which
+//    navigate from a DropdownMenuItem's onClick. This has to be the router
+//    object's own methods, not history.pushState/replaceState: Next defers
+//    the actual pushState call until the destination is ready to render, so
+//    for a slow navigation patching history fires at the same moment the
+//    navigation finishes, too late to show anything. router.push() itself
+//    still runs synchronously at click time regardless of how slow the
+//    navigation ends up being.
 export function TopProgressBar() {
+  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const navKey = `${pathname}?${searchParams.toString()}`;
@@ -109,6 +121,30 @@ export function TopProgressBar() {
     document.addEventListener("click", onClick);
     return () => document.removeEventListener("click", onClick);
   }, [start]);
+
+  useEffect(() => {
+    const originalPush = router.push.bind(router);
+    const originalReplace = router.replace.bind(router);
+
+    // Mutates the shared AppRouterInstance in place (wrap on mount, restore
+    // on cleanup) rather than replacing router.push at its call sites —
+    // there's no other way to observe a router.push() call itself, and every
+    // component's own useRouter() call resolves to this exact same object.
+    // eslint-disable-next-line react-hooks/immutability -- intentional: temporary wrap + restore, not a lingering mutation
+    router.push = (...args: Parameters<typeof router.push>) => {
+      start();
+      return originalPush(...args);
+    };
+    router.replace = (...args: Parameters<typeof router.replace>) => {
+      start();
+      return originalReplace(...args);
+    };
+
+    return () => {
+      router.push = originalPush;
+      router.replace = originalReplace;
+    };
+  }, [router, start]);
 
   if (phase === "idle") return null;
 
