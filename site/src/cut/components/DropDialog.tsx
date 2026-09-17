@@ -137,6 +137,12 @@ export function DropDialog({
   const queryClient = useQueryClient();
   const createDrop = useCreateDrop();
   const workflows = useStudioWorkflows(studioId);
+
+  // Hold the dialog off-screen until the auto-publish targets shown in its
+  // header are known — opening with an empty header that then pops in a row
+  // of accounts once the query resolves reads as broken, not loading.
+  if (workflows.isPending) return null;
+
   // The exact set social-workflow-publish.ts reads when this Drop finishes
   // uploading — shown so posting isn't a surprise about where it lands.
   const autoPublishTargets = (workflows.data?.workflows ?? []).filter(
