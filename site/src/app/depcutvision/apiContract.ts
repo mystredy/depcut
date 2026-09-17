@@ -4,7 +4,7 @@
 export const API_ENDPOINT = {
   method: "POST",
   path: "/api/vision",
-  host: "https://depcut.com",
+  host: "https://depcut.app",
 } as const;
 
 export type CodeLanguage = {

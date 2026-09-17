@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 import { DEPCUT_CANONICAL } from "@/cut/lib/hosts";
 
-// Served at depcut.com/sitemap.xml via the proxy rewrite (src/proxy.ts).
+// Served at depcut.app/sitemap.xml via the proxy rewrite (src/proxy.ts).
 // The legal pages are canonical on this host, since they describe DepCut.
 export default function sitemap(): MetadataRoute.Sitemap {
   return [

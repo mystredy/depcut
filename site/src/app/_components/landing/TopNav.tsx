@@ -17,7 +17,7 @@ type Props = {
   // page overrides the default "DepCut" with "DepCut Vision".
   wordmark?: string;
   // Sign-in/up pages show a single toggle to the other mode. Auth otherwise
-  // lives on depcut.com, so the marketing nav carries no auth entry points.
+  // lives on depcut.app, so the marketing nav carries no auth entry points.
   authToggle?: { href: string; label: string };
   // Signed-in pill into the product. The Cut landing points it at the Cut
   // projects home, which lives under a different base per host.

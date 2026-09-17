@@ -103,5 +103,5 @@ export default function WelcomeEmail({
 WelcomeEmail.PreviewProps = {
   name: "Ada",
   credits: "3",
-  unsubscribeUrl: "https://depcut.com/unsubscribe?token=preview",
+  unsubscribeUrl: "https://depcut.app/unsubscribe?token=preview",
 } satisfies WelcomeEmailProps;

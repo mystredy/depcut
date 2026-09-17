@@ -14,11 +14,10 @@ import { notifyTelegram } from "@/lib/telegram/notify";
 // once at creation; only a hash is stored (handled by the apiKey plugin).
 export const visionApiKeyPrefix = "dk_live_";
 
-// depcut.com is the canonical production host (the proxy 308s www. to the
+// depcut.app is the canonical production host (the proxy 308s www. to the
 // apex before anything serves, so auth cookies stay plain host-only
 // cookies), but sign-in also needs to work on every other domain this app
-// is actually reachable from — depcut.app runs alongside it, not through
-// it, so it gets no such apex redirect (see DEPCUT_HOSTS in cut/lib/hosts.ts).
+// is actually reachable from (see DEPCUT_HOSTS in cut/lib/hosts.ts).
 // Hosted deploys resolve baseURL per-request from this allowlist — it
 // decides the OAuth redirect_uri — falling back to the canonical host for
 // anything else, so an unrecognized Host header can never hijack a session.
@@ -27,7 +26,7 @@ export const visionApiKeyPrefix = "dk_live_";
 // it from the localhost request.
 const baseURL = process.env.VERCEL
   ? {
-      allowedHosts: ["depcut.com", "depcut.vercel.app", "depcut.app", "www.depcut.app"],
+      allowedHosts: ["depcut.vercel.app", "depcut.app", "www.depcut.app"],
       fallback: DEPCUT_CANONICAL,
     }
   : undefined;

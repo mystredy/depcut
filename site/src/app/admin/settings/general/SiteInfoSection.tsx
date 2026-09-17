@@ -78,7 +78,7 @@ export function SiteInfoSection() {
         <Input
           value={websiteUrl}
           onChange={(e) => setWebsiteUrl(e.target.value)}
-          placeholder="https://depcut.com"
+          placeholder="https://depcut.app"
         />
       </div>
       <div className="space-y-1.5">

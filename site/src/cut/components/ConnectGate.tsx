@@ -29,7 +29,7 @@ import { engineSeen, markEngineSeen } from "@/cut/lib/residency";
 
 // Which backend the app starts on, decided once per load. Chrome gates a
 // public https page's first fetch to 127.0.0.1 behind its Local Network Access
-// prompt — "depcut.com wants to access other apps and services on this
+// prompt — "depcut.app wants to access other apps and services on this
 // device" — so the engine is probed only when that costs nothing: the page is
 // served by the engine itself, or the permission is already granted.
 // Otherwise the app starts in the cloud. The api.ts latch keeps app code off

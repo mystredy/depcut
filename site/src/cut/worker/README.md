@@ -48,7 +48,7 @@ self-heals; `main.ts` exits after ~60s of empty queue so the container stops
 billing. Cold start is a few seconds. The hosted deployment needs
 `CUT_RENDER_WAKE_SECRET` in its env to send wakes — without it, queued jobs
 wait for a manually run worker. The address is code, not config: the Worker
-claims `worker.depcut.com` as its own custom domain, named in
+claims `worker.depcut.app` as its own custom domain, named in
 `src/cut/lib/hosts.ts`. That is deliberate — the wake used to ride the
 workers.dev address, and declaring the media route made wrangler turn
 workers.dev off, stranding every render with nothing to see but queued jobs.
@@ -99,7 +99,7 @@ One-time setup:
 
 1. The zone must be on Cloudflare — the Cache API is a no-op on `workers.dev`,
    so the route has to be a real hostname. `wrangler.jsonc` claims
-   `media.depcut.com` as a custom domain and wrangler creates the DNS record
+   `media.depcut.app` as a custom domain and wrangler creates the DNS record
    and certificate on deploy; a pre-existing CNAME on that name blocks it. The
    handler matches `CUT_MEDIA_HOST` in `../lib/hosts.ts`, so the two names move
    together.
@@ -124,7 +124,7 @@ drain serially instead of stampeding R2. One-time setup:
 
 1. Create the queue (from `site/`): `npx wrangler queues create depcut-cut-copy`.
 2. Worker secrets: `CUT_COPY_EXECUTE_URL` (the hosted endpoint, e.g.
-   `https://depcut.com/api/cut-copy-worker`) and `CUT_COPY_EXECUTE_SECRET`
+   `https://depcut.app/api/cut-copy-worker`) and `CUT_COPY_EXECUTE_SECRET`
    (any long random string).
 3. On the hosted site (Vercel env): `CLOUDFLARE_QUEUES_API_TOKEN` (an API
    token with Queues edit on the account — publishes ride the REST API since

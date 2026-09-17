@@ -26,11 +26,11 @@ export const metadata: Metadata = {
     "DepCut Vision",
   ],
   alternates: {
-    canonical: "https://depcut.com/depcutvision",
+    canonical: "https://depcut.app/depcutvision",
   },
   openGraph: {
     type: "website",
-    url: "https://depcut.com/depcutvision",
+    url: "https://depcut.app/depcutvision",
     siteName: "DepCut",
     title: "OmniParser API for UI Element Detection | DepCut Vision",
     description:
@@ -49,13 +49,13 @@ const structuredData = {
   "@type": "WebAPI",
   name: "DepCut Vision",
   alternateName: "OmniParser API",
-  url: "https://depcut.com/depcutvision",
+  url: "https://depcut.app/depcutvision",
   description:
     "DepCut Vision is a fast, OmniParser-compatible API for detecting interactable UI elements in screenshots — bounding boxes, center points, and labels.",
   provider: {
     "@type": "Organization",
     name: "DepCut",
-    url: "https://depcut.com",
+    url: "https://depcut.app",
   },
 };
 

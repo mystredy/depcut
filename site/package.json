@@ -2,7 +2,7 @@
   "name": "site",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://depcut.com",
+  "homepage": "https://depcut.app",
   "license": "Apache-2.0",
   "workspaces": [
     "packages/*"

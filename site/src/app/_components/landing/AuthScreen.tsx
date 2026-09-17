@@ -194,7 +194,7 @@ export function AuthScreen({ mode }: Props) {
       {/* Same html/body override + overflow guard as the Cut landing page
           (CutLanding.tsx) — see its comment for why both are needed. */}
       <style>{`html, body { background: ${BG}; overflow-x: hidden; }`}</style>
-      {/* Auth serves same-host on depcut.com, so the chrome is Cut's. */}
+      {/* Auth serves same-host on depcut.app, so the chrome is Cut's. */}
       <CutTopNav
         authToggle={{
           href: screenCopy.alternateHref,

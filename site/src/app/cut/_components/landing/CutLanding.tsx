@@ -9,7 +9,7 @@ import { CutPricing } from "@/app/cut/_components/landing/CutPricing";
 import { CutTopNav } from "@/app/cut/_components/landing/CutTopNav";
 import { CutWorksWith } from "@/app/cut/_components/landing/CutWorksWith";
 
-// The depcut.com marketing page, on the dark gradient-accented visual
+// The depcut.app marketing page, on the dark gradient-accented visual
 // system (`cut/_components/landing/dark`) — separate from the cream system
 // `_components/landing` still uses for DepCut Vision, auth, and legal pages.
 // Every CTA into the app is gated on session (useAppEntryHref): signed-out

@@ -13,11 +13,11 @@ import { fetchPublicSiteSettings } from "@/lib/siteSettings";
 // Cut (the video editor, publicly "DepCut") lives under /cut in this single
 // site app: the marketing landing at /cut and the app under /cut/app. Every
 // host gets the same mapping — "/" → landing, "/app/…" → editor app (generic
-// "/…" → "/cut/…" rewrite) — with depcut.com as the one production host.
+// "/…" → "/cut/…" rewrite) — with depcut.app as the one production host.
 // The auth pages (/sign-in, /sign-up), "/install", "/depcutvision", and the
 // legal pages (including "/unsubscribe") are real root-level routes and pass
 // through the rewrite.
-// www. 308s to the apex; retired domains redirect to depcut.com at the
+// www. 308s to the apex; retired domains redirect to depcut.app at the
 // edge (Cloudflare) and never reach this app.
 //
 // This file must live in src/ (next to app/) and use the Next 16 `proxy` name;
@@ -161,7 +161,7 @@ export async function proxy(req: NextRequest) {
   const host = req.headers.get("host");
 
   // Aliases (www.) canonicalize to the apex.
-  if (isDepCutHost(host) && host?.split(":")[0] !== "depcut.com") {
+  if (isDepCutHost(host) && host?.split(":")[0] !== "depcut.app") {
     const url = req.nextUrl.clone();
     return NextResponse.redirect(
       `${DEPCUT_CANONICAL}${pathname}${url.search}`,
@@ -227,7 +227,7 @@ export const config = {
   // Page routes (skip Next internals and files with an extension) plus every
   // Cut API path — including media/export files with extensions — so the
   // hosted 404 and local CORS above cover all of them. "/sitemap.xml" is
-  // matched explicitly so depcut.com can serve its own sitemap.
+  // matched explicitly so depcut.app can serve its own sitemap.
   matcher: [
     "/((?!_next/|.*\\..*).*)",
     "/api/cut/:path*",
