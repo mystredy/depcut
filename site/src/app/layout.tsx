@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
 import "./globals.css";
 
 import { publicSiteSettings } from "@/lib/siteSettings";
 import { QueryProvider } from "@/queries/QueryProvider";
 import { ErrorReporter } from "./_components/ErrorReporter";
 import { PostHogProvider } from "./_components/PostHogProvider";
+import { TopProgressBar } from "./_components/TopProgressBar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,6 +51,9 @@ export default async function RootLayout({
             raw <style> tag applies its cascade the same regardless of where
             it sits in the tree, so this needs no special <head> placement. */}
         {accentColor && <style>{`:root{--primary:${accentColor}}`}</style>}
+        <Suspense fallback={null}>
+          <TopProgressBar />
+        </Suspense>
         <PostHogProvider>
           <QueryProvider>
             {children}
