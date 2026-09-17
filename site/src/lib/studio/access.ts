@@ -16,6 +16,20 @@ export async function isStudioOwner(userId: string, studioId: string): Promise<b
   return member?.role === "owner";
 }
 
+// Shared by GET /api/drops/[id] and GET /api/drops/[id]/video — a studio
+// manager can always see their own drop (draft, scheduled, any visibility);
+// anyone else only once it's actually posted, and only if it isn't
+// "private". "Unlisted" is included here on purpose: a direct link is
+// exactly what that visibility is for, it just doesn't appear in the studio
+// grid (see GET /api/studios/[id]/drops's own visibility filter).
+export async function canViewDrop(
+  userId: string,
+  drop: { studioId: string; status: string; visibility: string },
+): Promise<boolean> {
+  if (await isStudioManager(userId, drop.studioId)) return true;
+  return drop.status === "complete" && drop.visibility !== "private";
+}
+
 // A workflow's source can be the studio's own Drops instead of another
 // connected platform. SocialWorkflow.sourceConnectionId is a required
 // foreign key, so that's represented as a real SocialConnection row rather

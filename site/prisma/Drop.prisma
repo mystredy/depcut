@@ -42,7 +42,21 @@ model Drop {
   // upload is verified — never trusted from the client. What the 10GB
   // per-account quota (lib/studio/storage.ts) sums over.
   sizeBytes    Int?
+  // "pending" -> "uploading" -> "draft" -> "complete" (posted), or
+  // "draft" -> "scheduled" -> "complete" once the scheduled sweep runs (see
+  // src/lib/jobs/dropScheduleSweep.ts). "error" on an upload failure.
   status       String   @default("pending")
+  // Who can see a "complete" drop on the studio's profile grid — "public"
+  // (the default; anyone signed in), "unlisted" (excluded from the grid but
+  // resolvable by a direct link, any signed-in account), or "private"
+  // (studio managers only). Meaningless before "complete": a draft or
+  // scheduled drop is already manager-only regardless of this field.
+  visibility   String   @default("public")
+  // Set when a manager schedules a post instead of publishing immediately —
+  // the sweep publishes it once this time has passed. Left in place after
+  // publishing as a record of when it was scheduled for; null for a drop
+  // that was always published immediately.
+  scheduledFor DateTime?
   error        String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -57,6 +71,8 @@ model Drop {
   @@index([status])
   @@index([studioId])
   @@index([studioId, importedPlatform, importedExternalId])
+  // The scheduled-drop sweep's own lookup (src/lib/jobs/dropScheduleSweep.ts).
+  @@index([status, scheduledFor])
   @@map("drop")
 }
 

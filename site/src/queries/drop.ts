@@ -1,8 +1,9 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { apiFetch } from "@/queries/apiClient";
+import type { StudioDrop } from "@/queries/studio";
 
 export function useCreateDrop() {
   return useMutation({
@@ -85,13 +86,36 @@ export async function uploadDropVideo(
   await apiFetch<{ ok: boolean }>(`/api/drops/${dropId}/complete`, { method: "POST" });
 }
 
-// Turns an uploaded draft into a real post — see /api/drops/[id]/publish.
+// A single drop by id — see GET /api/drops/[id]. Used for the studio page's
+// ?drop=<id> deep link when the drop isn't in the bulk studio-drops list
+// (an "unlisted" drop is deliberately excluded from that list; a direct
+// link is the only way to reach it). Disabled with no id so it doesn't fire
+// on mount for every visitor who didn't arrive via a deep link.
+export function useDrop(dropId: string | null) {
+  return useQuery({
+    enabled: dropId !== null,
+    queryFn: () => apiFetch<{ drop: StudioDrop }>(`/api/drops/${dropId}`),
+    queryKey: ["drop", dropId] as const,
+  });
+}
+
+export type DropVisibility = "public" | "unlisted" | "private";
+
+// Turns an uploaded draft into a real post, or schedules it for later — see
+// /api/drops/[id]/publish. Omit scheduledFor (or pass a past time) to
+// publish immediately; an ISO timestamp in the future schedules it instead.
 export function publishDrop(
   dropId: string,
-  input: { title?: string; caption?: string; hashtags?: string }
-): Promise<void> {
-  return apiFetch<{ ok: boolean }>(`/api/drops/${dropId}/publish`, {
+  input: {
+    title?: string;
+    caption?: string;
+    hashtags?: string;
+    visibility?: DropVisibility;
+    scheduledFor?: string | null;
+  }
+): Promise<{ status: "complete" | "scheduled" }> {
+  return apiFetch<{ ok: boolean; status: "complete" | "scheduled" }>(`/api/drops/${dropId}/publish`, {
     body: JSON.stringify(input),
     method: "POST",
-  }).then(() => undefined);
+  });
 }

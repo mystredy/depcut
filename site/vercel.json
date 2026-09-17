@@ -3,6 +3,7 @@
   "crons": [
     { "path": "/api/cut-cloud/gc", "schedule": "0 4 * * *" },
     { "path": "/api/analytics/run", "schedule": "0 1 * * *" },
-    { "path": "/api/social-workflows/run", "schedule": "0 13 * * *" }
+    { "path": "/api/social-workflows/run", "schedule": "0 13 * * *" },
+    { "path": "/api/drops/schedule/run", "schedule": "*/10 * * * *" }
   ]
 }

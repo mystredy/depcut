@@ -451,7 +451,9 @@ export type StudioDrop = {
   error: string | null;
   fileName: string | null;
   sizeBytes: number | null;
-  status: "pending" | "uploading" | "draft" | "complete" | "error";
+  status: "pending" | "uploading" | "draft" | "scheduled" | "complete" | "error";
+  visibility: "public" | "unlisted" | "private";
+  scheduledFor: string | null;
   thumbnailKey: string | null;
   publications: StudioDropPublication[];
 };

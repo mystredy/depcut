@@ -9,10 +9,13 @@ export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ id: string }> };
 
 // Any signed-in account can view a studio's drops — same sign-in-required
-// convention as the rest of Space. Same shape as GET /api/drops. A "draft"
-// drop (uploaded but not yet posted — see publish/route.ts) has real video
-// bytes behind it with no confirmation the author meant to share it, so
-// that one status is manager-only; everything else is public same as today.
+// convention as the rest of Space. Same shape as GET /api/drops/[id]. For a
+// non-manager: "draft" and "scheduled" are excluded (neither is posted yet),
+// and only "public" drops show — "unlisted" is deliberately left out of this
+// list too (that's the whole point of unlisted: reachable only by a direct
+// link, via GET /api/drops/[id], never from browsing the grid) and
+// "private" only a manager can see at all. A manager sees everything,
+// unfiltered, same as today.
 export const GET = withDepCutAuth(async (request, context: RouteContext) => {
   const { id } = await context.params;
   const studio = await prisma.studio.findUnique({ select: { id: true }, where: { id } });
@@ -41,12 +44,17 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
         },
         where: { status: "success" },
       },
+      scheduledFor: true,
       sizeBytes: true,
       status: true,
       thumbnailKey: true,
       title: true,
+      visibility: true,
     },
-    where: { studioId: id, ...(canSeeDrafts ? {} : { status: { not: "draft" } }) },
+    where: {
+      studioId: id,
+      ...(canSeeDrafts ? {} : { status: { notIn: ["draft", "scheduled"] }, visibility: "public" }),
+    },
   });
 
   return NextResponse.json({ drops });
