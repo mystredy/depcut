@@ -8,7 +8,7 @@ import DepCutRuntime
 @MainActor
 final class DepCutStatusItemController: NSObject, NSMenuDelegate {
     /// The hosted app "Go to App" opens — the Cut app, same destination as the billing page's host.
-    private static let appURL = URL(string: "https://depcut.com/app")!
+    private static let appURL = URL(string: "https://depcut.app/app")!
 
     private let statusItem: NSStatusItem
     private let checkForUpdates: () -> Void

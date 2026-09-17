@@ -1,6 +1,6 @@
 import Foundation
 
-/// Runs the DepCut engine — the local server behind depcut.com — for the app's lifetime.
+/// Runs the DepCut engine — the local server behind depcut.app — for the app's lifetime.
 ///
 /// Cut's page is static html/js served from the hosted site; everything real (project files, ffmpeg,
 /// on-device speech, the user's own claude/codex logins) happens in this engine on 127.0.0.1. The app

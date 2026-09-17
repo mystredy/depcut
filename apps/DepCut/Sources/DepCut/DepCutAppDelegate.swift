@@ -14,7 +14,7 @@ final class DepCutAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Sparkle, running windowless. A background check that finds an update surfaces the status
     /// menu's "Install Update" item; choosing it downloads, installs, and relaunches silently.
     private var updateChecker: (any DepCutUpdateChecking)?
-    /// Runs the DepCut engine (the local server behind depcut.com) for the app's lifetime.
+    /// Runs the DepCut engine (the local server behind depcut.app) for the app's lifetime.
     private var cutEngineSupervisor: DepCutEngineSupervisor?
     /// The QuickTime-style screen recorder: a menu bar toggle, a center-bottom control bar, and the
     /// region/window pickers.
