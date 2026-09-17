@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileVideo, Link2, Loader2 } from "lucide-react";
+import { CalendarClock, FileVideo, Globe2, Link2, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,6 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { formatBytes } from "@/cut/components/desktopFolders";
 import { getBackend } from "@/cut/lib/backend";
 import { createExportJob, originalSettings, pollExport } from "@/cut/lib/exportClient";
@@ -20,8 +22,23 @@ import { useEditor } from "@/cut/lib/store";
 import { STUDIO_SOURCE_PLATFORM } from "@/lib/marketplace/oauth-providers";
 import { PLATFORM_ICONS } from "@/lib/marketplace/platform-icons";
 import { studioDropsQueryKey, useStudioWorkflows } from "@/queries/studio";
-import { publishDrop, uploadDropVideo, useCreateDrop } from "@/queries/drop";
+import { publishDrop, uploadDropVideo, useCreateDrop, type DropVisibility } from "@/queries/drop";
 import { cn } from "@/lib/utils";
+
+const VISIBILITY_OPTIONS: { value: DropVisibility; label: string; description: string; icon: typeof Globe2 }[] = [
+  { description: "Anyone can search for and view", icon: Globe2, label: "Public", value: "public" },
+  { description: "Anyone with the link can view", icon: Link2, label: "Unlisted", value: "unlisted" },
+  { description: "Only this studio's managers can view", icon: Lock, label: "Private", value: "private" },
+];
+
+// datetime-local's value has no timezone — the browser already renders and
+// parses it in the visitor's own local time, so round-tripping through Date
+// (both directions) is what makes "3:30 PM" mean the same 3:30 PM the
+// manager actually picked rather than silently drifting to UTC.
+function toDatetimeLocalValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 // Renders the current cut and uploads the result — same render pipeline
 // Export uses, just handed straight to the drop instead of landing in the
@@ -107,6 +124,16 @@ export function DropDialog({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  const [visibility, setVisibility] = useState<DropVisibility>("public");
+  const [scheduling, setScheduling] = useState(false);
+  // Defaults to an hour out the first time scheduling is turned on, rather
+  // than blank — a picker with nothing selected reads as broken.
+  const [scheduledAt, setScheduledAt] = useState(() => toDatetimeLocalValue(new Date(Date.now() + 60 * 60_000)));
+  // Parsing scheduledAt is pure (no wall-clock read); comparing it against
+  // "now" is not, so that check happens only inside post() itself — an
+  // event handler, not render — never here.
+  const scheduledDate = scheduling ? new Date(scheduledAt) : null;
+
   const queryClient = useQueryClient();
   const createDrop = useCreateDrop();
   const workflows = useStudioWorkflows(studioId);
@@ -120,6 +147,12 @@ export function DropDialog({
     title: title.trim() || undefined,
     caption: caption.trim() || undefined,
     hashtags: hashtags.trim() || undefined,
+  });
+
+  const publishOptions = () => ({
+    ...currentFields(),
+    scheduledFor: scheduling && scheduledDate ? scheduledDate.toISOString() : null,
+    visibility,
   });
 
   // Start uploading to R2 the moment a file is picked or dropped — this is
@@ -155,6 +188,10 @@ export function DropDialog({
   };
 
   const post = async () => {
+    if (scheduling && (!scheduledDate || Number.isNaN(scheduledDate.getTime()) || scheduledDate.getTime() <= Date.now())) {
+      setError("Pick a time in the future, or turn scheduling off to post now.");
+      return;
+    }
     setPosting(true);
     setError(null);
     try {
@@ -162,7 +199,7 @@ export function DropDialog({
         // The video already finished uploading in the background (or this
         // is a resumed draft) — just finalize it with whatever's typed now.
         setPhase("finalize");
-        await publishDrop(dropId, currentFields());
+        await publishDrop(dropId, publishOptions());
       } else {
         // Editor "Post to Space" flow: no earlier pick() to have started
         // this, so render, upload, and finalize in one shot.
@@ -179,7 +216,7 @@ export function DropDialog({
           await exported.cleanup?.();
         }
         setPhase("finalize");
-        await publishDrop(created.id, currentFields());
+        await publishDrop(created.id, publishOptions());
       }
       void queryClient.invalidateQueries({ queryKey: studioDropsQueryKey(studioId) });
       setDone(true);
@@ -230,7 +267,9 @@ export function DropDialog({
         </DialogHeader>
 
         {done ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">Posted.</p>
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            {scheduling ? "Scheduled." : "Posted."}
+          </p>
         ) : (
           <>
             {!projectId && (
@@ -306,6 +345,43 @@ export function DropDialog({
               className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring disabled:opacity-60"
             />
 
+            <Select value={visibility} onValueChange={(v) => setVisibility(v as DropVisibility)}>
+              <SelectTrigger disabled={posting} size="sm" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {VISIBILITY_OPTIONS.map(({ value, label, description, icon: Icon }) => (
+                  <SelectItem key={value} value={value}>
+                    <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="flex flex-col">
+                      <span>{label}</span>
+                      <span className="text-[11px] font-normal text-muted-foreground">{description}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="flex flex-col gap-2 rounded-lg border border-input px-2.5 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-sm">
+                  <CalendarClock className="size-3.5 text-muted-foreground" />
+                  Schedule for later
+                </span>
+                <Switch checked={scheduling} onCheckedChange={setScheduling} disabled={posting} aria-label="Schedule for later" />
+              </div>
+              {scheduling && (
+                <input
+                  type="datetime-local"
+                  value={scheduledAt}
+                  min={toDatetimeLocalValue(new Date())}
+                  onChange={(e) => setScheduledAt(e.target.value)}
+                  disabled={posting}
+                  className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:border-ring disabled:opacity-60"
+                />
+              )}
+            </div>
+
             {error && <p className="text-sm text-red-600">{error}</p>}
 
             <DialogFooter className="mt-2">
@@ -318,10 +394,14 @@ export function DropDialog({
                     ? `Exporting… ${Math.round(progress * 100)}%`
                     : phase === "upload"
                       ? `Uploading… ${Math.round(progress * 100)}%`
-                      : "Posting…"
+                      : scheduling
+                        ? "Scheduling…"
+                        : "Posting…"
                   : uploadState === "uploading"
                     ? `Uploading… ${Math.round(progress * 100)}%`
-                    : "Post"}
+                    : scheduling
+                      ? "Schedule"
+                      : "Post"}
               </Button>
             </DialogFooter>
           </>
