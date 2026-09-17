@@ -30,8 +30,15 @@ export function AppSidebar() {
   const closeOnMobile = () => {
     if (isMobile) closeMobile();
   };
+  // AI suite and Editor start expanded — GROUPS is exactly those two, not
+  // ARTIST_GROUP, which stays collapsed unless the current page is one of
+  // its own children (same rule as before for every group).
   const [openGroups, setOpenGroups] = useState<Set<string>>(
-    () => new Set(ALL_GROUPS.filter((g) => pathname.startsWith(`${base}/${g.key}/`)).map((g) => g.key))
+    () =>
+      new Set([
+        ...GROUPS.map((g) => g.key),
+        ...ALL_GROUPS.filter((g) => pathname.startsWith(`${base}/${g.key}/`)).map((g) => g.key),
+      ])
   );
 
   const toggleGroup = (key: string) =>
