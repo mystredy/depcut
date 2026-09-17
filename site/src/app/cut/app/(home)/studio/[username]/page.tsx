@@ -10,8 +10,10 @@ import {
   ChevronDown,
   ChevronUp,
   EllipsisVertical,
+  Info,
   Link2,
   Loader2,
+  Lock,
   Pencil,
   Play,
   Plus,
@@ -61,6 +63,7 @@ import { PLATFORM_ICONS } from "@/lib/marketplace/platform-icons";
 import { SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/queries/apiClient";
+import { useDrop } from "@/queries/drop";
 import {
   studioAvatarUrl,
   studioBackgroundUrl,
@@ -106,17 +109,32 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
   const [redirectTo, setRedirectTo] = useState<StudioDropPublication | null>(null);
   const [deletingDrop, setDeletingDrop] = useState<StudioDrop | null>(null);
   const [repurposingDrop, setRepurposingDrop] = useState<StudioDrop | null>(null);
+  const [detailsDrop, setDetailsDrop] = useState<StudioDrop | null>(null);
+  // Whether the visitor has closed the single-drop viewer opened for a
+  // ?drop=<id> link to an unlisted drop (see singleDrop below) — otherwise
+  // it would keep reopening every render as long as the query fetch stays
+  // resolved.
+  const [unlistedViewerClosed, setUnlistedViewerClosed] = useState(false);
 
   // Deep link from a copied "Share" link (?drop=<id>) — opens straight to
   // that post in the viewer once the drops list has loaded.
+  const dropParam = searchParams.get("drop");
+  const dropParamInList = (drops.data?.drops ?? []).some((d) => d.id === dropParam);
   useEffect(() => {
-    const dropParam = searchParams.get("drop");
     if (!dropParam) return;
     const complete = (drops.data?.drops ?? []).filter((d) => d.status === "complete");
     const index = complete.findIndex((d) => d.id === dropParam);
     if (index !== -1) setViewingIndex(index);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when the drops list itself changes
   }, [drops.data]);
+
+  // An "unlisted" drop is deliberately excluded from the bulk list above —
+  // that's the whole point of unlisted — so a ?drop=<id> link to one won't
+  // resolve from it. Fetched separately (GET /api/drops/[id], the same
+  // access check the video route uses) only once the bulk list has loaded
+  // and genuinely doesn't contain it, and shown in its own single-drop
+  // viewer rather than spliced into the swipeable grid array.
+  const singleDrop = useDrop(dropParam && drops.data && !dropParamInList ? dropParam : null);
 
   const studioId = data?.studio.id ?? "";
   const update = useUpdateStudio(studioId);
@@ -423,8 +441,14 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                   }
                 }}
                 className={cn(
-                  "group relative flex aspect-[9/16] cursor-pointer flex-col justify-end overflow-hidden rounded-xl border bg-muted p-2 text-left",
-                  drop.status !== "complete" && drop.status !== "draft" && "pointer-events-none opacity-60"
+                  "group relative flex aspect-[9/16] flex-col justify-end overflow-hidden rounded-xl border bg-muted p-2 text-left",
+                  drop.status === "complete" || drop.status === "draft" ? "cursor-pointer" : "cursor-default",
+                  // A scheduled drop is already fully configured (video, title,
+                  // visibility) — nothing to click through to, but it's not
+                  // broken either, so it stays full-opacity unlike a genuinely
+                  // unfinished pending/uploading/error card.
+                  (drop.status === "pending" || drop.status === "uploading" || drop.status === "error") &&
+                    "pointer-events-none opacity-60"
                 )}
               >
                 {isManager && (
@@ -475,6 +499,16 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuItem
+                        className="px-2 py-1 text-xs"
+                        onClick={() => {
+                          setDetailsDrop(drop);
+                          setDropMenuOpenId(null);
+                        }}
+                      >
+                        <Info className="size-3" />
+                        Details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
                         variant="destructive"
                         className="px-2 py-1 text-xs"
                         onClick={() => {
@@ -509,7 +543,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
-                {(drop.status === "complete" || drop.status === "draft") && (
+                {(drop.status === "complete" || drop.status === "draft" || drop.status === "scheduled") && (
                   <>
                     <video
                       src={`/api/drops/${drop.id}/video`}
@@ -526,14 +560,26 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
                     />
                     <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-black/0" />
                     {drop.status === "complete" ? (
-                      <span className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
-                        <span className="grid size-9 place-items-center rounded-full bg-white/95">
-                          <Play className="ml-0.5 size-4 fill-ink text-ink" />
+                      <>
+                        <span className="absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
+                          <span className="grid size-9 place-items-center rounded-full bg-white/95">
+                            <Play className="ml-0.5 size-4 fill-ink text-ink" />
+                          </span>
                         </span>
-                      </span>
+                        {isManager && drop.visibility !== "public" && (
+                          <span className="absolute left-1.5 top-1.5 flex items-center gap-0.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white backdrop-blur">
+                            {drop.visibility === "private" ? (
+                              <Lock className="size-2.5" />
+                            ) : (
+                              <Link2 className="size-2.5" />
+                            )}
+                            {drop.visibility}
+                          </span>
+                        )}
+                      </>
                     ) : (
                       <span className="absolute left-1.5 top-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white backdrop-blur">
-                        Draft
+                        {drop.status === "scheduled" ? "Scheduled" : "Draft"}
                       </span>
                     )}
                   </>
@@ -562,6 +608,17 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
           onIndexChange={setViewingIndex}
         />
       )}
+
+      {dropParam && !dropParamInList && !unlistedViewerClosed && singleDrop.data && (
+        <DropViewer
+          drops={[singleDrop.data.drop]}
+          index={0}
+          onClose={() => setUnlistedViewerClosed(true)}
+          onIndexChange={() => {}}
+        />
+      )}
+
+      <DropDetailsDialog drop={detailsDrop} onClose={() => setDetailsDrop(null)} />
 
       {posting && (
         <DropDialog
@@ -913,6 +970,60 @@ function DropAnalyticsDialog({
                 <p className="text-lg font-semibold">{(analytics.data?.[key] ?? 0).toLocaleString()}</p>
               </div>
             ))}
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const VISIBILITY_LABELS: Record<StudioDrop["visibility"], string> = {
+  private: "Private — only this studio's managers",
+  public: "Public — anyone can search for and view",
+  unlisted: "Unlisted — anyone with the link can view",
+};
+
+// Read-only — title, description, hashtags, and visibility/schedule, opened
+// from the 3-dot menu's "Details" item. Works for any status (a draft or
+// scheduled drop's fields are just as worth inspecting as a posted one's).
+function DropDetailsDialog({ drop, onClose }: { drop: StudioDrop | null; onClose: () => void }) {
+  return (
+    <Dialog open={drop !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Details</DialogTitle>
+        </DialogHeader>
+        {drop && (
+          <div className="space-y-3 text-sm">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Title</p>
+              <p>{drop.title || "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Description</p>
+              <p className="whitespace-pre-wrap">{drop.caption || "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Hashtags</p>
+              <p>{drop.hashtags.length > 0 ? drop.hashtags.map((t) => `#${t}`).join(" ") : "—"}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Visibility</p>
+              <p>{VISIBILITY_LABELS[drop.visibility]}</p>
+            </div>
+            {drop.scheduledFor && (
+              <div>
+                <p className="text-xs font-medium text-muted-foreground">
+                  {drop.status === "scheduled" ? "Scheduled for" : "Was scheduled for"}
+                </p>
+                <p>{new Date(drop.scheduledFor).toLocaleString()}</p>
+              </div>
+            )}
           </div>
         )}
         <DialogFooter>
