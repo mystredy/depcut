@@ -152,10 +152,22 @@ export function DropDialog({
   const createDrop = useCreateDrop();
   const workflows = useStudioWorkflows(studioId);
 
-  // Hold the dialog off-screen until the auto-publish targets shown in its
-  // header are known — opening with an empty header that then pops in a row
-  // of accounts once the query resolves reads as broken, not loading.
-  if (workflows.isPending) return null;
+  // Hold the real header off until the auto-publish targets it shows are
+  // known — popping in a row of accounts once the query resolves reads as
+  // broken, not loading. The dialog itself still opens right away, just
+  // with a spinner in place of its content, so the click has an immediate
+  // response instead of a beat of nothing.
+  if (workflows.isPending) {
+    return (
+      <Dialog open onOpenChange={(open) => !open && onClose()}>
+        <DialogContent className="sm:max-w-sm">
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   // The exact set social-workflow-publish.ts reads when this Drop finishes
   // uploading — shown so posting isn't a surprise about where it lands.
