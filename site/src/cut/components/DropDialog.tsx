@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, FileVideo, Globe2, Link2, Loader2, Lock } from "lucide-react";
+import { CalendarClock, Check, FileVideo, Globe2, Link2, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -133,6 +133,20 @@ export function DropDialog({
   // "now" is not, so that check happens only inside post() itself — an
   // event handler, not render — never here.
   const scheduledDate = scheduling ? new Date(scheduledAt) : null;
+  // Which of this drop's own auto-publish targets to leave out this one
+  // time — the "Repurpose new posts" workflow itself stays on, only this
+  // drop skips it. Only takes effect when posting now: a scheduled drop's
+  // eventual publish (dropScheduleSweep.ts) has no way to see this choice.
+  const [skipConnectionIds, setSkipConnectionIds] = useState<Set<string>>(new Set());
+
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // Revoke the previous blob URL whenever a new one replaces it, or the
+  // dialog unmounts — otherwise every dropped file leaks its object URL.
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   const queryClient = useQueryClient();
   const createDrop = useCreateDrop();
@@ -158,6 +172,7 @@ export function DropDialog({
   const publishOptions = () => ({
     ...currentFields(),
     scheduledFor: scheduling && scheduledDate ? scheduledDate.toISOString() : null,
+    skipConnectionIds: Array.from(skipConnectionIds),
     visibility,
   });
 
@@ -175,6 +190,10 @@ export function DropDialog({
     }
     setError(null);
     setFile(f);
+    setPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(f);
+    });
     void startUpload(f);
   };
 
@@ -234,9 +253,6 @@ export function DropDialog({
   };
 
   const canPost = projectId !== null || uploadState === "ready";
-  // Blocked while a file is already uploading or done — open again on error
-  // so a failed upload can be retried by dropping the file in again.
-  const dropzoneDisabled = posting || uploadState === "uploading" || uploadState === "ready";
 
   return (
     <Dialog open onOpenChange={(open) => !open && !posting && onClose()}>
@@ -247,27 +263,58 @@ export function DropDialog({
             Posting to <span className="font-medium text-foreground">{studioName}</span>
           </DialogDescription>
           {autoPublishTargets.length > 0 && (
-            <div className="flex flex-wrap items-center gap-3 pt-1">
+            <div className="flex flex-col gap-1.5 pt-1">
+              <span className="text-[11px] font-medium text-muted-foreground">
+                {scheduling ? "Will also auto-post to:" : "Also posts to:"}
+              </span>
               {autoPublishTargets.map((w) => {
                 const c = w.destinationConnection;
                 const Icon = PLATFORM_ICONS[c.platform] ?? Link2;
+                const skipped = skipConnectionIds.has(c.id);
                 return (
-                  <div key={w.id} className="flex items-center gap-1.5">
-                    {c.profileImage ? (
-                      <div className="relative size-6 shrink-0">
-                        <div className="size-6 overflow-hidden rounded-full bg-muted">
-                          {/* eslint-disable-next-line @next/next/no-img-element -- external platform avatar */}
-                          <img src={c.profileImage} alt="" className="size-full object-cover" />
+                  <div key={w.id} className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      {c.profileImage ? (
+                        <div className="relative size-6 shrink-0">
+                          <div className="size-6 overflow-hidden rounded-full bg-muted">
+                            {/* eslint-disable-next-line @next/next/no-img-element -- external platform avatar */}
+                            <img src={c.profileImage} alt="" className="size-full object-cover" />
+                          </div>
+                          <Icon className="absolute -right-1 -bottom-1 size-3 rounded-[25%] ring-2 ring-background" />
                         </div>
-                        <Icon className="absolute -right-1 -bottom-1 size-3 rounded-[25%] ring-2 ring-background" />
-                      </div>
-                    ) : (
-                      <Icon className="size-6 shrink-0 rounded-[25%]" />
-                    )}
-                    <span className="text-xs font-medium text-foreground">{c.accountName}</span>
+                      ) : (
+                        <Icon className="size-6 shrink-0 rounded-[25%]" />
+                      )}
+                      <span
+                        className={cn(
+                          "truncate text-xs font-medium",
+                          skipped ? "text-muted-foreground line-through" : "text-foreground"
+                        )}
+                      >
+                        {c.accountName}
+                      </span>
+                    </div>
+                    <Switch
+                      checked={!skipped}
+                      onCheckedChange={(checked) =>
+                        setSkipConnectionIds((prev) => {
+                          const next = new Set(prev);
+                          if (checked) next.delete(c.id);
+                          else next.add(c.id);
+                          return next;
+                        })
+                      }
+                      disabled={posting || scheduling}
+                      aria-label={`Post this drop to ${c.accountName}`}
+                    />
                   </div>
                 );
               })}
+              {scheduling && (
+                <span className="text-[11px] text-muted-foreground">
+                  Picking platforms isn't available for scheduled posts yet.
+                </span>
+              )}
             </div>
           )}
         </DialogHeader>
@@ -278,50 +325,77 @@ export function DropDialog({
           </p>
         ) : (
           <>
-            {!projectId && (
+            {!projectId && (previewUrl || resumeDrop ? (
+              <div className="flex flex-col gap-1">
+                <div className="relative h-48 w-full overflow-hidden rounded-xl border border-border bg-black">
+                  <video
+                    key={previewUrl ?? resumeDrop?.id}
+                    src={previewUrl ?? `/api/drops/${resumeDrop?.id}/video`}
+                    className="size-full object-contain"
+                    controls={uploadState === "ready"}
+                    muted
+                    playsInline
+                  />
+                  {uploadState === "uploading" && (
+                    <>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/55 text-white">
+                        <Loader2 className="size-5 animate-spin" />
+                        <span className="text-xs font-medium">Uploading… {Math.round(progress * 100)}%</span>
+                      </div>
+                      <div className="absolute inset-x-0 bottom-0 h-1 bg-white/15">
+                        <div
+                          className="h-full bg-primary transition-[width]"
+                          style={{ width: `${Math.round(progress * 100)}%` }}
+                        />
+                      </div>
+                    </>
+                  )}
+                  {uploadState === "error" && (
+                    <label className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-2 bg-black/70 text-center text-white">
+                      <span className="text-xs font-medium text-red-300">Upload failed</span>
+                      <span className="text-[11px] underline underline-offset-2">Click to retry</span>
+                      <input
+                        type="file"
+                        accept="video/*"
+                        className="hidden"
+                        onChange={(e) => pick(e.target.files?.[0])}
+                      />
+                    </label>
+                  )}
+                  {uploadState === "ready" && (
+                    <span className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
+                      <Check className="size-3" />
+                      Ready
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2 px-0.5 text-[11px] text-muted-foreground">
+                  <span className="truncate">{file?.name ?? resumeDrop?.fileName ?? "Video uploaded"}</span>
+                  {file && <span className="shrink-0">{formatBytes(file.size)}</span>}
+                </div>
+              </div>
+            ) : (
               <label
                 onDragOver={(e) => {
                   e.preventDefault();
-                  if (!dropzoneDisabled) setDragOver(true);
+                  setDragOver(true);
                 }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={(e) => {
                   e.preventDefault();
                   setDragOver(false);
-                  if (!dropzoneDisabled) pick(e.dataTransfer.files[0]);
+                  pick(e.dataTransfer.files[0]);
                 }}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors",
-                  dropzoneDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+                  "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 text-center transition-colors",
                   dragOver ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
                 )}
               >
                 <FileVideo className="size-6 text-muted-foreground" />
-                <span className="text-xs font-medium">
-                  {file
-                    ? file.name
-                    : resumeDrop
-                      ? resumeDrop.fileName ?? "Video uploaded"
-                      : "Drop a video, or click to browse"}
-                </span>
-                {uploadState === "uploading" ? (
-                  <span className="text-[11px] text-muted-foreground">Uploading… {Math.round(progress * 100)}%</span>
-                ) : uploadState === "ready" ? (
-                  <span className="text-[11px] text-muted-foreground">Uploaded — ready to post</span>
-                ) : uploadState === "error" ? (
-                  <span className="text-[11px] text-destructive">Upload failed — drop it again to retry</span>
-                ) : (
-                  file && <span className="text-[11px] text-muted-foreground">{formatBytes(file.size)}</span>
-                )}
-                <input
-                  type="file"
-                  accept="video/*"
-                  className="hidden"
-                  disabled={dropzoneDisabled}
-                  onChange={(e) => pick(e.target.files?.[0])}
-                />
+                <span className="text-xs font-medium">Drop a video, or click to browse</span>
+                <input type="file" accept="video/*" className="hidden" onChange={(e) => pick(e.target.files?.[0])} />
               </label>
-            )}
+            ))}
 
             <input
               value={title}

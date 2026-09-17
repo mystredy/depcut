@@ -17,8 +17,8 @@ import { publishDropToWorkflow } from "@/lib/studio/dropPublish";
 // is safe") safe here specifically — that only protects the job row, not
 // an external publish call happening twice.
 export const socialWorkflowPublishJob = defineJob(
-  z.object({ dropId: z.string().trim().min(1) }).strict(),
-  async ({ dropId }) => {
+  z.object({ dropId: z.string().trim().min(1), skipConnectionIds: z.array(z.string()).default([]) }).strict(),
+  async ({ dropId, skipConnectionIds }) => {
     const drop = await prisma.drop.findUnique({ where: { id: dropId } });
     if (!drop) throw new JobFailure("Drop not found.");
     if (drop.status !== "complete" || !drop.storageKey) {
@@ -26,10 +26,13 @@ export const socialWorkflowPublishJob = defineJob(
     }
 
     const source = await ensureStudioSourceConnection(drop.studioId);
-    const workflows = await prisma.socialWorkflow.findMany({
+    const allWorkflows = await prisma.socialWorkflow.findMany({
       include: { destinationConnection: true },
       where: { autoPublish: true, sourceConnectionId: source.id, status: "Active" },
     });
+    // The manager's per-drop opt-out (DropDialog's per-target toggle) — the
+    // workflow itself stays Active, this drop just skips those destinations.
+    const workflows = allWorkflows.filter((w) => !skipConnectionIds.includes(w.destinationConnectionId));
 
     const alreadyPublished = new Set(
       (

@@ -112,6 +112,10 @@ export function publishDrop(
     hashtags?: string;
     visibility?: DropVisibility;
     scheduledFor?: string | null;
+    // Destination connection ids to leave out of this drop's own
+    // auto-publish fan-out — the standing workflow stays on, just not for
+    // this one drop. Only takes effect when posting now, not scheduling.
+    skipConnectionIds?: string[];
   }
 ): Promise<{ status: "complete" | "scheduled" }> {
   return apiFetch<{ ok: boolean; status: "complete" | "scheduled" }>(`/api/drops/${dropId}/publish`, {

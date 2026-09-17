@@ -20,6 +20,11 @@ const publishSchema = z.object({
   // instead (see dropScheduleSweep.ts). A timestamp that's already passed is
   // treated the same as omitting it — publish now, don't bounce the request.
   scheduledFor: z.string().datetime().nullable().optional(),
+  // Destination connection ids to leave out of this one drop's auto-publish
+  // fan-out (see DropDialog's per-target toggle) — only read below when
+  // publishing right now; a scheduled drop's own future sweep has no way to
+  // see this since it isn't persisted anywhere.
+  skipConnectionIds: z.array(z.string().trim().min(1)).default([]),
 });
 
 // Turns an uploaded draft into a real post (or a scheduled one) — the
@@ -70,7 +75,11 @@ export const POST = withDepCutAuth(async (request, context: RouteContext) => {
   if (publishNow) {
     // Fans out to any of this studio's "Repurpose new posts" workflows —
     // see social-workflow-publish.ts. No-ops fast when there are none.
-    await enqueueJob("social-workflow-publish", { dropId: id }, userId);
+    await enqueueJob(
+      "social-workflow-publish",
+      { dropId: id, skipConnectionIds: parsed.data.skipConnectionIds },
+      userId,
+    );
   }
 
   return NextResponse.json({ ok: true, status: publishNow ? "complete" : "scheduled" });
