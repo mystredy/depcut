@@ -25,8 +25,11 @@ export const GET = withDepCutAuth(async (request) => {
   return NextResponse.json({ withdrawals });
 });
 
-// Records a cashout request against a creator's available balance — reserves
-// (deducts) the requested amount immediately, same as a real request would.
+// Records a cashout request against a creator's Payout (USD) balance —
+// reserves (deducts) the requested amount immediately, same as a real
+// request would. amountRequested is USD, not Rates: PayoutAccount already
+// holds converted money (see api/artist/rates/move-to-payout), so no
+// exchange-rate conversion happens here.
 const createSchema = z
   .object({
     userId: z.string().trim().min(1),
@@ -60,24 +63,26 @@ export const POST = withDepCutAuth(async (request) => {
 
   const { userId, amountRequested, method, destination } = parsed.data;
 
-  const account = await prisma.artistRateAccount.upsert({
+  const account = await prisma.payoutAccount.upsert({
     create: { userId },
     update: {},
     where: { userId },
   });
   if (account.available < amountRequested) {
     return NextResponse.json(
-      { error: "Invalid request", message: "Amount exceeds the creator's available balance." },
+      { error: "Invalid request", message: "Amount exceeds the creator's available Payout balance." },
       { status: 400 },
     );
   }
 
-  const [settings, exchangeRate] = await Promise.all([
-    prisma.financeSettings.upsert({ create: { id: "singleton" }, update: {}, where: { id: "singleton" } }),
-    prisma.financeExchangeRate.upsert({ create: { id: "singleton" }, update: {}, where: { id: "singleton" } }),
-  ]);
+  const settings = await prisma.financeSettings.upsert({
+    create: { id: "singleton" },
+    update: {},
+    where: { id: "singleton" },
+  });
 
-  const grossUsd = amountRequested * exchangeRate.currentRate;
+  // Already USD by the time it lands in PayoutAccount — only fee/tax apply.
+  const grossUsd = amountRequested;
   const processingFee = grossUsd * (settings.processingFeePct / 100);
   const tax = grossUsd * (settings.taxPct / 100);
   const finalAmount = Math.max(0, grossUsd - processingFee - tax);
@@ -87,7 +92,7 @@ export const POST = withDepCutAuth(async (request) => {
       data: {
         amountRequested,
         destination,
-        exchangeRateUsed: exchangeRate.currentRate,
+        exchangeRateUsed: 1,
         finalAmount,
         method,
         processingFee,
@@ -95,7 +100,7 @@ export const POST = withDepCutAuth(async (request) => {
       },
       include: { user: { select: { displayName: true, email: true, name: true } } },
     }),
-    prisma.artistRateAccount.update({
+    prisma.payoutAccount.update({
       data: { available: account.available - amountRequested },
       where: { userId },
     }),
@@ -105,7 +110,7 @@ export const POST = withDepCutAuth(async (request) => {
   const requesterName = user.displayName || user.name || user.email;
   await notifyTelegram(
     "withdrawal",
-    `💸 Withdrawal requested: ${amountRequested} Rates by ${requesterName} via ${method}`,
+    `💸 Withdrawal requested: $${amountRequested} by ${requesterName} via ${method}`,
   );
 
   return NextResponse.json({ withdrawal: { ...withdrawalFields, userName: requesterName } });

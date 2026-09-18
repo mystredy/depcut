@@ -14,22 +14,27 @@ export const GET = withDepCutAuth(async (request) => {
     );
   }
 
-  const [balances, exchangeRate, settings, withdrawalsByStatus, paidWithdrawals] = await Promise.all([
-    prisma.artistRateAccount.aggregate({ _sum: { available: true, pending: true } }),
-    prisma.financeExchangeRate.upsert({ create: { id: "singleton" }, update: {}, where: { id: "singleton" } }),
-    prisma.financeSettings.upsert({ create: { id: "singleton" }, update: {}, where: { id: "singleton" } }),
-    prisma.withdrawal.groupBy({ _count: { _all: true }, by: ["status"] }),
-    prisma.withdrawal.aggregate({ _sum: { finalAmount: true }, where: { status: "Paid" } }),
-  ]);
+  const [balances, payoutBalances, exchangeRate, settings, withdrawalsByStatus, paidWithdrawals] =
+    await Promise.all([
+      prisma.artistRateAccount.aggregate({ _sum: { available: true, pending: true } }),
+      prisma.payoutAccount.aggregate({ _sum: { available: true } }),
+      prisma.financeExchangeRate.upsert({ create: { id: "singleton" }, update: {}, where: { id: "singleton" } }),
+      prisma.financeSettings.upsert({ create: { id: "singleton" }, update: {}, where: { id: "singleton" } }),
+      prisma.withdrawal.groupBy({ _count: { _all: true }, by: ["status"] }),
+      prisma.withdrawal.aggregate({ _sum: { finalAmount: true }, where: { status: "Paid" } }),
+    ]);
 
   const countByStatus = Object.fromEntries(withdrawalsByStatus.map((w) => [w.status, w._count._all]));
 
   return NextResponse.json({
     exchangeRate,
     settings,
+    // Artist Earnings (Rates) — not itself withdrawable.
     totalAvailableRates: balances._sum.available ?? 0,
-    totalCreatorPayouts: paidWithdrawals._sum.finalAmount ?? 0,
     totalPendingRates: balances._sum.pending ?? 0,
+    // Payout (USD) — what a real Withdrawal actually draws from.
+    totalPayoutAvailable: payoutBalances._sum.available ?? 0,
+    totalCreatorPayouts: paidWithdrawals._sum.finalAmount ?? 0,
     withdrawalCounts: {
       approved: countByStatus.Approved ?? 0,
       paid: countByStatus.Paid ?? 0,

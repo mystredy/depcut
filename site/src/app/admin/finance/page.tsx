@@ -68,10 +68,10 @@ export default function AdminFinanceDashboardPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-4 rounded-2xl border bg-gradient-to-r from-emerald-500/5 to-amber-500/5 p-6 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 rounded-2xl border bg-gradient-to-r from-emerald-500/5 to-amber-500/5 p-6 md:grid-cols-3">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-                Pending Platform Value
+                Pending Artist Earnings
               </p>
               <p className="mt-1 flex items-center gap-2 text-2xl font-bold">
                 <Coins className="size-5 text-amber-500" />
@@ -80,17 +80,35 @@ export default function AdminFinanceDashboardPage() {
                   ≈ ${pendingUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Not yet cleared by the bi-weekly sweep.
+              </p>
+            </div>
+            <div className="md:border-l md:pl-6">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                Cleared Artist Earnings
+              </p>
+              <p className="mt-1 flex items-center gap-2 text-2xl font-bold">
+                <Coins className="size-5 text-amber-500" />
+                {data.totalAvailableRates.toLocaleString()}
+                <span className="text-sm font-normal text-muted-foreground">
+                  ≈ ${availableUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Eligible to move to Payout — not itself withdrawable.
+              </p>
             </div>
             <div className="md:border-l md:pl-6">
               <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
                 Available Payout Pool
               </p>
               <p className="mt-1 flex items-center gap-2 text-2xl font-bold">
-                <Coins className="size-5 text-emerald-500" />
-                {data.totalAvailableRates.toLocaleString()}
-                <span className="text-sm font-normal text-muted-foreground">
-                  ≈ ${availableUsd.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                </span>
+                <Wallet className="size-5 text-emerald-500" />
+                ${data.totalPayoutAvailable.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                What Withdrawals actually draw from.
               </p>
             </div>
           </div>
@@ -128,7 +146,7 @@ export default function AdminFinanceDashboardPage() {
                 Policy Parameters
               </p>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <Row label="Min Withdrawal" value={`${data.settings.minWithdrawal} Rates`} />
+                <Row label="Min Withdrawal" value={`$${data.settings.minWithdrawal}`} />
                 <Row label="Processing Fee" value={`${data.settings.processingFeePct}%`} />
                 <Row label="Tax Rate" value={`${data.settings.taxPct}%`} />
                 <Row label="Payment Window" value={data.settings.paymentWindow} />

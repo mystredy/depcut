@@ -7,9 +7,11 @@ import {
   HelpCircle,
   Info,
   Layers,
+  Loader2,
   Play,
   Plus,
   Search,
+  Wallet,
 } from "lucide-react";
 
 import {
@@ -30,6 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -53,6 +56,7 @@ import { backendFor, type Residency } from "@/cut/lib/queries";
 import type { ProjectSummary } from "@/cut/lib/types";
 import { track } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
+import { useArtistRates, useMoveRatesToPayout } from "@/queries/artistRates";
 import {
   type Submission,
   useCreateDraftSubmission,
@@ -86,6 +90,7 @@ export default function MyProjectsPage() {
   const submissions = useMemo(() => submissionsQuery.data?.submissions ?? [], [submissionsQuery.data]);
   const createDraft = useCreateDraftSubmission();
   const deleteSubmission = useDeleteSubmission();
+  const rates = useArtistRates();
 
   const [selectedTab, setSelectedTab] = useState<SortTab>("Latest");
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>("All");
@@ -94,6 +99,7 @@ export default function MyProjectsPage() {
   const [infoItem, setInfoItem] = useState<Submission | null>(null);
   const [playItem, setPlayItem] = useState<Submission | null>(null);
   const [deleteItem, setDeleteItem] = useState<Submission | null>(null);
+  const [movingToPayout, setMovingToPayout] = useState(false);
 
   const goToSubmission = (id: string) => router.push(`${base}/artist/submit-project/${id}`);
   const confirmDelete = () => {
@@ -161,6 +167,36 @@ export default function MyProjectsPage() {
             </p>
           )}
         </div>
+      </div>
+
+      <div className="flex flex-col gap-4 rounded-2xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Artist Earnings</p>
+          <div className="mt-2 grid grid-cols-3 gap-6">
+            <div>
+              <div className="text-xl font-semibold tabular-nums">{rates.data?.available ?? 0} Rates</div>
+              <p className="mt-0.5 text-xs text-muted-foreground">Available</p>
+            </div>
+            <div>
+              <div className="text-xl font-semibold tabular-nums">{rates.data?.pending ?? 0} Rates</div>
+              <p className="mt-0.5 text-xs text-muted-foreground">Pending</p>
+            </div>
+            <div>
+              <div className="text-xl font-semibold tabular-nums">{rates.data?.lifetime ?? 0} Rates</div>
+              <p className="mt-0.5 text-xs text-muted-foreground">Lifetime</p>
+            </div>
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!rates.data?.available}
+          onClick={() => setMovingToPayout(true)}
+        >
+          <Wallet className="size-3.5" data-icon="inline-start" />
+          Move to Payout
+        </Button>
       </div>
 
       <div className="flex flex-col gap-3 rounded-2xl border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -449,7 +485,125 @@ export default function MyProjectsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <MoveToPayoutDialog
+        open={movingToPayout}
+        available={rates.data?.available ?? 0}
+        usdPerRate={rates.data?.usdPerRate ?? 0}
+        onClose={() => setMovingToPayout(false)}
+        onViewPayouts={() => router.push(`${base}/settings/payouts`)}
+      />
     </div>
+  );
+}
+
+function MoveToPayoutDialog({
+  open,
+  available,
+  usdPerRate,
+  onClose,
+  onViewPayouts,
+}: {
+  open: boolean;
+  available: number;
+  usdPerRate: number;
+  onClose: () => void;
+  onViewPayouts: () => void;
+}) {
+  const move = useMoveRatesToPayout();
+  const [amount, setAmount] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  const reset = () => {
+    setAmount(0);
+    setError(null);
+    move.reset();
+  };
+
+  const submit = () => {
+    if (amount <= 0 || amount > available) {
+      setError(`Enter an amount between 1 and ${available} Rates.`);
+      return;
+    }
+    setError(null);
+    move.mutate(amount, { onSuccess: () => setAmount(0) });
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) {
+          reset();
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Move to Payout</DialogTitle>
+        </DialogHeader>
+        {move.isSuccess ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Moved {move.data.movedRates} Rates (${move.data.movedUsd.toFixed(2)}) to your Payout wallet.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {available} Rates available. Only what you move here becomes eligible for withdrawal
+              in Payouts.
+            </p>
+            <Input
+              type="number"
+              min={1}
+              max={available}
+              value={amount || ""}
+              onChange={(e) => setAmount(Math.max(0, Number(e.target.value) || 0))}
+              placeholder="Rates to move"
+              disabled={move.isPending}
+            />
+            {amount > 0 && (
+              <p className="text-xs text-muted-foreground">≈ ${(amount * usdPerRate).toFixed(2)}</p>
+            )}
+            {(error || move.isError) && (
+              <p role="alert" className="text-sm text-destructive">
+                {error ??
+                  (move.error instanceof Error ? move.error.message : "Couldn't move that just now.")}
+              </p>
+            )}
+          </div>
+        )}
+        <DialogFooter>
+          {move.isSuccess ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  reset();
+                  onClose();
+                }}
+              >
+                Done
+              </Button>
+              <Button
+                onClick={() => {
+                  reset();
+                  onClose();
+                  onViewPayouts();
+                }}
+              >
+                View Payouts
+              </Button>
+            </>
+          ) : (
+            <Button className="w-full" disabled={move.isPending || amount <= 0} onClick={submit}>
+              {move.isPending && <Loader2 className="animate-spin" data-icon="inline-start" />}
+              Move to Payout
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -67,7 +67,7 @@ export default function AdminFinancePayoutQueuePage() {
                 <TableRow key={w.id}>
                   <TableCell className="text-sm font-medium">{w.userName}</TableCell>
                   <TableCell className="text-right font-mono text-sm text-amber-600 dark:text-amber-400">
-                    {w.amountRequested.toLocaleString()}
+                    ${w.amountRequested.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm text-emerald-600 dark:text-emerald-400">
                     ${w.finalAmount.toFixed(2)}

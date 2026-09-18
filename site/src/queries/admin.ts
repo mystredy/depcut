@@ -32,6 +32,7 @@ export const adminTelegramCommandsQueryKey = ["admin", "telegram-commands"] as c
 export const adminTelegramBotStatsQueryKey = ["admin", "telegram-bot-stats"] as const;
 export const adminFinanceExchangeRateQueryKey = ["admin", "finance-exchange-rate"] as const;
 export const adminFinanceRatesQueryKey = (q?: string) => ["admin", "finance-rates", q ?? ""] as const;
+export const adminFinancePayoutsQueryKey = (q?: string) => ["admin", "finance-payouts", q ?? ""] as const;
 export const adminFinanceWithdrawalsQueryKey = ["admin", "finance-withdrawals"] as const;
 export const adminFinanceTransactionsQueryKey = (filters: {
   user?: string;
@@ -127,6 +128,17 @@ export type AdminFinanceExchangeRateHistoryEntry = {
   effectiveDate: string;
   authorName: string;
   createdAt: string;
+};
+
+// A creator's Payout (USD) balance — separate from AdminArtistRateAccount's
+// Rates balance below. Only this is ever drawn down by a real Withdrawal.
+export type AdminPayoutAccount = {
+  userId: string;
+  name: string;
+  email: string;
+  image: string | null;
+  available: number;
+  lifetime: number;
 };
 
 export type AdminArtistRateAccount = {
@@ -225,6 +237,9 @@ export type AdminFinanceOverview = {
   settings: AdminFinanceSettings;
   totalPendingRates: number;
   totalAvailableRates: number;
+  // Sum of every PayoutAccount.available (USD) — what Withdrawals actually
+  // draw from, separate from the Rates totals above.
+  totalPayoutAvailable: number;
   totalCreatorPayouts: number;
   withdrawalCounts: { pending: number; approved: number; paid: number; rejected: number };
 };
@@ -1334,6 +1349,16 @@ export function useAdminFinanceRates(q: string) {
         `/api/admin/finance/rates${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`
       ),
     queryKey: adminFinanceRatesQueryKey(q.trim()),
+  });
+}
+
+export function useAdminFinancePayouts(q: string) {
+  return useQuery({
+    queryFn: () =>
+      apiFetch<{ accounts: AdminPayoutAccount[] }>(
+        `/api/admin/finance/payouts${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`
+      ),
+    queryKey: adminFinancePayoutsQueryKey(q.trim()),
   });
 }
 

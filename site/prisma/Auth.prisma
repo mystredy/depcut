@@ -49,6 +49,7 @@ model User {
   supportTicketsRaised   SupportTicket[] @relation("SupportTicketRaisedBy")
   supportMessagesSent    SupportMessage[] @relation("SupportMessageAuthor")
   artistRateAccount ArtistRateAccount?
+  payoutAccount PayoutAccount?
   withdrawals   Withdrawal[]
   financeTransactions FinanceTransaction[]
   giveawayPayments GiveawayPayment[]

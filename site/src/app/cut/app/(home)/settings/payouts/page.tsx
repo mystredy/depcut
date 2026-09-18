@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { usePayoutBalance } from "@/queries/payouts";
 
 type PayoutMethodType = "crypto" | "wise";
 type CryptoCurrency = "USDC" | "USDT";
@@ -47,13 +48,18 @@ const PAYOUT_METHODS: {
   },
 ];
 
-// No payouts backend exists yet — there's no submissions pipeline to earn
-// from, no ledger, and no payout processor wired up. Everything below is
-// local UI state: real zero balances (nothing invented), and a payout-method
-// "connect" flow that only remembers a wallet address or email locally, never
-// sends it anywhere. Wiring this to a real ledger and payout processor is
+// The Payout wallet below is real (PayoutAccount via usePayoutBalance) —
+// separate from Artist Earnings on /app/artist/my-projects, which is Rates,
+// not USD, and isn't itself withdrawable. A creator moves Rates into this
+// wallet explicitly from that page; this is the only balance a real
+// Withdrawal ever draws down. No payout processor exists yet, though: the
+// method "connect" flow below only remembers a wallet address or email
+// locally and never sends it anywhere, and there's no way to actually
+// submit a withdrawal request from here yet — an admin creates those from
+// /admin/finance/withdrawals. Wiring those to a real payout processor is
 // follow-up work.
 export default function PayoutsPage() {
+  const payout = usePayoutBalance();
   const [selectedMethod, setSelectedMethod] = useState<PayoutMethodType>("crypto");
   const [cryptoCurrency, setCryptoCurrency] = useState<CryptoCurrency>("USDC");
   const [connected, setConnected] = useState<
@@ -84,23 +90,23 @@ export default function PayoutsPage() {
     <div className="divide-y pb-9">
       <div className="py-6 first:pt-0">
         <div className="space-y-1">
-          <h2 className="text-base font-medium">Earnings</h2>
+          <h2 className="text-base font-medium">Payout Wallet</h2>
           <p className="text-sm text-muted-foreground">
-            What you've earned from approved submissions.
+            Rates moved here from Artist Earnings. Only this balance can be withdrawn.
           </p>
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-4">
+        <div className="mt-4 grid grid-cols-2 gap-4">
           <div>
-            <div className="text-2xl font-semibold tabular-nums">$0.00</div>
-            <p className="mt-1 text-xs text-muted-foreground">Available</p>
+            <div className="text-2xl font-semibold tabular-nums">
+              ${(payout.data?.available ?? 0).toFixed(2)}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Available for withdrawal</p>
           </div>
           <div>
-            <div className="text-2xl font-semibold tabular-nums">$0.00</div>
-            <p className="mt-1 text-xs text-muted-foreground">Pending review</p>
-          </div>
-          <div>
-            <div className="text-2xl font-semibold tabular-nums">$0.00</div>
-            <p className="mt-1 text-xs text-muted-foreground">Lifetime earned</p>
+            <div className="text-2xl font-semibold tabular-nums">
+              ${(payout.data?.lifetime ?? 0).toFixed(2)}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Lifetime moved here</p>
           </div>
         </div>
       </div>

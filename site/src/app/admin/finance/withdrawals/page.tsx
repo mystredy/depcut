@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import {
-  useAdminFinanceRates,
+  useAdminFinancePayouts,
   useAdminFinanceWithdrawals,
   useCreateWithdrawal,
   useUpdateWithdrawal,
@@ -48,7 +48,7 @@ export default function AdminFinanceWithdrawalsPage() {
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Withdrawals</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Creator cashout requests against their available Rates balance.
+            Creator cashout requests against their available Payout (USD) balance.
           </p>
         </div>
         <Button size="sm" onClick={() => setCreating(true)}>
@@ -80,7 +80,7 @@ export default function AdminFinanceWithdrawalsPage() {
                 <TableRow key={w.id}>
                   <TableCell className="text-sm font-medium">{w.userName}</TableCell>
                   <TableCell className="text-right font-mono text-sm text-amber-600 dark:text-amber-400">
-                    {w.amountRequested.toLocaleString()}
+                    ${w.amountRequested.toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm text-emerald-600 dark:text-emerald-400">
                     ${w.finalAmount.toFixed(2)}
@@ -154,7 +154,7 @@ export default function AdminFinanceWithdrawalsPage() {
 }
 
 function NewWithdrawalDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const accounts = useAdminFinanceRates("");
+  const accounts = useAdminFinancePayouts("");
   const create = useCreateWithdrawal();
 
   const [userId, setUserId] = useState("");
@@ -171,7 +171,7 @@ function NewWithdrawalDialog({ open, onClose }: { open: boolean; onClose: () => 
       return;
     }
     if (selected && amount > selected.available) {
-      setError(`Amount exceeds ${selected.name}'s available balance of ${selected.available}.`);
+      setError(`Amount exceeds ${selected.name}'s available Payout balance of $${selected.available.toFixed(2)}.`);
       return;
     }
     setError(null);
@@ -205,13 +205,13 @@ function NewWithdrawalDialog({ open, onClose }: { open: boolean; onClose: () => 
               <option value="">Select a creator…</option>
               {accounts.data?.accounts.map((a) => (
                 <option key={a.userId} value={a.userId}>
-                  {a.name} ({a.available.toLocaleString()} available)
+                  {a.name} (${a.available.toFixed(2)} available)
                 </option>
               ))}
             </select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs">Amount Requested (Rates)</Label>
+            <Label className="text-xs">Amount Requested (USD)</Label>
             <Input type="number" value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} />
           </div>
           <div className="space-y-1.5">
