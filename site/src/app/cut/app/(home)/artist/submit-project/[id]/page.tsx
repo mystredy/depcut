@@ -983,17 +983,22 @@ export default function SubmitProjectEditorPage() {
               >
                 {videoDisplayUrl ? (
                   <>
-                    {/* Same blurred cover-fill + contain-fit treatment as the
-                        thumbnail preview, so a non-16:9 video isn't cropped. */}
-                    <video
-                      src={videoDisplayUrl}
-                      muted
-                      autoPlay
-                      loop
-                      playsInline
-                      aria-hidden
-                      className="absolute inset-0 size-full scale-110 object-cover blur-xl"
-                    />
+                    {/* Blurred cover-fill background, same treatment as the
+                        thumbnail preview — local picks only. A resumed
+                        draft's remote asset skips it: filtering a second,
+                        cross-origin copy of an already-playing video adds
+                        real decode cost for a purely decorative letterbox. */}
+                    {videoPreviewUrl && (
+                      <video
+                        src={videoPreviewUrl}
+                        muted
+                        autoPlay
+                        loop
+                        playsInline
+                        aria-hidden
+                        className="absolute inset-0 size-full scale-110 object-cover blur-xl"
+                      />
+                    )}
                     <video
                       src={videoDisplayUrl}
                       muted
@@ -1079,15 +1084,17 @@ export default function SubmitProjectEditorPage() {
                 {thumbnailDisplayUrl ? (
                   <>
                     {/* Blurred cover-fill background, same treatment as the uploaded
-                        thumbnail (see toThumbnail) — so a non-16:9 pick previews the
-                        way it'll actually look, not hard-cropped. */}
-                    {/* eslint-disable-next-line @next/next/no-img-element -- local file preview, not a Next asset */}
-                    <img
-                      src={thumbnailDisplayUrl}
-                      alt=""
-                      aria-hidden
-                      className="absolute inset-0 size-full scale-110 object-cover blur-xl"
-                    />
+                        thumbnail (see toThumbnail) — local picks only, same reasoning
+                        as the video dropzone above. */}
+                    {thumbnailPreview && (
+                      // eslint-disable-next-line @next/next/no-img-element -- local file preview, not a Next asset
+                      <img
+                        src={thumbnailPreview}
+                        alt=""
+                        aria-hidden
+                        className="absolute inset-0 size-full scale-110 object-cover blur-xl"
+                      />
+                    )}
                     {/* eslint-disable-next-line @next/next/no-img-element -- local file preview, not a Next asset */}
                     <img
                       src={thumbnailDisplayUrl}
@@ -1486,15 +1493,19 @@ export default function SubmitProjectEditorPage() {
                 >
                   {mediaDisplayUrl ? (
                     <>
-                      <video
-                        src={mediaDisplayUrl}
-                        muted
-                        autoPlay
-                        loop
-                        playsInline
-                        aria-hidden
-                        className="absolute inset-0 size-full scale-110 object-cover blur-xl"
-                      />
+                      {/* Blurred cover-fill background, local picks only —
+                          same reasoning as the video dropzone above. */}
+                      {mediaPreviewUrl && (
+                        <video
+                          src={mediaPreviewUrl}
+                          muted
+                          autoPlay
+                          loop
+                          playsInline
+                          aria-hidden
+                          className="absolute inset-0 size-full scale-110 object-cover blur-xl"
+                        />
+                      )}
                       <video
                         src={mediaDisplayUrl}
                         muted
