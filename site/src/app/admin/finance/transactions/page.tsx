@@ -16,7 +16,7 @@ import {
 import { downloadCsv } from "@/lib/marketplace/download-csv";
 import { useAdminFinanceTransactions } from "@/queries/admin";
 
-const TYPES = ["All", "Withdrawal", "Referral", "Giveaway", "Manual Adjustment"];
+const TYPES = ["All", "Earning", "Withdrawal", "Referral", "Giveaway", "Manual Adjustment"];
 const STATUSES = ["All", "Completed", "Pending", "Failed"];
 
 export default function AdminFinanceTransactionsPage() {

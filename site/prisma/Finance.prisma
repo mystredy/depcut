@@ -4,20 +4,28 @@
 // Stripe-billed AI inference credit system — these Rates are what a creator
 // earns and cashes out, not what they spend on AI tools.
 //
-// No automated flow posts here yet (Task/Submission completions don't credit
-// an ArtistRateAccount automatically) — admins manage balances directly from
-// /admin/finance. Every balance change and withdrawal is logged to
-// FinanceTransaction, so the ledger stays real even before that wiring
-// exists.
+// Approving a Submission (see api/admin/submissions/[id]) is the one
+// automated poster: it credits `pending` and `lifetime` immediately and logs
+// a "Pending" FinanceTransaction of type "Earning". artistRatesSweep.ts (the
+// bi-weekly job behind /api/finance/rates-sweep/run, on the 1st and 16th)
+// moves that half-month's earnings from `pending` into `available` once
+// its cycle completes, flipping those ledger rows to "Completed". Anything
+// else touching a balance is still a manual admin action from
+// /admin/finance, logged the same way.
 
 // One row per creator with a Rates balance. Created lazily (upsert) the
-// first time an admin adjusts a user's balance.
+// first time a submission earns Rates or an admin adjusts a balance.
 model ArtistRateAccount {
   userId    String   @id
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Earned but not yet cash-out eligible — waiting on artistRatesSweep.ts to
+  // clear its earn window's cycle.
   pending   Int      @default(0)
+  // Cash-out eligible; what a Withdrawal actually draws down.
   available Int      @default(0)
   referral  Int      @default(0)
+  // Total ever earned, counted at earn time — never decremented by the
+  // pending -> available sweep or by a withdrawal.
   lifetime  Int      @default(0)
   // "Standard" | "Pro" — set by an admin (see /admin/finance/rates). Not
   // read by anything yet; a place to hang a future Pro-only capability.

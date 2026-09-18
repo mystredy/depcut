@@ -2,6 +2,7 @@ import type { z } from "zod";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { analyticsDailyJob } from "@/lib/jobs/analytics-daily";
+import { artistRatesSweepJob } from "@/lib/jobs/artistRatesSweep";
 import { deleteUserJob } from "@/lib/jobs/delete-user";
 import { dropScheduleSweepJob } from "@/lib/jobs/dropScheduleSweep";
 import { socialWorkflowDripJob } from "@/lib/jobs/social-workflow-drip";
@@ -29,6 +30,7 @@ export function defineJob<S extends z.ZodType<unknown>>(
 
 export const jobKinds: Record<string, JobKind> = {
   "analytics-daily": analyticsDailyJob,
+  "artist-rates-sweep": artistRatesSweepJob,
   "delete-user": deleteUserJob,
   "drop-schedule-sweep": dropScheduleSweepJob,
   "social-workflow-drip": socialWorkflowDripJob,

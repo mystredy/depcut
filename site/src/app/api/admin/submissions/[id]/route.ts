@@ -41,7 +41,10 @@ export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
 
   const { id } = await context.params;
   const submission = await prisma.submission.findUnique({
-    include: { task: { select: { maxRates: true } } },
+    include: {
+      task: { select: { maxRates: true } },
+      user: { select: { displayName: true, email: true, name: true } },
+    },
     where: { id },
   });
   if (!submission) {
@@ -80,6 +83,8 @@ export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
     const maxRates = submission.task?.maxRates ?? submission.maxRates ?? 10;
     const earnedRates = Math.round((maxRates * input.reviewScore) / 10);
     const creatorWorkdone = input.creatorWorkdone ?? 50;
+    const submitterName =
+      submission.user.displayName || submission.user.name || submission.user.email;
     [updated] = await prisma.$transaction([
       prisma.submission.update({
         data: {
@@ -107,6 +112,25 @@ export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
           userId: submission.userId,
         }),
       ),
+      // Lands in pending immediately; the bi-weekly sweep (artistRatesSweep.ts)
+      // moves it into available once its earn window's cycle completes.
+      // lifetime counts total ever earned, regardless of which bucket it's
+      // currently sitting in.
+      prisma.artistRateAccount.upsert({
+        create: { lifetime: earnedRates, pending: earnedRates, userId: submission.userId },
+        update: { lifetime: { increment: earnedRates }, pending: { increment: earnedRates } },
+        where: { userId: submission.userId },
+      }),
+      prisma.financeTransaction.create({
+        data: {
+          details: `"${submission.title}" approved (score ${input.reviewScore}/10)`,
+          ratesAmount: earnedRates,
+          status: "Pending",
+          type: "Earning",
+          userId: submission.userId,
+          userName: submitterName,
+        },
+      }),
     ]);
   } else {
     [updated] = await prisma.$transaction([
