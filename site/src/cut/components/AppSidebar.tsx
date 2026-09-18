@@ -160,7 +160,7 @@ export function AppSidebar() {
             )}
           </div>
         ) : (
-          <div className="flex h-full w-60 flex-col px-3 py-4">
+          <div className="flex h-full w-60 flex-col overflow-y-auto px-3 py-4">
             <div className="mb-5 flex items-center justify-between gap-2.5 px-2">
               <div className="flex items-center gap-2.5">
                 <SiteLogo width={36} height={36} />
