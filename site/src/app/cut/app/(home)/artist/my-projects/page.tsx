@@ -10,6 +10,7 @@ import {
   Play,
   Plus,
   Search,
+  Wallet,
 } from "lucide-react";
 
 import {
@@ -52,7 +53,9 @@ import { projectHref, useCutBase } from "@/cut/lib/nav";
 import { backendFor, type Residency } from "@/cut/lib/queries";
 import type { ProjectSummary } from "@/cut/lib/types";
 import { track } from "@/lib/analytics";
+import { formatUsd } from "@/lib/credits/format-usd";
 import { cn } from "@/lib/utils";
+import { useArtistRates } from "@/queries/artistRates";
 import {
   type Submission,
   useCreateDraftSubmission,
@@ -86,6 +89,7 @@ export default function MyProjectsPage() {
   const submissions = useMemo(() => submissionsQuery.data?.submissions ?? [], [submissionsQuery.data]);
   const createDraft = useCreateDraftSubmission();
   const deleteSubmission = useDeleteSubmission();
+  const rates = useArtistRates();
 
   const [selectedTab, setSelectedTab] = useState<SortTab>("Latest");
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>("All");
@@ -161,6 +165,35 @@ export default function MyProjectsPage() {
             </p>
           )}
         </div>
+      </div>
+
+      <div className="flex flex-col gap-4 rounded-2xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid grid-cols-3 gap-6">
+          <div>
+            <div className="text-xl font-semibold tabular-nums">{rates.data?.available ?? 0}</div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Available
+              {rates.data && ` · ${formatUsd(String(rates.data.available * rates.data.usdPerRate))}`}
+            </p>
+          </div>
+          <div>
+            <div className="text-xl font-semibold tabular-nums">{rates.data?.pending ?? 0}</div>
+            <p className="mt-0.5 text-xs text-muted-foreground">Pending</p>
+          </div>
+          <div>
+            <div className="text-xl font-semibold tabular-nums">{rates.data?.lifetime ?? 0}</div>
+            <p className="mt-0.5 text-xs text-muted-foreground">Lifetime</p>
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => router.push(`${base}/settings/payouts`)}
+        >
+          <Wallet className="size-3.5" data-icon="inline-start" />
+          Move to Payout
+        </Button>
       </div>
 
       <div className="flex flex-col gap-3 rounded-2xl border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">

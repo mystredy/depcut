@@ -12,7 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { formatUsd } from "@/lib/credits/format-usd";
 import { cn } from "@/lib/utils";
+import { useArtistRates } from "@/queries/artistRates";
 
 type PayoutMethodType = "crypto" | "wise";
 type CryptoCurrency = "USDC" | "USDT";
@@ -47,13 +49,14 @@ const PAYOUT_METHODS: {
   },
 ];
 
-// No payouts backend exists yet — there's no submissions pipeline to earn
-// from, no ledger, and no payout processor wired up. Everything below is
-// local UI state: real zero balances (nothing invented), and a payout-method
-// "connect" flow that only remembers a wallet address or email locally, never
-// sends it anywhere. Wiring this to a real ledger and payout processor is
-// follow-up work.
+// Earnings below are real (ArtistRateAccount via useArtistRates — see
+// artistRatesSweep.ts for how Rates move from pending to available). No
+// payout processor exists yet, though: the method "connect" flow below only
+// remembers a wallet address or email locally and never sends it anywhere,
+// and there's no way to actually submit a withdrawal request from here yet.
+// Wiring those to a real payout processor is follow-up work.
 export default function PayoutsPage() {
+  const rates = useArtistRates();
   const [selectedMethod, setSelectedMethod] = useState<PayoutMethodType>("crypto");
   const [cryptoCurrency, setCryptoCurrency] = useState<CryptoCurrency>("USDC");
   const [connected, setConnected] = useState<
@@ -91,15 +94,18 @@ export default function PayoutsPage() {
         </div>
         <div className="mt-4 grid grid-cols-3 gap-4">
           <div>
-            <div className="text-2xl font-semibold tabular-nums">$0.00</div>
-            <p className="mt-1 text-xs text-muted-foreground">Available</p>
+            <div className="text-2xl font-semibold tabular-nums">{rates.data?.available ?? 0} Rates</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Available
+              {rates.data && ` · ${formatUsd(String(rates.data.available * rates.data.usdPerRate))}`}
+            </p>
           </div>
           <div>
-            <div className="text-2xl font-semibold tabular-nums">$0.00</div>
-            <p className="mt-1 text-xs text-muted-foreground">Pending review</p>
+            <div className="text-2xl font-semibold tabular-nums">{rates.data?.pending ?? 0} Rates</div>
+            <p className="mt-1 text-xs text-muted-foreground">Pending</p>
           </div>
           <div>
-            <div className="text-2xl font-semibold tabular-nums">$0.00</div>
+            <div className="text-2xl font-semibold tabular-nums">{rates.data?.lifetime ?? 0} Rates</div>
             <p className="mt-1 text-xs text-muted-foreground">Lifetime earned</p>
           </div>
         </div>
