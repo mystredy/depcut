@@ -1,12 +1,15 @@
 // Cut is served from one production host, mapped by src/proxy.ts onto the
 // real routes under /cut: depcut.app — marketing landing at "/", the app
-// at "/app/…" (rewritten to /cut/app/…). Retired domains are redirected to
-// depcut.app at the edge (Cloudflare) and never reach this app.
+// at "/app/…" (rewritten to /cut/app/…). Retired domains, including
+// www.depcut.app, are redirected to the apex at the edge (Cloudflare) before
+// reaching this app — DEPCUT_HOSTS must not also list www., or the app's own
+// apex redirect below fights the edge one and loops (#incident: too many
+// redirects on www.depcut.app, 2026-09-18).
 //
 // Local dev is deliberately absent from the set: the proxy serves localhost
 // the same mapping, keeping the session cookie same-origin on the one dev
 // origin.
-export const DEPCUT_HOSTS = new Set(["depcut.app", "www.depcut.app"]);
+export const DEPCUT_HOSTS = new Set(["depcut.app"]);
 
 export const DEPCUT_CANONICAL = "https://depcut.app";
 
