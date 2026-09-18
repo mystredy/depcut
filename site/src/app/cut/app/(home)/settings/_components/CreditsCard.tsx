@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { track } from "@/lib/analytics";
 import {
   type CreditRate,
@@ -20,6 +21,7 @@ import {
   creditTopUpMinDollars,
   creditTopUpPresetsDollars,
 } from "@/lib/credits/top-up";
+import { cn } from "@/lib/utils";
 import { ApiError } from "@/queries/apiClient";
 import {
   useCreditAutoReload,
@@ -111,6 +113,14 @@ export function CreditsCard() {
             {checkout.isPending ? "Starting…" : "Buy"}
           </Button>
         </div>
+        {Number.isFinite(customValue) && customValue > 0 ? (
+          <p className="text-xs text-muted-foreground">
+            = {dollarsToCredits(customValue, creditRate).toLocaleString("en-US")} credits
+            {!customValid
+              ? ` (enter an amount between $${creditTopUpMinDollars} and $${creditTopUpMaxDollars})`
+              : ""}
+          </p>
+        ) : null}
         {checkout.isError ? (
           <p className="text-sm text-destructive">
             Couldn&apos;t start checkout. Try again in a moment.
@@ -137,19 +147,39 @@ function AutoReloadSection({
   const update = useUpdateCreditAutoReload();
   const [needsCard, setNeedsCard] = useState(false);
 
+  const [enabled, setEnabled] = useState(false);
+  const [thresholdCredits, setThresholdCredits] = useState(0);
+  const [amountCredits, setAmountCredits] = useState(0);
+
+  // Hydrate local state from the fetched settings exactly once — after
+  // that, edits here are the source of truth until Save writes them back.
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (hydratedRef.current || !autoReload.data) return;
+    hydratedRef.current = true;
+    setEnabled(autoReload.data.enabled);
+    setThresholdCredits(dollarsToCredits(autoReload.data.thresholdDollars, creditRate));
+    setAmountCredits(dollarsToCredits(autoReload.data.amountDollars, creditRate));
+  }, [autoReload.data, creditRate]);
+
   if (autoReload.isLoading) {
     return <Skeleton className="h-24 w-full" />;
   }
 
   const data = autoReload.data;
-  const enabled = data?.enabled ?? false;
+  const dirty =
+    !data ||
+    enabled !== data.enabled ||
+    thresholdCredits !== dollarsToCredits(data.thresholdDollars, creditRate) ||
+    amountCredits !== dollarsToCredits(data.amountDollars, creditRate);
 
-  const save = (next: {
-    enabled: boolean;
-    thresholdDollars: number;
-    amountDollars: number;
-  }) => {
+  const save = () => {
     setNeedsCard(false);
+    const next = {
+      amountDollars: creditsToDollars(amountCredits, creditRate),
+      enabled,
+      thresholdDollars: creditsToDollars(thresholdCredits, creditRate),
+    };
     track("credit_auto_reload_saved", next);
     update.mutate(next, {
       onError: (error) => {
@@ -161,54 +191,62 @@ function AutoReloadSection({
   };
 
   return (
-    <form
-      className="space-y-3 border-t pt-5"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const form = new FormData(event.currentTarget);
-        save({
-          amountDollars: creditsToDollars(Number(form.get("amount")), creditRate),
-          enabled: form.get("enabled") === "on",
-          thresholdDollars: creditsToDollars(Number(form.get("threshold")), creditRate),
-        });
-      }}
-    >
-      <label className="flex items-center gap-2 text-sm font-medium">
-        <input
-          className="size-4 accent-primary"
-          defaultChecked={enabled}
-          name="enabled"
-          type="checkbox"
-        />
-        Auto-reload when my balance runs low
-      </label>
-      <div className="flex flex-wrap items-end gap-3 text-sm text-muted-foreground">
-        <span>When balance falls below</span>
-        <div className="flex items-center gap-1">
-          <Input
-            className="w-24"
-            defaultValue={dollarsToCredits(data?.thresholdDollars ?? 10, creditRate)}
-            min={0}
-            name="threshold"
-            type="number"
-          />
-          <span>credits</span>
+    <div className="space-y-4 border-t pt-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-0.5">
+          <Label className="text-sm font-medium" htmlFor="auto-reload-enabled">
+            Auto-reload
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Automatically buy more credits before your balance runs out.
+          </p>
         </div>
-        <span>automatically buy</span>
-        <div className="flex items-center gap-1">
-          <Input
-            className="w-24"
-            defaultValue={dollarsToCredits(data?.amountDollars ?? creditTopUpDefaultDollars, creditRate)}
-            min={dollarsToCredits(creditTopUpMinDollars, creditRate)}
-            name="amount"
-            type="number"
-          />
-          <span>credits</span>
-        </div>
-        <Button disabled={update.isPending} size="sm" type="submit">
-          {update.isPending ? "Saving…" : "Save"}
-        </Button>
+        <Switch checked={enabled} id="auto-reload-enabled" onCheckedChange={setEnabled} />
       </div>
+
+      <div className={cn("space-y-4 rounded-xl border p-3", !enabled && "opacity-50")}>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground" htmlFor="reload-threshold">
+            Reload when balance drops below
+          </Label>
+          <div className="flex items-center gap-2">
+            <Input
+              className="w-28"
+              disabled={!enabled}
+              id="reload-threshold"
+              min={0}
+              onChange={(event) => setThresholdCredits(Number(event.target.value) || 0)}
+              type="number"
+              value={thresholdCredits}
+            />
+            <span className="text-sm text-muted-foreground">credits</span>
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground" htmlFor="reload-amount">
+            Automatically buy
+          </Label>
+          <div className="flex items-center gap-2">
+            <Input
+              className="w-28"
+              disabled={!enabled}
+              id="reload-amount"
+              min={dollarsToCredits(creditTopUpMinDollars, creditRate)}
+              onChange={(event) => setAmountCredits(Number(event.target.value) || 0)}
+              type="number"
+              value={amountCredits}
+            />
+            <span className="text-sm text-muted-foreground">
+              credits (${creditsToDollars(amountCredits, creditRate).toFixed(2)})
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <Button disabled={update.isPending || !dirty} onClick={save} size="sm">
+        {update.isPending ? "Saving…" : "Save"}
+      </Button>
+
       {data?.status === "failed" && data.lastError ? (
         <p className="text-sm text-destructive">
           Last auto-reload failed: {data.lastError}
@@ -227,6 +265,6 @@ function AutoReloadSection({
           to save one, then turn this on.
         </p>
       ) : null}
-    </form>
+    </div>
   );
 }
