@@ -347,6 +347,7 @@ export function DropDialog({
                     controls={uploadState === "ready"}
                     muted
                     playsInline
+                    preload="auto"
                   />
                   {uploadState === "uploading" && (
                     <>
