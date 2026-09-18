@@ -1,4 +1,5 @@
 import { dropVideoKey, putObject } from "@/cut/server/cloud/r2";
+import { createWithShortId } from "@/lib/studio/dropId";
 import { prisma } from "@/lib/prisma";
 
 export type ImportablePost = {
@@ -27,18 +28,21 @@ export async function importPostAsDrop(
     }
     const video = Buffer.from(await sourceRes.arrayBuffer());
 
-    const drop = await prisma.drop.create({
-      data: {
-        caption: post.caption || null,
-        fileName: `${post.externalId}.mp4`,
-        importedExternalId: post.externalId,
-        importedPlatform: opts.platform,
-        sizeBytes: video.byteLength,
-        status: "complete",
-        studioId: opts.studioId,
-        userId: opts.studioOwnerId,
-      },
-    });
+    const drop = await createWithShortId((id) =>
+      prisma.drop.create({
+        data: {
+          id,
+          caption: post.caption || null,
+          fileName: `${post.externalId}.mp4`,
+          importedExternalId: post.externalId,
+          importedPlatform: opts.platform,
+          sizeBytes: video.byteLength,
+          status: "complete",
+          studioId: opts.studioId,
+          userId: opts.studioOwnerId,
+        },
+      }),
+    );
 
     const storageKey = dropVideoKey(opts.studioOwnerId, drop.id, `${post.externalId}.mp4`);
     await putObject(storageKey, video, sourceRes.headers.get("content-type") ?? "video/mp4");

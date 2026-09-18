@@ -9,6 +9,7 @@ import {
 import { hashtagsSchema } from "@/app/api/drops/schemas";
 import { validationErrorResponse } from "@/lib/inference/responses";
 import { getStudioMembership } from "@/lib/studio/access";
+import { createWithShortId } from "@/lib/studio/dropId";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -31,17 +32,20 @@ export const POST = withDepCutAuth(async (request: DepCutAuthenticatedRequest) =
   const membership = await getStudioMembership(request.depcut.userId, parsed.data.studioId);
   if (!membership) return notFoundResponse();
 
-  const drop = await prisma.drop.create({
-    data: {
-      title: parsed.data.title || null,
-      caption: parsed.data.caption || null,
-      hashtags: parsed.data.hashtags,
-      projectId: parsed.data.projectId || null,
-      studioId: parsed.data.studioId,
-      userId: request.depcut.userId,
-    },
-    select: { id: true },
-  });
+  const drop = await createWithShortId((id) =>
+    prisma.drop.create({
+      data: {
+        id,
+        title: parsed.data.title || null,
+        caption: parsed.data.caption || null,
+        hashtags: parsed.data.hashtags,
+        projectId: parsed.data.projectId || null,
+        studioId: parsed.data.studioId,
+        userId: request.depcut.userId,
+      },
+      select: { id: true },
+    }),
+  );
 
   return NextResponse.json({ drop });
 });
