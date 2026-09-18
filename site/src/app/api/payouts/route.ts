@@ -12,13 +12,30 @@ export const dynamic = "force-dynamic";
 // lazily, so a creator who's never moved Rates here has no row at all;
 // that reads as all zeros rather than a 404.
 export const GET = withDepCutAuth(async (request) => {
-  const account = await prisma.payoutAccount.findUnique({
-    select: { available: true, lifetime: true },
-    where: { userId: request.depcut.userId },
-  });
+  const userId = request.depcut.userId;
+  const [account, withdrawals, paid] = await Promise.all([
+    prisma.payoutAccount.findUnique({ select: { available: true, lifetime: true }, where: { userId } }),
+    prisma.withdrawal.findMany({
+      orderBy: { createdAt: "desc" },
+      select: {
+        amountRequested: true,
+        createdAt: true,
+        destination: true,
+        finalAmount: true,
+        id: true,
+        method: true,
+        status: true,
+      },
+      take: 25,
+      where: { userId },
+    }),
+    prisma.withdrawal.aggregate({ _sum: { finalAmount: true }, where: { status: "Paid", userId } }),
+  ]);
 
   return NextResponse.json({
     available: account?.available ?? 0,
     lifetime: account?.lifetime ?? 0,
+    totalWithdrawn: paid._sum.finalAmount ?? 0,
+    withdrawals: withdrawals.map((w) => ({ ...w, createdAt: w.createdAt.toISOString() })),
   });
 });

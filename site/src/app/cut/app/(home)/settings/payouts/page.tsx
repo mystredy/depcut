@@ -48,16 +48,16 @@ const PAYOUT_METHODS: {
   },
 ];
 
-// The Payout wallet below is real (PayoutAccount via usePayoutBalance) —
-// separate from Artist Earnings on /app/artist/my-projects, which is Rates,
-// not USD, and isn't itself withdrawable. A creator moves Rates into this
-// wallet explicitly from that page; this is the only balance a real
-// Withdrawal ever draws down. No payout processor exists yet, though: the
-// method "connect" flow below only remembers a wallet address or email
-// locally and never sends it anywhere, and there's no way to actually
-// submit a withdrawal request from here yet — an admin creates those from
-// /admin/finance/withdrawals. Wiring those to a real payout processor is
-// follow-up work.
+// The Payout wallet, its totals, and its history below are all real
+// (PayoutAccount + Withdrawal via usePayoutBalance) — separate from Artist
+// Earnings on /app/artist/my-projects, which is Rates, not USD, and isn't
+// itself withdrawable. A creator moves Rates into this wallet explicitly
+// from that page; this is the only balance a real Withdrawal ever draws
+// down. No payout processor exists yet, though: the method "connect" flow
+// below only remembers a wallet address or email locally and never sends
+// it anywhere, and there's no way to actually submit a withdrawal request
+// from here yet — an admin creates those from /admin/finance/withdrawals.
+// Wiring those to a real payout processor is follow-up work.
 export default function PayoutsPage() {
   const payout = usePayoutBalance();
   const [selectedMethod, setSelectedMethod] = useState<PayoutMethodType>("crypto");
@@ -95,7 +95,7 @@ export default function PayoutsPage() {
             Rates moved here from Artist Earnings. Only this balance can be withdrawn.
           </p>
         </div>
-        <div className="mt-4 grid grid-cols-2 gap-4">
+        <div className="mt-4 grid grid-cols-3 gap-4">
           <div>
             <div className="text-2xl font-semibold tabular-nums">
               ${(payout.data?.available ?? 0).toFixed(2)}
@@ -107,6 +107,12 @@ export default function PayoutsPage() {
               ${(payout.data?.lifetime ?? 0).toFixed(2)}
             </div>
             <p className="mt-1 text-xs text-muted-foreground">Lifetime moved here</p>
+          </div>
+          <div>
+            <div className="text-2xl font-semibold tabular-nums">
+              ${(payout.data?.totalWithdrawn ?? 0).toFixed(2)}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Total withdrawn</p>
           </div>
         </div>
       </div>
@@ -234,14 +240,40 @@ export default function PayoutsPage() {
       <div className="space-y-4 py-6 first:pt-0">
         <div className="space-y-1">
           <h2 className="text-base font-medium">Payout history</h2>
-          <p className="text-sm text-muted-foreground">Past payouts to your connected account.</p>
+          <p className="text-sm text-muted-foreground">Every withdrawal you&apos;ve requested.</p>
         </div>
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center">
-          <Clock className="size-4 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            No payouts yet. They'll show up here once a submission is approved and paid out.
-          </p>
-        </div>
+        {payout.data?.withdrawals.length ? (
+          <div className="divide-y rounded-xl border">
+            {payout.data.withdrawals.map((w) => (
+              <div key={w.id} className="flex items-center justify-between gap-4 p-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">${w.finalAmount.toFixed(2)}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {w.method} · {w.destination} · {new Date(w.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "shrink-0 rounded px-2 py-0.5 font-mono text-[10px] font-bold uppercase",
+                    w.status === "Paid" && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+                    w.status === "Approved" && "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+                    w.status === "Pending" && "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+                    w.status === "Rejected" && "bg-red-500/10 text-red-700 dark:text-red-400"
+                  )}
+                >
+                  {w.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center">
+            <Clock className="size-4 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              No payouts yet. They'll show up here once a submission is approved and paid out.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
