@@ -189,8 +189,9 @@ function AutoReloadSection({
     thresholdCredits !== dollarsToCredits(data.thresholdDollars, creditRate) ||
     amountDollars !== data.amountDollars;
   // Turning it on needs a real price before Save is even reachable — no
-  // saving an "on" with nothing to charge.
-  const needsPrice = enabled && amountDollars <= 0;
+  // saving an "on" with nothing to charge, and never below the same $5
+  // floor the server enforces (creditTopUpMinDollars).
+  const needsPrice = enabled && amountDollars < creditTopUpMinDollars;
   const canSave = dirty && !needsPrice && !update.isPending;
 
   const save = () => {
@@ -273,7 +274,7 @@ function AutoReloadSection({
         </Button>
         {needsPrice ? (
           <p className="text-xs text-muted-foreground">
-            Enter an amount to buy before saving.
+            Enter at least ${creditTopUpMinDollars} to buy before saving.
           </p>
         ) : null}
       </div>
