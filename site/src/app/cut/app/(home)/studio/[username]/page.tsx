@@ -1009,7 +1009,7 @@ function DropDetailsDialog({ drop, onClose }: { drop: StudioDrop | null; onClose
               <p className="whitespace-pre-wrap">{drop.caption || "—"}</p>
             </div>
             <div>
-              <p className="text-xs font-medium text-muted-foreground">Hashtags</p>
+              <p className="text-xs font-medium text-muted-foreground">Tags</p>
               <p>{drop.hashtags.length > 0 ? drop.hashtags.map((t) => `#${t}`).join(" ") : "—"}</p>
             </div>
             <div>
