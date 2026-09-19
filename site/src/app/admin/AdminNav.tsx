@@ -61,7 +61,7 @@ const SECTIONS: NavSection[] = [
     color: "text-sky-500",
     children: [
       { label: "Project Submission", href: "/admin/project-submissions", icon: Clapperboard, color: "text-violet-500" },
-      { label: "Creator Submissions", href: "/admin/submissions", icon: FileCheck2, color: "text-emerald-500" },
+      { label: "Artist Submissions", href: "/admin/submissions", icon: FileCheck2, color: "text-emerald-500" },
       { label: "Publisher Posts", href: "/admin/uploads", icon: Send, color: "text-pink-500" },
     ],
   },
@@ -153,7 +153,7 @@ const SECTIONS: NavSection[] = [
     color: "text-emerald-500",
     children: [
       { label: "Dashboard", href: "/admin/finance", icon: LayoutDashboard, color: "text-emerald-500" },
-      { label: "Creator Applications", href: "/admin/finance/creator-applications", icon: Clapperboard, color: "text-fuchsia-500" },
+      { label: "Artist Applications", href: "/admin/finance/creator-applications", icon: Clapperboard, color: "text-fuchsia-500" },
       { label: "Withdrawals", href: "/admin/finance/withdrawals", icon: DollarSign, color: "text-rose-500" },
       { label: "Rates", href: "/admin/finance/rates", icon: Coins, color: "text-amber-500" },
       { label: "Transactions", href: "/admin/finance/transactions", icon: Activity, color: "text-blue-500" },

@@ -35,10 +35,10 @@ export default function AdminCreatorApplicationsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <Clapperboard className="size-5 text-muted-foreground" /> Creator Applications
+          <Clapperboard className="size-5 text-muted-foreground" /> Artist Applications
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Requests to become a paid Rates creator, filed from the account menu.
+          Requests to become a paid Rates artist, filed from the account menu.
         </p>
       </div>
 

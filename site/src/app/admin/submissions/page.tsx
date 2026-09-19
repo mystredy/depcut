@@ -92,7 +92,7 @@ function AdminSubmissionsContent() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight">Creator Submissions</h1>
+        <h1 className="text-lg font-semibold tracking-tight">Artist Submissions</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Review clip submissions from Submit Project. Approving sets earned Rates from the
           assigned quality score and the linked task&apos;s (or submission&apos;s) max Rates.

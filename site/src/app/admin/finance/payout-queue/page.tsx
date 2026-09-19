@@ -55,7 +55,7 @@ export default function AdminFinancePayoutQueuePage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Creator</TableHead>
+                <TableHead>Artist</TableHead>
                 <TableHead className="text-right">Requested</TableHead>
                 <TableHead className="text-right">Net Payout</TableHead>
                 <TableHead>Destination</TableHead>

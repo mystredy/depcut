@@ -67,7 +67,7 @@ export default function AdminFinanceWithdrawalsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Creator</TableHead>
+                <TableHead>Artist</TableHead>
                 <TableHead className="text-right">Requested</TableHead>
                 <TableHead className="text-right">Net Payout</TableHead>
                 <TableHead>Method / Destination</TableHead>
@@ -196,7 +196,7 @@ function NewWithdrawalDialog({ open, onClose }: { open: boolean; onClose: () => 
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">
-            <Label className="text-xs">Creator</Label>
+            <Label className="text-xs">Artist</Label>
             <select
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
