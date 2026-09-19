@@ -96,24 +96,22 @@ export default function PayoutsPage() {
           </p>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-4">
-          <div>
-            <div className="text-2xl font-semibold tabular-nums">
-              ${(payout.data?.available ?? 0).toFixed(2)}
+          {(
+            [
+              ["available", "Available for withdrawal"],
+              ["lifetime", "Lifetime moved here"],
+              ["totalWithdrawn", "Total withdrawn"],
+            ] as const
+          ).map(([key, label]) => (
+            <div key={key}>
+              {payout.isPending ? (
+                <div className="h-8 w-16 animate-pulse rounded-md bg-muted" />
+              ) : (
+                <div className="text-2xl font-semibold tabular-nums">${(payout.data?.[key] ?? 0).toFixed(2)}</div>
+              )}
+              <p className="mt-1 text-xs text-muted-foreground">{label}</p>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">Available for withdrawal</p>
-          </div>
-          <div>
-            <div className="text-2xl font-semibold tabular-nums">
-              ${(payout.data?.lifetime ?? 0).toFixed(2)}
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">Lifetime moved here</p>
-          </div>
-          <div>
-            <div className="text-2xl font-semibold tabular-nums">
-              ${(payout.data?.totalWithdrawn ?? 0).toFixed(2)}
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">Total withdrawn</p>
-          </div>
+          ))}
         </div>
       </div>
 
@@ -242,7 +240,12 @@ export default function PayoutsPage() {
           <h2 className="text-base font-medium">Payout history</h2>
           <p className="text-sm text-muted-foreground">Every withdrawal you&apos;ve requested.</p>
         </div>
-        {payout.data?.withdrawals.length ? (
+        {payout.isPending ? (
+          <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            Loading payout history…
+          </div>
+        ) : payout.data?.withdrawals.length ? (
           <div className="divide-y rounded-xl border">
             {payout.data.withdrawals.map((w) => (
               <div key={w.id} className="flex items-center justify-between gap-4 p-3">
