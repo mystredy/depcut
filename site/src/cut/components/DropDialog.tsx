@@ -422,7 +422,7 @@ export function DropDialog({
             <textarea
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              placeholder="Description (optional)"
+              placeholder="Description — #hashtags and @mentions welcome (optional)"
               maxLength={280}
               rows={2}
               disabled={posting}
@@ -432,7 +432,7 @@ export function DropDialog({
             <input
               value={hashtags}
               onChange={(e) => setHashtags(e.target.value)}
-              placeholder="Hashtags, space or comma separated (optional)"
+              placeholder="Tags, space or comma separated (optional)"
               maxLength={280}
               disabled={posting}
               className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring disabled:opacity-60"

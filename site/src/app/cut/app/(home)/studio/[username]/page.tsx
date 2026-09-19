@@ -849,16 +849,16 @@ function RepurposeDialog({
                 onChange={(e) => setCaption(e.target.value)}
                 maxLength={280}
                 rows={2}
-                placeholder="Description (optional)"
+                placeholder="Description — #hashtags and @mentions welcome (optional)"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Hashtags</Label>
+              <Label className="text-xs">Tags</Label>
               <Input
                 value={hashtags}
                 onChange={(e) => setHashtags(e.target.value)}
                 maxLength={280}
-                placeholder="Hashtags, space or comma separated (optional)"
+                placeholder="Tags, space or comma separated (optional)"
               />
             </div>
             <DialogFooter>
