@@ -14,5 +14,5 @@ export const hashtagsSchema = z
       .split(/[,\s]+/)
       .map((t) => t.replace(/^#/, "").trim())
       .filter(Boolean)
-      .slice(0, 30)
+      .slice(0, 5)
   );

@@ -858,7 +858,7 @@ function RepurposeDialog({
                 value={hashtags}
                 onChange={(e) => setHashtags(e.target.value)}
                 maxLength={280}
-                placeholder="Tags, space or comma separated (optional)"
+                placeholder="Up to 5 tags, space or comma separated (optional)"
               />
             </div>
             <DialogFooter>
