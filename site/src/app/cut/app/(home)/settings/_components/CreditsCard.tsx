@@ -205,10 +205,10 @@ function AutoReloadSection({
     track("credit_auto_reload_saved", next);
     update.mutate(next, {
       onError: (error) => {
-        if (error instanceof ApiError && error.code === "no_payment_method") {
-          setEnabled(false);
-          setNeedsCard(true);
-        }
+        // Any failed save reverts the toggle — it never silently stays "on"
+        // locally while the server still has it off.
+        setEnabled(data?.enabled ?? false);
+        setNeedsCard(error instanceof ApiError && error.code === "no_payment_method");
       },
     });
   };
@@ -226,6 +226,22 @@ function AutoReloadSection({
         </div>
         <Switch checked={enabled} id="auto-reload-enabled" onCheckedChange={setEnabled} />
       </div>
+
+      {needsCard ? (
+        <p className="text-sm text-destructive">
+          Couldn&apos;t save: auto-reload needs a saved card.{" "}
+          <button
+            className="underline underline-offset-4"
+            onClick={onNeedsCard}
+            type="button"
+          >
+            Buy credits once
+          </button>{" "}
+          to save one, then turn this back on.
+        </p>
+      ) : update.isError ? (
+        <p className="text-sm text-destructive">Couldn&apos;t save auto-reload. Try again.</p>
+      ) : null}
 
       <div className={cn("space-y-4 rounded-xl border p-3", !enabled && "opacity-50")}>
         <div className="space-y-1.5">
@@ -282,19 +298,6 @@ function AutoReloadSection({
       {data?.status === "failed" && data.lastError ? (
         <p className="text-sm text-destructive">
           Last auto-reload failed: {data.lastError}
-        </p>
-      ) : null}
-      {needsCard ? (
-        <p className="text-sm text-muted-foreground">
-          Auto-reload needs a saved card.{" "}
-          <button
-            className="text-primary underline-offset-4 hover:underline"
-            onClick={onNeedsCard}
-            type="button"
-          >
-            Buy credits once
-          </button>{" "}
-          to save one, then turn this on.
         </p>
       ) : null}
     </div>
