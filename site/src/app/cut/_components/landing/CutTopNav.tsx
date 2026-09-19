@@ -55,7 +55,7 @@ export function CutTopNav({ authToggle }: Props) {
             <div className="flex items-center justify-center overflow-hidden rounded-[10px]" style={{ width: NAV_ICON_SIZE, height: NAV_ICON_SIZE }}>
               <SiteLogo width={NAV_ICON_SIZE} height={NAV_ICON_SIZE} compact />
             </div>
-            <span className="text-xl font-semibold">epCut</span>
+            <span className="text-[24px] font-semibold">epCut</span>
           </span>
           <BetaBadge />
         </Link>
