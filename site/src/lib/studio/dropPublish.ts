@@ -19,10 +19,11 @@ export async function publishDropToConnection(
   drop: Drop,
   destinationConnection: SocialConnection,
   workflowId: string | null,
-  overrides?: { title?: string; caption?: string },
+  overrides?: { title?: string; caption?: string; hashtags?: string[] },
 ): Promise<DropPublishOutcome> {
   const title = overrides?.title || drop.title || drop.caption?.slice(0, 80) || "New post";
   const caption = overrides ? overrides.caption : (drop.caption ?? undefined);
+  const tags = overrides ? overrides.hashtags : drop.hashtags;
 
   try {
     if (!drop.storageKey) throw new PublishError("This Drop has no uploaded video.");
@@ -30,6 +31,7 @@ export async function publishDropToConnection(
     const published = await publishToConnection(destinationConnection.id, {
       description: caption,
       privacyStatus: "public",
+      tags,
       title,
       videoUrl,
     });

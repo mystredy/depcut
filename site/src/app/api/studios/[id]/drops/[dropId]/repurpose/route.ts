@@ -82,7 +82,11 @@ export const POST = withDepCutAuth(async (request, context: RouteContext) => {
     .filter(Boolean)
     .join("\n\n") || undefined;
 
-  const outcome = await publishDropToConnection(drop, destination, null, { caption, title: parsed.data.title });
+  const outcome = await publishDropToConnection(drop, destination, null, {
+    caption,
+    hashtags: parsed.data.hashtags,
+    title: parsed.data.title,
+  });
   if (!outcome.ok) {
     return NextResponse.json({ error: "Repurpose failed", message: outcome.error }, { status: 502 });
   }

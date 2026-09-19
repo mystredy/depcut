@@ -14,6 +14,7 @@ export async function publishYoutubeVideo(opts: {
   videoUrl: string;
   title: string;
   description?: string;
+  tags?: string[];
   privacyStatus: "public" | "unlisted" | "private";
 }): Promise<{ videoId: string; url: string }> {
   const sourceRes = await fetch(opts.videoUrl);
@@ -27,7 +28,11 @@ export async function publishYoutubeVideo(opts: {
     "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
     {
       body: JSON.stringify({
-        snippet: { description: opts.description ?? "", title: opts.title },
+        snippet: {
+          description: opts.description ?? "",
+          title: opts.title,
+          ...(opts.tags?.length ? { tags: opts.tags } : {}),
+        },
         status: { privacyStatus: opts.privacyStatus },
       }),
       headers: {

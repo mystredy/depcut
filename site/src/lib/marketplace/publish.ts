@@ -21,6 +21,10 @@ export type PublishOptions = {
   videoUrl?: string;
   title: string;
   description?: string;
+  // YouTube-only — its video resource has a real structured tags field
+  // (snippet.tags); the other platforms have no equivalent, so this is
+  // simply unused for them.
+  tags?: string[];
   privacyStatus?: "public" | "unlisted" | "private";
 };
 
@@ -39,7 +43,7 @@ export async function publishToConnection(connectionId: string, opts: PublishOpt
     throw new PublishError(`Publishing isn't wired up for ${connection.platform} connections yet.`);
   }
 
-  const { videoUrl, title, description, privacyStatus = "unlisted" } = opts;
+  const { videoUrl, title, description, tags, privacyStatus = "unlisted" } = opts;
 
   try {
     const accessToken = META_PLATFORMS.has(connection.platform)
@@ -68,7 +72,7 @@ export async function publishToConnection(connectionId: string, opts: PublishOpt
 
     if (connection.platform === "youtube") {
       if (!videoUrl) throw new PublishError("videoUrl is required for YouTube.");
-      return await publishYoutubeVideo({ accessToken, description, privacyStatus, title, videoUrl });
+      return await publishYoutubeVideo({ accessToken, description, privacyStatus, tags, title, videoUrl });
     }
 
     if (connection.platform === "tiktok") {
