@@ -162,9 +162,11 @@ export function AppSidebar() {
         ) : (
           <div className="flex h-full w-60 flex-col overflow-y-auto px-3 py-4">
             <div className="mb-5 flex items-center justify-between gap-2.5 px-2">
-              <div className="flex items-center gap-2.5">
-                <SiteLogo width={36} height={36} />
-                <span className="text-[17px] font-semibold tracking-tight">DepCut</span>
+              <div className="flex items-center gap-1.5">
+                <span className="flex items-center gap-0">
+                  <SiteLogo width={36} height={36} />
+                  <span className="text-[17px] font-semibold tracking-tight">epCut</span>
+                </span>
                 <BetaBadge />
               </div>
               {isMobile ? (

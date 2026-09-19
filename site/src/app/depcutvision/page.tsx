@@ -66,7 +66,7 @@ export default function DepCutVisionPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
       />
-      <TopNav wordmark="DepCut Vision" />
+      <TopNav wordmark="epCut Vision" />
       <HeroSection />
       <ProofSection />
       <VisionCompareSection />

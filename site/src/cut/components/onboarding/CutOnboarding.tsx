@@ -223,7 +223,7 @@ export function CutOnboarding() {
   const lockup = (
     <span className="flex items-center gap-0">
       <SiteLogo alt="" width={59} height={59} className="overflow-hidden rounded-[10px]" />
-      <span className="text-2xl font-semibold">DepCut</span>
+      <span className="text-2xl font-semibold">epCut</span>
     </span>
   );
 

@@ -50,12 +50,14 @@ export function CutTopNav({ authToggle }: Props) {
           boxShadow: scrolled ? "0 18px 50px rgba(0,0,0,0.35)" : "none",
         }}
       >
-        <Link href="/" aria-label="DepCut home" className="flex items-center gap-2 text-white no-underline">
-          <div className="flex items-center justify-center overflow-hidden rounded-[10px]" style={{ width: NAV_ICON_SIZE, height: NAV_ICON_SIZE }}>
-            <SiteLogo width={NAV_ICON_SIZE} height={NAV_ICON_SIZE} compact />
-          </div>
-          <span className="text-xl font-semibold">DepCut</span>
-          <BetaBadge className="ml-1" />
+        <Link href="/" aria-label="DepCut home" className="flex items-center gap-1.5 text-white no-underline">
+          <span className="flex items-center gap-0">
+            <div className="flex items-center justify-center overflow-hidden rounded-[10px]" style={{ width: NAV_ICON_SIZE, height: NAV_ICON_SIZE }}>
+              <SiteLogo width={NAV_ICON_SIZE} height={NAV_ICON_SIZE} compact />
+            </div>
+            <span className="text-xl font-semibold">epCut</span>
+          </span>
+          <BetaBadge />
         </Link>
         <div className="flex items-center gap-3 md:gap-4">
           {isSignedIn ? (

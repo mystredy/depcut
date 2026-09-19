@@ -13,8 +13,10 @@ const NAV_ICON_SIZE = 59;
 
 type Props = {
   homeHref?: string;
-  // Wordmark next to the logo. DepCut Vision is its own B2B product, so that
-  // page overrides the default "DepCut" with "DepCut Vision".
+  // Wordmark next to the logo — the logo itself is a stylized "D", so this
+  // starts from "epCut" to read as one continuous "DepCut" wordmark rather
+  // than a doubled D. DepCut Vision is its own B2B product, so that page
+  // overrides the default with "epCut Vision".
   wordmark?: string;
   // Sign-in/up pages show a single toggle to the other mode. Auth otherwise
   // lives on depcut.app, so the marketing nav carries no auth entry points.
@@ -29,7 +31,7 @@ type Props = {
 
 export function TopNav({
   homeHref = "/",
-  wordmark = "DepCut",
+  wordmark = "epCut",
   authToggle,
   signedInPill = { href: "/app", label: "Dashboard" },
   signedOutAuth,
