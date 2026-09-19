@@ -180,8 +180,27 @@ function AutoReloadSection({
 
   const data = autoReload.data;
 
-  const persist = (next: { enabled: boolean; thresholdDollars: number; amountDollars: number }) => {
+  // The switch itself is local only — flipping it doesn't call the API.
+  // Nothing is real until Save; turning it on still shows on, on its own,
+  // right up until a failed Save (e.g. no saved card) reverts it.
+  const dirty =
+    !data ||
+    enabled !== data.enabled ||
+    thresholdCredits !== dollarsToCredits(data.thresholdDollars, creditRate) ||
+    amountDollars !== data.amountDollars;
+  // Turning it on needs a real price before Save is even reachable — no
+  // saving an "on" with nothing to charge.
+  const needsPrice = enabled && amountDollars <= 0;
+  const canSave = dirty && !needsPrice && !update.isPending;
+
+  const save = () => {
+    if (!canSave) return;
     setNeedsCard(false);
+    const next = {
+      amountDollars,
+      enabled,
+      thresholdDollars: creditsToDollars(thresholdCredits, creditRate),
+    };
     track("credit_auto_reload_saved", next);
     update.mutate(next, {
       onError: (error) => {
@@ -190,31 +209,6 @@ function AutoReloadSection({
           setNeedsCard(true);
         }
       },
-    });
-  };
-
-  // The switch takes effect immediately — no Save click needed to turn
-  // auto-reload on or off. Save (below) only ever governs the threshold/
-  // amount fields, and only while auto-reload is already on.
-  const toggle = (next: boolean) => {
-    setEnabled(next);
-    persist({
-      amountDollars,
-      enabled: next,
-      thresholdDollars: creditsToDollars(thresholdCredits, creditRate),
-    });
-  };
-
-  const fieldsDirty =
-    !data ||
-    thresholdCredits !== dollarsToCredits(data.thresholdDollars, creditRate) ||
-    amountDollars !== data.amountDollars;
-
-  const save = () => {
-    persist({
-      amountDollars,
-      enabled: true,
-      thresholdDollars: creditsToDollars(thresholdCredits, creditRate),
     });
   };
 
@@ -229,7 +223,7 @@ function AutoReloadSection({
             Automatically buy more credits before your balance runs out.
           </p>
         </div>
-        <Switch checked={enabled} id="auto-reload-enabled" onCheckedChange={toggle} />
+        <Switch checked={enabled} id="auto-reload-enabled" onCheckedChange={setEnabled} />
       </div>
 
       <div className={cn("space-y-4 rounded-xl border p-3", !enabled && "opacity-50")}>
@@ -274,9 +268,14 @@ function AutoReloadSection({
             </span>
           </div>
         </div>
-        <Button disabled={update.isPending || !enabled || !fieldsDirty} onClick={save} size="sm">
+        <Button disabled={!canSave} onClick={save} size="sm">
           {update.isPending ? "Saving…" : "Save"}
         </Button>
+        {needsPrice ? (
+          <p className="text-xs text-muted-foreground">
+            Enter an amount to buy before saving.
+          </p>
+        ) : null}
       </div>
 
       {data?.status === "failed" && data.lastError ? (
