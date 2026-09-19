@@ -136,6 +136,14 @@ export function CreditsCard() {
   );
 }
 
+// Strips everything but digits and any leading zeros ("067" -> "67"), so a
+// field can never show or submit a zero-padded number. Empty input parses
+// to 0 — callers show that as a blank field via `value={n || ""}`, not "0".
+function parseWholeNumber(raw: string): number {
+  const digits = raw.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  return digits === "" ? 0 : Number(digits);
+}
+
 function AutoReloadSection({
   creditRate,
   onNeedsCard,
@@ -149,7 +157,11 @@ function AutoReloadSection({
 
   const [enabled, setEnabled] = useState(false);
   const [thresholdCredits, setThresholdCredits] = useState(0);
-  const [amountCredits, setAmountCredits] = useState(0);
+  // Dollars, not credits — this is what the API and Stripe actually charge
+  // in (see the auto-reload route's z.number().int() on amountDollars), so
+  // the field takes a dollar amount directly instead of round-tripping
+  // through the cosmetic credit rate.
+  const [amountDollars, setAmountDollars] = useState(0);
 
   // Hydrate local state from the fetched settings exactly once — after
   // that, edits here are the source of truth until Save writes them back.
@@ -159,7 +171,7 @@ function AutoReloadSection({
     hydratedRef.current = true;
     setEnabled(autoReload.data.enabled);
     setThresholdCredits(dollarsToCredits(autoReload.data.thresholdDollars, creditRate));
-    setAmountCredits(dollarsToCredits(autoReload.data.amountDollars, creditRate));
+    setAmountDollars(autoReload.data.amountDollars);
   }, [autoReload.data, creditRate]);
 
   if (autoReload.isLoading) {
@@ -167,26 +179,42 @@ function AutoReloadSection({
   }
 
   const data = autoReload.data;
-  const dirty =
-    !data ||
-    enabled !== data.enabled ||
-    thresholdCredits !== dollarsToCredits(data.thresholdDollars, creditRate) ||
-    amountCredits !== dollarsToCredits(data.amountDollars, creditRate);
 
-  const save = () => {
+  const persist = (next: { enabled: boolean; thresholdDollars: number; amountDollars: number }) => {
     setNeedsCard(false);
-    const next = {
-      amountDollars: creditsToDollars(amountCredits, creditRate),
-      enabled,
-      thresholdDollars: creditsToDollars(thresholdCredits, creditRate),
-    };
     track("credit_auto_reload_saved", next);
     update.mutate(next, {
       onError: (error) => {
         if (error instanceof ApiError && error.code === "no_payment_method") {
+          setEnabled(false);
           setNeedsCard(true);
         }
       },
+    });
+  };
+
+  // The switch takes effect immediately — no Save click needed to turn
+  // auto-reload on or off. Save (below) only ever governs the threshold/
+  // amount fields, and only while auto-reload is already on.
+  const toggle = (next: boolean) => {
+    setEnabled(next);
+    persist({
+      amountDollars,
+      enabled: next,
+      thresholdDollars: creditsToDollars(thresholdCredits, creditRate),
+    });
+  };
+
+  const fieldsDirty =
+    !data ||
+    thresholdCredits !== dollarsToCredits(data.thresholdDollars, creditRate) ||
+    amountDollars !== data.amountDollars;
+
+  const save = () => {
+    persist({
+      amountDollars,
+      enabled: true,
+      thresholdDollars: creditsToDollars(thresholdCredits, creditRate),
     });
   };
 
@@ -201,7 +229,7 @@ function AutoReloadSection({
             Automatically buy more credits before your balance runs out.
           </p>
         </div>
-        <Switch checked={enabled} id="auto-reload-enabled" onCheckedChange={setEnabled} />
+        <Switch checked={enabled} id="auto-reload-enabled" onCheckedChange={toggle} />
       </div>
 
       <div className={cn("space-y-4 rounded-xl border p-3", !enabled && "opacity-50")}>
@@ -214,10 +242,12 @@ function AutoReloadSection({
               className="w-28"
               disabled={!enabled}
               id="reload-threshold"
+              inputMode="numeric"
               min={0}
-              onChange={(event) => setThresholdCredits(Number(event.target.value) || 0)}
+              onChange={(event) => setThresholdCredits(parseWholeNumber(event.target.value))}
+              placeholder="0"
               type="number"
-              value={thresholdCredits}
+              value={thresholdCredits || ""}
             />
             <span className="text-sm text-muted-foreground">credits</span>
           </div>
@@ -227,25 +257,27 @@ function AutoReloadSection({
             Automatically buy
           </Label>
           <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">$</span>
             <Input
-              className="w-28"
+              className="w-24"
               disabled={!enabled}
               id="reload-amount"
-              min={dollarsToCredits(creditTopUpMinDollars, creditRate)}
-              onChange={(event) => setAmountCredits(Number(event.target.value) || 0)}
+              inputMode="numeric"
+              min={creditTopUpMinDollars}
+              onChange={(event) => setAmountDollars(parseWholeNumber(event.target.value))}
+              placeholder="0"
               type="number"
-              value={amountCredits}
+              value={amountDollars || ""}
             />
             <span className="text-sm text-muted-foreground">
-              credits (${creditsToDollars(amountCredits, creditRate).toFixed(2)})
+              ({dollarsToCredits(amountDollars, creditRate).toLocaleString("en-US")} credits)
             </span>
           </div>
         </div>
+        <Button disabled={update.isPending || !enabled || !fieldsDirty} onClick={save} size="sm">
+          {update.isPending ? "Saving…" : "Save"}
+        </Button>
       </div>
-
-      <Button disabled={update.isPending || !dirty} onClick={save} size="sm">
-        {update.isPending ? "Saving…" : "Save"}
-      </Button>
 
       {data?.status === "failed" && data.lastError ? (
         <p className="text-sm text-destructive">
