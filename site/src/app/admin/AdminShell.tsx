@@ -17,6 +17,7 @@ const FULL_WIDTH_ROUTES = new Set([
   "/admin/content/images",
   "/admin/content/videos",
   "/admin/content/audio",
+  "/admin/submissions",
 ]);
 
 const COLLAPSED_STORAGE_KEY = "admin-sidebar-collapsed";
