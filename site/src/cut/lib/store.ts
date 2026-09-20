@@ -3134,8 +3134,29 @@ export const useEditor = create<EditorState>((baseSet, get) => {
       // track 0. Layer-clip audio mixes into the transcribe pass as a
       // positioned source (exactly like a soundtrack clip), so dialogue carried
       // on a layer clip gets captioned and a layer-only cut still works.
-      const audio = s.audioClips
-        .filter((a) => !a.hidden && a.start < duration && assetById.has(a.assetId))
+      const audioClips = s.audioClips.filter(
+        (a) => !a.hidden && a.start < duration && assetById.has(a.assetId),
+      );
+      const audioLayerClips = overlayLayers(s.clips).filter(
+        (c) => !c.hidden && !c.muted && c.start < duration && assetById.has(c.assetId),
+      );
+      // An asset still uploading has no durable bytes yet for the cloud mix
+      // render to fetch — docClips/storedAssets hold the same clips out of the
+      // saved document for the same reason. Catching it here means a clear
+      // message instead of a raw fetch failure deep inside the render.
+      const stillUploading = [
+        ...spans.map((sp) => sp.asset),
+        ...audioClips.map((a) => assetById.get(a.assetId)!),
+        ...audioLayerClips.map((c) => assetById.get(c.assetId)!),
+      ].find((a) => a.upload);
+      if (stillUploading) {
+        set({
+          subtitleStatus: "error",
+          subtitleError: `Still uploading "${stillUploading.name}" — try again once it finishes.`,
+        });
+        return;
+      }
+      const audio = audioClips
         .map((a) => ({
           file: assetById.get(a.assetId)!.fileName,
           in: a.in,
@@ -3145,18 +3166,14 @@ export const useEditor = create<EditorState>((baseSet, get) => {
           speed: a.speed,
         }))
         .concat(
-          overlayLayers(s.clips)
-            .filter(
-              (c) => !c.hidden && !c.muted && c.start < duration && assetById.has(c.assetId),
-            )
-            .map((c) => ({
-              file: assetById.get(c.assetId)!.fileName,
-              in: c.in,
-              out: c.out,
-              start: c.start,
-              volume: 1,
-              speed: c.speed,
-            })),
+          audioLayerClips.map((c) => ({
+            file: assetById.get(c.assetId)!.fileName,
+            in: c.in,
+            out: c.out,
+            start: c.start,
+            volume: 1,
+            speed: c.speed,
+          })),
         );
       if (spans.length === 0 && audio.length === 0) {
         set({ subtitleStatus: "error", subtitleError: "Add a video to the timeline first." });
@@ -3244,6 +3261,9 @@ export const useEditor = create<EditorState>((baseSet, get) => {
       const projectId = s.projectId;
       const sp = clipWindow(s.clips, s.assets, clipId);
       if (!sp) throw new Error("The clip is no longer on the timeline.");
+      if (sp.asset.upload) {
+        throw new Error(`Still uploading "${sp.asset.name}" — try again once it finishes.`);
+      }
       const lane = s.subtitleLane;
       const epoch = laneEpoch;
       // The clip's own sound, deliberately unmuted: this transcribes what the
