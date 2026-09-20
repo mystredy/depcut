@@ -54,6 +54,7 @@ import {
   useUploadSubmissionAsset,
 } from "@/queries/submissions";
 import { MEDIA_CORS } from "@/cut/lib/mediaCors";
+import { formatCredits } from "@/lib/credits/format-credits";
 
 const THUMB_WIDTH = 480;
 const THUMB_HEIGHT = 270;
@@ -665,8 +666,7 @@ export default function SubmitProjectEditorPage() {
 
   const balanceLabel = useMemo(() => {
     if (credits.isLoading) return null;
-    const parsed = Number.parseFloat(credits.data?.balance ?? "0");
-    return Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00";
+    return formatCredits(credits.data?.balance ?? "0");
   }, [credits.isLoading, credits.data]);
 
   const openConnect = (wsId: string) => {
@@ -1342,7 +1342,7 @@ export default function SubmitProjectEditorPage() {
                   </p>
                   {balanceLabel && (
                     <span className="text-[10px] text-muted-foreground">
-                      Credit: <span className="font-mono">{balanceLabel}</span>
+                      <span className="font-mono">{balanceLabel}</span>
                     </span>
                   )}
                 </div>
