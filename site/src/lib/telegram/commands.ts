@@ -33,19 +33,27 @@ function truncate(text: string, max = TELEGRAM_TEXT_LIMIT): string {
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
-/** One call site for every Telegram Bot API method this file uses — swallows
- * failures the same way the rest of this handler does, since a webhook must
- * never throw. */
+/** One call site for every Telegram Bot API method this file uses — never
+ * throws, since a webhook must always return 200, but logs a failure
+ * instead of swallowing it silently so it actually shows up in the
+ * function's runtime logs. */
 async function callTelegramApi(
   botToken: string,
   method: string,
   body: Record<string, unknown>,
 ): Promise<void> {
-  await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
-    body: JSON.stringify(body),
-    headers: { "Content-Type": "application/json" },
-    method: "POST",
-  }).catch(() => {});
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
+      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+    if (!res.ok) {
+      console.error(`telegram ${method} failed (${res.status})`, await res.text().catch(() => ""));
+    }
+  } catch (e) {
+    console.error(`telegram ${method} request failed`, e);
+  }
 }
 
 // Telegram's real cap for a file a bot uploads directly (not by URL/file_id).
@@ -60,11 +68,17 @@ async function sendTelegramVideo(
   const form = new FormData();
   form.append("chat_id", String(chatId));
   form.append("video", video, filename);
-  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendVideo`, {
-    body: form,
-    method: "POST",
-  }).catch(() => null);
-  return res?.ok ?? false;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendVideo`, {
+      body: form,
+      method: "POST",
+    });
+    if (!res.ok) console.error(`telegram sendVideo failed (${res.status})`, await res.text().catch(() => ""));
+    return res.ok;
+  } catch (e) {
+    console.error("telegram sendVideo request failed", e);
+    return false;
+  }
 }
 
 const PLATFORM_LABELS: Record<UrlImportPlatform, string> = {
@@ -304,8 +318,10 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
 
     if (!botToken) return;
     await callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: replyText });
-  } catch {
-    // A webhook handler must always return 200 to Telegram — swallow
-    // everything rather than let a bad update trigger retries.
+  } catch (e) {
+    // A webhook handler must always return 200 to Telegram — log rather
+    // than rethrow, so a bad update doesn't trigger retries but the
+    // failure is still visible in the function's runtime logs.
+    console.error("telegram webhook handler failed", e);
   }
 }
