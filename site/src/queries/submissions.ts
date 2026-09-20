@@ -21,6 +21,20 @@ export type SubmissionAsset = {
   updatedAt: string;
 };
 
+// One connected external editing workspace (Submit Project's Collaboration
+// Hub) for a submission. provider matches one of that page's fixed
+// integration ids (capcut, canva, veed, ...). No password field — see
+// SubmissionWorkspaceLink's own doc comment.
+export type WorkspaceLink = {
+  id: string;
+  submissionId: string;
+  provider: string;
+  workspaceName: string;
+  editorEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 // status: "draft" (freely editable) | "submitting" (Submit clicked, at
 // least one required asset still isn't "complete") | "submitted" (every
 // required asset landed) | "failed" (one didn't — retry re-uploads just
@@ -87,6 +101,7 @@ export type Submission = {
   submittedAt: string | null;
   updatedAt: string;
   assets: SubmissionAsset[];
+  workspaceLinks: WorkspaceLink[];
 };
 
 // The signed-in user's own submissions, every status — feeds My Submissions'
@@ -186,6 +201,36 @@ export function useDeleteSubmission() {
     mutationFn: (id: string) => apiFetch<{ ok: boolean }>(`/api/submissions/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: submissionsQueryKey });
+    },
+  });
+}
+
+// Connects (or re-connects) one workspace integration to a submission — the
+// Collaboration Hub's Connect flow. See /api/submissions/[id]/workspace-links.
+export function useConnectWorkspace(submissionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { provider: string; workspaceName: string; editorEmail?: string }) =>
+      apiFetch<{ link: WorkspaceLink }>(`/api/submissions/${submissionId}/workspace-links`, {
+        body: JSON.stringify(input),
+        method: "POST",
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: submissionQueryKey(submissionId) });
+    },
+  });
+}
+
+// Disconnects one workspace integration from a submission.
+export function useDisconnectWorkspace(submissionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (provider: string) =>
+      apiFetch<{ ok: boolean }>(`/api/submissions/${submissionId}/workspace-links/${provider}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: submissionQueryKey(submissionId) });
     },
   });
 }

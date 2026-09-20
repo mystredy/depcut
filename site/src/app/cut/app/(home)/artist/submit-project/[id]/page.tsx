@@ -47,6 +47,8 @@ import {
   type AutosaveSubmissionInput,
   type Submission,
   useAutosaveSubmission,
+  useConnectWorkspace,
+  useDisconnectWorkspace,
   useSubmission,
   useSubmitSubmission,
   useUploadSubmissionAsset,
@@ -303,8 +305,9 @@ export default function SubmitProjectEditorPage() {
   const [couponValidated, setCouponValidated] = useState(false);
   const [couponMessage, setCouponMessage] = useState<string | null>(null);
 
-  // Workspace linking — no editor-integration backend exists, so "connected"
-  // is only ever local state, and can't be resumed from a reload.
+  // Workspace linking — "connected" is hydrated from submission.workspaceLinks
+  // below (real rows, see SubmissionWorkspaceLink), same as every other field
+  // this page hydrates once and then owns until its own edit round-trips.
   const [workspaces, setWorkspaces] = useState<Workspace[]>(INITIAL_WORKSPACES);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [connectOpen, setConnectOpen] = useState(false);
@@ -313,6 +316,9 @@ export default function SubmitProjectEditorPage() {
   const [memberEmail, setMemberEmail] = useState("");
   const [workspacePassword, setWorkspacePassword] = useState("");
   const [linking, setLinking] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const connectWorkspace = useConnectWorkspace(id);
+  const disconnectWorkspace = useDisconnectWorkspace(id);
 
   // Hydrate local field state from the fetched draft exactly once — after
   // that, this page (not the server) is the source of truth for what's on
@@ -335,6 +341,16 @@ export default function SubmitProjectEditorPage() {
     setWatermarkText(submission.watermarkText ?? "");
     setBurnInCaptions(submission.burnInCaptions);
     setCouponCode(submission.editCode ?? "");
+    if (submission.workspaceLinks.length > 0) {
+      setWorkspaces((prev) =>
+        prev.map((w) => {
+          const link = submission.workspaceLinks.find((l) => l.provider === w.id);
+          return link
+            ? { ...w, connected: true, connectedEmail: link.editorEmail ?? "", workspaceName: link.workspaceName }
+            : w;
+        })
+      );
+    }
   }, [submission]);
 
   // Debounced autosave — batches whatever changed in the last 600ms into one
@@ -658,17 +674,23 @@ export default function SubmitProjectEditorPage() {
     setTeamName("");
     setMemberEmail("");
     setWorkspacePassword("");
+    setConnectError(null);
   };
 
   // workspacePassword never leaves this function — there's nothing to send it
-  // to (see confirmConnect's own fake setTimeout, no fetch anywhere in this
-  // flow), so it's discarded here rather than folded into the workspaces
-  // state array the way teamName/memberEmail are, which do get displayed
-  // back to the user post-connect.
-  const confirmConnect = () => {
+  // to (see SubmissionWorkspaceLink's own doc comment for why), so it's
+  // discarded here rather than sent to workspace-links the way
+  // teamName/memberEmail are.
+  const confirmConnect = async () => {
     if (!connectingId || !teamName.trim()) return;
     setLinking(true);
-    setTimeout(() => {
+    setConnectError(null);
+    try {
+      await connectWorkspace.mutateAsync({
+        editorEmail: memberEmail.trim() || undefined,
+        provider: connectingId,
+        workspaceName: teamName.trim(),
+      });
       setWorkspaces((prev) =>
         prev.map((w) =>
           w.id === connectingId
@@ -677,12 +699,15 @@ export default function SubmitProjectEditorPage() {
         )
       );
       updateSelectedWorkspaceId(connectingId);
-      setLinking(false);
       setConnectingId(null);
       setTeamName("");
       setMemberEmail("");
       setWorkspacePassword("");
-    }, 900);
+    } catch (e) {
+      setConnectError(e instanceof Error ? e.message : "Couldn't connect that workspace — try again.");
+    } finally {
+      setLinking(false);
+    }
   };
 
   const disconnect = (wsId: string) => {
@@ -690,6 +715,7 @@ export default function SubmitProjectEditorPage() {
       prev.map((w) => (w.id === wsId ? { ...w, connected: false, workspaceName: "", connectedEmail: "" } : w))
     );
     if (selectedWorkspaceId === wsId) updateSelectedWorkspaceId("");
+    disconnectWorkspace.mutate(wsId);
   };
 
   // Submitted straight from the editor (TopBar's "Submit to marketplace")
@@ -1744,11 +1770,12 @@ export default function SubmitProjectEditorPage() {
                     This lets editors at {memberEmail || "this email"} upload against this
                     submission.
                   </p>
+                  {connectError && <p className="text-sm text-red-600">{connectError}</p>}
                   <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => setConnectingId(null)}>
                       Back
                     </Button>
-                    <Button type="button" disabled={!teamName.trim() || linking} onClick={confirmConnect}>
+                    <Button type="button" disabled={!teamName.trim() || linking} onClick={() => void confirmConnect()}>
                       {linking ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
                       Connect
                     </Button>
