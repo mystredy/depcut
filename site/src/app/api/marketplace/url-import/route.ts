@@ -8,9 +8,9 @@ export const dynamic = "force-dynamic";
 
 const bodySchema = z.object({ url: z.string().trim().url() });
 
-// Pulls title/description/tags from a YouTube, TikTok, Facebook, Instagram,
-// or X link — see url-import.ts. Metadata only; nothing here downloads or
-// posts a video.
+// Pulls title/description/tags (and, where available, a direct video URL)
+// from a YouTube, TikTok, Snapchat, Facebook, Instagram, or X link — see
+// url-import.ts. Nothing here downloads or posts a video itself.
 export const POST = withDepCutAuth(async (request) => {
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {

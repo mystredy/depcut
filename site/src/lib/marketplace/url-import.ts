@@ -2,17 +2,12 @@ import ytdl from "@distube/ytdl-core";
 import * as cheerio from "cheerio";
 
 // Pulls title/description/tags from a link to a creator's own post on
-// YouTube, TikTok, Facebook, Instagram, or X, so they can reuse it as a
-// starting point for a Drop instead of retyping everything by hand.
-// Metadata only for now — none of these fetch the actual video bytes;
-// that's separate, still-undecided follow-up work.
-//
-// Snapchat was tried and dropped: its Spotlight/Snap share pages only ever
-// expose generic profile boilerplate through Open Graph tags ("X is on
-// Snapchat!", the same on every link, no og:video at all) — confirmed
-// against a real share link, not just untested. Nothing to extract, so
-// there's no honest way to support it without a real API.
-export type UrlImportPlatform = "youtube" | "tiktok" | "facebook" | "instagram" | "x";
+// YouTube, TikTok, Snapchat, Facebook, Instagram, or X, so they can reuse it
+// as a starting point for a Drop instead of retyping everything by hand.
+// Downloading/posting the video itself is still separate, undecided
+// follow-up work — videoUrl below is populated where a source hands one
+// over for free, nothing more.
+export type UrlImportPlatform = "youtube" | "tiktok" | "snapchat" | "facebook" | "instagram" | "x";
 
 export type UrlImportResult = {
   platform: UrlImportPlatform;
@@ -20,6 +15,12 @@ export type UrlImportResult = {
   description: string;
   tags: string[];
   thumbnailUrl: string | null;
+  // A direct, playable video URL, when the source's own metadata hands one
+  // over — currently only Snapchat's Spotlight posts do (a real og:video).
+  // Null everywhere else: YouTube's format-resolving getInfo call hung in
+  // this environment (see extractYoutube), TikTok/X's oEmbed has no video
+  // field, and Facebook/Instagram weren't reachable enough here to know.
+  videoUrl: string | null;
   sourceUrl: string;
 };
 
@@ -41,6 +42,7 @@ export function detectUrlImportPlatform(url: string): UrlImportPlatform | null {
   }
   if (host === "youtube.com" || host === "m.youtube.com" || host === "youtu.be") return "youtube";
   if (host === "tiktok.com" || host.endsWith(".tiktok.com")) return "tiktok";
+  if (host === "snapchat.com" || host.endsWith(".snapchat.com")) return "snapchat";
   if (host === "facebook.com" || host === "m.facebook.com" || host === "fb.watch") return "facebook";
   if (host === "instagram.com" || host === "m.instagram.com") return "instagram";
   if (host === "x.com" || host === "twitter.com" || host === "mobile.twitter.com") return "x";
@@ -68,6 +70,7 @@ async function extractYoutube(url: string): Promise<UrlImportResult> {
     tags: d.keywords ?? [],
     thumbnailUrl: d.thumbnails.at(-1)?.url ?? null,
     title: d.title,
+    videoUrl: null,
   };
 }
 
@@ -90,23 +93,35 @@ async function extractTiktok(url: string): Promise<UrlImportResult> {
     tags,
     thumbnailUrl: data.thumbnail_url ?? null,
     title: "",
+    videoUrl: null,
   };
 }
 
-// No public, unauthenticated API for a single post on either of these —
+// No public, unauthenticated API for a single post on any of these three —
 // Meta locked down oEmbed for Facebook/Instagram behind an app access token
-// years ago. Falls back to the page's own Open Graph tags instead, the
-// same thing a link preview reads.
+// years ago, and Snapchat never had one. Falls back to the page's own Open
+// Graph tags instead, the same thing a link preview reads.
 //
-// A plain Node fetch() with these same headers gets real
-// og:title/og:description back for a public page (verified live, no login
-// wall) — but that exact request, made from inside this app's own dev
-// server instead of a bare script, consistently gets a 400 from Facebook
-// with nothing else different. Likely Meta's bot detection reading
-// something below the header level (TLS/HTTP2 fingerprint) that a fetch()
-// call can't control either way. Worth retesting once this runs on Vercel's
-// infrastructure instead of this local dev server — the mechanism itself is
-// sound, this may well be an environment-specific block.
+// Snapchat: verified against a real Spotlight link — full real data,
+// including a genuine playable og:video MP4 URL, no auth needed. A
+// *different* kind of Snapchat link (an individual Snap shared outside
+// Spotlight) instead returns generic profile boilerplate with the same
+// shape on every link ("X is on Snapchat!", no og:video) — isBoilerplate
+// below exists specifically to catch that and fail honestly instead of
+// returning it as if it were the post's real caption.
+//
+// Facebook/Instagram: a plain Node fetch() with these same headers gets
+// real og:title/og:description back for a public page (verified live, no
+// login wall) — but that exact request, made from inside this app's own
+// dev server instead of a bare script, consistently gets a 400 from
+// Facebook with nothing else different. Likely Meta's bot detection
+// reading something below the header level (TLS/HTTP2 fingerprint) that a
+// fetch() call can't control either way. Worth retesting once this runs on
+// Vercel's infrastructure instead of this local dev server — the
+// mechanism itself is sound, this may well be an environment-specific
+// block.
+const SNAPCHAT_BOILERPLATE = /\bis on Snapchat!?$|^View this Snap from\b/i;
+
 async function extractViaOpenGraph(
   url: string,
   platform: UrlImportPlatform,
@@ -118,9 +133,21 @@ async function extractViaOpenGraph(
   const title = $('meta[property="og:title"]').attr("content")?.trim() ?? "";
   const description = $('meta[property="og:description"]').attr("content")?.trim() ?? "";
   const thumbnailUrl = $('meta[property="og:image"]').attr("content") ?? null;
+  const videoUrl =
+    $('meta[property="og:video:secure_url"]').attr("content") ??
+    $('meta[property="og:video"]').attr("content") ??
+    null;
   if (!title && !description) throw new UrlImportError(notFoundMessage);
-  const tags = [...description.matchAll(/#(\w+)/g)].map((m) => m[1]);
-  return { description, platform, sourceUrl: url, tags, thumbnailUrl, title };
+  if (platform === "snapchat" && (SNAPCHAT_BOILERPLATE.test(title) || SNAPCHAT_BOILERPLATE.test(description))) {
+    throw new UrlImportError(
+      "That's a Snap share link, not a Spotlight post — only Spotlight (Snapchat's public video feed) exposes real post info.",
+    );
+  }
+  // Snapchat's title packs engagement stats and hashtags into one line
+  // ("49.1K likes... | #viral | ... | Spotlight") rather than putting them
+  // in the description — scan both so a title-only hashtag isn't missed.
+  const tags = [...`${title} ${description}`.matchAll(/#(\w+)/g)].map((m) => m[1]);
+  return { description, platform, sourceUrl: url, tags, thumbnailUrl, title, videoUrl };
 }
 
 // X's own oEmbed, same as TikTok's — documented, free, no auth. Only gives
@@ -133,17 +160,20 @@ async function extractX(url: string): Promise<UrlImportResult> {
   const data = (await res.json()) as { html?: string };
   const text = cheerio.load(data.html ?? "")("p").first().text().trim();
   const tags = [...text.matchAll(/#(\w+)/g)].map((m) => m[1]);
-  return { description: text, platform: "x", sourceUrl: url, tags, thumbnailUrl: null, title: "" };
+  return { description: text, platform: "x", sourceUrl: url, tags, thumbnailUrl: null, title: "", videoUrl: null };
 }
 
 export async function extractFromUrl(url: string): Promise<UrlImportResult> {
   const platform = detectUrlImportPlatform(url);
   if (!platform) {
-    throw new UrlImportError("That link isn't a YouTube, TikTok, Facebook, Instagram, or X video.");
+    throw new UrlImportError("That link isn't a YouTube, TikTok, Snapchat, Facebook, Instagram, or X video.");
   }
   if (platform === "youtube") return extractYoutube(url);
   if (platform === "tiktok") return extractTiktok(url);
   if (platform === "x") return extractX(url);
+  if (platform === "snapchat") {
+    return extractViaOpenGraph(url, "snapchat", "Couldn't find any video info on that Snapchat link.");
+  }
   if (platform === "facebook") {
     return extractViaOpenGraph(url, "facebook", "Couldn't read that Facebook video — check the link is public.");
   }
