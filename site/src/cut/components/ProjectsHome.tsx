@@ -205,6 +205,12 @@ function GraceBanner({ enabled }: { enabled: boolean }) {
   );
 }
 
+// "New folder" and "New project" shrink to the Button "sm" size on mobile,
+// where the header has to fit a page title beside them, then step up to the
+// default size once there's room.
+const compactHeaderButton =
+  "h-7 gap-1 px-2.5 text-[0.8rem] has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5 sm:h-8 sm:gap-1.5 sm:px-2.5 sm:text-sm sm:has-data-[icon=inline-start]:pl-2 sm:[&_svg:not([class*='size-'])]:size-4";
+
 export function ProjectsHome() {
   const router = useRouter();
   const base = useCutBase();
@@ -866,13 +872,18 @@ export function ProjectsHome() {
             {/* A folder lands where a project would: New project owns that
                 choice for the whole page, so this asks nothing of its own. */}
             {openFolder === null && (
-              <Button variant="outline" onClick={() => setFolderCreating(target)}>
+              <Button
+                variant="outline"
+                className={compactHeaderButton}
+                onClick={() => setFolderCreating(target)}
+              >
                 <FolderPlus data-icon="inline-start" /> New folder
               </Button>
             )}
             <NewProjectButton
               pinned={pinnedTarget}
               onCreate={(r) => void newProjectHere(r)}
+              className={compactHeaderButton}
             />
             {anyProjects && (
               <div className="flex rounded-lg border border-border bg-card p-0.5">
