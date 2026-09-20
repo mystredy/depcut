@@ -1,0 +1,23 @@
+import { NextResponse } from "next/server";
+
+import { deleteImageGeneration } from "@/lib/imageGenerations/db";
+import { withDepCutAuth } from "@/lib/depcut-api-auth";
+
+export const dynamic = "force-dynamic";
+
+type RouteContext = { params: Promise<{ id: string }> };
+
+export const DELETE = withDepCutAuth(async (request, context: RouteContext) => {
+  const { id } = await context.params;
+  const result = await deleteImageGeneration(request.depcut.userId, id);
+  if (result === "not_found") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (result === "storage_error") {
+    return NextResponse.json(
+      { error: "Delete failed", message: "Couldn't delete that media. Try again." },
+      { status: 502 },
+    );
+  }
+  return NextResponse.json({ ok: true });
+});

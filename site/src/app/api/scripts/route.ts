@@ -2,9 +2,15 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { withDepCutAuth } from "@/lib/depcut-api-auth";
-import { createScriptGeneration } from "@/lib/scripts/db";
+import { createScriptGeneration, listScriptGenerations } from "@/lib/scripts/db";
 
 export const dynamic = "force-dynamic";
+
+// The signed-in user's own durable Scripting history.
+export const GET = withDepCutAuth(async (request) => {
+  const scripts = await listScriptGenerations(request.depcut.userId);
+  return NextResponse.json({ scripts });
+});
 
 const createSchema = z
   .object({

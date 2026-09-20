@@ -1,7 +1,7 @@
 import { audioGenerationKey } from "@/cut/server/cloud/r2";
 import { audioGenerationUrl } from "@/lib/audioGenerations/media";
 import { prisma } from "@/lib/prisma";
-import { putObject } from "@/cut/server/cloud/r2";
+import { delStrict, putObject } from "@/cut/server/cloud/r2";
 
 export type AudioTool = "text-to-speech" | "dubbing";
 
@@ -58,6 +58,56 @@ export async function createAudioGeneration(input: CreateAudioGenerationInput): 
     select: { id: true },
   });
   return row;
+}
+
+export type AudioGenerationRow = {
+  id: string;
+  script: string;
+  direction: string | null;
+  voice: string;
+  language: string | null;
+  outputUrl: string;
+  outputMime: string;
+  durationSeconds: number | null;
+  createdAt: Date;
+};
+
+const HISTORY_LIMIT = 50;
+
+/** The signed-in user's own Text to Speech history. */
+export async function listAudioGenerations(userId: string): Promise<AudioGenerationRow[]> {
+  const rows = await prisma.audioGeneration.findMany({
+    orderBy: { createdAt: "desc" },
+    take: HISTORY_LIMIT,
+    where: { userId },
+  });
+  return Promise.all(
+    rows.map(async (r) => ({
+      createdAt: r.createdAt,
+      direction: r.direction,
+      durationSeconds: r.durationSeconds,
+      id: r.id,
+      language: r.language,
+      outputMime: r.outputMime,
+      outputUrl: await audioGenerationUrl(r.outputKey),
+      script: r.script,
+      voice: r.voice,
+    })),
+  );
+}
+
+export type DeleteGenerationResult = "deleted" | "not_found" | "storage_error";
+
+/** The R2 object goes first (see flows' generation DELETE for the same
+ * order) — the row is only removed once it's confirmed gone, so a storage
+ * failure leaves the row in place and the same delete is safely retryable. */
+export async function deleteAudioGeneration(userId: string, id: string): Promise<DeleteGenerationResult> {
+  const row = await prisma.audioGeneration.findFirst({ select: { outputKey: true }, where: { id, userId } });
+  if (!row) return "not_found";
+  const { failed } = await delStrict([row.outputKey]);
+  if (failed.length > 0) return "storage_error";
+  await prisma.audioGeneration.delete({ where: { id } });
+  return "deleted";
 }
 
 export type AudioGenerationView = {

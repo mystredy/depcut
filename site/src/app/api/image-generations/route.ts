@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { createImageGeneration } from "@/lib/imageGenerations/db";
+import { createImageGeneration, listImageGenerations } from "@/lib/imageGenerations/db";
 import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { resolveInferenceBlobs } from "@/lib/inference/blobs";
 import type { JsonValue } from "@/lib/inference/providers";
 
 export const dynamic = "force-dynamic";
+
+// The signed-in user's own durable Text to Image history.
+export const GET = withDepCutAuth(async (request) => {
+  const generations = await listImageGenerations(request.depcut.userId);
+  return NextResponse.json({ generations });
+});
 
 const baseSchema = {
   prompt: z.string().trim().min(1).max(4_000),

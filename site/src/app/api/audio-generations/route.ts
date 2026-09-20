@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { createAudioGeneration } from "@/lib/audioGenerations/db";
+import { createAudioGeneration, listAudioGenerations } from "@/lib/audioGenerations/db";
 import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { resolveInferenceBlobs } from "@/lib/inference/blobs";
 import type { JsonValue } from "@/lib/inference/providers";
 
 export const dynamic = "force-dynamic";
+
+// The signed-in user's own durable Text to Speech history.
+export const GET = withDepCutAuth(async (request) => {
+  const generations = await listAudioGenerations(request.depcut.userId);
+  return NextResponse.json({ generations });
+});
 
 const createSchema = z
   .object({

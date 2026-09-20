@@ -29,3 +29,41 @@ export async function createScriptGeneration(input: CreateScriptInput): Promise<
     select: { id: true },
   });
 }
+
+export type ScriptGenerationRow = {
+  id: string;
+  topic: string;
+  duration: string;
+  platform: string;
+  tone: string | null;
+  status: string;
+  script: string | null;
+  errorMessage: string | null;
+  createdAt: Date;
+};
+
+const HISTORY_LIMIT = 50;
+
+export async function listScriptGenerations(userId: string): Promise<ScriptGenerationRow[]> {
+  return prisma.scriptGeneration.findMany({
+    orderBy: { createdAt: "desc" },
+    select: {
+      createdAt: true,
+      duration: true,
+      errorMessage: true,
+      id: true,
+      platform: true,
+      script: true,
+      status: true,
+      tone: true,
+      topic: true,
+    },
+    take: HISTORY_LIMIT,
+    where: { userId },
+  });
+}
+
+export async function deleteScriptGeneration(userId: string, id: string): Promise<boolean> {
+  const { count } = await prisma.scriptGeneration.deleteMany({ where: { id, userId } });
+  return count > 0;
+}

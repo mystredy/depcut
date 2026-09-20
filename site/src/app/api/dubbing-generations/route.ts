@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { createDubbingGeneration } from "@/lib/dubbingGenerations/db";
+import { createDubbingGeneration, listDubbingGenerations } from "@/lib/dubbingGenerations/db";
 import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { resolveInferenceBlobs } from "@/lib/inference/blobs";
 import type { JsonValue } from "@/lib/inference/providers";
 
 export const dynamic = "force-dynamic";
+
+// The signed-in user's own durable Dubbing history.
+export const GET = withDepCutAuth(async (request) => {
+  const generations = await listDubbingGenerations(request.depcut.userId);
+  return NextResponse.json({ generations });
+});
 
 const createSchema = z
   .object({
