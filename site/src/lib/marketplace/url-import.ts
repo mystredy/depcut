@@ -4,9 +4,8 @@ import * as cheerio from "cheerio";
 // Pulls title/description/tags from a link to a creator's own post on
 // YouTube, TikTok, Snapchat, Facebook, Instagram, or X, so they can reuse it
 // as a starting point for a Drop instead of retyping everything by hand.
-// Downloading/posting the video itself is still separate, undecided
-// follow-up work — videoUrl below is populated where a source hands one
-// over for free, nothing more.
+// resolveDownloadUrl below additionally resolves an actual downloadable
+// video URL for the Telegram bot's Download button.
 export type UrlImportPlatform = "youtube" | "tiktok" | "snapchat" | "facebook" | "instagram" | "x";
 
 export type UrlImportResult = {
@@ -205,4 +204,32 @@ export async function extractFromUrl(url: string): Promise<UrlImportResult> {
     return extractViaOpenGraph(url, "facebook", "Couldn't read that Facebook video — check the link is public.");
   }
   return extractViaOpenGraph(url, "instagram", "Couldn't read that Instagram post — check the link is public.");
+}
+
+// A direct, downloadable video URL for an already-extracted result, when one
+// exists — result.videoUrl if the source handed one over for free (Snapchat
+// Spotlight, and Facebook/Instagram when their og:video resolves), otherwise
+// YouTube's own format-resolving info call. Null for TikTok/X, which have no
+// free source for this at all. getInfo (unlike extractYoutube's
+// getBasicInfo) hung indefinitely against YouTube from this environment
+// during earlier testing — guarded here with a timeout so a hang fails fast
+// instead of blocking the caller forever.
+export async function resolveDownloadUrl(
+  result: UrlImportResult,
+): Promise<{ url: string; sizeBytes: number | null } | null> {
+  if (result.videoUrl) return { sizeBytes: null, url: result.videoUrl };
+  if (result.platform !== "youtube") return null;
+
+  const info = await Promise.race([
+    ytdl.getInfo(result.sourceUrl),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 20_000)),
+  ]).catch(() => null);
+  if (!info) return null;
+
+  try {
+    const format = ytdl.chooseFormat(info.formats, { filter: "videoandaudio", quality: "highest" });
+    return { sizeBytes: format.contentLength ? Number(format.contentLength) : null, url: format.url };
+  } catch {
+    return null;
+  }
 }

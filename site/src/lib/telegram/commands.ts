@@ -2,9 +2,9 @@ import { transcribeCloud } from "@/cut/server/cloud/transcribe";
 import {
   detectUrlImportPlatform,
   extractFromUrl,
+  resolveDownloadUrl,
   UrlImportError,
   type UrlImportPlatform,
-  type UrlImportResult,
 } from "@/lib/marketplace/url-import";
 import { prisma } from "@/lib/prisma";
 
@@ -46,6 +46,25 @@ async function callTelegramApi(
     headers: { "Content-Type": "application/json" },
     method: "POST",
   }).catch(() => {});
+}
+
+// Telegram's real cap for a file a bot uploads directly (not by URL/file_id).
+const MAX_TELEGRAM_UPLOAD_BYTES = 50 * 1024 * 1024;
+
+async function sendTelegramVideo(
+  botToken: string,
+  chatId: number | string,
+  video: Blob,
+  filename: string,
+): Promise<boolean> {
+  const form = new FormData();
+  form.append("chat_id", String(chatId));
+  form.append("video", video, filename);
+  const res = await fetch(`https://api.telegram.org/bot${botToken}/sendVideo`, {
+    body: form,
+    method: "POST",
+  }).catch(() => null);
+  return res?.ok ?? false;
 }
 
 const PLATFORM_LABELS: Record<UrlImportPlatform, string> = {
@@ -95,21 +114,13 @@ async function tryRedeemLinkToken(
   return "linked";
 }
 
-function formatDetailsMessage(result: UrlImportResult): string {
-  const lines = [`${PLATFORM_LABELS[result.platform]} details`];
-  if (result.handle) lines.push(result.handle);
-  if (result.title) lines.push("", result.title);
-  lines.push("", result.description || "(no description)");
-  if (result.tags.length) lines.push("", result.tags.map((t) => `#${t}`).join(" "));
-  return truncate(lines.join("\n"));
-}
-
-// A URL sent to the bot offers Details (title/description/tags/handle — see
-// url-import.ts) or Transcript (real speech-to-text via the same hosted
-// ElevenLabs transcriber the Speech to Text tool uses, see
-// cut/server/cloud/transcribe.ts). Only the action goes in callback_data
-// (Telegram's 64-byte limit rules out the URL itself); the callback handler
-// below re-reads the URL from this message's own text, which it controls.
+// A URL sent to the bot offers Transcript (real speech-to-text via the same
+// hosted ElevenLabs transcriber the Speech to Text tool uses, see
+// cut/server/cloud/transcribe.ts) or Download (the video file itself, sent
+// back in chat — see resolveDownloadUrl in url-import.ts). Only the action
+// goes in callback_data (Telegram's 64-byte limit rules out the URL
+// itself); the callback handler below re-reads the URL from this message's
+// own text, which it controls.
 //
 // The prompt itself is the "*" row on /admin/telegram-bot/commands — the
 // same catch-all convention as any other trigger there, just matched
@@ -124,7 +135,7 @@ async function sendUrlOptions(botToken: string, chatId: number | string, url: st
 
   let text = catchAll
     ? catchAll.replyText.replaceAll("{{url}}", url).replaceAll("{{platform}}", PLATFORM_LABELS[platform])
-    : `Got your ${PLATFORM_LABELS[platform]} link:\n${url}\n\nWhat would you like?`;
+    : `Got your ${PLATFORM_LABELS[platform]} link:\n${url}\n\nDownload the video or get a transcript?`;
   // handleCallbackQuery recovers the url straight out of this message's own
   // text later — guarantee it survives even if a custom reply omits {{url}}.
   if (!URL_RE.test(text)) text += `\n\n${url}`;
@@ -134,8 +145,8 @@ async function sendUrlOptions(botToken: string, chatId: number | string, url: st
     reply_markup: {
       inline_keyboard: [
         [
-          { callback_data: "d", text: "📝 Details" },
-          { callback_data: "t", text: "🎙️ Transcript" },
+          { callback_data: "t", text: "📜 Transcript" },
+          { callback_data: "dl", text: "📥 Download" },
         ],
       ],
     },
@@ -162,12 +173,32 @@ async function handleCallbackQuery(cq: TelegramCallbackQuery, botToken: string):
       text: truncate(text),
     });
 
-  if (cq.data === "d") {
-    await edit("⏳ Fetching details…");
+  if (cq.data === "dl") {
+    await edit("⏳ Downloading…");
     try {
-      await edit(formatDetailsMessage(await extractFromUrl(url)));
+      const result = await extractFromUrl(url);
+      const resolved = await resolveDownloadUrl(result);
+      if (!resolved) {
+        await edit(`⚠️ Can't download from ${PLATFORM_LABELS[result.platform]} yet — try Transcript instead.`);
+        return;
+      }
+      if (resolved.sizeBytes && resolved.sizeBytes > MAX_TELEGRAM_UPLOAD_BYTES) {
+        await edit("⚠️ That video is too large to send here (Telegram's 50MB bot upload limit).");
+        return;
+      }
+
+      const videoRes = await fetch(resolved.url);
+      if (!videoRes.ok) throw new Error("Couldn't fetch the video.");
+      const blob = await videoRes.blob();
+      if (blob.size > MAX_TELEGRAM_UPLOAD_BYTES) {
+        await edit("⚠️ That video is too large to send here (Telegram's 50MB bot upload limit).");
+        return;
+      }
+
+      const sent = await sendTelegramVideo(botToken, chatId, blob, `${result.title || "video"}.mp4`);
+      await edit(sent ? "✅ Sent below." : "⚠️ Couldn't send that video.");
     } catch (e) {
-      await edit(`⚠️ ${e instanceof UrlImportError ? e.message : "Couldn't read that link."}`);
+      await edit(`⚠️ ${e instanceof UrlImportError ? e.message : "Couldn't download that video."}`);
     }
     return;
   }
@@ -204,9 +235,9 @@ async function handleCallbackQuery(cq: TelegramCallbackQuery, botToken: string):
 // e.g. "/start" — Telegram also allows "/start@YourBot", so the @mention
 // suffix is stripped) is matched against admin-defined commands (see
 // /admin/telegram-bot/commands) and replied to. A message carrying a
-// YouTube/TikTok/Snapchat/Facebook/Instagram/X link instead offers Details
-// or Transcript, ahead of the custom-command lookup. Silently does nothing
-// if the bot is disabled, the message isn't a recognized command or link,
+// YouTube/TikTok/Snapchat/Facebook/Instagram/X link instead offers
+// Transcript or Download, ahead of the custom-command lookup. Silently does
+// nothing if the bot is disabled, the message isn't a recognized command or link,
 // or sending the reply fails — a webhook handler must never throw, or
 // Telegram will keep retrying the same update.
 export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void> {

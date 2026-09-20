@@ -40,7 +40,7 @@ export default function AdminTelegramCommandsPage() {
             What the bot replies when someone sends it one of these. Use {"{{first_name}}"} or{" "}
             {"{{username}}"} in a reply to include the sender&apos;s name or @handle. Trigger{" "}
             <span className="font-mono">*</span> is the catch-all for a supported video link — its
-            reply becomes the prompt shown with the Details/Transcript buttons, and can use{" "}
+            reply becomes the prompt shown with the Transcript/Download buttons, and can use{" "}
             {"{{url}}"} or {"{{platform}}"}.
           </p>
         </div>
