@@ -19,6 +19,7 @@ import {
   type GeminiVeoModel,
 } from "@/lib/inference/gemini-models";
 import { openaiModels, type OpenAIRunModel } from "@/lib/inference/openai-models";
+import { anthropicModels, type AnthropicRunModel } from "@/lib/inference/anthropic-models";
 import { browserUsePerStepUsd } from "@/lib/browser/pricing";
 
 export type ProviderCreditPricing = {
@@ -70,6 +71,9 @@ export function providerCreditPricing(
   if (normalizedProvider === "gemini-music") {
     return geminiMusicCreditPricing(normalizedModel);
   }
+  if (normalizedProvider === "anthropic") {
+    return anthropicCreditPricing(normalizedModel);
+  }
   if (normalizedProvider === "elevenlabs") {
     return elevenLabsCreditPricing(normalizedModel);
   }
@@ -86,6 +90,15 @@ export function providerCreditPricing(
 const openaiRunModelPricing: Record<OpenAIRunModel, ProviderCreditPricing> = {
   [openaiModels.debugInspection]: textTokenPricing({
     model: "gpt-5.4",
+    input: "2.5",
+    cachedInput: "0.25",
+    output: "15",
+    longContext: { input: "5", cachedInput: "0.5", output: "22.5" },
+  }),
+  // Same-generation sibling rate to gpt-5.4 above — the Cut chat agent's
+  // hosted GPT option (openai-chat-responses.ts).
+  [openaiModels.chat]: textTokenPricing({
+    model: "gpt-5.5",
     input: "2.5",
     cachedInput: "0.25",
     output: "15",
@@ -307,6 +320,22 @@ const geminiTtsModelPricing: Record<GeminiTtsModel, ProviderCreditPricing> = {
 
 function geminiTtsCreditPricing(model: string): ProviderCreditPricing | undefined {
   return geminiTtsModelPricing[model as GeminiTtsModel];
+}
+
+// Every Anthropic model we run must appear here: the Record is keyed by the
+// AnthropicRunModel union, so adding a model without a price fails the
+// build. Published Claude Sonnet-generation text rate.
+const anthropicModelPricing: Record<AnthropicRunModel, ProviderCreditPricing> = {
+  [anthropicModels.chat]: textTokenPricing({
+    model: "claude-sonnet-5",
+    input: "3",
+    cachedInput: "0.3",
+    output: "15",
+  }),
+};
+
+function anthropicCreditPricing(model: string): ProviderCreditPricing | undefined {
+  return anthropicModelPricing[model as AnthropicRunModel];
 }
 
 // Unified video generation (Gemini Omni Flash). The provider bills by tokens —

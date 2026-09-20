@@ -35,7 +35,7 @@ export const chatCompletionRequestSchema = z
   })
   .passthrough();
 
-export const responsesProviderSelectionSchema = z.enum(["openai", "gemini"]);
+export const responsesProviderSelectionSchema = z.enum(["openai", "gemini", "anthropic"]);
 
 export const responseCreateRequestSchema = z
   .object({

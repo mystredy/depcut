@@ -4,6 +4,8 @@
 export const openaiModels = {
   // Developer UI inspection Responses calls.
   debugInspection: "gpt-5.4",
+  // The Cut chat agent's hosted GPT option (openai-responses.ts).
+  chat: "gpt-5.5",
 } as const;
 
 export type OpenAIRunModel = (typeof openaiModels)[keyof typeof openaiModels];

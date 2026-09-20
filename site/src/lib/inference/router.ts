@@ -1,3 +1,4 @@
+import { createAnthropicResponsesProvider } from "@/lib/inference/adapters/anthropic-responses";
 import { createGeminiComputerUseProvider } from "@/lib/inference/adapters/gemini-computer-use";
 import { createGeminiImageAssetProvider } from "@/lib/inference/adapters/gemini-image";
 import { createGeminiMusicAssetProvider } from "@/lib/inference/adapters/gemini-music";
@@ -5,6 +6,7 @@ import { createGeminiSpeechAssetProvider } from "@/lib/inference/adapters/gemini
 import { createGeminiOmniVideoAssetProvider } from "@/lib/inference/adapters/gemini-omni-video";
 import { createGeminiVeoVideoAssetProvider } from "@/lib/inference/adapters/gemini-veo-video";
 import { createHostedResponsesProvider } from "@/lib/inference/adapters/hosted-responses";
+import { createOpenAIChatResponsesProvider } from "@/lib/inference/adapters/openai-chat-responses";
 import {
   InferenceProviderError,
   type AssetGenerationRequest,
@@ -239,6 +241,12 @@ export function createProviderRegistry() {
     // a bed can still span a longer video (see gemini-music.ts).
     createGeminiMusicAssetProvider(),
     createGeminiComputerUseProvider(),
+    // General hosted chat/tool-calling for the Cut AI panel's GPT and Claude
+    // model options — ahead of hosted-responses (its narrow debug-inspection
+    // canCreateResponse already excludes everything else, but this keeps the
+    // intent obvious: the general adapter is the default "openai" match).
+    createOpenAIChatResponsesProvider(),
+    createAnthropicResponsesProvider(),
     createHostedResponsesProvider(),
   ]);
 }
