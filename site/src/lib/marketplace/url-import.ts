@@ -111,15 +111,18 @@ async function extractTiktok(url: string): Promise<UrlImportResult> {
 // returning it as if it were the post's real caption.
 //
 // Facebook/Instagram: a plain Node fetch() with these same headers gets
-// real og:title/og:description back for a public page (verified live, no
-// login wall) — but that exact request, made from inside this app's own
-// dev server instead of a bare script, consistently gets a 400 from
-// Facebook with nothing else different. Likely Meta's bot detection
-// reading something below the header level (TLS/HTTP2 fingerprint) that a
-// fetch() call can't control either way. Worth retesting once this runs on
-// Vercel's infrastructure instead of this local dev server — the
-// mechanism itself is sound, this may well be an environment-specific
-// block.
+// real og:title/og:description back for both a public page and a real
+// Reel/video post (verified live against both, no login wall) — but the
+// identical request, made from inside this app's own dev server instead
+// of a bare script, is blocked every time. The two platforms fail
+// differently: Facebook returns a 400 outright; Instagram returns 200 but
+// with different (likely login-walled) content, so title/description come
+// back empty and this throws the same notFoundMessage. Likely Meta's bot
+// detection reading something below the header level (TLS/HTTP2
+// fingerprint) that a fetch() call can't control either way. Worth
+// retesting once this runs on Vercel's infrastructure instead of this
+// local dev server — the mechanism itself is sound, this may well be an
+// environment-specific block.
 const SNAPCHAT_BOILERPLATE = /\bis on Snapchat!?$|^View this Snap from\b/i;
 
 async function extractViaOpenGraph(
