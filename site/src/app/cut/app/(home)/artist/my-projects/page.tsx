@@ -173,18 +173,22 @@ export default function MyProjectsPage() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Artist Earnings</p>
           <div className="mt-2 grid grid-cols-3 gap-6">
-            <div>
-              <div className="text-xl font-semibold tabular-nums">{rates.data?.available ?? 0} Rates</div>
-              <p className="mt-0.5 text-xs text-muted-foreground">Available</p>
-            </div>
-            <div>
-              <div className="text-xl font-semibold tabular-nums">{rates.data?.pending ?? 0} Rates</div>
-              <p className="mt-0.5 text-xs text-muted-foreground">Pending</p>
-            </div>
-            <div>
-              <div className="text-xl font-semibold tabular-nums">{rates.data?.lifetime ?? 0} Rates</div>
-              <p className="mt-0.5 text-xs text-muted-foreground">Lifetime</p>
-            </div>
+            {(
+              [
+                ["available", "Available"],
+                ["pending", "Pending"],
+                ["lifetime", "Lifetime"],
+              ] as const
+            ).map(([key, label]) => (
+              <div key={key}>
+                {rates.isPending ? (
+                  <div className="h-7 w-14 animate-pulse rounded-md bg-muted" />
+                ) : (
+                  <div className="text-xl font-semibold tabular-nums">{rates.data?.[key] ?? 0} Rates</div>
+                )}
+                <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
+              </div>
+            ))}
           </div>
         </div>
         <Button
