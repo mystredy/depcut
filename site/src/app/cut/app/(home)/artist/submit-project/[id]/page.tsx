@@ -1728,6 +1728,8 @@ export default function SubmitProjectEditorPage() {
             (() => {
               const target = workspaces.find((w) => w.id === connectingId);
               if (!target) return null;
+              const trimmedEmail = memberEmail.trim();
+              const editorEmailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
               return (
                 <div className="space-y-4">
                   <div className="rounded-xl border bg-muted/30 p-3">
@@ -1767,8 +1769,9 @@ export default function SubmitProjectEditorPage() {
                   </div>
                   <p className="flex items-start gap-2 rounded-xl border bg-muted/30 p-3 text-[11px] text-muted-foreground">
                     <Shield className="mt-0.5 size-4 shrink-0 text-primary" />
-                    This lets editors at {memberEmail || "this email"} upload against this
-                    submission.
+                    {editorEmailLooksValid
+                      ? `This lets editors at ${trimmedEmail} upload against this submission.`
+                      : "This lets that authorized editor upload against this submission."}
                   </p>
                   {connectError && <p className="text-sm text-red-600">{connectError}</p>}
                   <DialogFooter>
