@@ -1295,10 +1295,10 @@ function MentionedText({
   );
 }
 
-/** Copy-to-clipboard affordance — hover-revealed on a user's own sent
- * message, always shown on an assistant reply (see MessageView) where it
- * sits alongside MessageReadAloud. */
-function MessageCopy({ text, visible = false }: { text: string; visible?: boolean }) {
+/** Copy-to-clipboard affordance, always shown on both a user's own sent
+ * message and an assistant reply — on the reply it sits alongside
+ * MessageReadAloud. */
+function MessageCopy({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   if (!text) return null;
   return (
@@ -1306,11 +1306,7 @@ function MessageCopy({ text, visible = false }: { text: string; visible?: boolea
       type="button"
       aria-label="Copy message"
       title="Copy"
-      className={cn(
-        "ai-msg-copy",
-        cardIconButton,
-        !visible && "opacity-0 group-hover:opacity-100",
-      )}
+      className={cn("ai-msg-copy", cardIconButton)}
       onClick={() => {
         void navigator.clipboard.writeText(text).then(() => {
           setCopied(true);
@@ -1756,7 +1752,7 @@ const MessageView = memo(function MessageView({
       )}
       {text && (
         <div className="flex items-center gap-1">
-          <MessageCopy text={text} visible />
+          <MessageCopy text={text} />
           <MessageReadAloud text={text} />
         </div>
       )}
