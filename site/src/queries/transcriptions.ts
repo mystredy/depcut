@@ -11,6 +11,11 @@ export type TranscriptionHistoryEntry = {
   status: string;
   transcript: string | null;
   errorMessage: string | null;
+  language: string | null;
+  tagAudioEvents: boolean;
+  noVerbatim: boolean;
+  diarize: boolean;
+  keyterms: string[];
   createdAt: string;
 };
 

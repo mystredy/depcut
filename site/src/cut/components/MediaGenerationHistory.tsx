@@ -1,13 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { ImagePlus, Trash2 } from "lucide-react";
+import { Download, EllipsisVertical, ImagePlus, RotateCcw, Share2, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SectionTitle } from "@/cut/components/SectionTitle";
+import { canShareMedia, downloadFromUrl, shareMediaUrl } from "@/lib/generationExport";
 import { useDeleteGeneration, useGenerationHistory } from "@/queries/generationHistory";
 
 function timeAgo(iso: string): string {
@@ -24,10 +32,69 @@ type MediaHistoryRow = {
   id: string;
   createdAt: string;
   outputUrl: string | null;
+  downloadUrl: string | null;
   outputMime: string | null;
   status?: string;
   errorMessage?: string | null;
 };
+
+function RowMenu<T extends MediaHistoryRow>({
+  entry,
+  label,
+  onUseAsReference,
+  onUseAgain,
+  onDelete,
+}: {
+  entry: T;
+  label: string;
+  onUseAsReference?: (row: T) => void;
+  onUseAgain?: (row: T) => void;
+  onDelete: () => void;
+}) {
+  const hasMedia = entry.status !== "failed" && !!entry.outputUrl && !!entry.downloadUrl;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        onClick={(e) => e.stopPropagation()}
+        className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <EllipsisVertical className="size-3.5" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+        {hasMedia && (
+          <>
+            <DropdownMenuItem onClick={() => downloadFromUrl(entry.downloadUrl!)}>
+              <Download /> Download
+            </DropdownMenuItem>
+            {canShareMedia() && (
+              <DropdownMenuItem
+                onClick={() =>
+                  void shareMediaUrl(entry.outputUrl!, label, entry.outputMime ?? "", label).catch(() => {})
+                }
+              >
+                <Share2 /> Share
+              </DropdownMenuItem>
+            )}
+            {onUseAsReference && (
+              <DropdownMenuItem onClick={() => onUseAsReference(entry)}>
+                <ImagePlus /> Use as reference
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+          </>
+        )}
+        {onUseAgain && (
+          <DropdownMenuItem onClick={() => onUseAgain(entry)}>
+            <RotateCcw /> Use again
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem variant="destructive" onClick={onDelete}>
+          <Trash2 /> Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 // The shared server-saved history view for every media-producing AI Suite
 // tool (Text to Speech, Dubbing, Text to Image, Text to Video) — each has
@@ -40,16 +107,21 @@ export function MediaGenerationHistory<T extends MediaHistoryRow>({
   label,
   emptyMessage,
   onUseAsReference,
+  onUseAgain,
 }: {
   basePath: string;
   listKey: string;
   kind: "audio" | "image" | "video";
   label: (row: T) => string;
   emptyMessage: string;
-  // Image only: attach a past generation as a reference for the next one —
-  // the caller owns turning outputUrl into an AssetRef (see TextToImagePage's
-  // attachAsReference), this just offers the button and passes the row back.
+  // Image/video only: attach a past generation as a reference for the next
+  // one — the caller owns turning outputUrl into an AssetRef (see
+  // TextToImagePage's attachHistoryEntryAsReference), this just offers the
+  // menu item and passes the row back.
   onUseAsReference?: (row: T) => void;
+  // Refill the form from a past run's own stored fields — omitted where a
+  // tool has nothing reusable to restore.
+  onUseAgain?: (row: T) => void;
 }) {
   const history = useGenerationHistory<T>(basePath, listKey);
   const del = useDeleteGeneration(basePath);
@@ -88,17 +160,13 @@ export function MediaGenerationHistory<T extends MediaHistoryRow>({
                   </div>
                 </TableCell>
                 <TableCell>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      del.mutate(entry.id);
-                    }}
-                    title="Delete"
-                    className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
+                  <RowMenu
+                    entry={entry}
+                    label={label(entry)}
+                    onUseAsReference={kind === "audio" ? undefined : onUseAsReference}
+                    onUseAgain={onUseAgain}
+                    onDelete={() => del.mutate(entry.id)}
+                  />
                 </TableCell>
               </TableRow>
             ))}
@@ -119,28 +187,12 @@ export function MediaGenerationHistory<T extends MediaHistoryRow>({
             ) : kind === "audio" ? (
               // eslint-disable-next-line jsx-a11y/media-has-caption -- generated speech, no captions to offer
               <audio controls src={detailEntry.outputUrl} className="w-full" />
+            ) : kind === "image" ? (
+              // eslint-disable-next-line @next/next/no-img-element -- a presigned R2 URL, not a static/optimizable asset
+              <img src={detailEntry.outputUrl} alt="" className="w-full rounded-lg" />
             ) : (
-              <div className="space-y-2">
-                {onUseAsReference && (
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      onClick={() => onUseAsReference(detailEntry)}
-                      className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
-                    >
-                      <ImagePlus className="size-3.5" />
-                      Use as reference
-                    </button>
-                  </div>
-                )}
-                {kind === "image" ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- a presigned R2 URL, not a static/optimizable asset
-                  <img src={detailEntry.outputUrl} alt="" className="w-full rounded-lg" />
-                ) : (
-                  // eslint-disable-next-line jsx-a11y/media-has-caption -- generated video, no captions to offer
-                  <video controls src={detailEntry.outputUrl} className="max-h-[60vh] w-full rounded-lg" />
-                )}
-              </div>
+              // eslint-disable-next-line jsx-a11y/media-has-caption -- generated video, no captions to offer
+              <video controls src={detailEntry.outputUrl} className="max-h-[60vh] w-full rounded-lg" />
             ))}
         </DialogContent>
       </Dialog>

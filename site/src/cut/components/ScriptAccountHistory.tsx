@@ -1,16 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Clipboard, Trash2 } from "lucide-react";
+import { Clipboard } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SectionTitle } from "@/cut/components/SectionTitle";
+import { TextGenerationRowMenu } from "@/cut/components/TextGenerationRowMenu";
 import { useDeleteGeneration, useGenerationHistory } from "@/queries/generationHistory";
 
-type ScriptHistoryEntry = {
+export type ScriptHistoryEntry = {
   id: string;
   topic: string;
   duration: string;
@@ -36,7 +37,7 @@ function timeAgo(iso: string): string {
 // TranscriptionAccountHistory.tsx, its own component rather than the shared
 // generic since a script's fields (topic/platform/tone) don't overlap with
 // a transcript's (sourceType/sourceLabel).
-export function ScriptAccountHistory() {
+export function ScriptAccountHistory({ onReuse }: { onReuse: (entry: ScriptHistoryEntry) => void }) {
   const history = useGenerationHistory<ScriptHistoryEntry>("scripts", "scripts");
   const del = useDeleteGeneration("scripts");
   const [detailEntry, setDetailEntry] = useState<ScriptHistoryEntry | null>(null);
@@ -87,17 +88,13 @@ export function ScriptAccountHistory() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      del.mutate(entry.id);
-                    }}
-                    title="Delete"
-                    className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
+                  <TextGenerationRowMenu
+                    text={entry.status === "succeeded" ? entry.script : null}
+                    title={entry.topic}
+                    data={{ duration: entry.duration, platform: entry.platform, tone: entry.tone, topic: entry.topic }}
+                    onUseAgain={() => onReuse(entry)}
+                    onDelete={() => del.mutate(entry.id)}
+                  />
                 </TableCell>
               </TableRow>
             ))}

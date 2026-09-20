@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Clipboard, Trash2 } from "lucide-react";
+import { Clipboard } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { SectionTitle } from "@/cut/components/SectionTitle";
+import { TextGenerationRowMenu } from "@/cut/components/TextGenerationRowMenu";
 import {
   useDeleteTranscription,
   useTranscriptionHistory,
@@ -35,7 +36,14 @@ function timeAgo(iso: string): string {
 // here after each run settles, and so does the Telegram bot's Transcript
 // button (see lib/telegram/commands.ts), so a transcript requested from
 // Telegram shows up here too. Server-saved, so it's the same on any device.
-export function TranscriptionAccountHistory() {
+export function TranscriptionAccountHistory({
+  onReuse,
+}: {
+  // Omitted when a row's own source can't be refilled (a past upload/
+  // recording — the bytes never round-trip back into the form, only a URL
+  // can), same as the removed local history's "Use again" was.
+  onReuse: (entry: TranscriptionHistoryEntry) => void;
+}) {
   const history = useTranscriptionHistory();
   const del = useDeleteTranscription();
   const [detailEntry, setDetailEntry] = useState<TranscriptionHistoryEntry | null>(null);
@@ -88,17 +96,25 @@ export function TranscriptionAccountHistory() {
                   </div>
                 </TableCell>
                 <TableCell>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      del.mutate(entry.id);
+                  <TextGenerationRowMenu
+                    text={entry.status === "succeeded" ? entry.transcript : null}
+                    title={entry.sourceLabel}
+                    data={{
+                      diarize: entry.diarize,
+                      keyterms: entry.keyterms,
+                      language: entry.language,
+                      noVerbatim: entry.noVerbatim,
+                      sourceLabel: entry.sourceLabel,
+                      sourceType: entry.sourceType,
+                      tagAudioEvents: entry.tagAudioEvents,
                     }}
-                    title="Delete"
-                    className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
+                    onUseAgain={
+                      entry.sourceType === "social" || entry.sourceType === "source"
+                        ? () => onReuse(entry)
+                        : undefined
+                    }
+                    onDelete={() => del.mutate(entry.id)}
+                  />
                 </TableCell>
               </TableRow>
             ))}
