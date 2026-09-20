@@ -59,13 +59,30 @@ export function detectUrlImportPlatform(url: string): UrlImportPlatform | null {
 // indefinitely against YouTube from this environment during testing, while
 // getBasicInfo returned cleanly. Revisit if/when actual video download is
 // wired up.
+//
+// YouTube's own bot-check ("Sign in to confirm you're not a bot") is a real,
+// common failure for ytdl-style requests from a cloud server IP — ytdl-core
+// surfaces it as a plain Error whose message is that exact sentence, which
+// reads as an instruction to the person using the bot rather than what it
+// actually means (YouTube is blocking this server, not them). Rewritten
+// below into something that doesn't require youtubeErrorMessage to guess at
+// intent — it's translating one specific, known third-party error string,
+// not classifying free-form user text.
+function youtubeErrorMessage(e: unknown): string {
+  const raw = e instanceof Error ? e.message : "";
+  if (raw.includes("Sign in to confirm")) {
+    return "YouTube is blocking this server's requests right now — try again later.";
+  }
+  return raw || "Couldn't read that YouTube video.";
+}
+
 async function extractYoutube(url: string): Promise<UrlImportResult> {
   if (!ytdl.validateURL(url)) throw new UrlImportError("That doesn't look like a valid YouTube video link.");
   let info: Awaited<ReturnType<typeof ytdl.getBasicInfo>>;
   try {
     info = await ytdl.getBasicInfo(url);
   } catch (e) {
-    throw new UrlImportError(e instanceof Error ? e.message : "Couldn't read that YouTube video.");
+    throw new UrlImportError(youtubeErrorMessage(e));
   }
   const d = info.videoDetails;
   return {
@@ -223,7 +240,10 @@ export async function resolveDownloadUrl(
   const info = await Promise.race([
     ytdl.getInfo(result.sourceUrl),
     new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 20_000)),
-  ]).catch(() => null);
+  ]).catch((e) => {
+    console.error("resolveDownloadUrl: youtube getInfo failed —", youtubeErrorMessage(e));
+    return null;
+  });
   if (!info) return null;
 
   try {
