@@ -311,6 +311,7 @@ export default function SubmitProjectEditorPage() {
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [teamName, setTeamName] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
+  const [workspacePassword, setWorkspacePassword] = useState("");
   const [linking, setLinking] = useState(false);
 
   // Hydrate local field state from the fetched draft exactly once — after
@@ -656,8 +657,14 @@ export default function SubmitProjectEditorPage() {
     setConnectingId(wsId);
     setTeamName("");
     setMemberEmail("");
+    setWorkspacePassword("");
   };
 
+  // workspacePassword never leaves this function — there's nothing to send it
+  // to (see confirmConnect's own fake setTimeout, no fetch anywhere in this
+  // flow), so it's discarded here rather than folded into the workspaces
+  // state array the way teamName/memberEmail are, which do get displayed
+  // back to the user post-connect.
   const confirmConnect = () => {
     if (!connectingId || !teamName.trim()) return;
     setLinking(true);
@@ -674,6 +681,7 @@ export default function SubmitProjectEditorPage() {
       setConnectingId(null);
       setTeamName("");
       setMemberEmail("");
+      setWorkspacePassword("");
     }, 900);
   };
 
@@ -1719,6 +1727,16 @@ export default function SubmitProjectEditorPage() {
                       value={memberEmail}
                       onChange={(e) => setMemberEmail(e.target.value)}
                       placeholder="editor@studio.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Workspace password</Label>
+                    <Input
+                      type="password"
+                      autoComplete="off"
+                      value={workspacePassword}
+                      onChange={(e) => setWorkspacePassword(e.target.value)}
+                      placeholder="••••••••"
                     />
                   </div>
                   <p className="flex items-start gap-2 rounded-xl border bg-muted/30 p-3 text-[11px] text-muted-foreground">
