@@ -1723,6 +1723,7 @@ export default function SubmitProjectEditorPage() {
               if (!target) return null;
               const trimmedEmail = memberEmail.trim();
               const editorEmailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
+              const editorEmailInvalid = trimmedEmail !== "" && !editorEmailLooksValid;
               return (
                 <div className="space-y-4">
                   <div className="rounded-xl border bg-muted/30 p-3">
@@ -1748,7 +1749,11 @@ export default function SubmitProjectEditorPage() {
                       value={memberEmail}
                       onChange={(e) => setMemberEmail(e.target.value)}
                       placeholder="editor@studio.com"
+                      aria-invalid={editorEmailInvalid}
                     />
+                    {editorEmailInvalid && (
+                      <p className="text-[11px] text-destructive">Enter a full email address, or leave this blank.</p>
+                    )}
                   </div>
                   <p className="flex items-start gap-2 rounded-xl border bg-muted/30 p-3 text-[11px] text-muted-foreground">
                     <Shield className="mt-0.5 size-4 shrink-0 text-primary" />
@@ -1761,7 +1766,11 @@ export default function SubmitProjectEditorPage() {
                     <Button type="button" variant="outline" onClick={() => setConnectingId(null)}>
                       Back
                     </Button>
-                    <Button type="button" disabled={!teamName.trim() || linking} onClick={() => void confirmConnect()}>
+                    <Button
+                      type="button"
+                      disabled={!teamName.trim() || editorEmailInvalid || linking}
+                      onClick={() => void confirmConnect()}
+                    >
                       {linking ? <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" /> : null}
                       Connect
                     </Button>

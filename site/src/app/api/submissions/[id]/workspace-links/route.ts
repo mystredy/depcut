@@ -11,7 +11,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 const linkSchema = z.object({
   provider: z.string().trim().min(1).max(60),
   workspaceName: z.string().trim().min(1).max(160),
-  editorEmail: z.string().trim().max(200).optional(),
+  editorEmail: z.string().trim().max(200).email().optional(),
 });
 
 // Connects (or re-connects, overwriting the prior name/email) one external
