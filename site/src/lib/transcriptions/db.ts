@@ -51,6 +51,11 @@ export type TranscriptionGenerationRow = {
   status: string;
   transcript: string | null;
   errorMessage: string | null;
+  language: string | null;
+  tagAudioEvents: boolean;
+  noVerbatim: boolean;
+  diarize: boolean;
+  keyterms: string[];
   createdAt: Date;
 };
 
@@ -59,17 +64,24 @@ const HISTORY_LIMIT = 50;
 /** The signed-in user's own durable transcription history — every run
  * counted here regardless of whether it came from the Speech to Text page
  * or the Telegram bot's Transcript button, both of which call
- * createTranscriptionGeneration above. */
+ * createTranscriptionGeneration above. Selects the settings fields too
+ * (not just the content), so a row can fully refill the form on "Use
+ * again", not just its source. */
 export async function listTranscriptionGenerations(userId: string): Promise<TranscriptionGenerationRow[]> {
   return prisma.transcriptionGeneration.findMany({
     orderBy: { createdAt: "desc" },
     select: {
       createdAt: true,
+      diarize: true,
       errorMessage: true,
       id: true,
+      keyterms: true,
+      language: true,
+      noVerbatim: true,
       sourceLabel: true,
       sourceType: true,
       status: true,
+      tagAudioEvents: true,
       transcript: true,
     },
     take: HISTORY_LIMIT,

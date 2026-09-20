@@ -1,6 +1,7 @@
 import { imageGenerationKey } from "@/cut/server/cloud/r2";
+import { safeExportName } from "@/lib/exportFilename";
 import { prisma } from "@/lib/prisma";
-import { delStrict, presignGet, putObject } from "@/cut/server/cloud/r2";
+import { delStrict, presignGet, presignGetDownload, putObject } from "@/cut/server/cloud/r2";
 
 type CreateImageBase = {
   userId: string;
@@ -60,6 +61,7 @@ export type ImageGenerationRow = {
   status: string;
   errorMessage: string | null;
   outputUrl: string | null;
+  downloadUrl: string | null;
   outputMime: string | null;
   createdAt: Date;
 };
@@ -77,6 +79,7 @@ export async function listImageGenerations(userId: string): Promise<ImageGenerat
     rows.map(async (r) => ({
       aspect: r.aspect,
       createdAt: r.createdAt,
+      downloadUrl: r.outputKey ? await presignGetDownload(r.outputKey, `${safeExportName(r.prompt)}.png`) : null,
       errorMessage: r.errorMessage,
       id: r.id,
       outputMime: r.outputMime,

@@ -1,7 +1,8 @@
 import { dubbingGenerationKey } from "@/cut/server/cloud/r2";
 import { wavDurationSeconds } from "@/lib/audioGenerations/db";
+import { safeExportName } from "@/lib/exportFilename";
 import { prisma } from "@/lib/prisma";
-import { delStrict, presignGet, putObject } from "@/cut/server/cloud/r2";
+import { delStrict, presignGet, presignGetDownload, putObject } from "@/cut/server/cloud/r2";
 
 export type CreateDubbingGenerationInput = {
   userId: string;
@@ -57,6 +58,7 @@ export type DubbingGenerationRow = {
   transcript: string | null;
   targetLanguage: string | null;
   outputUrl: string;
+  downloadUrl: string;
   outputMime: string;
   durationSeconds: number | null;
   createdAt: Date;
@@ -72,20 +74,25 @@ export async function listDubbingGenerations(userId: string): Promise<DubbingGen
     where: { userId },
   });
   return Promise.all(
-    rows.map(async (r) => ({
-      createdAt: r.createdAt,
-      direction: r.direction,
-      durationSeconds: r.durationSeconds,
-      id: r.id,
-      language: r.language,
-      outputMime: r.outputMime,
-      outputUrl: await presignGet(r.outputKey),
-      script: r.script,
-      sourceLabel: r.sourceLabel,
-      targetLanguage: r.targetLanguage,
-      transcript: r.transcript,
-      voice: r.voice,
-    })),
+    rows.map(async (r) => {
+      const ext = r.outputMime.includes("wav") ? "wav" : "bin";
+      const filename = `${safeExportName(r.sourceLabel ?? r.script)}.${ext}`;
+      return {
+        createdAt: r.createdAt,
+        direction: r.direction,
+        downloadUrl: await presignGetDownload(r.outputKey, filename),
+        durationSeconds: r.durationSeconds,
+        id: r.id,
+        language: r.language,
+        outputMime: r.outputMime,
+        outputUrl: await presignGet(r.outputKey),
+        script: r.script,
+        sourceLabel: r.sourceLabel,
+        targetLanguage: r.targetLanguage,
+        transcript: r.transcript,
+        voice: r.voice,
+      };
+    }),
   );
 }
 

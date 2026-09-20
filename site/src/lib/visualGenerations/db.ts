@@ -1,6 +1,7 @@
 import { visualGenerationKey } from "@/cut/server/cloud/r2";
+import { safeExportName } from "@/lib/exportFilename";
 import { prisma } from "@/lib/prisma";
-import { delStrict, presignGet, putObject } from "@/cut/server/cloud/r2";
+import { delStrict, presignGet, presignGetDownload, putObject } from "@/cut/server/cloud/r2";
 
 type CreateVisualBase = {
   userId: string;
@@ -66,6 +67,7 @@ export type VisualGenerationRow = {
   status: string;
   errorMessage: string | null;
   outputUrl: string | null;
+  downloadUrl: string | null;
   outputMime: string | null;
   durationSeconds: number | null;
   createdAt: Date;
@@ -84,6 +86,7 @@ export async function listVisualGenerations(userId: string): Promise<VisualGener
     rows.map(async (r) => ({
       aspect: r.aspect,
       createdAt: r.createdAt,
+      downloadUrl: r.outputKey ? await presignGetDownload(r.outputKey, `${safeExportName(r.prompt)}.mp4`) : null,
       durationSeconds: r.durationSeconds,
       errorMessage: r.errorMessage,
       id: r.id,

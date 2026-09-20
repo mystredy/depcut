@@ -1,5 +1,6 @@
-import { audioGenerationKey } from "@/cut/server/cloud/r2";
+import { audioGenerationKey, presignGetDownload } from "@/cut/server/cloud/r2";
 import { audioGenerationUrl } from "@/lib/audioGenerations/media";
+import { safeExportName } from "@/lib/exportFilename";
 import { prisma } from "@/lib/prisma";
 import { delStrict, putObject } from "@/cut/server/cloud/r2";
 
@@ -67,6 +68,7 @@ export type AudioGenerationRow = {
   voice: string;
   language: string | null;
   outputUrl: string;
+  downloadUrl: string;
   outputMime: string;
   durationSeconds: number | null;
   createdAt: Date;
@@ -82,17 +84,22 @@ export async function listAudioGenerations(userId: string): Promise<AudioGenerat
     where: { userId },
   });
   return Promise.all(
-    rows.map(async (r) => ({
-      createdAt: r.createdAt,
-      direction: r.direction,
-      durationSeconds: r.durationSeconds,
-      id: r.id,
-      language: r.language,
-      outputMime: r.outputMime,
-      outputUrl: await audioGenerationUrl(r.outputKey),
-      script: r.script,
-      voice: r.voice,
-    })),
+    rows.map(async (r) => {
+      const ext = r.outputMime.includes("wav") ? "wav" : "bin";
+      const filename = `${safeExportName(r.script)}.${ext}`;
+      return {
+        createdAt: r.createdAt,
+        direction: r.direction,
+        downloadUrl: await presignGetDownload(r.outputKey, filename),
+        durationSeconds: r.durationSeconds,
+        id: r.id,
+        language: r.language,
+        outputMime: r.outputMime,
+        outputUrl: await audioGenerationUrl(r.outputKey),
+        script: r.script,
+        voice: r.voice,
+      };
+    }),
   );
 }
 

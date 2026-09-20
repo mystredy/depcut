@@ -170,6 +170,25 @@ export function presignGet(key: string): Promise<string> {
   });
 }
 
+/** Same as presignGet, but the response carries Content-Disposition:
+ * attachment — the only thing that forces a real download for a cross-origin
+ * URL (an anchor's own `download` attribute is ignored cross-origin, and
+ * every URL this returns is cross-origin to the page). Kept separate from
+ * presignGet rather than an option on it: the two need different
+ * dispositions for the same object at once — inline for the page's own
+ * <audio>/<img>/<video> preview, attachment for its "Download" action. */
+export function presignGetDownload(key: string, filename: string): Promise<string> {
+  return getSignedUrl(
+    r2(),
+    new GetObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: key,
+      ResponseContentDisposition: `attachment; filename="${filename.replace(/["\r\n]/g, "")}"`,
+    }),
+    { expiresIn: GET_EXPIRY_SECONDS },
+  );
+}
+
 
 /** Object size/type, or null when the object does not exist. */
 export async function head(
