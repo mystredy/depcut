@@ -21,6 +21,12 @@ export type UrlImportResult = {
   // this environment (see extractYoutube), TikTok/X's oEmbed has no video
   // field, and Facebook/Instagram weren't reachable enough here to know.
   videoUrl: string | null;
+  // The poster's @handle, always with the leading @ when present. YouTube
+  // and TikTok hand this over directly; X derives it from oEmbed's
+  // author_url; Instagram/Snapchat parse it out of og:title, which embeds
+  // it inline; Facebook has no @handle convention at all, so this is null
+  // there unless one happens to appear in the title text.
+  handle: string | null;
   sourceUrl: string;
 };
 
@@ -65,6 +71,7 @@ async function extractYoutube(url: string): Promise<UrlImportResult> {
   const d = info.videoDetails;
   return {
     description: d.description ?? "",
+    handle: d.author?.user ?? null,
     platform: "youtube",
     sourceUrl: url,
     tags: d.keywords ?? [],
@@ -83,11 +90,12 @@ async function extractTiktok(url: string): Promise<UrlImportResult> {
   const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
   const res = await fetch(oembedUrl, { headers: BROWSER_HEADERS });
   if (!res.ok) throw new UrlImportError("Couldn't read that TikTok video — check the link is public.");
-  const data = (await res.json()) as { title?: string; thumbnail_url?: string };
+  const data = (await res.json()) as { title?: string; thumbnail_url?: string; author_unique_id?: string };
   const caption = data.title ?? "";
   const tags = [...caption.matchAll(/#(\w+)/g)].map((m) => m[1]);
   return {
     description: caption,
+    handle: data.author_unique_id ? `@${data.author_unique_id}` : null,
     platform: "tiktok",
     sourceUrl: url,
     tags,
@@ -149,8 +157,14 @@ async function extractViaOpenGraph(
   // Snapchat's title packs engagement stats and hashtags into one line
   // ("49.1K likes... | #viral | ... | Spotlight") rather than putting them
   // in the description — scan both so a title-only hashtag isn't missed.
-  const tags = [...`${title} ${description}`.matchAll(/#(\w+)/g)].map((m) => m[1]);
-  return { description, platform, sourceUrl: url, tags, thumbnailUrl, title, videoUrl };
+  const combined = `${title} ${description}`;
+  const tags = [...combined.matchAll(/#(\w+)/g)].map((m) => m[1]);
+  // Instagram/Snapchat both embed "@handle" directly in og:title
+  // ("@viralgroove1 on Instagram: ...", "... (@ihtishaamm) ... Spotlight").
+  // Facebook has no @handle convention, so this stays null there unless
+  // the title happens to include one.
+  const handleMatch = combined.match(/@([\w.]{2,30})/);
+  return { description, handle: handleMatch ? `@${handleMatch[1]}` : null, platform, sourceUrl: url, tags, thumbnailUrl, title, videoUrl };
 }
 
 // X's own oEmbed, same as TikTok's — documented, free, no auth. Only gives
@@ -160,10 +174,20 @@ async function extractX(url: string): Promise<UrlImportResult> {
   const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}&omit_script=true`;
   const res = await fetch(oembedUrl, { headers: BROWSER_HEADERS });
   if (!res.ok) throw new UrlImportError("Couldn't read that X post — check the link is public.");
-  const data = (await res.json()) as { html?: string };
+  const data = (await res.json()) as { html?: string; author_url?: string };
   const text = cheerio.load(data.html ?? "")("p").first().text().trim();
   const tags = [...text.matchAll(/#(\w+)/g)].map((m) => m[1]);
-  return { description: text, platform: "x", sourceUrl: url, tags, thumbnailUrl: null, title: "", videoUrl: null };
+  const handle = data.author_url ? `@${new URL(data.author_url).pathname.replace(/^\//, "")}` : null;
+  return {
+    description: text,
+    handle,
+    platform: "x",
+    sourceUrl: url,
+    tags,
+    thumbnailUrl: null,
+    title: "",
+    videoUrl: null,
+  };
 }
 
 export async function extractFromUrl(url: string): Promise<UrlImportResult> {
