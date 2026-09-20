@@ -255,6 +255,10 @@ async function handleCallbackQuery(cq: TelegramCallbackQuery, botToken: string):
 // or sending the reply fails — a webhook handler must never throw, or
 // Telegram will keep retrying the same update.
 export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void> {
+  console.log("telegram update:", JSON.stringify({
+    callbackData: update.callback_query?.data,
+    text: update.message?.text,
+  }));
   try {
     const bot = await prisma.socialAppConfig.findUnique({ where: { platform: "telegram" } });
     if (!bot?.enabled) return;
