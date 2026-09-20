@@ -7,6 +7,7 @@ import {
   type UrlImportPlatform,
 } from "@/lib/marketplace/url-import";
 import { prisma } from "@/lib/prisma";
+import { createTranscriptionGeneration } from "@/lib/transcriptions/db";
 
 type TelegramMessage = {
   message_id?: number;
@@ -231,6 +232,18 @@ async function handleCallbackQuery(cq: TelegramCallbackQuery, botToken: string):
     }
 
     await edit("⏳ Transcribing… this can take a moment.");
+    // Same record the website's own Speech to Text page saves after a run
+    // (see transcriptionPersist.ts) — a transcript run from the bot should
+    // show up in that history too, not just get DMed back and forgotten.
+    const persistBase = {
+      diarize: false,
+      keyterms: [] as string[],
+      noVerbatim: false,
+      sourceLabel: url,
+      sourceType: "social" as const,
+      tagAudioEvents: false,
+      userId: user.id,
+    };
     try {
       const form = new FormData();
       form.append("sourceUrl", url);
@@ -238,9 +251,16 @@ async function handleCallbackQuery(cq: TelegramCallbackQuery, botToken: string):
       const body = (await res.json().catch(() => null)) as { cues?: { text: string }[]; error?: string; message?: string } | null;
       if (!res.ok) throw new Error(body?.message ?? body?.error ?? "Transcription failed.");
       const transcript = (body?.cues ?? []).map((c) => c.text).join(" ").trim();
+      await createTranscriptionGeneration({
+        ...persistBase,
+        status: "succeeded",
+        transcript: transcript || "(no speech detected)",
+      }).catch(() => {});
       await edit(transcript ? `🎙️ Transcript:\n\n${transcript}` : "No speech detected in that video.");
     } catch (e) {
-      await edit(`⚠️ ${e instanceof Error ? e.message : "Couldn't transcribe that link."}`);
+      const message = e instanceof Error ? e.message : "Couldn't transcribe that link.";
+      await createTranscriptionGeneration({ ...persistBase, errorMessage: message, status: "failed" }).catch(() => {});
+      await edit(`⚠️ ${message}`);
     }
   }
 }
