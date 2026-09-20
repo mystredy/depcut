@@ -87,7 +87,7 @@ import {
   useSignedIn,
 } from "@/cut/lib/generate";
 import { useCreditsRecheck, useOutOfCredits } from "@/cut/lib/hosted";
-import { streamGeminiChat } from "@/cut/lib/geminiChat";
+import { streamHostedChat } from "@/cut/lib/geminiChat";
 import { AI_MODELS } from "@/cut/lib/aiModels";
 import { saveAssetToLibrary } from "@/cut/lib/library";
 import { formatDuration, useGenScene } from "@/cut/lib/genScene";
@@ -215,8 +215,15 @@ const PROVIDER_LABEL: Record<string, string> = {
   claude: "Claude Code",
   codex: "Codex",
   gemini: "Gemini",
+  openai: "OpenAI",
+  anthropic: "Anthropic",
   test: "Testing",
 };
+
+// Hosted providers run through DepCut's own inference route (sign-in +
+// credits) — no local engine needed, unlike claude/codex which route
+// through a CLI on this Mac.
+const HOSTED_PROVIDERS = new Set(["gemini", "openai", "anthropic"]);
 
 const SUGGESTIONS = [
   "What's in this video?",
@@ -227,15 +234,20 @@ const SUGGESTIONS = [
   "Write my post caption + tags",
 ];
 
-/** Chat provider bucket for a model id. */
+/** Chat provider bucket for a model id — the catalog's own tag, so a hosted
+ * and a local-CLI entry that share an underlying model (Sonnet 5 as both
+ * "claude-sonnet-5" and "claude-sonnet-5-hosted") never get confused for
+ * each other. Falls back to a prefix guess only for an id the catalog
+ * doesn't know about. */
 const provider = (id: string): string =>
-  id.startsWith("claude")
+  AI_MODELS.find((m) => m.id === id)?.provider ??
+  (id.startsWith("claude")
     ? "claude"
     : id.startsWith("gemini")
       ? "gemini"
       : id === "cut-test"
         ? "test"
-        : "codex";
+        : "codex");
 
 export function AiPanel({
   projectId,
@@ -343,24 +355,30 @@ export function AiPanel({
     localStorage.setItem(MODEL_KEY, id);
   };
 
-  // Gemini runs on the user's DepCut account, so its availability is the
-  // sign-in probe, not the engine's CLI checks. Signed-in state (or a probe
-  // still in flight) leaves it usable; a definite signed-out disables it.
+  // Every hosted provider (Gemini, OpenAI, Anthropic) runs on the user's
+  // DepCut account, so availability is the sign-in probe, not the engine's
+  // CLI checks. Signed-in state (or a probe still in flight) leaves them
+  // usable; a definite signed-out disables all three with the same note.
   const mergedInfo = useMemo<ModelsInfo | null>(() => {
-    const gemini =
+    const hostedFallback = (id: string) =>
       signedIn === false
         ? { available: false, note: "sign in to DepCut to chat", installed: true }
-        : (info?.providers.gemini ?? { available: true, note: "", installed: true });
+        : (info?.providers[id] ?? { available: true, note: "", installed: true });
+    const hosted = {
+      gemini: hostedFallback("gemini"),
+      openai: hostedFallback("openai"),
+      anthropic: hostedFallback("anthropic"),
+    };
     // With no engine on this Mac the CLI providers don't exist: their groups
     // hide, and the saved-model fallback effect moves a CLI selection over to
-    // Gemini.
+    // a hosted one.
     if (!engineUp) {
       const off = { available: false, note: "", installed: false };
-      const providers: ModelsInfo["providers"] = { claude: off, codex: off, test: off, gemini };
+      const providers: ModelsInfo["providers"] = { claude: off, codex: off, test: off, ...hosted };
       return { providers };
     }
     if (!info) return null;
-    return { ...info, providers: { ...info.providers, gemini } };
+    return { ...info, providers: { ...info.providers, ...hosted } };
   }, [info, signedIn, engineUp]);
 
   return (
@@ -662,8 +680,9 @@ function ChatSession({
   const modelRef = useRef(model);
   modelRef.current = model;
 
-  // Gemini turns run their editor tools inside the transport loop (no engine
-  // bridge); this flags them so onToolCall doesn't execute those calls again.
+  // A hosted turn (Gemini/OpenAI/Anthropic) runs its editor tools inside the
+  // transport loop (no engine bridge); this flags them so onToolCall doesn't
+  // execute those calls again.
   const clientToolsRef = useRef(false);
   const transport = useMemo<ChatTransport<UIMessage>>(() => {
     const engine = new DefaultChatTransport<UIMessage>({
@@ -688,12 +707,15 @@ function ChatSession({
       },
     });
     return {
-      // Claude/Codex chat through the local engine; Gemini goes straight from
-      // the page to DepCut's hosted inference with the user's session.
+      // Claude/Codex chat through the local engine; Gemini/OpenAI/Anthropic
+      // go straight from the page to DepCut's hosted inference with the
+      // user's session.
       sendMessages: async (options) => {
-        if (provider(modelRef.current) === "gemini") {
+        const p = provider(modelRef.current);
+        if (HOSTED_PROVIDERS.has(p)) {
           clientToolsRef.current = true;
-          return streamGeminiChat({
+          return streamHostedChat({
+            depcutProvider: p,
             model: modelRef.current,
             messages: options.messages,
             abortSignal: options.abortSignal,
@@ -927,7 +949,7 @@ function ChatSession({
     : true;
   const unavailableMessage = (): string => {
     const p = provider(model);
-    if (p === "gemini") return "Sign in to your DepCut account to chat with Gemini.";
+    if (HOSTED_PROVIDERS.has(p)) return "Sign in to your DepCut account to chat.";
     const note = info?.providers[p]?.note?.trim();
     return note ? `${PROVIDER_LABEL[p]}: ${note}` : `${PROVIDER_LABEL[p]} isn't available.`;
   };
@@ -1763,6 +1785,8 @@ function ModelSelector({
     "claude",
     "codex",
     "gemini",
+    "openai",
+    "anthropic",
     ...(showTest ? ["test"] : []),
   ]
     .map((p) => ({
@@ -1770,11 +1794,10 @@ function ModelSelector({
       models: models.filter((m) => m.provider === p),
       // CLI providers list only once the engine has confirmed the CLI is
       // installed — until the probe answers there is no evidence the group
-      // exists on this Mac. Gemini is hosted, so it needs no confirmation.
-      installed:
-        p === "gemini"
-          ? info?.providers[p]?.installed !== false
-          : info?.providers[p]?.installed === true,
+      // exists on this Mac. Hosted providers need no confirmation.
+      installed: HOSTED_PROVIDERS.has(p)
+        ? info?.providers[p]?.installed !== false
+        : info?.providers[p]?.installed === true,
     }))
     // The picker lists every confirmed provider and lets any of them be
     // picked; any other problem (signed out, etc.) surfaces as a chat error

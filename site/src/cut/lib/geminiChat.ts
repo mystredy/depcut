@@ -11,12 +11,16 @@ import { hostedPost } from "./hosted";
 import { refsToParts } from "./refMedia";
 import { parseTurnIntent, TURN_INTENT_PROMPT, turnIntentInput, type TurnIntent } from "./turnIntent";
 
-// Gemini chat runs from the page through DepCut's hosted Responses route with
-// the user's sign-in and credits — the local engine is not involved (same
-// carve-out as AI media generation). Each round the model answers or asks for
-// editor tools; tools execute right here against the live store via runAiTool,
-// and their results go back until the model settles on a reply. The whole
-// conversation is replayed per turn, so no provider session is kept.
+// Hosted chat (Gemini, GPT, or Claude — see aiModels.ts) runs from the page
+// through DepCut's hosted Responses route with the user's sign-in and
+// credits — the local engine is not involved (same carve-out as AI media
+// generation). Each round the model answers or asks for editor tools; tools
+// execute right here against the live store via runAiTool, and their
+// results go back until the model settles on a reply. The whole
+// conversation is replayed per turn, so no provider session is kept. The
+// turn-intent gate always runs on Gemini regardless of the chosen chat
+// provider — it's a cheap, fast, purely internal routing check, not part of
+// the visible conversation.
 
 const MAX_TOOL_ROUNDS = 24;
 
@@ -86,7 +90,7 @@ async function readStreamedRound(
   onDelta: (delta: string) => void
 ): Promise<ResponseBody> {
   const reader = res.body?.getReader();
-  if (!reader) throw new Error("Gemini returned no response stream.");
+  if (!reader) throw new Error("No response stream.");
   const decoder = new TextDecoder();
   let buffer = "";
   let completed: ResponseBody | null = null;
@@ -112,7 +116,7 @@ async function readStreamedRound(
       } catch {
         continue;
       }
-      if (isError) throw new Error(event.message || "Gemini stream failed.");
+      if (isError) throw new Error(event.message || "Stream failed.");
       if (event.type === "response.output_text.delta" && typeof event.delta === "string") {
         onDelta(event.delta);
       } else if (event.type === "response.completed" && event.response) {
@@ -120,7 +124,7 @@ async function readStreamedRound(
       }
     }
   }
-  if (!completed) throw new Error("Gemini stream ended early.");
+  if (!completed) throw new Error("Stream ended early.");
   return completed;
 }
 
@@ -132,12 +136,14 @@ const STEP_LIMIT_FALLBACK =
  * in its own voice, so the turn ends on a readable summary instead of a raw
  * error. A static line covers a failed or empty summary. */
 async function emitStepLimitSummary({
+  depcutProvider,
   model,
   input,
   emit,
   textId,
   abortSignal,
 }: {
+  depcutProvider: string;
   model: string;
   input: Item[];
   emit: (chunk: Record<string, unknown>) => void;
@@ -158,7 +164,7 @@ async function emitStepLimitSummary({
       },
     ];
     const body = await postRound(
-      { depcutProvider: "gemini", model, instructions: systemPrompt(), input: summaryInput },
+      { depcutProvider, model, instructions: systemPrompt(), input: summaryInput },
       abortSignal
     );
     const summary = (body.output_text ?? "").trim();
@@ -283,7 +289,7 @@ async function requestError(res: Response): Promise<string> {
   if (res.status === 401) {
     // Refresh the sign-in probe so the composer note (with its sign-in link) appears.
     useGenerate.getState().probe();
-    return "Sign in to DepCut to chat with Gemini.";
+    return "Sign in to DepCut to chat.";
   }
   const body = (await res.json().catch(() => null)) as {
     error?: unknown;
@@ -296,7 +302,7 @@ async function requestError(res: Response): Promise<string> {
     (v): v is string => typeof v === "string" && v.length > 0
   );
   if (res.status === 402) return NO_CREDITS_MESSAGE;
-  return message ?? "Gemini request failed.";
+  return message ?? "Chat request failed.";
 }
 
 /** Server-side skills resolve locally; everything else runs on the editor store. */
@@ -380,12 +386,17 @@ interface ResponseBody {
   }[];
 }
 
-/** One chat turn: request → (tool round-trips) → reply, streamed as UI chunks. */
-export function streamGeminiChat({
+/** One chat turn: request → (tool round-trips) → reply, streamed as UI chunks.
+ * depcutProvider picks which hosted adapter the Responses route dispatches
+ * to (gemini/openai/anthropic — see aiModels.ts); model is that provider's
+ * own model id. */
+export function streamHostedChat({
+  depcutProvider,
   model,
   messages,
   abortSignal,
 }: {
+  depcutProvider: string;
   model: string;
   messages: UIMessage[];
   abortSignal?: AbortSignal;
@@ -418,15 +429,16 @@ export function streamGeminiChat({
         let scenePlannedThisTurn = false;
 
         for (let round = 0; round < MAX_TOOL_ROUNDS && !settled; round++) {
-          // The round streams: text lands in the reply bubble as Gemini writes
-          // it, instead of popping in whole seconds later when the round-trip
-          // settles. The block opens on the first real (non-whitespace) delta,
-          // matching the trim the settled body gets below.
+          // The round streams: text lands in the reply bubble as the model
+          // writes it, instead of popping in whole seconds later when the
+          // round-trip settles. The block opens on the first real
+          // (non-whitespace) delta, matching the trim the settled body gets
+          // below.
           let textId: string | null = null;
           let body: ResponseBody;
           try {
             body = await postRound(
-              { depcutProvider: "gemini", model, instructions: systemPrompt(), input, ...(tools ? { tools } : {}) },
+              { depcutProvider, model, instructions: systemPrompt(), input, ...(tools ? { tools } : {}) },
               abortSignal,
               (delta) => {
                 if (!textId) {
@@ -469,7 +481,7 @@ export function streamGeminiChat({
             }
             settled = true;
             if (textCount === 0) {
-              emit({ type: "error", errorText: "Gemini returned an empty response. Try again." });
+              emit({ type: "error", errorText: "Got an empty response. Try again." });
             }
             break;
           }
@@ -533,6 +545,7 @@ export function streamGeminiChat({
 
         if (!settled && !abortSignal?.aborted) {
           await emitStepLimitSummary({
+            depcutProvider,
             model,
             input,
             emit,
