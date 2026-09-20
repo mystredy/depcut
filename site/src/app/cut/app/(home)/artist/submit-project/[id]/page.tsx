@@ -54,7 +54,6 @@ import {
   useUploadSubmissionAsset,
 } from "@/queries/submissions";
 import { MEDIA_CORS } from "@/cut/lib/mediaCors";
-import { formatUsd } from "@/lib/credits/format-usd";
 
 const THUMB_WIDTH = 480;
 const THUMB_HEIGHT = 270;
@@ -666,7 +665,8 @@ export default function SubmitProjectEditorPage() {
 
   const balanceLabel = useMemo(() => {
     if (credits.isLoading) return null;
-    return formatUsd(credits.data?.balance ?? "0");
+    const parsed = Number.parseFloat(credits.data?.balance ?? "0");
+    return Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00";
   }, [credits.isLoading, credits.data]);
 
   const openConnect = (wsId: string) => {
