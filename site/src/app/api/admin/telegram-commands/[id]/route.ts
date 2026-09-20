@@ -17,9 +17,10 @@ const updateSchema = z
     trigger: z
       .string()
       .trim()
-      .min(2)
       .max(60)
-      .regex(/^\/\S+$/, "Must start with / and have no spaces, e.g. /start")
+      .refine((v) => v === "*" || /^\/\S+$/.test(v), {
+        message: "Must start with / and have no spaces (e.g. /start), or be * for the link-prompt catch-all",
+      })
       .optional(),
     replyText: z.string().trim().min(1).max(4000).optional(),
     enabled: z.boolean().optional(),

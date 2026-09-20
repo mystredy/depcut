@@ -110,7 +110,25 @@ function formatDetailsMessage(result: UrlImportResult): string {
 // cut/server/cloud/transcribe.ts). Only the action goes in callback_data
 // (Telegram's 64-byte limit rules out the URL itself); the callback handler
 // below re-reads the URL from this message's own text, which it controls.
+//
+// The prompt itself is the "*" row on /admin/telegram-bot/commands — the
+// same catch-all convention as any other trigger there, just matched
+// against "has a supported link" instead of a literal word. Its `enabled`
+// switch turns the whole link-import feature on or off, and its replyText
+// (with {{url}}/{{platform}} substituted, same as {{first_name}} elsewhere)
+// becomes the message the buttons attach to. No row yet, or "*" never
+// created, falls back to a plain default so this keeps working unconfigured.
 async function sendUrlOptions(botToken: string, chatId: number | string, url: string, platform: UrlImportPlatform) {
+  const catchAll = await prisma.telegramCommand.findUnique({ where: { trigger: "*" } });
+  if (catchAll && !catchAll.enabled) return;
+
+  let text = catchAll
+    ? catchAll.replyText.replaceAll("{{url}}", url).replaceAll("{{platform}}", PLATFORM_LABELS[platform])
+    : `Got your ${PLATFORM_LABELS[platform]} link:\n${url}\n\nWhat would you like?`;
+  // handleCallbackQuery recovers the url straight out of this message's own
+  // text later — guarantee it survives even if a custom reply omits {{url}}.
+  if (!URL_RE.test(text)) text += `\n\n${url}`;
+
   await callTelegramApi(botToken, "sendMessage", {
     chat_id: chatId,
     reply_markup: {
@@ -121,7 +139,7 @@ async function sendUrlOptions(botToken: string, chatId: number | string, url: st
         ],
       ],
     },
-    text: `Got your ${PLATFORM_LABELS[platform]} link:\n${url}\n\nWhat would you like?`,
+    text: truncate(text),
   });
 }
 

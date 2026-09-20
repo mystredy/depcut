@@ -38,7 +38,10 @@ export default function AdminTelegramCommandsPage() {
           <h1 className="text-lg font-semibold tracking-tight">Commands</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             What the bot replies when someone sends it one of these. Use {"{{first_name}}"} or{" "}
-            {"{{username}}"} in a reply to include the sender&apos;s name or @handle.
+            {"{{username}}"} in a reply to include the sender&apos;s name or @handle. Trigger{" "}
+            <span className="font-mono">*</span> is the catch-all for a supported video link — its
+            reply becomes the prompt shown with the Details/Transcript buttons, and can use{" "}
+            {"{{url}}"} or {"{{platform}}"}.
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -178,7 +181,7 @@ function CommandDialog({
             <Input
               value={trigger}
               onChange={(e) => setTrigger(e.target.value)}
-              placeholder="/start"
+              placeholder="/start or *"
               className="font-mono"
             />
           </div>
