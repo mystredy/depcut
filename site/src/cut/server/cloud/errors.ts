@@ -19,6 +19,12 @@ export const errorsCloud = {
     }
     if (!context || !message) return err("context and message are required.", 400);
 
+    // Telegram delivery is best-effort and silently no-ops (or, if the bot's
+    // misconfigured, rejects) — log the real message here first so a client
+    // error is still traceable in the server's own logs when the alert never
+    // lands.
+    console.error(`[client-error] ${context} user=${userId}: ${message}`);
+
     await notifyTelegram(
       "systemError",
       `⚠️ ${context}\nuser: ${userId}\n${message}`

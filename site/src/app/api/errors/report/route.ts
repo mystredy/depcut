@@ -31,6 +31,12 @@ export async function POST(request: Request) {
   const session = await auth.api.getSession({ headers: request.headers }).catch(() => null);
   const who = session?.user.email ?? "signed out";
 
+  // Telegram delivery is best-effort and silently no-ops (or, if the bot's
+  // misconfigured, rejects) — log the real message here first so a client
+  // error is still traceable in the server's own logs when the alert never
+  // lands.
+  console.error(`[client-error] ${context} user=${who}: ${message}`);
+
   await notifyTelegram("systemError", `🚨 ${context}\nuser: ${who}\n${message}`);
   return NextResponse.json({ ok: true });
 }
