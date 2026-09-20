@@ -18,7 +18,7 @@ export type TranscriptionRecord =
 
 /** Best-effort: save a just-settled Speech to Text run (succeeded or failed)
  * to the database — the only place a run is recorded, shown back on the
- * page as Account History (see TranscriptionAccountHistory.tsx). A failure
+ * page as Generations (see TranscriptionAccountHistory.tsx). A failure
  * here never surfaces to the user: they already have their transcript (or
  * error) either way. */
 export async function persistTranscription(record: TranscriptionRecord): Promise<void> {

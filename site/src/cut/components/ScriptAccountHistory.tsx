@@ -32,7 +32,7 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-// The server-saved Scripting history — same "Account History" pattern as
+// The server-saved Scripting history — same "Generations" pattern as
 // TranscriptionAccountHistory.tsx, its own component rather than the shared
 // generic since a script's fields (topic/platform/tone) don't overlap with
 // a transcript's (sourceType/sourceLabel).
@@ -52,7 +52,7 @@ export function ScriptAccountHistory() {
 
   return (
     <div className="space-y-3">
-      <SectionTitle>Account History</SectionTitle>
+      <SectionTitle>Generations</SectionTitle>
 
       {history.isPending ? (
         <div className="space-y-2">

@@ -57,7 +57,7 @@ export function MediaGenerationHistory<T extends MediaHistoryRow>({
 
   return (
     <div className="space-y-3">
-      <SectionTitle>Account History</SectionTitle>
+      <SectionTitle>Generations</SectionTitle>
 
       {history.isPending ? (
         <div className="space-y-2">
