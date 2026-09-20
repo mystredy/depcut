@@ -108,14 +108,25 @@ export const POST = withDepCutAuth(async (request) => {
       }
 
       const encoder = new TextEncoder();
+      // The client can disconnect (navigation, request abort) at any point
+      // while `for await` is still pulling from the provider — `cancel()`
+      // then fires and the controller moves to "closed" on its own. Without
+      // this flag, the `finally` below still calls `controller.close()`
+      // unconditionally and throws "Controller is already closed" as an
+      // uncaught exception, since a ReadableStreamDefaultController has no
+      // way to ask "am I already closed?" before acting on it.
+      let closed = false;
       const stream = new ReadableStream<Uint8Array>({
         async start(controller) {
-          const send = (data: unknown) =>
+          const send = (data: unknown) => {
+            if (closed) return;
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify(data)}\n\n`),
             );
+          };
           try {
             for await (const event of streamed.events) {
+              if (closed) break;
               if (event.type === "output_text_delta") {
                 send({ type: "response.output_text.delta", delta: event.delta });
                 continue;
@@ -138,7 +149,7 @@ export const POST = withDepCutAuth(async (request) => {
               }
               send({ type: "response.completed", response: event.body });
             }
-            controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            if (!closed) controller.enqueue(encoder.encode("data: [DONE]\n\n"));
           } catch (error) {
             if (!bypassCredits) {
               await recordFailedInferenceUsage({
@@ -156,14 +167,22 @@ export const POST = withDepCutAuth(async (request) => {
             // the client stops cleanly instead of hanging on a truncated stream.
             const message =
               error instanceof Error ? error.message : "stream failed";
-            controller.enqueue(
-              encoder.encode(
-                `event: error\ndata: ${JSON.stringify({ message })}\n\n`,
-              ),
-            );
+            if (!closed) {
+              controller.enqueue(
+                encoder.encode(
+                  `event: error\ndata: ${JSON.stringify({ message })}\n\n`,
+                ),
+              );
+            }
           } finally {
-            controller.close();
+            if (!closed) {
+              closed = true;
+              controller.close();
+            }
           }
+        },
+        cancel() {
+          closed = true;
         },
       });
 

@@ -152,10 +152,16 @@ function streamScreenshotParseResponse(input: {
   userId: string;
 }) {
   const encoder = new TextEncoder();
+  // See the analogous guard in api/inference/responses/route.ts: a client
+  // disconnect mid-stream fires `cancel()` and closes the controller on its
+  // own, so the unconditional `controller.close()` in `finally` below would
+  // otherwise throw "Controller is already closed" as an uncaught exception.
+  let closed = false;
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
         for await (const event of parseScreenshotStream(input.request, input.parserProvider)) {
+          if (closed) break;
           if (event.type === "partial") {
             controller.enqueue(encoder.encode(serverSentEvent("partial", event.result)));
             continue;
@@ -176,6 +182,7 @@ function streamScreenshotParseResponse(input: {
             usage: event.usage,
             userId: input.userId,
           });
+          if (closed) break;
           controller.enqueue(
             encoder.encode(
               serverSentEvent("final", {
@@ -203,18 +210,26 @@ function streamScreenshotParseResponse(input: {
           route: inferenceUsageRoutes.screenshotParse,
           userId: input.userId,
         });
-        controller.enqueue(
-          encoder.encode(
-            serverSentEvent("error", {
-              error: inferenceErrorCode(error),
-              message: error instanceof Error ? error.message : "Screenshot parsing failed.",
-              details: error instanceof InferenceProviderError ? error.details : null,
-            }),
-          ),
-        );
+        if (!closed) {
+          controller.enqueue(
+            encoder.encode(
+              serverSentEvent("error", {
+                error: inferenceErrorCode(error),
+                message: error instanceof Error ? error.message : "Screenshot parsing failed.",
+                details: error instanceof InferenceProviderError ? error.details : null,
+              }),
+            ),
+          );
+        }
       } finally {
-        controller.close();
+        if (!closed) {
+          closed = true;
+          controller.close();
+        }
       }
+    },
+    cancel() {
+      closed = true;
     },
   });
 

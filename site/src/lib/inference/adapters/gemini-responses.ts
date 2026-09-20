@@ -243,10 +243,16 @@ export function createGeminiResponsesProvider(
     }
 
     const encoder = new TextEncoder();
+    // A client disconnect mid-stream fires `cancel()` and closes the
+    // controller on its own; without this flag the unconditional
+    // `controller.close()` in `finally` below throws "Controller is already
+    // closed" as an uncaught exception.
+    let closed = false;
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         try {
           for await (const chunk of iterator) {
+            if (closed) break;
             const piece = streamChunkText(chunk);
             if (!piece) {
               continue;
@@ -254,17 +260,25 @@ export function createGeminiResponsesProvider(
             const event = { choices: [{ index: 0, delta: { content: piece } }] };
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
           }
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+          if (!closed) controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         } catch (error) {
           // A mid-stream provider failure is surfaced as a terminal SSE error event so the client
           // stops cleanly with whatever it has, rather than hanging on a truncated stream.
           const message = error instanceof Error ? error.message : "stream failed";
-          controller.enqueue(
-            encoder.encode(`event: error\ndata: ${JSON.stringify({ message })}\n\n`),
-          );
+          if (!closed) {
+            controller.enqueue(
+              encoder.encode(`event: error\ndata: ${JSON.stringify({ message })}\n\n`),
+            );
+          }
         } finally {
-          controller.close();
+          if (!closed) {
+            closed = true;
+            controller.close();
+          }
         }
+      },
+      cancel() {
+        closed = true;
       },
     });
 

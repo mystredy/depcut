@@ -390,10 +390,17 @@ export function streamGeminiChat({
   messages: UIMessage[];
   abortSignal?: AbortSignal;
 }): ReadableStream<UIMessageChunk> {
+  // A reader cancelling mid-stream (e.g. the caller's abortSignal firing)
+  // closes the controller on its own; without this flag the unconditional
+  // `controller.close()` in `finally` below throws "Controller is already
+  // closed" as an uncaught exception.
+  let closed = false;
   return new ReadableStream<UIMessageChunk>({
     async start(controller) {
-      const emit = (chunk: Record<string, unknown>) =>
+      const emit = (chunk: Record<string, unknown>) => {
+        if (closed) return;
         controller.enqueue(chunk as unknown as UIMessageChunk);
+      };
       emit({ type: "start" });
       try {
         // The gate classifies while the input assembles; a "chat" verdict
@@ -539,8 +546,14 @@ export function streamGeminiChat({
         }
       } finally {
         emit({ type: "finish" });
-        controller.close();
+        if (!closed) {
+          closed = true;
+          controller.close();
+        }
       }
+    },
+    cancel() {
+      closed = true;
     },
   });
 }
