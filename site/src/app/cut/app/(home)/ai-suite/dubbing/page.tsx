@@ -12,10 +12,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useQueryClient } from "@tanstack/react-query";
 import { AudioPlayer } from "@/cut/components/AudioPlayer";
 import { SectionTitle } from "@/cut/components/SectionTitle";
 import { SubTabs } from "@/cut/components/SubTabs";
-import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
+import { MediaGenerationHistory } from "@/cut/components/MediaGenerationHistory";
 import { useSpeakerVoice, VoicePicker } from "@/cut/components/VoicePicker";
 import { formatBytes } from "@/cut/components/desktopFolders";
 import { persistDubbingGeneration } from "@/cut/lib/dubbingGenerationPersist";
@@ -23,8 +24,16 @@ import { creditsUrl, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { cloudTranscribeRecording, transcribeSourceUrl } from "@/cut/lib/cloudTranscribe";
 import { NoCreditsError, renderSpeechClip, SPEECH_LANGUAGES } from "@/cut/lib/tts";
 import { cn } from "@/lib/utils";
-import { useToolHistory } from "@/lib/toolHistory";
-import { useBlobUrl } from "@/lib/useBlobUrl";
+
+// The client-facing shape of a GET /api/dubbing-generations row.
+type DubbingHistoryRow = {
+  id: string;
+  script: string;
+  sourceLabel: string | null;
+  outputUrl: string;
+  outputMime: string;
+  createdAt: string;
+};
 
 // Every language but "auto" — dubbing always needs an explicit target.
 const DUB_LANGUAGES = SPEECH_LANGUAGES.filter((l) => l.id !== "auto");
@@ -71,7 +80,7 @@ export default function DubbingPage() {
   const [transcript, setTranscript] = useState<string | null>(null);
   const [result, setResult] = useState<{ url: string } | null>(null);
   const [error, setError] = useState<{ text: string; credits?: boolean } | null>(null);
-  const history = useToolHistory("dubbing");
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     return () => {
@@ -156,7 +165,7 @@ export default function DubbingPage() {
         language: target.id,
       });
       setResult({ url: URL.createObjectURL(blob) });
-      void persistDubbingGeneration(blob, {
+      await persistDubbingGeneration(blob, {
         // The line actually spoken — renderSpeechClip translates it from
         // `text` internally (planVoiceover, in tts.ts), so layout carries
         // the real dubbed line where the caller only has the original.
@@ -168,29 +177,13 @@ export default function DubbingPage() {
         transcript: text,
         targetLanguage: target.id,
       });
-      history.save({
-        inputs: { style, targetLanguage },
-        result: { blob, data: { transcript: text }, filename: "dubbed-audio.wav", kind: "blob", mimeType: blob.type || "audio/wav" },
-        status: "succeeded",
-        summary: `${sourceLabel} → ${target.label}`,
-      });
+      void queryClient.invalidateQueries({ queryKey: ["dubbing-generations"] });
     } catch (e) {
       const message = e instanceof Error ? e.message : "Dubbing failed.";
       setError({ text: message, credits: e instanceof NoCreditsError });
-      history.save({
-        errorMessage: message,
-        inputs: { style, targetLanguage },
-        status: "failed",
-        summary: `${sourceLabel} → ${target.label}`,
-      });
     } finally {
       setStage("idle");
     }
-  };
-
-  const reuse = (inputs: Record<string, unknown>) => {
-    if (typeof inputs.targetLanguage === "string") setTargetLanguage(inputs.targetLanguage);
-    if (typeof inputs.style === "string") setStyle(inputs.style);
   };
 
   const busy = stage !== "idle";
@@ -416,31 +409,15 @@ export default function DubbingPage() {
         )}
       </div>
 
-      <ToolHistoryList
-        tool="dubbing"
-        onReuse={reuse}
-        renderPreview={(entry) =>
-          entry.result.kind === "blob" ? <DubHistoryPreview result={entry.result} /> : null
-        }
-      />
-    </div>
-  );
-}
-
-function DubHistoryPreview({
-  result,
-}: {
-  result: { blob: Blob; data?: unknown };
-}) {
-  const url = useBlobUrl(result.blob);
-  const transcript =
-    result.data && typeof result.data === "object" && "transcript" in result.data
-      ? (result.data as { transcript: string }).transcript
-      : null;
-  return (
-    <div className="space-y-2">
-      {transcript && <p className="text-[12.5px] leading-relaxed text-muted-foreground">{transcript}</p>}
-      {url && <AudioPlayer src={url} />}
+      {!signedOut && (
+        <MediaGenerationHistory<DubbingHistoryRow>
+          basePath="dubbing-generations"
+          listKey="generations"
+          kind="audio"
+          label={(row) => row.sourceLabel ?? row.script}
+          emptyMessage="Nothing saved to your account yet — a dubbed clip will show up here."
+        />
+      )}
     </div>
   );
 }

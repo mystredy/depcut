@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AudioLines, Check, ChevronDown, Download, Info, LibraryBig, Loader2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,14 +14,22 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AudioPlayer } from "@/cut/components/AudioPlayer";
 import { SectionTitle } from "@/cut/components/SectionTitle";
-import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
+import { MediaGenerationHistory } from "@/cut/components/MediaGenerationHistory";
 import { useSpeakerVoice, useSpeechLanguage, VoicePicker } from "@/cut/components/VoicePicker";
 import { persistAudioGeneration } from "@/cut/lib/audioGenerationPersist";
 import { creditsUrl, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { uploadToLibrary } from "@/cut/lib/library";
 import { NoCreditsError, renderSpeechClip } from "@/cut/lib/tts";
-import { useToolHistory } from "@/lib/toolHistory";
-import { useBlobUrl } from "@/lib/useBlobUrl";
+
+// The client-facing shape of a GET /api/audio-generations row — createdAt is
+// a string here (JSON, not the server's Date) once it's crossed the wire.
+type AudioHistoryRow = {
+  id: string;
+  script: string;
+  outputUrl: string;
+  outputMime: string;
+  createdAt: string;
+};
 
 // Starting points for the direction prompt — same set the Audio panel's voice
 // generator offers, picking one fills the input so it can be tweaked.
@@ -52,7 +61,7 @@ export default function TextToSpeechPage() {
   const [result, setResult] = useState<Result | null>(null);
   const [libraryState, setLibraryState] = useState<"idle" | "adding" | "added">("idle");
   const directionInput = useRef<HTMLTextAreaElement>(null);
-  const history = useToolHistory("text-to-speech");
+  const queryClient = useQueryClient();
 
   // The object URL only makes sense for the clip that made it — release it
   // once replaced or the page unmounts.
@@ -78,27 +87,16 @@ export default function TextToSpeechPage() {
         return { url: URL.createObjectURL(blob), blob, language: spoken };
       });
       setLibraryState("idle");
-      void persistAudioGeneration(blob, {
+      await persistAudioGeneration(blob, {
         script: text,
         voice,
         direction: direction.trim() || undefined,
         language: spoken,
       });
-      history.save({
-        inputs: { direction, script: text },
-        result: { blob, filename: "text-to-speech.wav", kind: "blob", mimeType: blob.type || "audio/wav" },
-        status: "succeeded",
-        summary: text.slice(0, 80),
-      });
+      void queryClient.invalidateQueries({ queryKey: ["audio-generations"] });
     } catch (e) {
       const message = e instanceof Error ? e.message : "Voice generation failed.";
       setError({ text: message, credits: e instanceof NoCreditsError });
-      history.save({
-        errorMessage: message,
-        inputs: { direction, script: text },
-        status: "failed",
-        summary: text.slice(0, 80),
-      });
     } finally {
       setBusy(false);
     }
@@ -122,11 +120,6 @@ export default function TextToSpeechPage() {
       setLibraryState("idle");
       setError(e instanceof Error ? { text: e.message } : { text: "Could not add to library." });
     }
-  };
-
-  const reuse = (inputs: Record<string, unknown>) => {
-    if (typeof inputs.script === "string") setScript(inputs.script);
-    if (typeof inputs.direction === "string") setDirection(inputs.direction);
   };
 
   return (
@@ -284,19 +277,15 @@ export default function TextToSpeechPage() {
         )}
       </div>
 
-      <ToolHistoryList
-        tool="text-to-speech"
-        onReuse={reuse}
-        renderPreview={(entry) =>
-          entry.result.kind === "blob" ? <AudioHistoryPreview blob={entry.result.blob} /> : null
-        }
-      />
+      {!signedOut && (
+        <MediaGenerationHistory<AudioHistoryRow>
+          basePath="audio-generations"
+          listKey="generations"
+          kind="audio"
+          label={(row) => row.script}
+          emptyMessage="Nothing saved to your account yet — a generated clip will show up here."
+        />
+      )}
     </div>
   );
-}
-
-function AudioHistoryPreview({ blob }: { blob: Blob }) {
-  const url = useBlobUrl(blob);
-  if (!url) return null;
-  return <AudioPlayer src={url} />;
 }

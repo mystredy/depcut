@@ -13,8 +13,9 @@ import {
   Sparkles,
   VideoIcon,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { SectionTitle } from "@/cut/components/SectionTitle";
-import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
+import { MediaGenerationHistory } from "@/cut/components/MediaGenerationHistory";
 import { AddRefButton, MentionTextarea, RefChips } from "@/cut/components/AssetRefs";
 import {
   COUNT_OPTIONS,
@@ -40,9 +41,18 @@ import {
   type VideoTier,
 } from "@/cut/lib/videoModels";
 import { persistVisualGeneration } from "@/cut/lib/visualGenerationPersist";
-import { useToolHistory } from "@/lib/toolHistory";
-import { useBlobUrl } from "@/lib/useBlobUrl";
 import { cn } from "@/lib/utils";
+
+// The client-facing shape of a GET /api/visual-generations row.
+type VisualHistoryRow = {
+  id: string;
+  prompt: string;
+  status: string;
+  errorMessage: string | null;
+  outputUrl: string | null;
+  outputMime: string | null;
+  createdAt: string;
+};
 
 const COUNTS = [1, 2, 3, 4] as const;
 // Mirrors generate.ts's own video poll loop (see finishVideo) — this
@@ -96,20 +106,6 @@ type GenerationResponse = {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** What "Use again" needs to fully replay a past generation — every knob plus
- * the exact reference pictures sent, frozen as blobs so they survive the
- * originals changing or disappearing. */
-type VideoGenInputs = {
-  prompt: string;
-  aspect: VideoAspect;
-  tier: VideoTier;
-  resolution: VideoResolution;
-  durationSeconds: number;
-  count: number;
-  refMode: VideoRefMode;
-  referenceImages: { name: string; blob: Blob }[];
-};
-
 /** A local file, or a picked Library/stock asset, staged as a reference —
  * never imported into a project (nothing here has one): resolved straight to
  * inline bytes fetched from its ref url. */
@@ -120,18 +116,6 @@ function refFromLocalFile(file: File): AssetRef {
     name: file.name,
     kind: file.type.startsWith("video") ? "video" : "image",
     url: URL.createObjectURL(file),
-  };
-}
-
-/** A still image blob staged as a reference — how a frozen history row's
- * reference pictures become attachments again on "Use again". */
-function refFromImageBlob(blob: Blob, name: string): AssetRef {
-  return {
-    scope: "file",
-    id: crypto.randomUUID().slice(0, 8),
-    name,
-    kind: "image",
-    url: URL.createObjectURL(blob),
   };
 }
 
@@ -146,13 +130,6 @@ function refFromVideoBlob(blob: Blob, name: string): AssetRef {
     kind: "video",
     url: URL.createObjectURL(blob),
   };
-}
-
-function referenceImagesForHistory(images: InlineImage[]): { name: string; blob: Blob }[] {
-  return images.map((img, i) => ({
-    name: `Reference ${i + 1}`,
-    blob: new Blob([bytesFromBase64(img.data)], { type: img.mimeType }),
-  }));
 }
 
 // The shared video-generation composer behind both the standalone Text to
@@ -179,7 +156,7 @@ export function VideoGenerator({ className }: { className?: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ text: string; credits?: boolean } | null>(null);
   const [results, setResults] = useState<{ url: string; blob: Blob }[]>([]);
-  const history = useToolHistory("text-to-video");
+  const queryClient = useQueryClient();
 
   const setRefMode = (mode: VideoRefMode) => {
     setRefModeState(mode);
@@ -279,19 +256,6 @@ export function VideoGenerator({ className }: { className?: string }) {
     if (!text || busy) return;
     setBusy(true);
     setError(null);
-    // Frozen once the refs resolve, reused for every history row this run
-    // writes — the exact pictures sent, not just their live source.
-    let referenceImages: { name: string; blob: Blob }[] = [];
-    const baseInputs = (): VideoGenInputs => ({
-      prompt: text,
-      aspect: effAspect,
-      tier,
-      resolution: effResolution,
-      durationSeconds: effDurationSeconds,
-      count,
-      refMode,
-      referenceImages,
-    });
     try {
       let sentPrompt = text;
       let inputs: { images?: InlineImage[]; referenceImages?: InlineImage[] } | undefined;
@@ -312,7 +276,6 @@ export function VideoGenerator({ className }: { className?: string }) {
           if (images.length > 0) inputs = { images };
         }
       }
-      referenceImages = referenceImagesForHistory(inputs?.images ?? inputs?.referenceImages ?? []);
       const settled = await Promise.allSettled(
         Array.from({ length: count }, () => generateOne(sentPrompt, inputs))
       );
@@ -322,18 +285,7 @@ export function VideoGenerator({ className }: { className?: string }) {
       const failed = settled.filter((s): s is PromiseRejectedResult => s.status === "rejected");
       if (ok.length > 0) setResults(ok.map((s) => s.value));
       for (const s of ok) {
-        history.save({
-          inputs: baseInputs(),
-          result: {
-            blob: s.value.blob,
-            filename: "text-to-video.mp4",
-            kind: "blob",
-            mimeType: s.value.blob.type || "video/mp4",
-          },
-          status: "succeeded",
-          summary: text.slice(0, 80),
-        });
-        void persistVisualGeneration({
+        await persistVisualGeneration({
           aspect: effAspect,
           blob: s.value.blob,
           durationSeconds: effDurationSeconds,
@@ -349,13 +301,7 @@ export function VideoGenerator({ className }: { className?: string }) {
           text: ok.length > 0 ? `${failed.length} of ${count} failed: ${message}` : message,
           credits: message === NO_CREDITS_MESSAGE,
         });
-        history.save({
-          errorMessage: message,
-          inputs: baseInputs(),
-          status: "failed",
-          summary: text.slice(0, 80),
-        });
-        void persistVisualGeneration({
+        await persistVisualGeneration({
           aspect: effAspect,
           errorMessage: message,
           prompt: text,
@@ -363,55 +309,32 @@ export function VideoGenerator({ className }: { className?: string }) {
           tier,
         });
       }
+      void queryClient.invalidateQueries({ queryKey: ["visual-generations"] });
     } catch (e) {
       const message = e instanceof Error ? e.message : "Video generation failed.";
       setError({ text: message, credits: message === NO_CREDITS_MESSAGE });
-      history.save({
-        errorMessage: message,
-        inputs: baseInputs(),
-        status: "failed",
-        summary: text.slice(0, 80),
-      });
-      void persistVisualGeneration({
+      await persistVisualGeneration({
         aspect: effAspect,
         errorMessage: message,
         prompt: text,
         status: "failed",
         tier,
       });
+      void queryClient.invalidateQueries({ queryKey: ["visual-generations"] });
     } finally {
       setBusy(false);
-    }
-  };
-
-  const reuse = (inputs: Record<string, unknown>) => {
-    if (typeof inputs.prompt === "string") setPrompt(inputs.prompt);
-    if (typeof inputs.aspect === "string") setAspect(inputs.aspect as VideoAspect);
-    if (typeof inputs.tier === "string" && VIDEO_MODELS.some((m) => m.tier === inputs.tier)) {
-      setTier(inputs.tier as VideoTier);
-    }
-    if (typeof inputs.resolution === "string") setResolution(inputs.resolution as VideoResolution);
-    if (typeof inputs.durationSeconds === "number") setDurationSeconds(inputs.durationSeconds);
-    if (typeof inputs.count === "number" && (COUNTS as readonly number[]).includes(inputs.count)) {
-      setCount(inputs.count as (typeof COUNTS)[number]);
-    }
-    if (inputs.refMode === "frames" || inputs.refMode === "ingredients") {
-      setRefModeState(inputs.refMode);
-    }
-    // Older rows saved before references were tracked have no this field —
-    // leave whatever's currently attached alone rather than clearing it.
-    if (Array.isArray(inputs.referenceImages)) {
-      setRefs(
-        (inputs.referenceImages as { name: string; blob: Blob }[])
-          .filter((r) => r?.blob instanceof Blob)
-          .map((r) => refFromImageBlob(r.blob, r.name))
-      );
     }
   };
 
   /** Attach a generated clip (just made, or pulled back out of history) as a
    * reference for the next generation. */
   const attachAsReference = (blob: Blob, name: string) => addRef(refFromVideoBlob(blob, name));
+
+  const attachHistoryEntryAsReference = async (row: VisualHistoryRow) => {
+    if (!row.outputUrl) return;
+    const blob = await fetch(row.outputUrl).then((r) => r.blob());
+    attachAsReference(blob, row.prompt.slice(0, 60) || "reference");
+  };
 
   return (
     <div className={cn("space-y-5", className)}>
@@ -633,24 +556,16 @@ export function VideoGenerator({ className }: { className?: string }) {
         </div>
       )}
 
-      <ToolHistoryList
-        tool="text-to-video"
-        onReuse={reuse}
-        renderPreview={(entry) =>
-          entry.result.kind === "blob" ? (
-            <VideoHistoryPreview blob={entry.result.blob} />
-          ) : null
-        }
-        onUseAsReference={(entry) =>
-          entry.result.kind === "blob" && attachAsReference(entry.result.blob, entry.summary)
-        }
-      />
+      {!signedOut && (
+        <MediaGenerationHistory<VisualHistoryRow>
+          basePath="visual-generations"
+          listKey="generations"
+          kind="video"
+          label={(row) => row.prompt}
+          emptyMessage="Nothing saved to your account yet — a generated clip will show up here."
+          onUseAsReference={(row) => void attachHistoryEntryAsReference(row)}
+        />
+      )}
     </div>
   );
-}
-
-function VideoHistoryPreview({ blob }: { blob: Blob }) {
-  const url = useBlobUrl(blob);
-  if (!url) return null;
-  return <video src={url} controls playsInline className="w-full rounded-lg" />;
 }

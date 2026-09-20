@@ -34,8 +34,7 @@ function timeAgo(iso: string): string {
 // Every run saved to the account — the Speech to Text page above writes
 // here after each run settles, and so does the Telegram bot's Transcript
 // button (see lib/telegram/commands.ts), so a transcript requested from
-// Telegram shows up here too. Unlike Recent History (this browser only,
-// see ToolHistoryList), this is server-saved and the same on any device.
+// Telegram shows up here too. Server-saved, so it's the same on any device.
 export function TranscriptionAccountHistory() {
   const history = useTranscriptionHistory();
   const del = useDeleteTranscription();

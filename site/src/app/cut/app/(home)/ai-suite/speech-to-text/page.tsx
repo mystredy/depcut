@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ChevronRight, Clipboard, Download, FileText, Mic, Pause, Play, Trash2, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +11,6 @@ import { Switch } from "@/components/ui/switch";
 import { SectionTitle } from "@/cut/components/SectionTitle";
 import { SubTabs } from "@/cut/components/SubTabs";
 import { formatBytes } from "@/cut/components/desktopFolders";
-import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
 import { TranscriptionAccountHistory } from "@/cut/components/TranscriptionAccountHistory";
 import { NoCreditsError, transcribeBlob, transcribeSourceUrl, type TranscribeSettings } from "@/cut/lib/cloudTranscribe";
 import { creditsUrl, signInUrl, useSignedIn } from "@/cut/lib/generate";
@@ -18,7 +18,6 @@ import { useMicRecorder } from "@/cut/hooks/useMicRecorder";
 import { persistTranscription } from "@/cut/lib/transcriptionPersist";
 import type { SubtitleCue } from "@/cut/lib/types";
 import { cn } from "@/lib/utils";
-import { useToolHistory } from "@/lib/toolHistory";
 
 type Tab = "upload" | "record" | "social" | "source";
 const TABS: { id: Tab; label: string }[] = [
@@ -56,17 +55,6 @@ function srtTimestamp(t: number): string {
   return `${pad(Math.floor(ms / 3600000))}:${pad(Math.floor((ms % 3600000) / 60000))}:${pad(
     Math.floor((ms % 60000) / 1000)
   )},${pad(ms % 1000, 3)}`;
-}
-
-const HISTORY_SENTENCE_COUNT = 6;
-
-// The row's title, once real content exists to name it with — the first few
-// sentences of what was actually said, not the source URL/filename it came
-// from.
-function summaryFromTranscript(cues: SubtitleCue[]): string {
-  const text = cues.map((c) => c.text).join(" ").trim();
-  const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
-  return sentences.slice(0, HISTORY_SENTENCE_COUNT).join(" ") || text;
 }
 
 function toSrt(cues: SubtitleCue[]): string {
@@ -150,9 +138,10 @@ export default function SpeechToTextPage() {
   const [cues, setCues] = useState<SubtitleCue[] | null>(null);
   const [copied, setCopied] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const mic = useMicRecorder();
-  const history = useToolHistory("speech-to-text");
+  const queryClient = useQueryClient();
 
   // Each submit resolves in the background (see run()) — the panel below
   // always reflects whichever job most recently finished, so switching tabs
@@ -207,24 +196,6 @@ export default function SpeechToTextPage() {
     await mic.start();
   };
 
-  const reuse = (inputs: Record<string, unknown>) => {
-    const reuseTab: "social" | "source" | null =
-      inputs.tab === "social" ? "social" : inputs.tab === "source" ? "source" : null;
-    if (!reuseTab) return;
-    switchTab(reuseTab);
-    if (typeof inputs.sourceLabel === "string") {
-      if (reuseTab === "social") setSocialUrl(inputs.sourceLabel);
-      else setSourceUrlInput(inputs.sourceLabel);
-    }
-    if (typeof inputs.language === "string") setLanguage(inputs.language);
-    if (typeof inputs.tagAudioEvents === "boolean") setTagAudioEvents(inputs.tagAudioEvents);
-    if (typeof inputs.noVerbatim === "boolean") setNoVerbatim(inputs.noVerbatim);
-    if (typeof inputs.assignSpeakers === "boolean") setAssignSpeakers(inputs.assignSpeakers);
-    if (Array.isArray(inputs.keyterms)) {
-      setKeyterms(inputs.keyterms.filter((k): k is string => typeof k === "string"));
-    }
-  };
-
   const addKeyterm = () => {
     const term = keytermDraft.trim();
     setKeytermDraft("");
@@ -239,13 +210,8 @@ export default function SpeechToTextPage() {
     (tab === "record" && !recordedBlob) ||
     (tab === "social" && !socialUrl.trim()) ||
     (tab === "source" && !sourceUrlInput.trim());
-  const disabled = signedOut || mic.state === "recording" || missingInput;
+  const disabled = signedOut || busy || mic.state === "recording" || missingInput;
 
-  // Runs in the background: the row lands in Recent History as "pending"
-  // immediately, the form is free the instant this returns, and this
-  // function keeps going on its own — resolving that same row (and, if it's
-  // the last one to finish, the panel below) once the call actually
-  // completes. Multiple submissions can be in flight at once this way.
   const run = async () => {
     if (missingInput) return;
     const summary =
@@ -264,9 +230,6 @@ export default function SpeechToTextPage() {
       tagAudioEvents,
     };
 
-    // Snapshot the job now — nothing below should read component state
-    // again, since the user is free to change the form the instant this
-    // function yields (creating the pending row is itself an await).
     const job =
       tab === "upload" && file
         ? () => transcribeBlob(file, languageCode, settings, true)
@@ -288,48 +251,31 @@ export default function SpeechToTextPage() {
       tagAudioEvents,
     };
 
-    // A file or recording can't round-trip through this lightweight
-    // inputs-as-plain-values pattern, so only the URL tabs carry enough to
-    // meaningfully refill the form on "Use again" — see reuse() below.
-    const inputs =
-      tab === "social" || tab === "source"
-        ? { assignSpeakers, keyterms, language, noVerbatim, sourceLabel: summary, tab, tagAudioEvents }
-        : {};
-    const id = await history.createPending({ inputs, summary });
-
-    // job() already closed over this render's file/recordedBlob/socialUrl/
-    // sourceUrlInput, so clearing the input here is safe — it frees the form
-    // for the next submission without touching the job in flight.
-    if (tab === "upload") clearFile();
-    else if (tab === "record") setRecordedBlob(null);
-    else if (tab === "social") setSocialUrl("");
-    else setSourceUrlInput("");
-
+    setBusy(true);
+    setError(null);
     try {
       const result = await job();
       if (!result) throw new Error("Transcription was interrupted.");
       if (result.length === 0) throw new Error("Couldn't find any speech there.");
       setCues(result);
-      setError(null);
-      history.resolveEntry({
-        id,
-        outcome: {
-          result: { data: { cues: result }, kind: "text", text: result.map((c) => c.text).join(" ") },
-          status: "succeeded",
-        },
-        summary: summaryFromTranscript(result),
-      });
-      void persistTranscription({
+      if (tab === "upload") clearFile();
+      else if (tab === "record") setRecordedBlob(null);
+      else if (tab === "social") setSocialUrl("");
+      else setSourceUrlInput("");
+      await persistTranscription({
         ...persistBase,
         status: "succeeded",
         transcript: result.map((c) => c.text).join(" "),
       });
+      void queryClient.invalidateQueries({ queryKey: ["transcriptions"] });
     } catch (e) {
       const message =
         e instanceof NoCreditsError || e instanceof Error ? e.message : "Transcription failed.";
       setError({ credits: e instanceof NoCreditsError, text: message });
-      history.resolveEntry({ id, outcome: { errorMessage: message, status: "failed" } });
-      void persistTranscription({ ...persistBase, errorMessage: message, status: "failed" });
+      await persistTranscription({ ...persistBase, errorMessage: message, status: "failed" });
+      void queryClient.invalidateQueries({ queryKey: ["transcriptions"] });
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -601,7 +547,7 @@ export default function SpeechToTextPage() {
           onClick={() => void run()}
         >
           <FileText data-icon="inline-start" />
-          Transcribe
+          {busy ? "Transcribing…" : "Transcribe"}
         </Button>
 
         {signedOut ? (
@@ -668,22 +614,6 @@ export default function SpeechToTextPage() {
           </div>
         )}
       </div>
-
-      <ToolHistoryList
-        tool="speech-to-text"
-        onReuse={reuse}
-        renderPreview={(entry) => {
-          const entryCues =
-            entry.result.kind === "text" &&
-            entry.result.data &&
-            typeof entry.result.data === "object" &&
-            "cues" in entry.result.data
-              ? (entry.result.data as { cues: SubtitleCue[] }).cues
-              : null;
-          if (!entryCues) return null;
-          return <CueList cues={entryCues} className="max-h-60" />;
-        }}
-      />
 
       {!signedOut && <TranscriptionAccountHistory />}
     </div>

@@ -23,10 +23,10 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 /** Best-effort: save a just-settled Text to Image take (succeeded or failed)
- * to the database. Called once per take, right after it settles, alongside
- * — not instead of — the browser-local Recent History entry. A failure here
- * never surfaces to the user: they already have their render (or error)
- * either way. */
+ * to the database — the only place a take is recorded, shown back on the
+ * page as Account History. Called once per take, right after it settles. A
+ * failure here never surfaces to the user: they already have their render
+ * (or error) either way. */
 export async function persistImageGeneration(record: ImageGenerationRecord): Promise<void> {
   try {
     if (record.status === "failed") {
