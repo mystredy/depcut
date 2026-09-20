@@ -23,6 +23,7 @@ import {
   Star,
   Trash2,
   TriangleAlert,
+  Volume2,
   Wrench,
   X,
 } from "lucide-react";
@@ -1294,18 +1295,21 @@ function MentionedText({
   );
 }
 
-/** Copy-to-clipboard affordance revealed on message hover. */
-function MessageCopy({ text }: { text: string }) {
+/** Copy-to-clipboard affordance — hover-revealed on a user's own sent
+ * message, always shown on an assistant reply (see MessageView) where it
+ * sits alongside MessageReadAloud. */
+function MessageCopy({ text, visible = false }: { text: string; visible?: boolean }) {
   const [copied, setCopied] = useState(false);
   if (!text) return null;
   return (
     <button
+      type="button"
       aria-label="Copy message"
       title="Copy"
       className={cn(
         "ai-msg-copy",
         cardIconButton,
-        "opacity-0 group-hover:opacity-100",
+        !visible && "opacity-0 group-hover:opacity-100",
       )}
       onClick={() => {
         void navigator.clipboard.writeText(text).then(() => {
@@ -1319,6 +1323,42 @@ function MessageCopy({ text }: { text: string }) {
       ) : (
         <Copy className="size-3.5" />
       )}
+    </button>
+  );
+}
+
+/** Read-aloud affordance for an assistant reply, on the browser's own
+ * speech synthesis — free and instant, unlike the app's metered Gemini TTS
+ * voice generation, which is for creating a real voiceover asset, not
+ * narrating a chat bubble. Starting one cancels whatever the page was
+ * already reading (there's only ever one global utterance), and the
+ * cancelled button's own onend/onerror fires to bring it back out of its
+ * "speaking" state — no shared store needed for two buttons to stay in sync. */
+function MessageReadAloud({ text }: { text: string }) {
+  const [speaking, setSpeaking] = useState(false);
+  useEffect(() => () => window.speechSynthesis?.cancel(), []);
+  if (!text || typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+  const toggle = () => {
+    window.speechSynthesis.cancel();
+    if (speaking) {
+      setSpeaking(false);
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+    setSpeaking(true);
+  };
+  return (
+    <button
+      type="button"
+      aria-label={speaking ? "Stop reading" : "Read aloud"}
+      title={speaking ? "Stop reading" : "Read aloud"}
+      className={cn("ai-msg-read-aloud", cardIconButton, speaking && "text-primary")}
+      onClick={toggle}
+    >
+      {speaking ? <Square className="size-3 fill-current" /> : <Volume2 className="size-3.5" />}
     </button>
   );
 }
@@ -1714,7 +1754,12 @@ const MessageView = memo(function MessageView({
           ))}
         </div>
       )}
-      <MessageCopy text={text} />
+      {text && (
+        <div className="flex items-center gap-1">
+          <MessageCopy text={text} visible />
+          <MessageReadAloud text={text} />
+        </div>
+      )}
     </div>
   );
 });
