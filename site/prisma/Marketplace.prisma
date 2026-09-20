@@ -151,6 +151,7 @@ model Submission {
   updatedAt         DateTime          @updatedAt
   uploads           Upload[]
   assets            SubmissionAsset[]
+  workspaceLinks    SubmissionWorkspaceLink[]
 
   @@index([userId, createdAt])
   @@index([taskId])
@@ -190,6 +191,32 @@ model SubmissionAsset {
   @@index([submissionId])
   @@index([status])
   @@map("submission_asset")
+}
+
+// A creator's linked external editing workspace for one Submission — the
+// Submit Project page's Collaboration Hub (submit-project/[id]/page.tsx),
+// currently local-only state (Workspace/INITIAL_WORKSPACES) with no
+// persistence. provider is one of that page's fixed integration ids (capcut,
+// canva, veed, premiere, davinci, finalcut, frameio, postlab, lucidlink) —
+// kept as free text rather than an enum so the page can add a new one
+// without a migration. No password field on purpose: the page's own
+// "Workspace password" input is local-only and discarded on confirm, since
+// storing a real third-party service password here would mean holding a
+// credential this app has no business keeping — that field should move to
+// real OAuth before this table ever gets a row with a password attached.
+model SubmissionWorkspaceLink {
+  id            String     @id @default(cuid())
+  submissionId  String
+  submission    Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  provider      String
+  workspaceName String
+  editorEmail   String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@unique([submissionId, provider])
+  @@index([submissionId])
+  @@map("submission_workspace_link")
 }
 
 // The Pro Verification Suite's publishing package for a submission: the
