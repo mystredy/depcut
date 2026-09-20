@@ -1342,7 +1342,7 @@ export default function SubmitProjectEditorPage() {
                   </p>
                   {balanceLabel && (
                     <span className="text-[10px] text-muted-foreground">
-                      Balance: <span className="font-mono">{balanceLabel}</span>
+                      Credit: <span className="font-mono">{balanceLabel}</span>
                     </span>
                   )}
                 </div>
