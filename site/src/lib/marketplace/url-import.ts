@@ -1,11 +1,12 @@
 import ytdl from "@distube/ytdl-core";
 import * as cheerio from "cheerio";
 
-// Pulls title/description/tags from a link to a creator's own video, so they
-// can reuse it as a starting point for a Drop instead of retyping everything
-// by hand. Metadata only for now — none of these fetch the actual video
-// bytes; that's separate, still-undecided follow-up work.
-export type UrlImportPlatform = "youtube" | "tiktok" | "snapchat";
+// Pulls title/description/tags from a link to a creator's own post on
+// YouTube, TikTok, Snapchat, Facebook, Instagram, or X, so they can reuse it
+// as a starting point for a Drop instead of retyping everything by hand.
+// Metadata only for now — none of these fetch the actual video bytes;
+// that's separate, still-undecided follow-up work.
+export type UrlImportPlatform = "youtube" | "tiktok" | "snapchat" | "facebook" | "instagram" | "x";
 
 export type UrlImportResult = {
   platform: UrlImportPlatform;
@@ -18,8 +19,12 @@ export type UrlImportResult = {
 
 export class UrlImportError extends Error {}
 
-const BROWSER_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+const BROWSER_HEADERS = {
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+};
 
 export function detectUrlImportPlatform(url: string): UrlImportPlatform | null {
   let host: string;
@@ -31,6 +36,9 @@ export function detectUrlImportPlatform(url: string): UrlImportPlatform | null {
   if (host === "youtube.com" || host === "m.youtube.com" || host === "youtu.be") return "youtube";
   if (host === "tiktok.com" || host.endsWith(".tiktok.com")) return "tiktok";
   if (host === "snapchat.com" || host.endsWith(".snapchat.com")) return "snapchat";
+  if (host === "facebook.com" || host === "m.facebook.com" || host === "fb.watch") return "facebook";
+  if (host === "instagram.com" || host === "m.instagram.com") return "instagram";
+  if (host === "x.com" || host === "twitter.com" || host === "mobile.twitter.com") return "x";
   return null;
 }
 
@@ -65,7 +73,7 @@ async function extractYoutube(url: string): Promise<UrlImportResult> {
 // content renders client-side, so the raw HTML has no metadata to read).
 async function extractTiktok(url: string): Promise<UrlImportResult> {
   const oembedUrl = `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`;
-  const res = await fetch(oembedUrl, { headers: { "User-Agent": BROWSER_UA } });
+  const res = await fetch(oembedUrl, { headers: BROWSER_HEADERS });
   if (!res.ok) throw new UrlImportError("Couldn't read that TikTok video — check the link is public.");
   const data = (await res.json()) as { title?: string; thumbnail_url?: string };
   const caption = data.title ?? "";
@@ -80,28 +88,66 @@ async function extractTiktok(url: string): Promise<UrlImportResult> {
   };
 }
 
-// No oEmbed or public API for Spotlight — falls back to the page's own Open
-// Graph tags, the same thing a link preview reads. Untested against a real
-// URL (didn't have one on hand); Snapchat's web presence for a Spotlight
-// link is thin, so treat this as best-effort and confirm against a real
-// link before relying on it.
-async function extractSnapchat(url: string): Promise<UrlImportResult> {
-  const res = await fetch(url, { headers: { "User-Agent": BROWSER_UA } });
-  if (!res.ok) throw new UrlImportError("Couldn't read that Snapchat link — check it's a public Spotlight post.");
+// No public, unauthenticated API for a single post on any of these three —
+// Meta locked down oEmbed for Facebook/Instagram behind an app access token
+// years ago, and Snapchat never had one for Spotlight. Falls back to the
+// page's own Open Graph tags instead, the same thing a link preview reads.
+//
+// Facebook and Instagram: a plain Node fetch() with these same headers gets
+// real og:title/og:description back for a public page (verified live,
+// no login wall) — but that exact request, made from inside this app's own
+// dev server instead of a bare script, consistently gets a 400 from
+// Facebook with nothing else different. Likely Meta's bot detection reading
+// something below the header level (TLS/HTTP2 fingerprint) that a fetch()
+// call can't control either way. Worth retesting once this runs on Vercel's
+// infrastructure instead of this local dev server — the mechanism itself is
+// sound, this may well be an environment-specific block.
+//
+// Snapchat's Spotlight pages weren't verified at all (no real URL on hand
+// to test against). Treat all three as best-effort until confirmed against
+// a real link in the actual deployed environment.
+async function extractViaOpenGraph(
+  url: string,
+  platform: UrlImportPlatform,
+  notFoundMessage: string,
+): Promise<UrlImportResult> {
+  const res = await fetch(url, { headers: BROWSER_HEADERS });
+  if (!res.ok) throw new UrlImportError(notFoundMessage);
   const $ = cheerio.load(await res.text());
   const title = $('meta[property="og:title"]').attr("content")?.trim() ?? "";
   const description = $('meta[property="og:description"]').attr("content")?.trim() ?? "";
   const thumbnailUrl = $('meta[property="og:image"]').attr("content") ?? null;
-  if (!title && !description) {
-    throw new UrlImportError("Couldn't find any video info on that Snapchat link.");
-  }
-  return { description, platform: "snapchat", sourceUrl: url, tags: [], thumbnailUrl, title };
+  if (!title && !description) throw new UrlImportError(notFoundMessage);
+  const tags = [...description.matchAll(/#(\w+)/g)].map((m) => m[1]);
+  return { description, platform, sourceUrl: url, tags, thumbnailUrl, title };
+}
+
+// X's own oEmbed, same as TikTok's — documented, free, no auth. Only gives
+// the tweet text (as embed HTML, parsed out below) and author, no
+// thumbnail/video URL; X doesn't expose either through this endpoint.
+async function extractX(url: string): Promise<UrlImportResult> {
+  const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}&omit_script=true`;
+  const res = await fetch(oembedUrl, { headers: BROWSER_HEADERS });
+  if (!res.ok) throw new UrlImportError("Couldn't read that X post — check the link is public.");
+  const data = (await res.json()) as { html?: string };
+  const text = cheerio.load(data.html ?? "")("p").first().text().trim();
+  const tags = [...text.matchAll(/#(\w+)/g)].map((m) => m[1]);
+  return { description: text, platform: "x", sourceUrl: url, tags, thumbnailUrl: null, title: "" };
 }
 
 export async function extractFromUrl(url: string): Promise<UrlImportResult> {
   const platform = detectUrlImportPlatform(url);
-  if (!platform) throw new UrlImportError("That link isn't a YouTube, TikTok, or Snapchat video.");
+  if (!platform) {
+    throw new UrlImportError("That link isn't a YouTube, TikTok, Snapchat, Facebook, Instagram, or X video.");
+  }
   if (platform === "youtube") return extractYoutube(url);
   if (platform === "tiktok") return extractTiktok(url);
-  return extractSnapchat(url);
+  if (platform === "x") return extractX(url);
+  if (platform === "snapchat") {
+    return extractViaOpenGraph(url, "snapchat", "Couldn't find any video info on that Snapchat link.");
+  }
+  if (platform === "facebook") {
+    return extractViaOpenGraph(url, "facebook", "Couldn't read that Facebook video — check the link is public.");
+  }
+  return extractViaOpenGraph(url, "instagram", "Couldn't read that Instagram post — check the link is public.");
 }
