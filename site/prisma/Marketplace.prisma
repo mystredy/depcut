@@ -199,11 +199,10 @@ model SubmissionAsset {
 // persistence. provider is one of that page's fixed integration ids (capcut,
 // canva, veed, premiere, davinci, finalcut, frameio, postlab, lucidlink) —
 // kept as free text rather than an enum so the page can add a new one
-// without a migration. No password field on purpose: the page's own
-// "Workspace password" input is local-only and discarded on confirm, since
-// storing a real third-party service password here would mean holding a
-// credential this app has no business keeping — that field should move to
-// real OAuth before this table ever gets a row with a password attached.
+// without a migration. No password field on purpose: the Connect Workspace
+// dialog never asks for one — storing a real third-party service password
+// here would mean holding a credential this app has no business keeping.
+// Real access to a linked workspace belongs behind OAuth, not a form field.
 model SubmissionWorkspaceLink {
   id            String     @id @default(cuid())
   submissionId  String
