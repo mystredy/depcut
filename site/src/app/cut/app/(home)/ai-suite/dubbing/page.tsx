@@ -29,8 +29,11 @@ import { cn } from "@/lib/utils";
 type DubbingHistoryRow = {
   id: string;
   script: string;
+  direction: string | null;
+  targetLanguage: string | null;
   sourceLabel: string | null;
   outputUrl: string;
+  downloadUrl: string;
   outputMime: string;
   createdAt: string;
 };
@@ -189,6 +192,14 @@ export default function DubbingPage() {
   const busy = stage !== "idle";
   const buttonLabel =
     stage === "transcribing" ? "Transcribing…" : stage === "dubbing" ? "Dubbing…" : "Dub audio";
+
+  // The source (an upload's bytes, or which tab a link came from) isn't
+  // restorable — a row only keeps a generic sourceLabel, not which tab
+  // produced it — so this refills just the dub settings.
+  const reuse = (row: DubbingHistoryRow) => {
+    setStyle(row.direction ?? "");
+    if (row.targetLanguage) setTargetLanguage(row.targetLanguage);
+  };
 
   return (
     <div className="w-full space-y-6 p-6">
@@ -416,6 +427,7 @@ export default function DubbingPage() {
           kind="audio"
           label={(row) => row.sourceLabel ?? row.script}
           emptyMessage="Nothing saved to your account yet — a dubbed clip will show up here."
+          onUseAgain={reuse}
         />
       )}
     </div>

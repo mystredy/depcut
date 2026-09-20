@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SectionTitle } from "@/cut/components/SectionTitle";
-import { ScriptAccountHistory } from "@/cut/components/ScriptAccountHistory";
+import { ScriptAccountHistory, type ScriptHistoryEntry } from "@/cut/components/ScriptAccountHistory";
 import { creditsUrl, NO_CREDITS_MESSAGE, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { hostedPost } from "@/cut/lib/hosted";
 import { persistScript } from "@/cut/lib/scriptPersist";
@@ -122,6 +122,13 @@ export default function ScriptingPage() {
     a.download = "script.txt";
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const reuse = (entry: ScriptHistoryEntry) => {
+    setTopic(entry.topic);
+    setDuration(entry.duration);
+    setPlatform(entry.platform);
+    setTone(entry.tone ?? "");
   };
 
   return (
@@ -253,7 +260,7 @@ export default function ScriptingPage() {
         )}
       </div>
 
-      {!signedOut && <ScriptAccountHistory />}
+      {!signedOut && <ScriptAccountHistory onReuse={reuse} />}
     </div>
   );
 }

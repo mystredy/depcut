@@ -17,6 +17,7 @@ import { creditsUrl, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { useMicRecorder } from "@/cut/hooks/useMicRecorder";
 import { persistTranscription } from "@/cut/lib/transcriptionPersist";
 import type { SubtitleCue } from "@/cut/lib/types";
+import type { TranscriptionHistoryEntry } from "@/queries/transcriptions";
 import { cn } from "@/lib/utils";
 
 type Tab = "upload" | "record" | "social" | "source";
@@ -204,6 +205,19 @@ export default function SpeechToTextPage() {
     setKeyterms((prev) => [...prev, term]);
   };
   const removeKeyterm = (term: string) => setKeyterms((prev) => prev.filter((t) => t !== term));
+
+  // Only ever called for a social/source row — a past upload or recording's
+  // bytes never round-trip back into the form, only a URL can.
+  const reuse = (entry: TranscriptionHistoryEntry) => {
+    switchTab(entry.sourceType === "social" ? "social" : "source");
+    if (entry.sourceType === "social") setSocialUrl(entry.sourceLabel);
+    else setSourceUrlInput(entry.sourceLabel);
+    setLanguage(entry.language ?? "auto");
+    setTagAudioEvents(entry.tagAudioEvents);
+    setNoVerbatim(entry.noVerbatim);
+    setAssignSpeakers(entry.diarize);
+    setKeyterms(entry.keyterms);
+  };
 
   const missingInput =
     (tab === "upload" && !file) ||
@@ -615,7 +629,7 @@ export default function SpeechToTextPage() {
         )}
       </div>
 
-      {!signedOut && <TranscriptionAccountHistory />}
+      {!signedOut && <TranscriptionAccountHistory onReuse={reuse} />}
     </div>
   );
 }

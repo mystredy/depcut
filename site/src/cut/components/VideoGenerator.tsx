@@ -47,9 +47,13 @@ import { cn } from "@/lib/utils";
 type VisualHistoryRow = {
   id: string;
   prompt: string;
+  aspect: string;
+  tier: string;
+  durationSeconds: number | null;
   status: string;
   errorMessage: string | null;
   outputUrl: string | null;
+  downloadUrl: string | null;
   outputMime: string | null;
   createdAt: string;
 };
@@ -336,6 +340,16 @@ export function VideoGenerator({ className }: { className?: string }) {
     attachAsReference(blob, row.prompt.slice(0, 60) || "reference");
   };
 
+  // The reference pictures/resolution/take count/ref mode a past run used
+  // aren't restorable — a row only keeps its final prompt/aspect/tier/
+  // duration — so this refills those and leaves the rest alone.
+  const reuse = (row: VisualHistoryRow) => {
+    setPrompt(row.prompt);
+    if (row.aspect in VIDEO_ASPECT_LABEL) setAspect(row.aspect as VideoAspect);
+    if (VIDEO_MODELS.some((m) => m.tier === row.tier)) setTier(row.tier as VideoTier);
+    if (row.durationSeconds) setDurationSeconds(row.durationSeconds);
+  };
+
   return (
     <div className={cn("space-y-5", className)}>
       <div className="relative flex flex-col rounded-2xl border border-input bg-card focus-within:border-ring">
@@ -564,6 +578,7 @@ export function VideoGenerator({ className }: { className?: string }) {
           label={(row) => row.prompt}
           emptyMessage="Nothing saved to your account yet — a generated clip will show up here."
           onUseAsReference={(row) => void attachHistoryEntryAsReference(row)}
+          onUseAgain={reuse}
         />
       )}
     </div>

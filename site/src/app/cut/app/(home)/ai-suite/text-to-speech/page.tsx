@@ -26,7 +26,9 @@ import { NoCreditsError, renderSpeechClip } from "@/cut/lib/tts";
 type AudioHistoryRow = {
   id: string;
   script: string;
+  direction: string | null;
   outputUrl: string;
+  downloadUrl: string;
   outputMime: string;
   createdAt: string;
 };
@@ -120,6 +122,14 @@ export default function TextToSpeechPage() {
       setLibraryState("idle");
       setError(e instanceof Error ? { text: e.message } : { text: "Could not add to library." });
     }
+  };
+
+  // The voice/language pickers are a shared cross-tool preference (see
+  // VoicePicker.tsx), not per-generation state — "Use again" leaves them
+  // alone and only refills what's actually local to this form.
+  const reuse = (row: AudioHistoryRow) => {
+    setScript(row.script);
+    setDirection(row.direction ?? "");
   };
 
   return (
@@ -284,6 +294,7 @@ export default function TextToSpeechPage() {
           kind="audio"
           label={(row) => row.script}
           emptyMessage="Nothing saved to your account yet — a generated clip will show up here."
+          onUseAgain={reuse}
         />
       )}
     </div>

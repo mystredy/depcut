@@ -21,9 +21,12 @@ import { cn } from "@/lib/utils";
 type ImageHistoryRow = {
   id: string;
   prompt: string;
+  aspect: string;
+  tier: string;
   status: string;
   errorMessage: string | null;
   outputUrl: string | null;
+  downloadUrl: string | null;
   outputMime: string | null;
   createdAt: string;
 };
@@ -207,6 +210,15 @@ export default function TextToImagePage() {
     attachAsReference(blob, row.prompt.slice(0, 60) || "reference");
   };
 
+  // The reference pictures a past run sent aren't restorable — a row only
+  // keeps its final prompt/aspect/tier, not the attachments — so this
+  // refills the prompt and settings, leaving refs (and count) alone.
+  const reuse = (row: ImageHistoryRow) => {
+    setPrompt(row.prompt);
+    if ((ASPECTS as string[]).includes(row.aspect)) setAspect(row.aspect as Aspect);
+    if (IMAGE_MODELS.some((m) => m.tier === row.tier)) setTier(row.tier as ImageTier);
+  };
+
   return (
     <div className="w-full space-y-6 p-6">
       <div>
@@ -362,6 +374,7 @@ export default function TextToImagePage() {
           label={(row) => row.prompt}
           emptyMessage="Nothing saved to your account yet — a generated image will show up here."
           onUseAsReference={(row) => void attachHistoryEntryAsReference(row)}
+          onUseAgain={reuse}
         />
       )}
     </div>
