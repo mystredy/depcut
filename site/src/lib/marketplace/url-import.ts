@@ -2,11 +2,17 @@ import ytdl from "@distube/ytdl-core";
 import * as cheerio from "cheerio";
 
 // Pulls title/description/tags from a link to a creator's own post on
-// YouTube, TikTok, Snapchat, Facebook, Instagram, or X, so they can reuse it
-// as a starting point for a Drop instead of retyping everything by hand.
+// YouTube, TikTok, Facebook, Instagram, or X, so they can reuse it as a
+// starting point for a Drop instead of retyping everything by hand.
 // Metadata only for now — none of these fetch the actual video bytes;
 // that's separate, still-undecided follow-up work.
-export type UrlImportPlatform = "youtube" | "tiktok" | "snapchat" | "facebook" | "instagram" | "x";
+//
+// Snapchat was tried and dropped: its Spotlight/Snap share pages only ever
+// expose generic profile boilerplate through Open Graph tags ("X is on
+// Snapchat!", the same on every link, no og:video at all) — confirmed
+// against a real share link, not just untested. Nothing to extract, so
+// there's no honest way to support it without a real API.
+export type UrlImportPlatform = "youtube" | "tiktok" | "facebook" | "instagram" | "x";
 
 export type UrlImportResult = {
   platform: UrlImportPlatform;
@@ -35,7 +41,6 @@ export function detectUrlImportPlatform(url: string): UrlImportPlatform | null {
   }
   if (host === "youtube.com" || host === "m.youtube.com" || host === "youtu.be") return "youtube";
   if (host === "tiktok.com" || host.endsWith(".tiktok.com")) return "tiktok";
-  if (host === "snapchat.com" || host.endsWith(".snapchat.com")) return "snapchat";
   if (host === "facebook.com" || host === "m.facebook.com" || host === "fb.watch") return "facebook";
   if (host === "instagram.com" || host === "m.instagram.com") return "instagram";
   if (host === "x.com" || host === "twitter.com" || host === "mobile.twitter.com") return "x";
@@ -88,24 +93,20 @@ async function extractTiktok(url: string): Promise<UrlImportResult> {
   };
 }
 
-// No public, unauthenticated API for a single post on any of these three —
+// No public, unauthenticated API for a single post on either of these —
 // Meta locked down oEmbed for Facebook/Instagram behind an app access token
-// years ago, and Snapchat never had one for Spotlight. Falls back to the
-// page's own Open Graph tags instead, the same thing a link preview reads.
+// years ago. Falls back to the page's own Open Graph tags instead, the
+// same thing a link preview reads.
 //
-// Facebook and Instagram: a plain Node fetch() with these same headers gets
-// real og:title/og:description back for a public page (verified live,
-// no login wall) — but that exact request, made from inside this app's own
-// dev server instead of a bare script, consistently gets a 400 from
-// Facebook with nothing else different. Likely Meta's bot detection reading
+// A plain Node fetch() with these same headers gets real
+// og:title/og:description back for a public page (verified live, no login
+// wall) — but that exact request, made from inside this app's own dev
+// server instead of a bare script, consistently gets a 400 from Facebook
+// with nothing else different. Likely Meta's bot detection reading
 // something below the header level (TLS/HTTP2 fingerprint) that a fetch()
 // call can't control either way. Worth retesting once this runs on Vercel's
 // infrastructure instead of this local dev server — the mechanism itself is
 // sound, this may well be an environment-specific block.
-//
-// Snapchat's Spotlight pages weren't verified at all (no real URL on hand
-// to test against). Treat all three as best-effort until confirmed against
-// a real link in the actual deployed environment.
 async function extractViaOpenGraph(
   url: string,
   platform: UrlImportPlatform,
@@ -138,14 +139,11 @@ async function extractX(url: string): Promise<UrlImportResult> {
 export async function extractFromUrl(url: string): Promise<UrlImportResult> {
   const platform = detectUrlImportPlatform(url);
   if (!platform) {
-    throw new UrlImportError("That link isn't a YouTube, TikTok, Snapchat, Facebook, Instagram, or X video.");
+    throw new UrlImportError("That link isn't a YouTube, TikTok, Facebook, Instagram, or X video.");
   }
   if (platform === "youtube") return extractYoutube(url);
   if (platform === "tiktok") return extractTiktok(url);
   if (platform === "x") return extractX(url);
-  if (platform === "snapchat") {
-    return extractViaOpenGraph(url, "snapchat", "Couldn't find any video info on that Snapchat link.");
-  }
   if (platform === "facebook") {
     return extractViaOpenGraph(url, "facebook", "Couldn't read that Facebook video — check the link is public.");
   }
