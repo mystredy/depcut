@@ -11,6 +11,7 @@ import { SectionTitle } from "@/cut/components/SectionTitle";
 import { SubTabs } from "@/cut/components/SubTabs";
 import { formatBytes } from "@/cut/components/desktopFolders";
 import { ToolHistoryList } from "@/cut/components/ToolHistoryList";
+import { TranscriptionAccountHistory } from "@/cut/components/TranscriptionAccountHistory";
 import { NoCreditsError, transcribeBlob, transcribeSourceUrl, type TranscribeSettings } from "@/cut/lib/cloudTranscribe";
 import { creditsUrl, signInUrl, useSignedIn } from "@/cut/lib/generate";
 import { useMicRecorder } from "@/cut/hooks/useMicRecorder";
@@ -683,6 +684,8 @@ export default function SpeechToTextPage() {
           return <CueList cues={entryCues} className="max-h-60" />;
         }}
       />
+
+      {!signedOut && <TranscriptionAccountHistory />}
     </div>
   );
 }

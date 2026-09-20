@@ -21,7 +21,8 @@ export type CreateTranscriptionInput =
 
 /** Record a finished (succeeded or failed) Speech to Text run — called once,
  * right after the run settles client-side (see
- * cut/lib/transcriptionPersist.ts). */
+ * cut/lib/transcriptionPersist.ts), or server-side right after the Telegram
+ * bot's Transcript action settles (see lib/telegram/commands.ts). */
 export async function createTranscriptionGeneration(input: CreateTranscriptionInput): Promise<{ id: string }> {
   return prisma.transcriptionGeneration.create({
     data: {
@@ -41,4 +42,44 @@ export async function createTranscriptionGeneration(input: CreateTranscriptionIn
     },
     select: { id: true },
   });
+}
+
+export type TranscriptionGenerationRow = {
+  id: string;
+  sourceType: string;
+  sourceLabel: string;
+  status: string;
+  transcript: string | null;
+  errorMessage: string | null;
+  createdAt: Date;
+};
+
+const HISTORY_LIMIT = 50;
+
+/** The signed-in user's own durable transcription history — every run
+ * counted here regardless of whether it came from the Speech to Text page
+ * or the Telegram bot's Transcript button, both of which call
+ * createTranscriptionGeneration above. */
+export async function listTranscriptionGenerations(userId: string): Promise<TranscriptionGenerationRow[]> {
+  return prisma.transcriptionGeneration.findMany({
+    orderBy: { createdAt: "desc" },
+    select: {
+      createdAt: true,
+      errorMessage: true,
+      id: true,
+      sourceLabel: true,
+      sourceType: true,
+      status: true,
+      transcript: true,
+    },
+    take: HISTORY_LIMIT,
+    where: { userId },
+  });
+}
+
+/** Deletes one row, scoped to its owner — returns whether a row actually
+ * matched (false if it didn't exist or belonged to someone else). */
+export async function deleteTranscriptionGeneration(userId: string, id: string): Promise<boolean> {
+  const { count } = await prisma.transcriptionGeneration.deleteMany({ where: { id, userId } });
+  return count > 0;
 }

@@ -2,9 +2,17 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { withDepCutAuth } from "@/lib/depcut-api-auth";
-import { createTranscriptionGeneration } from "@/lib/transcriptions/db";
+import { createTranscriptionGeneration, listTranscriptionGenerations } from "@/lib/transcriptions/db";
 
 export const dynamic = "force-dynamic";
+
+// The signed-in user's own durable transcription history — see
+// db.ts's listTranscriptionGenerations for what counts (Speech to Text page
+// runs and Telegram bot Transcript runs alike).
+export const GET = withDepCutAuth(async (request) => {
+  const transcriptions = await listTranscriptionGenerations(request.depcut.userId);
+  return NextResponse.json({ transcriptions });
+});
 
 const createSchema = z
   .object({
