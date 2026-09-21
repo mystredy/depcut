@@ -661,7 +661,10 @@ export async function importUrlMedia(
     // The cloud route is async: it answers {jobId} and a worker does the fetch.
     const started = await apiJson<{ jobId?: string }>(res);
     if (!res.ok || !started.jobId) throw new Error(started.error ?? "Could not import that URL.");
-    body = await pollImportUrlJob(started.jobId, backend);
+    body = await pollImportUrlJob<{ files?: { fileName: string; title: string }[]; text?: string }>(
+      started.jobId,
+      backend
+    );
   } else {
     body = await apiJson<{ files?: { fileName: string; title: string }[]; text?: string }>(res);
   }
@@ -685,14 +688,14 @@ export async function importUrlMedia(
   return { assets, text: body.text };
 }
 
-/** Poll a cloud import-url job to completion (2s cadence, ~10 min cap) and
- * return the engine-shaped {files, text} result. Fails only when the job
- * itself says so — state "error", or the job gone (404) — or after several
- * consecutive failed polls; a single dropped request keeps polling. */
-async function pollImportUrlJob(
-  jobId: string,
-  backend: CutBackend
-): Promise<{ files?: { fileName: string; title: string }[]; text?: string }> {
+/** Poll a cloud render job to completion (2s cadence, ~10 min cap) and
+ * return its result, typed by the caller. Fails only when the job itself
+ * says so — state "error", or the job gone (404) — or after several
+ * consecutive failed polls; a single dropped request keeps polling. Shared
+ * by every cloud job that answers {jobId} and lands its real payload
+ * async — today the project and library URL-import flows (media.ts /
+ * library.ts), same job kind, different landing spot. */
+export async function pollImportUrlJob<T>(jobId: string, backend: CutBackend): Promise<T> {
   const deadline = Date.now() + 10 * 60 * 1000;
   const MAX_STRIKES = 6;
   let strikes = 0;
@@ -712,12 +715,9 @@ async function pollImportUrlJob(
       continue;
     }
     strikes = 0;
-    const job = await apiJson<{
-      state?: string;
-      result?: { files?: { fileName: string; title: string }[]; text?: string };
-    }>(res);
+    const job = await apiJson<{ state?: string; error?: string; result?: T }>(res);
     if (job.state === "error") throw new Error(job.error ?? "Could not import that URL.");
-    if (job.state === "done") return job.result ?? {};
+    if (job.state === "done") return job.result ?? ({} as T);
   }
 }
 

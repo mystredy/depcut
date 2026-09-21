@@ -5,6 +5,7 @@ import { readSnapshot, writeSnapshot } from "./cache";
 import {
   enrichAsset,
   importRemote,
+  pollImportUrlJob,
   presignedUpload,
   probeFileMeta,
   uploadProjectMediaTo,
@@ -120,11 +121,23 @@ export async function importUrlToLibrary(
   url: string,
   residency: Residency = activeResidency()
 ): Promise<LibraryAsset[]> {
-  const res = await backendFor(residency).fetch("/api/cut/library/import-url", {
+  const backend = backendFor(residency);
+  const res = await backend.fetch("/api/cut/library/import-url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url }),
   });
+  if (backend.kind === "cloud") {
+    // The cloud route is async, same reasoning as the project-scoped
+    // import (media.ts's importUrlMedia): it answers {jobId} and a worker
+    // does the fetch, landing the result straight in the Library instead
+    // of a project's media.
+    const started = await apiJson<{ jobId?: string }>(res);
+    if (!res.ok || !started.jobId) throw new Error(started.error ?? "Could not import that URL.");
+    const { assets } = await pollImportUrlJob<{ assets?: LibraryAsset[] }>(started.jobId, backend);
+    if (!assets?.length) throw new Error("That link has no media to import.");
+    return assets.map((a) => ({ ...a, residency }));
+  }
   const body = await apiJson<LibraryAsset[]>(res);
   if (!res.ok) throw new Error(body.error ?? "Could not import that URL.");
   return (Array.isArray(body) ? body : []).map((a) => ({ ...a, residency }));

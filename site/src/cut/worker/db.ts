@@ -82,3 +82,74 @@ export async function unregisterObjects(userId: string, r2Keys: string[]): Promi
     });
   });
 }
+
+/** Land one downloaded file in the shared Library instead of a project: the
+ * media object plus its CutLibraryAsset metadata row, in one step since the
+ * worker already has the bytes (unlike the browser's presign-then-complete
+ * upload, which needs the pending row in between). */
+export async function registerLibraryObject(opts: {
+  userId: string;
+  r2Key: string;
+  fileName: string;
+  mime: string;
+  bytes: number;
+  meta: { name: string; type: "video" | "audio" | "image"; duration: number };
+}): Promise<{ id: string; fileName: string; name: string; type: string; duration: number; addedAt: number }> {
+  const prior = await prisma.cutMediaObject.findUnique({
+    where: { r2Key: opts.r2Key },
+    select: { bytes: true, uploadState: true },
+  });
+  const priorBytes = prior?.uploadState === "complete" ? prior.bytes : BigInt(0);
+  const delta = BigInt(opts.bytes) - priorBytes;
+  const asset = await prisma.$transaction(async (tx) => {
+    const obj = await tx.cutMediaObject.upsert({
+      where: { r2Key: opts.r2Key },
+      create: {
+        userId: opts.userId,
+        r2Key: opts.r2Key,
+        fileName: opts.fileName,
+        mime: opts.mime,
+        bytes: BigInt(opts.bytes),
+        kind: "library",
+        uploadState: "complete",
+      },
+      update: { bytes: BigInt(opts.bytes), uploadState: "complete" },
+    });
+    await tx.cutStorageUsage.upsert({
+      where: { userId: opts.userId },
+      create: { userId: opts.userId, bytes: delta },
+      update: { bytes: { increment: delta } },
+    });
+    return tx.cutLibraryAsset.create({
+      data: { userId: opts.userId, mediaObjectId: obj.id, meta: opts.meta },
+    });
+  });
+  return {
+    id: asset.id,
+    fileName: opts.fileName,
+    name: opts.meta.name,
+    type: opts.meta.type,
+    duration: opts.meta.duration,
+    addedAt: asset.createdAt.getTime(),
+  };
+}
+
+/** Undo registerLibraryObject for a job's staged files: the CutLibraryAsset
+ * rows have no DB-level foreign key to their media objects (this schema
+ * never declares that relation — see CutLibraryAsset.mediaObjectId), so
+ * unregisterObjects alone would leave them dangling. Delete them first,
+ * then fall through to the same row/usage cleanup every other job kind
+ * uses. R2 object deletion stays the caller's (best-effort) follow-up. */
+export async function unregisterLibraryObjects(userId: string, r2Keys: string[]): Promise<void> {
+  if (r2Keys.length === 0) return;
+  const objects = await prisma.cutMediaObject.findMany({
+    where: { userId, r2Key: { in: r2Keys } },
+    select: { id: true },
+  });
+  if (objects.length > 0) {
+    await prisma.cutLibraryAsset.deleteMany({
+      where: { userId, mediaObjectId: { in: objects.map((o) => o.id) } },
+    });
+  }
+  await unregisterObjects(userId, r2Keys);
+}

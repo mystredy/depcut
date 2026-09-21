@@ -15,6 +15,7 @@ import {
 // routes can never drift apart.
 
 export {
+  libraryKey,
   projectCardKey as cardKey,
   projectExportKey as exportKey,
   projectHlsPrefix as hlsPrefix,

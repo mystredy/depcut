@@ -447,6 +447,29 @@ export const jobsCloud = {
     }
   },
 
+  /** Queue a URL import that lands in the shared Library instead of a
+   * project — same job kind (projectId null tells the worker where to put
+   * the result), same async-on-the-cloud reasoning as importUrl above. */
+  async importUrlToLibrary(userId: string, req: Request) {
+    try {
+      const { url } = (await req.json()) as { url?: string };
+      if (!url) return err("No URL provided.", 400);
+      const capped = await renderJobCheck(userId);
+      if (capped) return capped;
+      const row = await prisma.cutRenderJob.create({
+        data: {
+          userId,
+          kind: "import_url",
+          spec: { url } as unknown as Prisma.InputJsonValue,
+        },
+      });
+      wakeRenderWorker();
+      return Response.json({ jobId: row.id });
+    } catch (e) {
+      return caught(e, "Could not import that URL.");
+    }
+  },
+
   /** Generic job poll for non-export kinds (import_url). */
   async status(userId: string, jobId: string) {
     const row = await findJob(userId, jobId);

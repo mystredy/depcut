@@ -63,6 +63,7 @@ const CUT_CLOUD_ROUTES: CloudRoute[] = [
   { method: "POST", path: "/api/cut-cloud/errors/report", handler: (r, u) => errorsCloud.report(u, r) },
 
   { method: "GET", path: "/api/cut-cloud/library", handler: (_r, u) => libraryCloud.list(u) },
+  { method: "POST", path: "/api/cut-cloud/library/import-url", handler: (r, u) => jobsCloud.importUrlToLibrary(u, r) },
   { method: "POST", path: "/api/cut-cloud/library/presign", handler: (r, u) => libraryCloud.presign(u, r) },
   { method: "POST", path: "/api/cut-cloud/library/complete", handler: (r, u) => libraryCloud.complete(u, r) },
   { method: "POST", path: "/api/cut-cloud/library/use", handler: (r, u) => libraryCloud.use(u, r) },
