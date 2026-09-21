@@ -21,6 +21,27 @@ import { decodeAudioSpan } from "./mediaRead";
 import { timeStretch } from "./timeStretch";
 import { clampCutOverlap } from "./types";
 
+/** One retry, matching exportRender.ts's ClipReader on the video side: a
+ * long render or transcode can outlive the media URL's first, already-
+ * resolved target (that URL redirects to a freshly presigned one on every
+ * fetch — see types.ts's mediaUrl — but mediabunny's reader can hold onto
+ * the redirect it already followed), and a transient network drop looks
+ * the same way. decodeAudioSpan opens a fresh reader on every call, so
+ * simply calling it again is enough to recover from either. A second
+ * failure is real and is allowed to fail the render, same as the video
+ * side. */
+async function decodeAudioSpanResilient(
+  src: string,
+  from: number,
+  to: number
+): Promise<AudioBuffer | null> {
+  try {
+    return await decodeAudioSpan(src, from, to);
+  } catch {
+    return await decodeAudioSpan(src, from, to);
+  }
+}
+
 /** One track-0 clip's audio in the sequential fold. A spacer (no file) only
  * shapes time. */
 export interface MixClip {
@@ -202,7 +223,7 @@ export async function renderMix(spec: MixSpec, opts: MixOptions): Promise<AudioB
       // check. A source that could not be *read* is a different thing and is
       // allowed to fail the render: silently dropping it would hand the user a
       // finished file with a clip, or a whole voiceover, missing its sound.
-      const buf = await decodeAudioSpan(resolve(span.file), span.from, span.to);
+      const buf = await decodeAudioSpanResilient(resolve(span.file), span.from, span.to);
       if (buf) buffers.set(key, buf);
     })
   );
