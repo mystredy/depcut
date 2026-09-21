@@ -10,7 +10,31 @@ import { MockSidePanel } from "@/cut/components/editor-mock/MockSidePanel";
 import { MockTimeline } from "@/cut/components/editor-mock/MockTimeline";
 import { MockTopBar } from "@/cut/components/editor-mock/MockTopBar";
 import { MOCK_PROJECTS, type MockProject } from "@/cut/components/editor-mock/mockData";
+import { isDark, readStoredTheme } from "@/cut/components/ThemeProvider";
 import { cn } from "@/lib/utils";
+
+// The marketing page around this mock keeps its fixed cream look regardless
+// of theme (ThemeProvider is scoped to the signed-in app) — but this mock is
+// a literal replica of the real editor's chrome, so unlike the rest of the
+// page it should show up in whichever theme the viewer actually uses there.
+// No ThemeProvider wraps this route, so it reads the same stored preference
+// directly rather than through useTheme(), and reacts to it live so toggling
+// the theme in another tab updates an already-open landing page.
+function useMockDark(): boolean {
+  const [dark, setDark] = useState(false);
+  useEffect(() => {
+    const sync = () => setDark(isDark(readStoredTheme()));
+    sync();
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    mq.addEventListener("change", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      mq.removeEventListener("change", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+  return dark;
+}
 
 // The mock is authored at a fixed design size and scaled to its container's
 // width, so its internals never reflow — it behaves like a live screenshot.
@@ -62,6 +86,7 @@ export function EditorMock({
   const [active, setActive] = useState(0);
   const frameRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ width: 0, height: 0 });
+  const dark = useMockDark();
 
   useEffect(() => {
     const el = frameRef.current;
@@ -102,6 +127,7 @@ export function EditorMock({
         <div
           className={cn(
             "overflow-hidden rounded-2xl bg-card",
+            dark && "dark",
             shadow
               ? "shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_24px_64px_rgba(15,14,13,0.25)]"
               : "shadow-[0_0_0_1px_rgba(0,0,0,0.06)]",

@@ -6,15 +6,15 @@ import { THEME_STORAGE_KEY } from "@/cut/components/ThemeScript";
 
 export type ThemeChoice = "light" | "dark" | "system";
 
-function prefersDark(): boolean {
+export function prefersDark(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
-function isDark(choice: ThemeChoice): boolean {
+export function isDark(choice: ThemeChoice): boolean {
   return choice === "dark" || (choice === "system" && prefersDark());
 }
 
-function readStoredTheme(): ThemeChoice {
+export function readStoredTheme(): ThemeChoice {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
     return stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
