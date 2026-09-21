@@ -244,6 +244,49 @@ async function synthesizeSegment(
   return { samples: new Int16Array(bytes.buffer, 0, bytes.byteLength >> 1), rate };
 }
 
+const MAX_ELEVENLABS_CHARS = 5000;
+
+/** One hosted ElevenLabs speech call: a single script in, a playable clip out
+ * — no PCM decoding or WAV assembly, since ElevenLabs (unlike Gemini TTS)
+ * returns an already-encoded clip (mp3 by default) and the ai-suite
+ * text-to-speech page only ever sends one segment at a time, not a timeline
+ * of cues to lay out and mix. `speed` is ElevenLabs' own voice_settings.speed
+ * (1.0 = default); omitted when left at the default so the request matches
+ * the voice's stored settings. */
+export async function renderElevenLabsClip(
+  text: string,
+  opts: { model: string; voiceId: string; speed?: number }
+): Promise<{ blob: Blob }> {
+  const prompt = text.trim();
+  if (!prompt) throw new Error("Nothing to say.");
+  if (prompt.length > MAX_ELEVENLABS_CHARS) {
+    throw new Error(`The script must stay under ${MAX_ELEVENLABS_CHARS} characters.`);
+  }
+
+  const res = await hostedPost("/api/inference/assets", {
+    kind: "speech",
+    provider: "elevenlabs",
+    model: opts.model,
+    prompt,
+    inputs: { voiceId: opts.voiceId },
+    ...(opts.speed !== undefined && opts.speed !== 1
+      ? { parameters: { voiceSettings: { speed: opts.speed } } }
+      : {}),
+  });
+  if (!res.ok) {
+    const message = await readError(res, "Voice generation failed.");
+    throw res.status === 402 ? new NoCreditsError(message) : new Error(message);
+  }
+  const gen = (await res.json()) as {
+    outputs?: { dataBase64?: string; contentType?: string }[];
+  };
+  const out = gen.outputs?.find((o) => o.dataBase64);
+  if (!out?.dataBase64) throw new Error("The provider returned no audio.");
+
+  const bytes = bytesFromBase64(out.dataBase64);
+  return { blob: new Blob([bytes], { type: out.contentType ?? "audio/mpeg" }) };
+}
+
 /** Nearest-neighbor resample, only for the off chance segments disagree. */
 function resample(clip: PcmClip, rate: number): PcmClip {
   if (clip.rate === rate) return clip;
