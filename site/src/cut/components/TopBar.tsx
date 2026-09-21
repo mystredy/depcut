@@ -362,15 +362,15 @@ export function TopBar({
         variant={aiOpen ? "default" : "outline"}
         size="sm"
         className="ai-toggle max-sm:size-7 max-sm:px-0"
-        aria-label="Chat"
+        aria-label="Agent"
         aria-pressed={aiOpen}
-        title="Chat (⌘J)"
+        title="Agent (⌘J)"
         onClick={() => {
           const s = useEditor.getState();
           s.setAiOpen(!s.aiOpen);
         }}
       >
-        <Sparkles data-icon="inline-start" /> <span className="hidden sm:inline">Chat</span>
+        <Sparkles data-icon="inline-start" /> <span className="hidden sm:inline">Agent</span>
       </Button>
     </>
   );
@@ -603,7 +603,7 @@ export function TopBar({
                   }}
                 >
                   <Sparkles />
-                  <span className="flex-1">Chat</span>
+                  <span className="flex-1">Agent</span>
                   {aiOpen && <Check className="size-3.5 text-muted-foreground" />}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setFeedbackOpen(true)}>

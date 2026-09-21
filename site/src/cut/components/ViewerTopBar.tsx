@@ -83,14 +83,14 @@ export function ViewerTopBar() {
             variant="ghost"
             size="sm"
             className="ai-toggle"
-            aria-label="Chat"
-            title="Chat (⌘J)"
+            aria-label="Agent"
+            title="Agent (⌘J)"
             onClick={() => {
               const s = useEditor.getState();
               s.setAiOpen(!s.aiOpen);
             }}
           >
-            <Sparkles data-icon="inline-start" /> Chat
+            <Sparkles data-icon="inline-start" /> Agent
           </Button>
         )}
         <Button size="sm" disabled={copying} onClick={() => void copyProject()}>

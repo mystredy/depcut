@@ -52,7 +52,7 @@ export function MockTopBar({ project }: { project: MockProject }) {
       </div>
       <div className="flex items-center gap-2">
         <span className="flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium text-foreground">
-          <Sparkles className="size-3.5" /> Chat
+          <Sparkles className="size-3.5" /> Agent
         </span>
         <span className="flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground shadow-xs">
           <Upload className="size-3.5" /> Export
