@@ -23,7 +23,7 @@ export function CutHero() {
       />
 
       <div className="flex flex-col items-center text-center">
-        <Eyebrow>AI video editor</Eyebrow>
+        <Eyebrow>AI video editor & creative suite</Eyebrow>
         <h1 className="mt-6 max-w-[900px] text-[clamp(40px,6.5vw,76px)] font-semibold leading-[1.02] tracking-[-0.02em] text-white">
           The video editor{" "}
           <span style={GRADIENT_TEXT}>iMovie should have been.</span>
