@@ -17,6 +17,7 @@ import {
   type InferenceModel,
   type InferenceProvider,
   type JsonValue,
+  type VoiceOption,
 } from "@/lib/inference/providers";
 
 type AdapterEnvironment = Record<string, string | undefined>;
@@ -61,19 +62,42 @@ export function createAudioAssetProvider(
     }
   }
 
+  // Voice catalog for text-to-speech (ai-suite/text-to-speech's voice picker):
+  // the account's premade and added voices, each with the labels (gender,
+  // accent, age, use case, …) ElevenLabs attaches and a hosted sample clip
+  // the picker can play without spending a generation.
+  async function listVoices(): Promise<VoiceOption[]> {
+    ensureConfigured(configured);
+    try {
+      const { voices } = await client.voices.getAll();
+      return voices.map((voice) => ({
+        id: voice.voiceId,
+        name: voice.name ?? voice.voiceId,
+        category: voice.category,
+        labels: voice.labels,
+        previewUrl: voice.previewUrl,
+      }));
+    } catch (error) {
+      throw providerError("Unable to list voices.", error);
+    }
+  }
+
   async function generateAsset({
     request,
   }: AssetGenerationProviderRequest): Promise<AssetGenerationProviderResult> {
     ensureConfigured(configured);
 
-    if (request.kind !== "music") {
+    if (request.kind !== "music" && request.kind !== "speech") {
       throw new InferenceProviderError("Provider does not support this asset kind.", {
         statusCode: 400,
         code: "unsupported_asset_kind",
       });
     }
 
-    const mode = stringParam(request.parameters, "audioMode") ?? "music";
+    // Music additionally distinguishes a sound-effect request by its own
+    // audioMode parameter; speech always means speech.
+    const mode =
+      request.kind === "speech" ? "speech" : stringParam(request.parameters, "audioMode") ?? "music";
     switch (mode) {
       case "music":
         return createMusic(client, request);
@@ -94,12 +118,16 @@ export function createAudioAssetProvider(
   return {
     id: providerID,
     configured,
-    // Music only: generateAsset rejects every other kind, and advertising the
-    // generic "audio" capability would make this a fallback match for speech
-    // routing (preferredCapabilities ["speech","audio"]) and misroute voiceovers
-    // here whenever the speech provider is unconfigured.
+    // Music only: generateAsset rejects every other kind besides music and
+    // speech (see createSpeech below), and advertising the generic "audio"
+    // capability would make this a fallback match for speech routing
+    // (preferredCapabilities ["speech","audio"]) and misroute voiceovers here
+    // whenever the Gemini speech provider is unconfigured. Text-to-speech
+    // reaches this provider only by naming it explicitly (request.provider =
+    // "elevenlabs"), which bypasses capability matching entirely.
     capabilities: ["music"],
     listModels,
+    listVoices,
     generateAsset,
   };
 }

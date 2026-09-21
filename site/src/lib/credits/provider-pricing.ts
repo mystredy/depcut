@@ -433,6 +433,12 @@ const elevenLabsRunModelPricing: Record<ElevenLabsRunModel, ProviderCreditPricin
   // published rate card — verify against the account's actual plan/rate
   // before relying on this margin at volume.
   [elevenLabsModels.scribe]: { durationSecondCostMicros: usdWithMargin("0.000111") },
+  // Same per-character rate elevenLabsCreditPricing's pattern match below
+  // already applies to these ids — listed explicitly here too since they're
+  // now named run models (elevenlabs-models.ts) the ai-suite text-to-speech
+  // page selects directly.
+  [elevenLabsModels.speechV3]: { characterCostMicros: usdWithMargin("0.0001") },
+  [elevenLabsModels.speechMultilingualV2]: { characterCostMicros: usdWithMargin("0.0001") },
 };
 
 function elevenLabsCreditPricing(model: string): ProviderCreditPricing | undefined {

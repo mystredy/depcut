@@ -102,6 +102,17 @@ export type AssetGenerationProviderResult = {
   metadata?: JsonObject;
 };
 
+// One selectable voice from a provider's own catalog (currently ElevenLabs
+// only — Gemini speaks through a small set of hardcoded prebuilt voice names
+// instead of a queryable catalog, so it has no listVoices implementation).
+export type VoiceOption = {
+  id: string;
+  name: string;
+  category?: string;
+  labels?: Record<string, string>;
+  previewUrl?: string;
+};
+
 export type StoredGenerationForProvider = {
   id: string;
   kind: AssetGenerationKind;
@@ -120,6 +131,9 @@ export type InferenceProvider = {
   capabilities: InferenceModality[];
   responseProviderIDs?: string[];
   listModels: (modalities: InferenceModality[]) => Promise<InferenceModel[]>;
+  // Only implemented by a provider whose voices are a queryable account
+  // catalog (ElevenLabs) rather than a small hardcoded set (Gemini).
+  listVoices?: () => Promise<VoiceOption[]>;
   completeText?: (
     request: ChatCompletionRequest,
   ) => Promise<TextCompletionResult>;

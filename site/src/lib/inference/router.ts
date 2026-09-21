@@ -1,4 +1,5 @@
 import { createAnthropicResponsesProvider } from "@/lib/inference/adapters/anthropic-responses";
+import { createAudioAssetProvider } from "@/lib/inference/adapters/audio-studio";
 import { createGeminiComputerUseProvider } from "@/lib/inference/adapters/gemini-computer-use";
 import { createGeminiImageAssetProvider } from "@/lib/inference/adapters/gemini-image";
 import { createGeminiMusicAssetProvider } from "@/lib/inference/adapters/gemini-music";
@@ -203,6 +204,13 @@ export class ProviderRegistry {
     return provider;
   }
 
+  /** A configured provider by id, or undefined — for a capability the router
+   * has no request shape for (e.g. voice listing), where the caller already
+   * knows which provider it wants. */
+  public byID(id: string): InferenceProvider | undefined {
+    return this.providers.find((candidate) => candidate.configured && candidate.id === id);
+  }
+
   public async refresh(generation: StoredGenerationForProvider) {
     const provider = this.providerForGeneration(generation);
     if (!provider.refreshAsset) {
@@ -232,14 +240,24 @@ export function createProviderRegistry() {
     // the video panel always names a provider explicitly (see videoModels.ts),
     // so capability-based fallback never has to pick between the two.
     createGeminiVeoVideoAssetProvider(),
-    // Gemini TTS serves kind="speech" (voiceovers, subtitle read-alouds).
+    // Gemini TTS is the default kind="speech" provider (voiceovers, subtitle
+    // read-alouds) — listed ahead of ElevenLabs below so it wins that
+    // capability fallback whenever a speech request names no provider.
     createGeminiSpeechAssetProvider(),
-    // Gemini/Lyria is the sole kind="music" provider — the Audio-tab generator,
-    // generate_music, and the brief-to-video bed. It runs on the always-hosted
-    // Vertex service account, so music never falls back to another provider. The
-    // adapter picks the clip or the longer pro model from the requested length so
-    // a bed can still span a longer video (see gemini-music.ts).
+    // Gemini/Lyria is the default kind="music" provider — the Audio-tab
+    // generator, generate_music, and the brief-to-video bed. It runs on the
+    // always-hosted Vertex service account, so music never falls back to
+    // another provider by itself. The adapter picks the clip or the longer
+    // pro model from the requested length so a bed can still span a longer
+    // video (see gemini-music.ts).
     createGeminiMusicAssetProvider(),
+    // ElevenLabs (audio-studio.ts): reached only by an explicit
+    // request.provider = "elevenlabs" — for speech (ai-suite/text-to-speech's
+    // Audio Model picker) and, later, its own music modes. Listed after both
+    // Gemini asset providers above so neither's capability fallback ever
+    // picks it by accident; its own capabilities list stays music-only for
+    // the same reason (see audio-studio.ts's comment).
+    createAudioAssetProvider(),
     createGeminiComputerUseProvider(),
     // General hosted chat/tool-calling for the Cut AI panel's GPT and Claude
     // model options — ahead of hosted-responses (its narrow debug-inspection
