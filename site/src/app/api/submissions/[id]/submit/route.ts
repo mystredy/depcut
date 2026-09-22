@@ -64,7 +64,7 @@ export const POST = withDepCutAuth(async (request, context: RouteContext) => {
     if (!hasVerification) missing.push("verification export");
     // Set by a successful Check (see /api/submissions/[id]/edit-code) —
     // a Pro submission always belongs to a studio.
-    if (!submission.brandId) missing.push("edit code");
+    if (!submission.studioId) missing.push("edit code");
   }
   if (missing.length > 0) {
     return NextResponse.json(

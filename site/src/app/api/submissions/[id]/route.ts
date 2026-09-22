@@ -17,7 +17,7 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
   const submission = await prisma.submission.findUnique({
     include: {
       assets: true,
-      brand: { select: { id: true, name: true } },
+      studio: { select: { id: true, name: true } },
       category: { select: { emoji: true, name: true } },
       project: { select: { name: true } },
       workspaceLinks: true,
@@ -125,7 +125,7 @@ export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
     data: parsed.data,
     include: {
       assets: true,
-      brand: { select: { id: true, name: true } },
+      studio: { select: { id: true, name: true } },
       category: { select: { emoji: true, name: true } },
       workspaceLinks: true,
     },

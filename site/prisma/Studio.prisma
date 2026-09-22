@@ -32,6 +32,12 @@ model Studio {
   drops              Drop[]
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+  // Pro artists authorized to submit for this studio, the single-use edit
+  // codes issued for it, and the submissions matched to it — see
+  // ProSubmissionCodes.prisma.
+  artistAssignments ArtistStudioAssignment[]
+  editCodes         SubmissionEditCode[]
+  submissions       Submission[]
 
   @@index([ownerId])
   @@map("studio")

@@ -15,10 +15,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   type AdminUser,
   useAdjustArtistRate,
-  useAdminBrands,
-  useArtistBrandAssignments,
-  useAssignArtistBrand,
-  useUnassignArtistBrand,
+  useAdminStudios,
+  useArtistStudioAssignments,
+  useAssignArtistStudio,
+  useUnassignArtistStudio,
 } from "@/queries/admin";
 import { ApiError } from "@/queries/apiClient";
 
@@ -168,18 +168,18 @@ function PermissionsDialogBody({
   );
 }
 
-// Which studios (Brand — /admin/social/brands) a Pro artist may submit for,
-// and the "code" Telegram command generates a code against. Only shown for
-// Pro artists: a Standard submission never asks for an edit code at all.
+// Which studios a Pro artist may submit for, and the "code" Telegram command
+// generates a code against. Only shown for Pro artists: a Standard
+// submission never asks for an edit code at all.
 function StudiosSection({ userId }: { userId: string }) {
-  const assignments = useArtistBrandAssignments(userId);
-  const brands = useAdminBrands();
-  const assign = useAssignArtistBrand();
-  const unassign = useUnassignArtistBrand();
+  const assignments = useArtistStudioAssignments(userId);
+  const studios = useAdminStudios();
+  const assign = useAssignArtistStudio();
+  const unassign = useUnassignArtistStudio();
   const [picked, setPicked] = useState("");
 
-  const assignedIds = new Set((assignments.data?.assignments ?? []).map((a) => a.brand.id));
-  const available = (brands.data?.brands ?? []).filter((b) => !assignedIds.has(b.id));
+  const assignedIds = new Set((assignments.data?.assignments ?? []).map((a) => a.studio.id));
+  const available = (studios.data?.studios ?? []).filter((s) => !assignedIds.has(s.id));
 
   return (
     <div className="rounded-xl border p-3">
@@ -189,11 +189,11 @@ function StudiosSection({ userId }: { userId: string }) {
       <div className="mt-2 space-y-1.5">
         {assignments.data?.assignments.map((a) => (
           <div key={a.id} className="flex items-center justify-between rounded-lg bg-muted/50 px-2.5 py-1.5">
-            <span className="text-sm">{a.brand.name}</span>
+            <span className="text-sm">{a.studio.name}</span>
             <button
               type="button"
               disabled={unassign.isPending}
-              onClick={() => unassign.mutate({ brandId: a.brand.id, userId })}
+              onClick={() => unassign.mutate({ studioId: a.studio.id, userId })}
               className="text-xs text-muted-foreground hover:text-destructive disabled:opacity-50"
             >
               Remove
@@ -210,13 +210,13 @@ function StudiosSection({ userId }: { userId: string }) {
           <Select value={picked} onValueChange={(value) => setPicked(value ?? "")}>
             <SelectTrigger size="sm" className="flex-1">
               <SelectValue placeholder="Add a studio…">
-                {(value: string | null) => available.find((b) => b.id === value)?.name ?? "Add a studio…"}
+                {(value: string | null) => available.find((s) => s.id === value)?.name ?? "Add a studio…"}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {available.map((b) => (
-                <SelectItem key={b.id} value={b.id}>
-                  {b.name}
+              {available.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -226,7 +226,7 @@ function StudiosSection({ userId }: { userId: string }) {
             variant="outline"
             disabled={!picked || assign.isPending}
             onClick={() => {
-              assign.mutate({ brandId: picked, userId });
+              assign.mutate({ studioId: picked, userId });
               setPicked("");
             }}
           >

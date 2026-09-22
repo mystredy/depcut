@@ -674,10 +674,10 @@ export default function SubmitProjectEditorPage() {
         if (result.packageDescription) setDescription(result.packageDescription);
         if (result.packageTags) setTags(result.packageTags);
         setCouponMessage(
-          `Matched to ${result.brandName}.${result.videoPulled ? "" : " Couldn't pull the video automatically — upload it below."}`
+          `Matched to ${result.studioName}.${result.videoPulled ? "" : " Couldn't pull the video automatically — upload it below."}`
         );
       } else {
-        setCouponMessage(`Matched to ${result.brandName}.`);
+        setCouponMessage(`Matched to ${result.studioName}.`);
       }
     } catch (e) {
       setCouponError(e instanceof ApiError ? e.message : "Couldn't check that just now — try again.");
@@ -770,7 +770,7 @@ export default function SubmitProjectEditorPage() {
           packageTitle.trim() &&
           description.trim() &&
           tags.trim() &&
-          Boolean(submission?.brand))) &&
+          Boolean(submission?.studio))) &&
       (!watermarkEnabled || watermarkText.trim())
   );
 

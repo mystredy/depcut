@@ -1,46 +1,47 @@
-// Pro Verification Suite's studio-scoped edit codes: which studios (Brand —
-// see SiteConfig.prisma) a Pro artist may submit for, and the single-use
-// codes that identify which one a given submission is for. A code is issued
-// from Telegram (send "code", pick a studio from the inline buttons — see
+// Pro Verification Suite's studio-scoped edit codes: which studios (Studio —
+// see Studio.prisma) a Pro artist may submit for, and the single-use codes
+// that identify which one a given submission is for. A code is issued from
+// Telegram (send "code", pick a studio from the inline buttons — see
 // lib/telegram/commands.ts) and redeemed once by Submit Project's Check
 // button (see /api/submissions/[id]/edit-code).
 
 // Grants a Pro artist permission to submit for one studio. Set from the same
 // Permissions dialog that grants artist/Pro access (/admin/users) — a studio
 // assignment with no Pro access to hang it on doesn't mean anything on its
-// own.
-model ArtistBrandAssignment {
+// own. Distinct from StudioMember: a member manages the studio's own social
+// presence, this is a Pro artist authorized to submit content for it.
+model ArtistStudioAssignment {
   id           String   @id @default(cuid())
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brandId      String
-  brand        Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  studioId     String
+  studio       Studio   @relation(fields: [studioId], references: [id], onDelete: Cascade)
   assignedById String?
-  assignedBy   User?    @relation("BrandAssignmentsGranted", fields: [assignedById], references: [id], onDelete: SetNull)
+  assignedBy   User?    @relation("StudioAssignmentsGranted", fields: [assignedById], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
 
-  @@unique([userId, brandId])
+  @@unique([userId, studioId])
   @@index([userId])
-  @@index([brandId])
-  @@map("artist_brand_assignment")
+  @@index([studioId])
+  @@map("artist_studio_assignment")
 }
 
 // A single-use code, e.g. "VK12345678" (2 letters from the studio's name +
 // 8 random digits). Redeeming one (see POST /api/submissions/[id]/edit-code)
-// sets Submission.brandId and marks usedAt/usedBySubmissionId so it can never
-// be reused, by this submission or any other.
+// sets Submission.studioId and marks usedAt/usedBySubmissionId so it can
+// never be reused, by this submission or any other.
 model SubmissionEditCode {
   code               String      @id
   userId             String
   user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brandId            String
-  brand              Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  studioId           String
+  studio             Studio      @relation(fields: [studioId], references: [id], onDelete: Cascade)
   usedAt             DateTime?
   usedBySubmissionId String?
   usedBySubmission   Submission? @relation(fields: [usedBySubmissionId], references: [id], onDelete: SetNull)
   createdAt          DateTime    @default(now())
 
   @@index([userId])
-  @@index([brandId])
+  @@index([studioId])
   @@map("submission_edit_code")
 }

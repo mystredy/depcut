@@ -85,8 +85,8 @@ async function sendTelegramVideo(
 
 // "Viral King" -> "VK"; a one-word name falls back to its own first two
 // letters, padded if it's a single character.
-function studioCodePrefix(brandName: string): string {
-  const words = brandName.trim().split(/\s+/).filter(Boolean);
+function studioCodePrefix(studioName: string): string {
+  const words = studioName.trim().split(/\s+/).filter(Boolean);
   const raw = words.length >= 2 ? words[0][0] + words[1][0] : (words[0] ?? "XX").padEnd(2, "X").slice(0, 2);
   return raw.toUpperCase();
 }
@@ -98,8 +98,8 @@ function randomEditCodeDigits(): string {
 // Prefix from the studio's name + 8 random digits, retried against
 // SubmissionEditCode's own id until it lands on one that isn't taken — same
 // collision-retry shape as /api/account/telegram-link's randomPin() loop.
-async function generateEditCode(brandName: string): Promise<string> {
-  const prefix = studioCodePrefix(brandName);
+async function generateEditCode(studioName: string): Promise<string> {
+  const prefix = studioCodePrefix(studioName);
   let code = prefix + randomEditCodeDigits();
   while (await prisma.submissionEditCode.findUnique({ select: { code: true }, where: { code } })) {
     code = prefix + randomEditCodeDigits();
@@ -107,10 +107,10 @@ async function generateEditCode(brandName: string): Promise<string> {
   return code;
 }
 
-// "code" asks which studio (Brand) to generate a single-use Pro submission
-// edit code for. Always goes through the button, even for an artist with
-// only one assignment, so they see — and confirm — which studio the code is
-// actually for before it's issued.
+// "code" asks which studio to generate a single-use Pro submission edit code
+// for. Always goes through the button, even for an artist with only one
+// assignment, so they see — and confirm — which studio the code is actually
+// for before it's issued.
 async function sendStudioCodeOptions(botToken: string, chatId: number | string): Promise<void> {
   const user = await prisma.user.findUnique({
     select: { id: true },
@@ -124,8 +124,8 @@ async function sendStudioCodeOptions(botToken: string, chatId: number | string):
     return;
   }
 
-  const assignments = await prisma.artistBrandAssignment.findMany({
-    include: { brand: { select: { id: true, name: true } } },
+  const assignments = await prisma.artistStudioAssignment.findMany({
+    include: { studio: { select: { id: true, name: true } } },
     where: { userId: user.id },
   });
   if (assignments.length === 0) {
@@ -139,7 +139,7 @@ async function sendStudioCodeOptions(botToken: string, chatId: number | string):
   await callTelegramApi(botToken, "sendMessage", {
     chat_id: chatId,
     reply_markup: {
-      inline_keyboard: assignments.map((a) => [{ callback_data: `ecb:${a.brand.id}`, text: a.brand.name }]),
+      inline_keyboard: assignments.map((a) => [{ callback_data: `ecs:${a.studio.id}`, text: a.studio.name }]),
     },
     text: "Which studio is this edit code for?",
   });
@@ -149,7 +149,7 @@ async function sendStudioCodeOptions(botToken: string, chatId: number | string):
 // fresh, single-use SubmissionEditCode. Re-checks the assignment rather than
 // trusting the button, in case it was revoked between the prompt and the tap.
 async function handleEditCodeCallback(
-  brandId: string,
+  studioId: string,
   chatId: number | string,
   edit: (text: string, parseMode?: "HTML") => Promise<void>,
 ): Promise<void> {
@@ -159,9 +159,9 @@ async function handleEditCodeCallback(
     return;
   }
 
-  const assignment = await prisma.artistBrandAssignment.findUnique({
-    include: { brand: { select: { name: true } } },
-    where: { userId_brandId: { userId: user.id, brandId } },
+  const assignment = await prisma.artistStudioAssignment.findUnique({
+    include: { studio: { select: { name: true } } },
+    where: { userId_studioId: { userId: user.id, studioId } },
   });
   if (!assignment) {
     await edit("⚠️ You're no longer assigned to that studio.");
@@ -173,16 +173,16 @@ async function handleEditCodeCallback(
   // pasted somewhere doesn't silently stop working the moment a new one
   // is requested.
   const existing = await prisma.submissionEditCode.findFirst({
-    where: { brandId, userId: user.id, usedAt: null },
+    where: { studioId, userId: user.id, usedAt: null },
   });
-  const code = existing?.code ?? (await generateEditCode(assignment.brand.name));
+  const code = existing?.code ?? (await generateEditCode(assignment.studio.name));
   if (!existing) {
-    await prisma.submissionEditCode.create({ data: { brandId, code, userId: user.id } });
+    await prisma.submissionEditCode.create({ data: { studioId, code, userId: user.id } });
   }
   // <code> renders as monospace and is tap-to-copy in Telegram's own
   // clients — the reason this reply needs parse_mode: "HTML" at all.
   await edit(
-    `✅ Your edit code for ${escapeHtml(assignment.brand.name)}: <code>${code}</code>\n\nPaste it into Edit code on your Pro submission — one-time use.`,
+    `✅ Your edit code for ${escapeHtml(assignment.studio.name)}: <code>${code}</code>\n\nPaste it into Edit code on your Pro submission — one-time use.`,
     "HTML",
   );
 }
@@ -293,7 +293,7 @@ async function handleCallbackQuery(cq: TelegramCallbackQuery, botToken: string):
       text: truncate(text),
     });
 
-  if (cq.data?.startsWith("ecb:")) {
+  if (cq.data?.startsWith("ecs:")) {
     await handleEditCodeCallback(cq.data.slice(4), chatId, edit);
     return;
   }

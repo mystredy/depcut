@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-// Super-user only. Which studios (Brand) a Pro artist may submit for — see
+// Super-user only. Which studios a Pro artist may submit for — see
 // ProSubmissionCodes.prisma. Managed from the Permissions dialog on
 // /admin/users, alongside the artist/Pro grant it depends on.
 export const GET = withDepCutAuth(async (request) => {
@@ -19,21 +19,21 @@ export const GET = withDepCutAuth(async (request) => {
     return NextResponse.json({ error: "Invalid request", message: "userId is required." }, { status: 400 });
   }
 
-  const assignments = await prisma.artistBrandAssignment.findMany({
-    include: { brand: { select: { id: true, name: true, username: true } } },
+  const assignments = await prisma.artistStudioAssignment.findMany({
+    include: { studio: { select: { id: true, name: true, username: true } } },
     orderBy: { createdAt: "asc" },
     where: { userId },
   });
 
   return NextResponse.json({
-    assignments: assignments.map((a) => ({ brand: a.brand, id: a.id })),
+    assignments: assignments.map((a) => ({ id: a.id, studio: a.studio })),
   });
 });
 
 const writeSchema = z
   .object({
     userId: z.string().trim().min(1),
-    brandId: z.string().trim().min(1),
+    studioId: z.string().trim().min(1),
   })
   .strict();
 
@@ -44,17 +44,17 @@ export const POST = withDepCutAuth(async (request) => {
 
   const parsed = writeSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request", message: "userId and brandId are required." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid request", message: "userId and studioId are required." }, { status: 400 });
   }
 
-  const assignment = await prisma.artistBrandAssignment.upsert({
+  const assignment = await prisma.artistStudioAssignment.upsert({
     create: { ...parsed.data, assignedById: request.depcut.userId },
-    include: { brand: { select: { id: true, name: true, username: true } } },
+    include: { studio: { select: { id: true, name: true, username: true } } },
     update: {},
-    where: { userId_brandId: parsed.data },
+    where: { userId_studioId: parsed.data },
   });
 
-  return NextResponse.json({ assignment: { brand: assignment.brand, id: assignment.id } });
+  return NextResponse.json({ assignment: { id: assignment.id, studio: assignment.studio } });
 });
 
 export const DELETE = withDepCutAuth(async (request) => {
@@ -64,9 +64,9 @@ export const DELETE = withDepCutAuth(async (request) => {
 
   const parsed = writeSchema.safeParse(await request.json());
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request", message: "userId and brandId are required." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid request", message: "userId and studioId are required." }, { status: 400 });
   }
 
-  await prisma.artistBrandAssignment.deleteMany({ where: parsed.data });
+  await prisma.artistStudioAssignment.deleteMany({ where: parsed.data });
   return NextResponse.json({ ok: true });
 });

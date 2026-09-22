@@ -30,20 +30,20 @@ function invalidCodeResponse() {
 
 // A code is single-use and belongs to whoever it was issued to — see
 // lib/telegram/commands.ts's handleEditCodeCallback. Checking it here only
-// confirms it's real, unused, and theirs, and sets which studio (Brand) this
+// confirms it's real, unused, and theirs, and sets which studio this
 // submission is for — it isn't spent yet. It's only marked used at actual
 // Submit time (see /api/submissions/[id]/submit), so an artist who checks a
 // code and then abandons the draft hasn't burned it.
 async function redeemCode(submissionId: string, userId: string, code: string) {
   const row = await prisma.submissionEditCode.findUnique({
-    include: { brand: { select: { name: true } } },
+    include: { studio: { select: { name: true } } },
     where: { code },
   });
   if (!row || row.userId !== userId || row.usedAt) return invalidCodeResponse();
 
-  await prisma.submission.update({ data: { brandId: row.brandId }, where: { id: submissionId } });
+  await prisma.submission.update({ data: { studioId: row.studioId }, where: { id: submissionId } });
 
-  return NextResponse.json({ brandName: row.brand.name, kind: "code" as const, valid: true });
+  return NextResponse.json({ studioName: row.studio.name, kind: "code" as const, valid: true });
 }
 
 // A YouTube link identifies the studio by matching its channel against every
@@ -59,14 +59,14 @@ async function matchYoutubeLink(submissionId: string, userId: string, url: strin
     return NextResponse.json({ error: "youtube_fetch_failed", message }, { status: 400 });
   }
 
-  const assignments = await prisma.artistBrandAssignment.findMany({
-    include: { brand: { include: { connections: { where: { platform: "youtube" } } } } },
+  const assignments = await prisma.artistStudioAssignment.findMany({
+    include: { studio: { include: { connections: { where: { platform: "youtube" } } } } },
     where: { userId },
   });
 
   const handle = result.handle?.replace(/^@/, "").toLowerCase() ?? null;
   const matched = assignments.find((a) =>
-    a.brand.connections.some((c) => {
+    a.studio.connections.some((c) => {
       if (result.channelId && c.platformAccountId && c.platformAccountId === result.channelId) return true;
       if (handle && c.accountHandle && c.accountHandle.replace(/^@/, "").toLowerCase() === handle) return true;
       return false;
@@ -107,7 +107,7 @@ async function matchYoutubeLink(submissionId: string, userId: string, url: strin
 
   await prisma.submission.update({
     data: {
-      brandId: matched.brandId,
+      studioId: matched.studioId,
       ...(result.description ? { packageDescription: result.description } : {}),
       ...(result.tags.length ? { packageTags: result.tags.join(", ") } : {}),
       ...(result.title ? { packageTitle: result.title } : {}),
@@ -116,7 +116,7 @@ async function matchYoutubeLink(submissionId: string, userId: string, url: strin
   });
 
   return NextResponse.json({
-    brandName: matched.brand.name,
+    studioName: matched.studio.name,
     kind: "youtube" as const,
     packageDescription: result.description,
     packageTags: result.tags.join(", "),

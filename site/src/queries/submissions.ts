@@ -77,9 +77,9 @@ export type Submission = {
   duration: number | null;
   publishingid: string | null;
   editCode: string | null;
-  // The studio (Brand) this Pro submission is for — set once an edit code or
-  // a matching YouTube link is verified. See useVerifyEditCode.
-  brand: { id: string; name: string } | null;
+  // The studio this Pro submission is for — set once an edit code or a
+  // matching YouTube link is verified. See useVerifyEditCode.
+  studio: { id: string; name: string } | null;
   watermarkEnabled: boolean;
   watermarkText: string | null;
   burnInCaptions: boolean;
@@ -241,7 +241,7 @@ export function useDisconnectWorkspace(submissionId: string) {
 export type VerifyEditCodeResult = {
   valid: true;
   kind: "code" | "youtube";
-  brandName: string;
+  studioName: string;
   packageTitle?: string;
   packageDescription?: string;
   packageTags?: string;
