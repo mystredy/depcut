@@ -9,7 +9,7 @@ import { offloadHostedMedia } from "./hostedBlobs";
 // session and credits (the one hosted carve-out on the otherwise local-only
 // Cut page). Shared by media generation, prompt composition, and AI chat.
 
-const CLIENT_ID = "depcut-cut";
+export const CLIENT_ID = "depcut-cut";
 
 const OUT_KEY = "cut-credits-out";
 
@@ -95,6 +95,20 @@ export function useCreditsRecheck(): void {
 const OFFLOAD_ABOVE_BYTES = 1024 * 1024;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
+/** fetch() itself rejected on both the original attempt and the one retry —
+ * the connection died before any HTTP response came back, not a 4xx/5xx.
+ * Callers of a single-shot, no-poll generation (speech) catch this
+ * specifically to attempt recovering an already-finished result instead of
+ * just reporting the drop — see tts.ts and /api/inference/assets/recover. */
+export class ConnectionDroppedError extends Error {
+  constructor() {
+    super(
+      "Connection dropped while generating. If it had already finished, it may still have used credits — check your balance before trying again."
+    );
+    this.name = "ConnectionDroppedError";
+  }
+}
+
 function postOnce(path: string, payload: string, signal?: AbortSignal) {
   return fetch(path, {
     method: "POST",
@@ -129,9 +143,12 @@ export const hostedPost = async (path: string, body: unknown, signal?: AbortSign
     try {
       res = await postOnce(path, payload, signal);
     } catch {
-      throw new Error(
-        "Connection dropped while generating. If it had already finished, it may still have used credits — check your balance before trying again."
-      );
+      // A distinguishable type, not just a message: a speech caller catches
+      // this specifically to try recovering the result before giving up (see
+      // tts.ts) — a plain Error here would be indistinguishable from every
+      // other failure a caller already handles differently (no credits, a
+      // validation error, ...).
+      throw new ConnectionDroppedError();
     }
   }
   noteBalance(res);

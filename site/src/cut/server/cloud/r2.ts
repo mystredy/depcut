@@ -76,6 +76,16 @@ export const INFERENCE_PREFIX = "cut/inference/";
 export const inferenceBlobKey = (userId: string, sha256: string, ext: string) =>
   `${INFERENCE_PREFIX}${userId}/${sha256}.${ext}`;
 
+/** A generation result's durable safety copy, keyed by the same client-supplied
+ * generationId the request carried — not content, since it is written before
+ * anything downstream has hashed it. Same prefix and sweep as inferenceBlobKey
+ * above (24h — see gc.ts), for the same reason: a single-shot, no-poll
+ * generation (speech) can finish and bill server-side while the client's own
+ * connection dies before the bytes arrive, and this is what a follow-up
+ * recovery request reads back instead of losing the result outright. */
+export const inferenceOutputKey = (userId: string, generationId: string) =>
+  `${INFERENCE_PREFIX}${userId}/out/${generationId}.bin`;
+
 /** The creator marketplace's Submit Project uploads — outside the Cut engine's
  * own project media, so its own top-level prefix. "New Submit" creates the
  * Submission row before anything is picked, so every asset is keyed by that

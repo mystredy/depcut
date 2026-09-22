@@ -22,8 +22,13 @@ import {
 import { assetGenerationRequestSchema } from "@/lib/inference/schemas";
 import { withDepCutAuth } from "@/lib/depcut-api-auth";
 import { resolveInferenceBlobs } from "@/lib/inference/blobs";
-import { InferenceProviderError, type JsonObject } from "@/lib/inference/providers";
+import {
+  InferenceProviderError,
+  type AssetGenerationProviderResult,
+  type JsonObject,
+} from "@/lib/inference/providers";
 import { toJsonObject, toJsonValue } from "@/lib/inference/json";
+import { inferenceOutputKey, putObject } from "@/cut/server/cloud/r2";
 
 export const dynamic = "force-dynamic";
 
@@ -145,6 +150,16 @@ export const POST = withDepCutAuth(async (request) => {
       });
     }
 
+    // Speech is a single request that is the entire slow operation, unlike
+    // image/video/music's async submit-then-poll — no job id survives if this
+    // response never reaches the client, so there is nothing to reconnect to
+    // and a dropped mobile connection loses a result that already billed. A
+    // durable safety copy closes that gap: best-effort, never lets a storage
+    // hiccup fail a generation that otherwise succeeded (see /assets/recover).
+    if (parsed.data.kind === "speech") {
+      await persistSpeechRecoveryCopy(request.depcut.userId, generationId, result).catch(() => {});
+    }
+
     // The submit is the billable moment, for sync and async results alike: a
     // sync completion carries its real usage, and an async render bills the
     // flat clip price (the adapter stamps the generation-count unit) — so one
@@ -195,3 +210,23 @@ export const POST = withDepCutAuth(async (request) => {
     throw error;
   }
 });
+
+/** Write a speech result's audio bytes to the recovery prefix (see
+ * inferenceOutputKey), so /assets/recover can hand it back if this response
+ * never reaches the client. Only the first output — every speech provider
+ * returns exactly one clip — and only on a real success; nothing to save for
+ * a synchronous "failed" result. */
+async function persistSpeechRecoveryCopy(
+  userId: string,
+  generationId: string,
+  result: AssetGenerationProviderResult,
+): Promise<void> {
+  if (result.status !== "completed") return;
+  const out = result.outputs.find((o) => o.dataBase64);
+  if (!out?.dataBase64) return;
+  await putObject(
+    inferenceOutputKey(userId, generationId),
+    Buffer.from(out.dataBase64, "base64"),
+    out.contentType || "application/octet-stream",
+  );
+}

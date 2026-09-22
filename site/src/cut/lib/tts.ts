@@ -2,7 +2,7 @@
 
 import { geminiModels } from "@/lib/inference/gemini-models";
 import { bytesFromBase64 } from "./bytes";
-import { hostedPost } from "./hosted";
+import { CLIENT_ID, ConnectionDroppedError, hostedPost } from "./hosted";
 import { importFileToProject } from "./media";
 import { mediaSlug, type MediaAsset } from "./types";
 import {
@@ -209,6 +209,51 @@ async function readError(res: Response, fallback: string): Promise<string> {
   return full ?? fallback;
 }
 
+type SpeechAssetOutput = { dataBase64?: string; contentType?: string };
+type SpeechAssetResponse = { outputs?: SpeechAssetOutput[] };
+
+/** Read back a speech result's durable safety copy after a dropped connection
+ * (see persistSpeechRecoveryCopy in /api/inference/assets/route.ts) — null
+ * for every "nothing to recover" case alike (never finished, already swept
+ * past its 24h window, or the storage write itself failed), which the caller
+ * treats the same as any other failure: report it and let the user retry. */
+async function recoverSpeechAsset(generationId: string): Promise<SpeechAssetResponse | null> {
+  try {
+    const res = await fetch(`/api/inference/assets/recover?id=${encodeURIComponent(generationId)}`, {
+      headers: { "x-depcut-client-id": CLIENT_ID },
+    });
+    return res.ok ? ((await res.json()) as SpeechAssetResponse) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One hosted speech call — Gemini or ElevenLabs, whatever `body` asks for —
+ * with the plumbing every speech caller needs: a generationId to recover by
+ * (speech is a single request that is the entire slow operation, unlike
+ * image/video/music's submit-then-poll, so there is no job id to reconnect
+ * to if this response is lost), the ok/402/error handling, and — on a
+ * dropped connection — one attempt to read the result back before reporting
+ * the drop. */
+async function postSpeechAsset(body: Record<string, unknown>): Promise<SpeechAssetResponse> {
+  const generationId = crypto.randomUUID();
+  let res: Response;
+  try {
+    res = await hostedPost("/api/inference/assets", { ...body, generationId });
+  } catch (e) {
+    if (e instanceof ConnectionDroppedError) {
+      const recovered = await recoverSpeechAsset(generationId);
+      if (recovered) return recovered;
+    }
+    throw e;
+  }
+  if (!res.ok) {
+    const message = await readError(res, "Voice generation failed.");
+    throw res.status === 402 ? new NoCreditsError(message) : new Error(message);
+  }
+  return (await res.json()) as SpeechAssetResponse;
+}
+
 /** One hosted Gemini speech call: text in, decoded PCM out. A direction is a
  * natural-language delivery instruction ("Say warmly, like an old friend");
  * the model also honors inline tags like [whispers] in the text itself. */
@@ -220,7 +265,7 @@ async function synthesizeSegment(
 ): Promise<PcmClip> {
   const style = direction?.trim();
   const languageCode = resolveLanguage(language);
-  const res = await hostedPost("/api/inference/assets", {
+  const gen = await postSpeechAsset({
     kind: "speech",
     prompt: style ? `${style}: ${text}` : text,
     inputs: { voice },
@@ -228,13 +273,6 @@ async function synthesizeSegment(
       ? { parameters: { languageCode } }
       : {}),
   });
-  if (!res.ok) {
-    const message = await readError(res, "Voice generation failed.");
-    throw res.status === 402 ? new NoCreditsError(message) : new Error(message);
-  }
-  const gen = (await res.json()) as {
-    outputs?: { dataBase64?: string; contentType?: string }[];
-  };
   const out = gen.outputs?.find((o) => o.dataBase64);
   if (!out?.dataBase64) throw new Error("The provider returned no audio.");
 
@@ -263,7 +301,7 @@ export async function renderElevenLabsClip(
     throw new Error(`The script must stay under ${MAX_ELEVENLABS_CHARS} characters.`);
   }
 
-  const res = await hostedPost("/api/inference/assets", {
+  const gen = await postSpeechAsset({
     kind: "speech",
     provider: "elevenlabs",
     model: opts.model,
@@ -273,13 +311,6 @@ export async function renderElevenLabsClip(
       ? { parameters: { voiceSettings: { speed: opts.speed } } }
       : {}),
   });
-  if (!res.ok) {
-    const message = await readError(res, "Voice generation failed.");
-    throw res.status === 402 ? new NoCreditsError(message) : new Error(message);
-  }
-  const gen = (await res.json()) as {
-    outputs?: { dataBase64?: string; contentType?: string }[];
-  };
   const out = gen.outputs?.find((o) => o.dataBase64);
   if (!out?.dataBase64) throw new Error("The provider returned no audio.");
 
