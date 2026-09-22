@@ -25,6 +25,7 @@ export const adminChatCategoriesQueryKey = ["admin", "chat-categories"] as const
 export const adminChatTemplatesQueryKey = ["admin", "chat-templates"] as const;
 export const adminAiEnginesQueryKey = ["admin", "ai-engines"] as const;
 export const adminLegalPagesQueryKey = ["admin", "legal-pages"] as const;
+export const adminBlogPostsQueryKey = ["admin", "blog-posts"] as const;
 export const adminOnboardingSlidesQueryKey = ["admin", "onboarding-slides"] as const;
 export const adminFinanceSettingsQueryKey = ["admin", "finance-settings"] as const;
 export const adminTelegramNotificationsQueryKey = ["admin", "telegram-notifications"] as const;
@@ -2043,6 +2044,97 @@ export function useUpdateLegalPage() {
   });
 }
 
+export type AdminBlogPost = {
+  id: string;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  contentMarkdown: string;
+  authorName: string | null;
+  hasCoverImage: boolean;
+  published: boolean;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function useAdminBlogPosts() {
+  return useQuery({
+    queryFn: () => apiFetch<{ posts: AdminBlogPost[] }>("/api/admin/blog"),
+    queryKey: adminBlogPostsQueryKey,
+  });
+}
+
+export function useCreateBlogPost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      title: string;
+      slug: string;
+      excerpt?: string;
+      contentMarkdown: string;
+      authorName?: string;
+      published: boolean;
+    }) =>
+      apiFetch<{ post: AdminBlogPost }>("/api/admin/blog", {
+        body: JSON.stringify(input),
+        method: "POST",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminBlogPostsQueryKey }),
+  });
+}
+
+export function useUpdateBlogPost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...input
+    }: {
+      id: string;
+      title?: string;
+      slug?: string;
+      excerpt?: string | null;
+      contentMarkdown?: string;
+      authorName?: string | null;
+      published?: boolean;
+    }) =>
+      apiFetch<{ post: AdminBlogPost }>(`/api/admin/blog/${id}`, {
+        body: JSON.stringify(input),
+        method: "PATCH",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminBlogPostsQueryKey }),
+  });
+}
+
+export function useDeleteBlogPost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<{ ok: true }>(`/api/admin/blog/${id}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminBlogPostsQueryKey }),
+  });
+}
+
+export function useUploadBlogCover() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) =>
+      apiFetch<{ ok: true }>(`/api/admin/blog/${id}/cover`, {
+        body: file,
+        headers: { "Content-Type": file.type },
+        method: "PUT",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminBlogPostsQueryKey }),
+  });
+}
+
+export function useRemoveBlogCover() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<{ ok: true }>(`/api/admin/blog/${id}/cover`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminBlogPostsQueryKey }),
+  });
+}
 export function useAdminOnboardingSlides() {
   return useQuery({
     queryFn: () => apiFetch<{ slides: AdminOnboardingSlide[] }>("/api/admin/onboarding-slides"),

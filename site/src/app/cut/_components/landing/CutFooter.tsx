@@ -18,6 +18,7 @@ export function CutFooter() {
     {
       title: "Product",
       links: [
+        { href: "/blog", label: "Blog" },
         { href: DISCORD_URL, label: "Discord" },
         { href: TELEGRAM_URL, label: "Telegram" },
       ],

@@ -154,6 +154,11 @@ export const socialShareImageKey = () => "site-branding/social-share-image";
 export const studioAvatarKey = (studioId: string) => `studio/${studioId}/avatar`;
 export const studioBackgroundKey = (studioId: string) => `studio/${studioId}/background`;
 
+/** A blog post's cover image. Same fixed-key-overwritten-in-place scheme as
+ * studioAvatarKey — BlogPost.hasCoverImage (not a missing R2 object) is what
+ * tells a caller whether one has ever been uploaded. */
+export const blogCoverKey = (postId: string) => `blog/${postId}/cover`;
+
 export function presignPut(key: string, mime: string): Promise<string> {
   return getSignedUrl(
     r2(),

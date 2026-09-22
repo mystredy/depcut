@@ -26,6 +26,7 @@ import {
   Link2,
   Megaphone,
   MessageSquare,
+  Newspaper,
   RotateCw,
   Send,
   Settings as SettingsIcon,
@@ -131,6 +132,7 @@ const SECTIONS: NavSection[] = [
     ],
   },
   { kind: "leaf", id: "announcements", label: "Announcements", icon: Megaphone, color: "text-amber-500", href: "/admin/announcements" },
+  { kind: "leaf", id: "blog", label: "Blog", icon: Newspaper, color: "text-orange-500", href: "/admin/blog" },
   { kind: "leaf", id: "support-requests", label: "Support Requests", icon: HelpCircle, color: "text-red-500", href: "/admin/support" },
   {
     kind: "group",
