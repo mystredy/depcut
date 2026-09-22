@@ -11,7 +11,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { type AdminUser, useAdjustArtistRate } from "@/queries/admin";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  type AdminUser,
+  useAdjustArtistRate,
+  useAdminBrands,
+  useArtistBrandAssignments,
+  useAssignArtistBrand,
+  useUnassignArtistBrand,
+} from "@/queries/admin";
 import { ApiError } from "@/queries/apiClient";
 
 import { SuperUserDialog } from "./SuperUserDialog";
@@ -133,6 +141,8 @@ function PermissionsDialogBody({
                 </Button>
               )}
             </div>
+
+            {isArtist && tier === "Pro" && <StudiosSection userId={target.id} />}
           </div>
 
           {error && (
@@ -155,5 +165,75 @@ function PermissionsDialogBody({
         onSuccess={setSuperUser}
       />
     </>
+  );
+}
+
+// Which studios (Brand — /admin/social/brands) a Pro artist may submit for,
+// and the "code" Telegram command generates a code against. Only shown for
+// Pro artists: a Standard submission never asks for an edit code at all.
+function StudiosSection({ userId }: { userId: string }) {
+  const assignments = useArtistBrandAssignments(userId);
+  const brands = useAdminBrands();
+  const assign = useAssignArtistBrand();
+  const unassign = useUnassignArtistBrand();
+  const [picked, setPicked] = useState("");
+
+  const assignedIds = new Set((assignments.data?.assignments ?? []).map((a) => a.brand.id));
+  const available = (brands.data?.brands ?? []).filter((b) => !assignedIds.has(b.id));
+
+  return (
+    <div className="rounded-xl border p-3">
+      <p className="text-sm font-medium">Studios</p>
+      <p className="text-xs text-muted-foreground">Which studios this Pro artist may submit for.</p>
+
+      <div className="mt-2 space-y-1.5">
+        {assignments.data?.assignments.map((a) => (
+          <div key={a.id} className="flex items-center justify-between rounded-lg bg-muted/50 px-2.5 py-1.5">
+            <span className="text-sm">{a.brand.name}</span>
+            <button
+              type="button"
+              disabled={unassign.isPending}
+              onClick={() => unassign.mutate({ brandId: a.brand.id, userId })}
+              className="text-xs text-muted-foreground hover:text-destructive disabled:opacity-50"
+            >
+              Remove
+            </button>
+          </div>
+        ))}
+        {assignments.data?.assignments.length === 0 && (
+          <p className="text-xs text-muted-foreground">No studios assigned yet.</p>
+        )}
+      </div>
+
+      {available.length > 0 && (
+        <div className="mt-2 flex items-center gap-2">
+          <Select value={picked} onValueChange={(value) => setPicked(value ?? "")}>
+            <SelectTrigger size="sm" className="flex-1">
+              <SelectValue placeholder="Add a studio…">
+                {(value: string | null) => available.find((b) => b.id === value)?.name ?? "Add a studio…"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {available.map((b) => (
+                <SelectItem key={b.id} value={b.id}>
+                  {b.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!picked || assign.isPending}
+            onClick={() => {
+              assign.mutate({ brandId: picked, userId });
+              setPicked("");
+            }}
+          >
+            Add
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }

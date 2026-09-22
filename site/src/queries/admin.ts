@@ -52,6 +52,8 @@ export const adminApiIntegrationsQueryKey = ["admin", "api-integrations"] as con
 export const adminSubmissionsQueryKey = ["admin", "submissions"] as const;
 export const adminSocialConnectionsQueryKey = ["admin", "social-connections"] as const;
 export const adminBrandsQueryKey = ["admin", "brands"] as const;
+export const adminArtistBrandAssignmentsQueryKey = (userId: string) =>
+  ["admin", "artist-brand-assignments", userId] as const;
 export const adminSocialWorkflowsQueryKey = ["admin", "social-workflows"] as const;
 export const adminSupportTicketsQueryKey = ["admin", "support-tickets"] as const;
 
@@ -1780,6 +1782,52 @@ export function useDeleteBrand() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminBrandsQueryKey });
       queryClient.invalidateQueries({ queryKey: adminSocialConnectionsQueryKey });
+    },
+  });
+}
+
+// Which studios (Brand) a Pro artist may submit for — the Permissions
+// dialog's Studios row. See ProSubmissionCodes.prisma.
+export type AdminArtistBrandAssignment = {
+  id: string;
+  brand: { id: string; name: string; username: string };
+};
+
+export function useArtistBrandAssignments(userId: string | null) {
+  return useQuery({
+    enabled: Boolean(userId),
+    queryFn: () =>
+      apiFetch<{ assignments: AdminArtistBrandAssignment[] }>(
+        `/api/admin/artist-brand-assignments?userId=${encodeURIComponent(userId ?? "")}`,
+      ),
+    queryKey: adminArtistBrandAssignmentsQueryKey(userId ?? ""),
+  });
+}
+
+export function useAssignArtistBrand() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, brandId }: { userId: string; brandId: string }) =>
+      apiFetch<{ assignment: AdminArtistBrandAssignment }>("/api/admin/artist-brand-assignments", {
+        body: JSON.stringify({ brandId, userId }),
+        method: "POST",
+      }),
+    onSuccess: (_data, { userId }) => {
+      queryClient.invalidateQueries({ queryKey: adminArtistBrandAssignmentsQueryKey(userId) });
+    },
+  });
+}
+
+export function useUnassignArtistBrand() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, brandId }: { userId: string; brandId: string }) =>
+      apiFetch<{ ok: boolean }>("/api/admin/artist-brand-assignments", {
+        body: JSON.stringify({ brandId, userId }),
+        method: "DELETE",
+      }),
+    onSuccess: (_data, { userId }) => {
+      queryClient.invalidateQueries({ queryKey: adminArtistBrandAssignmentsQueryKey(userId) });
     },
   });
 }
