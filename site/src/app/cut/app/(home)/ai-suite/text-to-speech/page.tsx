@@ -541,6 +541,21 @@ export default function TextToSpeechPage() {
     };
   }, [result]);
 
+  // A generation (especially Eleven v3) routinely takes 60-100+ seconds with
+  // nothing on screen but a spinner — long enough that a user who doesn't
+  // know that will assume it's stuck and reload or navigate away. The
+  // request already in flight server-side has no idea the tab is gone: it
+  // finishes and bills regardless, for a result the user never sees. This
+  // warns before that happens rather than losing the credits silently.
+  useEffect(() => {
+    if (!busy) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [busy]);
+
   const generate = async () => {
     const text = script.trim();
     if (!text) return;
@@ -776,11 +791,18 @@ export default function TextToSpeechPage() {
             {busy ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <AudioLines data-icon="inline-start" />}
             Generate audio
           </Button>
-          {costLabel && (
+          {busy ? (
             <p className="text-center text-[11px] text-muted-foreground">
-              {costLabel}
-              {!cost?.exact && " (estimated — Gemini bills by the clip's actual length)"}
+              Generating — this can take a minute or two, especially with Eleven v3. Stay on this
+              page; leaving won&apos;t stop the charge, only the result reaching you.
             </p>
+          ) : (
+            costLabel && (
+              <p className="text-center text-[11px] text-muted-foreground">
+                {costLabel}
+                {!cost?.exact && " (estimated — Gemini bills by the clip's actual length)"}
+              </p>
+            )
           )}
         </div>
 
