@@ -7,55 +7,47 @@ import { GROUPS } from "@/cut/lib/navData";
 import { useCutBase } from "@/cut/lib/nav";
 import { cn } from "@/lib/utils";
 
-const STUDIO_TOOLS = GROUPS.find((g) => g.key === "ai-suite")!.children;
+const AI_SUITE_TOOLS = GROUPS.find((g) => g.key === "ai-suite")!.children;
+// The generate box below the row is Text to Video, so it leads the row
+// instead of sitting wherever it falls in the shared nav order.
+const STUDIO_TOOLS = [
+  AI_SUITE_TOOLS.find((t) => t.slug === "text-to-video")!,
+  ...AI_SUITE_TOOLS.filter((t) => t.slug !== "text-to-video"),
+];
 
 export default function DashboardPage() {
   const base = useCutBase();
 
   return (
     <div className="space-y-5 p-6">
-      <div className="space-y-5 rounded-3xl border bg-card p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Studio Tools
-          </h2>
-          <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
-            AI Suite
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {STUDIO_TOOLS.map(({ slug, label, icon: Icon }) => {
-            // The generate box right below this grid already is Text to
-            // Video — shown selected here instead of just another link to it.
-            const selected = slug === "text-to-video";
-            return (
-              <Link
-                key={slug}
-                href={`${base}/ai-suite/${slug}`}
-                aria-current={selected ? "page" : undefined}
-                className={cn(
-                  "flex h-12 items-center gap-2.5 rounded-2xl border px-3.5 text-sm font-medium transition-colors",
-                  selected
-                    ? "border-primary/50 bg-primary/10 text-primary"
-                    : "border-border bg-background hover:border-primary/50 hover:bg-muted"
-                )}
-              >
-                <span
-                  className={cn(
-                    "grid size-8 shrink-0 place-items-center rounded-lg",
-                    selected ? "bg-primary/15 text-primary" : "bg-muted text-primary"
-                  )}
-                >
-                  <Icon className="size-4" />
-                </span>
-                {label}
-              </Link>
-            );
-          })}
-        </div>
+      <NewProjectLauncher source="dashboard" className="w-full sm:w-auto" />
+      {/* A single scrollable row of pills instead of a grid — a grid ran
+          several rows tall on narrow screens and pushed the prompt box
+          down; a scroll strip stays a fixed height at any width. */}
+      <div className="-mx-6 flex gap-2 overflow-x-auto px-6 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {STUDIO_TOOLS.map(({ slug, label, icon: Icon }) => {
+          // The generate box right below this row already is Text to
+          // Video — shown selected here instead of just another link to it.
+          const selected = slug === "text-to-video";
+          return (
+            <Link
+              key={slug}
+              href={`${base}/ai-suite/${slug}`}
+              aria-current={selected ? "page" : undefined}
+              className={cn(
+                "flex h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors",
+                selected
+                  ? "border-primary/50 bg-primary/10 text-primary"
+                  : "border-border bg-background hover:border-primary/50 hover:bg-muted"
+              )}
+            >
+              <Icon className="size-4 shrink-0" />
+              {label}
+            </Link>
+          );
+        })}
       </div>
       <VideoGenerator />
-      <NewProjectLauncher source="dashboard" className="w-full sm:w-auto" />
     </div>
   );
 }
