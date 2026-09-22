@@ -168,8 +168,17 @@ async function handleEditCodeCallback(
     return;
   }
 
-  const code = await generateEditCode(assignment.brand.name);
-  await prisma.submissionEditCode.create({ data: { brandId, code, userId: user.id } });
+  // An artist can only ever have one outstanding (unredeemed) code per
+  // studio — resend that one instead of minting a second, so an old code
+  // pasted somewhere doesn't silently stop working the moment a new one
+  // is requested.
+  const existing = await prisma.submissionEditCode.findFirst({
+    where: { brandId, userId: user.id, usedAt: null },
+  });
+  const code = existing?.code ?? (await generateEditCode(assignment.brand.name));
+  if (!existing) {
+    await prisma.submissionEditCode.create({ data: { brandId, code, userId: user.id } });
+  }
   // <code> renders as monospace and is tap-to-copy in Telegram's own
   // clients — the reason this reply needs parse_mode: "HTML" at all.
   await edit(
