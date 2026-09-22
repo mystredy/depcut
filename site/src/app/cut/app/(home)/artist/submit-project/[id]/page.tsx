@@ -765,7 +765,12 @@ export default function SubmitProjectEditorPage() {
       (submissionType === "Inspire" ? inspirationLink.trim() : taskReference.trim()) &&
       vocalScript.trim() &&
       checkedConfirm &&
-      (!isProMode || (hasVerification && packageTitle.trim() && description.trim() && tags.trim())) &&
+      (!isProMode ||
+        (hasVerification &&
+          packageTitle.trim() &&
+          description.trim() &&
+          tags.trim() &&
+          Boolean(submission?.brand))) &&
       (!watermarkEnabled || watermarkText.trim())
   );
 
