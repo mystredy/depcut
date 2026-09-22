@@ -217,24 +217,28 @@ function StudiosSection({
       <p className="text-xs text-muted-foreground">Which studios this Pro artist may submit for.</p>
 
       <div className="mt-2 space-y-1.5">
-        {assignments.data?.assignments.map((a) => (
-          <div key={a.id} className="flex items-center justify-between rounded-lg bg-muted/50 px-2.5 py-1.5">
-            <span className="text-sm">{a.studio.name}</span>
-            <button
-              type="button"
-              disabled={unassign.isPending}
-              onClick={() =>
-                unassign.mutate(
-                  { studioId: a.studio.id, userId },
-                  { onSuccess: (data) => data.tierDowngraded && onTierDowngraded() },
-                )
-              }
-              className="text-xs text-muted-foreground hover:text-destructive disabled:opacity-50"
-            >
-              Remove
-            </button>
-          </div>
-        ))}
+        {assignments.data?.assignments.map((a) => {
+          const removing = unassign.isPending && unassign.variables?.studioId === a.studio.id;
+          return (
+            <div key={a.id} className="flex items-center justify-between rounded-lg bg-muted/50 px-2.5 py-1.5">
+              <span className="text-sm">{a.studio.name}</span>
+              <button
+                type="button"
+                disabled={unassign.isPending}
+                onClick={() =>
+                  unassign.mutate(
+                    { studioId: a.studio.id, userId },
+                    { onSuccess: (data) => data.tierDowngraded && onTierDowngraded() },
+                  )
+                }
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive disabled:opacity-50"
+              >
+                {removing && <Loader2 className="size-3 animate-spin" />}
+                {removing ? "Removing…" : "Remove"}
+              </button>
+            </div>
+          );
+        })}
         {assignments.data?.assignments.length === 0 && (
           <p className="text-xs text-muted-foreground">No studios assigned yet.</p>
         )}
@@ -266,7 +270,8 @@ function StudiosSection({
               assign.mutate({ studioId, userId });
             }}
           >
-            Add
+            {assign.isPending && <Loader2 className="size-3.5 animate-spin" data-icon="inline-start" />}
+            {assign.isPending ? "Adding…" : "Add"}
           </Button>
         </div>
       )}
