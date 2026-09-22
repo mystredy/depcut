@@ -68,5 +68,22 @@ export const DELETE = withDepCutAuth(async (request) => {
   }
 
   await prisma.artistStudioAssignment.deleteMany({ where: parsed.data });
-  return NextResponse.json({ ok: true });
+
+  // A Pro artist always has at least one studio while Pro — dropping the
+  // last one takes them off Pro too, rather than leaving a Pro tier with
+  // nothing behind it.
+  const remaining = await prisma.artistStudioAssignment.count({ where: { userId: parsed.data.userId } });
+  let tierDowngraded = false;
+  if (remaining === 0) {
+    const account = await prisma.artistRateAccount.findUnique({
+      select: { tier: true },
+      where: { userId: parsed.data.userId },
+    });
+    if (account?.tier === "Pro") {
+      await prisma.artistRateAccount.update({ data: { tier: "Standard" }, where: { userId: parsed.data.userId } });
+      tierDowngraded = true;
+    }
+  }
+
+  return NextResponse.json({ ok: true, tierDowngraded });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -15,12 +15,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   type AdminUser,
   useAdjustArtistRate,
-  useAdminStudios,
   useArtistStudioAssignments,
   useAssignArtistStudio,
   useUnassignArtistStudio,
 } from "@/queries/admin";
 import { ApiError } from "@/queries/apiClient";
+import { useStudios } from "@/queries/studio";
 
 import { SuperUserDialog } from "./SuperUserDialog";
 
@@ -55,9 +55,13 @@ function PermissionsDialogBody({
   const [superUser, setSuperUser] = useState(target.superUser);
   const [isArtist, setIsArtist] = useState(target.isArtist);
   const [tier, setTier] = useState<"Standard" | "Pro">(target.creatorTier === "Pro" ? "Pro" : "Standard");
+  const [studiosBusy, setStudiosBusy] = useState(false);
   const grant = useAdjustArtistRate();
   const revoke = useAdjustArtistRate();
   const setTierMutation = useAdjustArtistRate();
+  // Blocks Done (and Escape/backdrop dismiss) while any change here is still
+  // in flight, so the dialog can't be closed mid-save.
+  const busy = grant.isPending || revoke.isPending || setTierMutation.isPending || studiosBusy;
 
   const doGrant = () => {
     grant.mutate({ action: "grant", userId: target.id }, { onSuccess: () => setIsArtist(true) });
@@ -79,7 +83,7 @@ function PermissionsDialogBody({
 
   return (
     <>
-      <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <Dialog open onOpenChange={(o) => !o && !busy && onClose()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Permissions</DialogTitle>
@@ -142,7 +146,13 @@ function PermissionsDialogBody({
               )}
             </div>
 
-            {isArtist && tier === "Pro" && <StudiosSection userId={target.id} />}
+            {isArtist && tier === "Pro" && (
+              <StudiosSection
+                userId={target.id}
+                onTierDowngraded={() => setTier("Standard")}
+                onBusyChange={setStudiosBusy}
+              />
+            )}
           </div>
 
           {error && (
@@ -152,7 +162,7 @@ function PermissionsDialogBody({
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" disabled={busy} onClick={onClose}>
               Done
             </Button>
           </DialogFooter>
@@ -170,16 +180,36 @@ function PermissionsDialogBody({
 
 // Which studios a Pro artist may submit for, and the "code" Telegram command
 // generates a code against. Only shown for Pro artists: a Standard
-// submission never asks for an edit code at all.
-function StudiosSection({ userId }: { userId: string }) {
+// submission never asks for an edit code at all. The picker only offers
+// studios the signed-in admin themselves owns or manages (useStudios) — not
+// every studio on the site.
+function StudiosSection({
+  userId,
+  onTierDowngraded,
+  onBusyChange,
+}: {
+  userId: string;
+  // Dropping an artist's last studio takes them off Pro too (see the
+  // DELETE route) — this syncs the parent's own tier state so the badge
+  // and this section (Pro-only) update immediately, not just on reopen.
+  onTierDowngraded: () => void;
+  // Lets the parent block Done while an add/remove here is still saving.
+  onBusyChange: (busy: boolean) => void;
+}) {
   const assignments = useArtistStudioAssignments(userId);
-  const studios = useAdminStudios();
+  const studios = useStudios();
   const assign = useAssignArtistStudio();
   const unassign = useUnassignArtistStudio();
   const [picked, setPicked] = useState("");
 
+  const busy = assign.isPending || unassign.isPending;
+  useEffect(() => {
+    onBusyChange(busy);
+    return () => onBusyChange(false);
+  }, [busy, onBusyChange]);
+
   const assignedIds = new Set((assignments.data?.assignments ?? []).map((a) => a.studio.id));
-  const available = (studios.data?.studios ?? []).filter((s) => !assignedIds.has(s.id));
+  const available = (studios.data?.spaces ?? []).filter((s) => !assignedIds.has(s.id));
 
   return (
     <div className="rounded-xl border p-3">
@@ -193,7 +223,12 @@ function StudiosSection({ userId }: { userId: string }) {
             <button
               type="button"
               disabled={unassign.isPending}
-              onClick={() => unassign.mutate({ studioId: a.studio.id, userId })}
+              onClick={() =>
+                unassign.mutate(
+                  { studioId: a.studio.id, userId },
+                  { onSuccess: (data) => data.tierDowngraded && onTierDowngraded() },
+                )
+              }
               className="text-xs text-muted-foreground hover:text-destructive disabled:opacity-50"
             >
               Remove
@@ -226,13 +261,24 @@ function StudiosSection({ userId }: { userId: string }) {
             variant="outline"
             disabled={!picked || assign.isPending}
             onClick={() => {
-              assign.mutate({ studioId: picked, userId });
+              const studioId = picked;
               setPicked("");
+              assign.mutate({ studioId, userId });
             }}
           >
             Add
           </Button>
         </div>
+      )}
+
+      {(assign.error || unassign.error) && (
+        <p className="mt-2 text-xs text-destructive">
+          {assign.error instanceof ApiError
+            ? assign.error.message
+            : unassign.error instanceof ApiError
+              ? unassign.error.message
+              : "Couldn't update studios — try again."}
+        </p>
       )}
     </div>
   );

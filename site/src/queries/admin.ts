@@ -52,7 +52,6 @@ export const adminApiIntegrationsQueryKey = ["admin", "api-integrations"] as con
 export const adminSubmissionsQueryKey = ["admin", "submissions"] as const;
 export const adminSocialConnectionsQueryKey = ["admin", "social-connections"] as const;
 export const adminBrandsQueryKey = ["admin", "brands"] as const;
-export const adminStudiosQueryKey = ["admin", "studios"] as const;
 export const adminArtistStudioAssignmentsQueryKey = (userId: string) =>
   ["admin", "artist-studio-assignments", userId] as const;
 export const adminSocialWorkflowsQueryKey = ["admin", "social-workflows"] as const;
@@ -1787,22 +1786,13 @@ export function useDeleteBrand() {
   });
 }
 
-// Every studio in the system — the Permissions dialog's Studios picker (any
-// studio can be assigned, regardless of who owns it). See /api/admin/studios.
-export type AdminStudio = { id: string; name: string; username: string };
-
-export function useAdminStudios() {
-  return useQuery({
-    queryFn: () => apiFetch<{ studios: AdminStudio[] }>("/api/admin/studios"),
-    queryKey: adminStudiosQueryKey,
-  });
-}
-
 // Which studios a Pro artist may submit for — the Permissions dialog's
-// Studios row. See ProSubmissionCodes.prisma.
+// Studios row. See ProSubmissionCodes.prisma. The picker itself offers only
+// studios the signed-in admin owns or manages (useStudios, @/queries/studio)
+// — not every studio in the system.
 export type AdminArtistStudioAssignment = {
   id: string;
-  studio: AdminStudio;
+  studio: { id: string; name: string; username: string };
 };
 
 export function useArtistStudioAssignments(userId: string | null) {
@@ -1833,8 +1823,10 @@ export function useAssignArtistStudio() {
 export function useUnassignArtistStudio() {
   const queryClient = useQueryClient();
   return useMutation({
+    // tierDowngraded: dropping an artist's last studio takes them off Pro
+    // too — see the DELETE route.
     mutationFn: ({ userId, studioId }: { userId: string; studioId: string }) =>
-      apiFetch<{ ok: boolean }>("/api/admin/artist-studio-assignments", {
+      apiFetch<{ ok: boolean; tierDowngraded: boolean }>("/api/admin/artist-studio-assignments", {
         body: JSON.stringify({ studioId, userId }),
         method: "DELETE",
       }),
