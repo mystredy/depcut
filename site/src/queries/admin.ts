@@ -32,6 +32,7 @@ export const adminTelegramCommandsQueryKey = ["admin", "telegram-commands"] as c
 export const adminTelegramBotStatsQueryKey = ["admin", "telegram-bot-stats"] as const;
 export const adminFinanceExchangeRateQueryKey = ["admin", "finance-exchange-rate"] as const;
 export const adminFinanceRatesQueryKey = (q?: string) => ["admin", "finance-rates", q ?? ""] as const;
+export const adminAiPricingQueryKey = ["admin", "ai-pricing"] as const;
 export const adminFinancePayoutsQueryKey = (q?: string) => ["admin", "finance-payouts", q ?? ""] as const;
 export const adminFinanceWithdrawalsQueryKey = ["admin", "finance-withdrawals"] as const;
 export const adminFinanceTransactionsQueryKey = (filters: {
@@ -1349,6 +1350,36 @@ export function useAdminFinanceRates(q: string) {
         `/api/admin/finance/rates${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`
       ),
     queryKey: adminFinanceRatesQueryKey(q.trim()),
+  });
+}
+
+// A pricing entry's micros fields cross the wire as decimal strings (a
+// bigint can't ride JSON) — see the ai-pricing route's serializePricing.
+export type AdminProviderPricing = {
+  inputTokenCostMicrosPerMillion?: string;
+  cachedInputTokenCostMicrosPerMillion?: string;
+  outputTokenCostMicrosPerMillion?: string;
+  inputAudioTokenCostMicrosPerMillion?: string;
+  cachedInputAudioTokenCostMicrosPerMillion?: string;
+  outputAudioTokenCostMicrosPerMillion?: string;
+  characterCostMicros?: string;
+  durationSecondCostMicros?: string;
+  generationCostMicros?: string;
+  longContextThresholdTokens?: string;
+  longContext?: AdminProviderPricing;
+};
+
+export type AdminProviderRate = {
+  provider: string;
+  model: string;
+  label: string;
+  pricing: AdminProviderPricing;
+};
+
+export function useAdminAiPricing() {
+  return useQuery({
+    queryFn: () => apiFetch<{ rates: AdminProviderRate[] }>("/api/admin/finance/ai-pricing"),
+    queryKey: adminAiPricingQueryKey,
   });
 }
 

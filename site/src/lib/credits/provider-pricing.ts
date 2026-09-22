@@ -37,8 +37,13 @@ export type ProviderCreditPricing = {
   longContext?: Omit<ProviderCreditPricing, "longContext" | "longContextThresholdTokens">;
 };
 
-const providerMarginNumerator = BigInt(13);
-const providerMarginDenominator = BigInt(10);
+// Exported so the admin AI Pricing page can reconstruct each rate's
+// pre-margin base cost (charged * denominator / numerator) instead of
+// hardcoding "10/13" a second time — every priced field in this file runs
+// through usdWithMargin/usdPerMillionWithMargin, so the margin is this exact
+// fixed ratio for every provider and model, with no per-model override.
+export const providerMarginNumerator = BigInt(13);
+export const providerMarginDenominator = BigInt(10);
 const openAILongContextThresholdTokens = BigInt(272000);
 
 export function providerCreditPricing(
@@ -82,6 +87,53 @@ export function providerCreditPricing(
   }
 
   return undefined;
+}
+
+export type KnownProviderRate = {
+  provider: string;
+  model: string;
+  /** Human label for the admin pricing table — what the model is used for,
+   * not just its raw id. */
+  label: string;
+  pricing: ProviderCreditPricing;
+};
+
+// Every model id the gateway actually selects (see each *-models.ts catalog),
+// paired with the exact price providerCreditPricing() resolves for it — the
+// admin AI Pricing page's one source of truth, so it can never drift from
+// what a real request is actually billed. browser-use is flat-rate with no
+// model id, so it isn't a "model" the gateway selects and is listed on its
+// own elsewhere.
+export function listKnownProviderRates(): KnownProviderRate[] {
+  const known: { provider: string; model: string; label: string }[] = [
+    { provider: "openai", model: openaiModels.debugInspection, label: "Debug inspection" },
+    { provider: "openai", model: openaiModels.chat, label: "Cut chat agent (hosted GPT)" },
+    { provider: "gemini", model: geminiModels.flash, label: "General chat / flash" },
+    { provider: "gemini", model: geminiModels.flashLite, label: "Fast structured decisions" },
+    { provider: "gemini", model: geminiModels.flashImage, label: "Image edit/generation" },
+    { provider: "gemini", model: geminiModels.proImage, label: "Pro image edit/generation" },
+    { provider: "gemini-tts", model: geminiTtsModels.flash, label: "Text to Speech (Gemini)" },
+    { provider: "gemini-omni", model: geminiOmniModels.flashVideo, label: "Omni video" },
+    { provider: "gemini-veo", model: geminiVeoModels.lite, label: "Veo video — Lite" },
+    { provider: "gemini-veo", model: geminiVeoModels.fast, label: "Veo video — Fast" },
+    { provider: "gemini-veo", model: geminiVeoModels.quality, label: "Veo video — Quality" },
+    { provider: "gemini-music", model: geminiMusicModels.clip, label: "Music — clip (~30s)" },
+    { provider: "gemini-music", model: geminiMusicModels.pro, label: "Music — pro (~2min)" },
+    { provider: "anthropic", model: anthropicModels.chat, label: "Cut chat agent (hosted Claude)" },
+    { provider: "elevenlabs", model: elevenLabsModels.music, label: "Music composition" },
+    { provider: "elevenlabs", model: elevenLabsModels.scribe, label: "Speech to Text" },
+    { provider: "elevenlabs", model: elevenLabsModels.speechV3, label: "Text to Speech — Eleven v3" },
+    {
+      provider: "elevenlabs",
+      model: elevenLabsModels.speechMultilingualV2,
+      label: "Text to Speech — Eleven Multilingual v2",
+    },
+  ];
+
+  return known.flatMap(({ provider, model, label }) => {
+    const pricing = providerCreditPricing(provider, model);
+    return pricing ? [{ provider, model, label, pricing }] : [];
+  });
 }
 
 // Every OpenAI model the gateway selects must appear here: the Record is keyed by the

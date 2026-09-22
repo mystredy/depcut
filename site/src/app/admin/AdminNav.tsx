@@ -163,6 +163,7 @@ const SECTIONS: NavSection[] = [
       { label: "Affiliates", href: "/admin/finance/affiliates", icon: Link2, color: "text-yellow-500" },
       { label: "Payment Methods", href: "/admin/finance/payment-methods", icon: CreditCard, color: "text-cyan-500" },
       { label: "AI Credits", href: "/admin/finance/ai-credits", icon: Zap, color: "text-yellow-500" },
+      { label: "AI Pricing", href: "/admin/finance/ai-pricing", icon: LineChart, color: "text-lime-500" },
       { label: "Reports", href: "/admin/finance/reports", icon: FileText, color: "text-orange-500" },
       { label: "Finance Settings", href: "/admin/finance/settings", icon: SettingsIcon, color: "text-gray-500" },
       { label: "Payment API", href: "/admin/finance/payment-api", icon: Key, color: "text-amber-500" },
