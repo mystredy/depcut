@@ -173,6 +173,32 @@ html.dark:not(.app-surface) {
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /* A slim, theme-aware scrollbar everywhere on the site instead of the
+       browser's own fat, square, arrow-button one — a translucent pill that
+       fades in against the surface behind it and brightens on hover, no
+       visible track. color-mix keeps it in step with the current
+       light/dark foreground color instead of a hard-coded value. */
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--foreground) 25%, transparent) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklch, var(--foreground) 25%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklch, var(--foreground) 45%, transparent);
+  }
+  *::-webkit-scrollbar-corner {
+    background: transparent;
   }
   body {
     @apply bg-background text-foreground;

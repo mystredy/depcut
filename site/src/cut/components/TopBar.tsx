@@ -382,7 +382,7 @@ export function TopBar({
     // toward whichever side has slack instead of colliding with the rail.
     <header
       ref={headerRef}
-      className="relative flex items-center overflow-x-auto overflow-y-hidden border-b border-border bg-card [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="relative flex items-center overflow-x-auto overflow-y-hidden border-b border-border bg-card"
     >
       <div ref={leftRef} className="flex shrink-0 items-center gap-0.5 pl-1 sm:gap-1 sm:pl-2">
         <Button
