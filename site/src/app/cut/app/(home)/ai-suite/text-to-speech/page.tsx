@@ -556,6 +556,28 @@ export default function TextToSpeechPage() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [busy]);
 
+  // beforeunload only covers closing the tab or a hard reload — it never
+  // fires for a click on another sidebar item, which just unmounts this page
+  // client-side. That's the more likely escape hatch for someone who thinks
+  // a 90-second spinner means it's stuck, so it needs its own guard.
+  useEffect(() => {
+    if (!busy) return;
+    const guard = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement)?.closest?.("a[href]");
+      const href = anchor?.getAttribute("href");
+      if (!href || href.startsWith("#")) return;
+      const leave = window.confirm(
+        "A voice generation is still running and will be billed either way — leaving now just means you won't see the result. Leave anyway?"
+      );
+      if (!leave) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    document.addEventListener("click", guard, true);
+    return () => document.removeEventListener("click", guard, true);
+  }, [busy]);
+
   const generate = async () => {
     const text = script.trim();
     if (!text) return;
