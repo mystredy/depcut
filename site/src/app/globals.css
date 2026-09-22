@@ -148,6 +148,28 @@ html.dark:not(.app-surface) {
   --background: #F5EFE0;
 }
 
+/* iOS Safari zooms the whole page to a focused input/textarea/select whose
+   computed font-size is under 16px. Several of Cut's compact panels set a
+   smaller size (e.g. text-[12.5px]) for density on desktop, and some use a
+   raw <textarea> that skips the shared Textarea component's own mobile-safe
+   default entirely — needs both !important and the [class] attribute
+   qualifier to actually win, verified against the compiled output: a bare
+   unlayered `input, textarea, select { font-size: 16px }` loses to a
+   `text-[Npx]` utility (inside Tailwind's own @layer utilities) even though
+   it sits outside every layer, and the build's CSS optimizer strips
+   !important again if the selector has no class-level specificity of its
+   own — [class] gives it that (every real input here carries Tailwind
+   classes) without hard-coding which class. Scoped to below Tailwind's `md`
+   breakpoint — desktop never zooms on focus, so the smaller sizes there are
+   untouched. */
+@media (max-width: 767.98px) {
+  input[class],
+  textarea[class],
+  select[class] {
+    font-size: 16px !important;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
