@@ -1,7 +1,8 @@
 "use client";
 
 import { type ComponentType } from "react";
-import { ChevronDown, Frame, Puzzle } from "lucide-react";
+import { Frame, Puzzle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { VideoModelOption, VideoResolution } from "@/cut/lib/videoModels";
 import type { VideoRefMode } from "@/cut/lib/videoGen";
@@ -119,12 +120,12 @@ export function SegRow<T extends string | number>({
 }
 
 /** A compact icon + text + chevron quick picker for a composer's bottom
- * toolbar — a borderless twin of PillSelect's hidden-native-select
- * technique, sized to sit inline among plain icon buttons instead of
- * standing out as a pill. Values compare by their string form (a native
- * `<select>` only ever hands back strings), then resolve back to the
- * matching option's real value — so a numeric option set (duration, count)
- * round-trips correctly instead of onChange firing with a stringified number. */
+ * toolbar — the app's own styled Select dressed as a borderless pill instead
+ * of a bordered box, sized to sit inline among plain icon buttons. Values
+ * compare by their string form (Select only ever hands back strings), then
+ * resolve back to the matching option's real value — so a numeric option set
+ * (duration, count) round-trips correctly instead of onChange firing with a
+ * stringified number. */
 export function IconSelect<T extends string | number>({
   icon: Icon,
   title,
@@ -143,31 +144,33 @@ export function IconSelect<T extends string | number>({
   disabled?: boolean;
 }) {
   return (
-    <label
-      className={cn(
-        "relative flex shrink-0 items-center gap-1 rounded-full px-1.5 py-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-        disabled && "pointer-events-none opacity-50"
-      )}
-      title={title}
+    <Select
+      value={String(value)}
+      onValueChange={(v) => {
+        const picked = options.find((o) => String(o.value) === v);
+        if (picked) onChange(picked.value);
+      }}
     >
-      <Icon className="size-4 shrink-0" />
-      <span className="max-w-16 truncate text-[11px] font-medium">{display}</span>
-      <ChevronDown className="size-3 shrink-0" />
-      <select
-        className="absolute inset-0 w-full cursor-pointer appearance-none opacity-0"
-        value={String(value)}
+      <SelectTrigger
+        size="sm"
         disabled={disabled}
-        onChange={(e) => {
-          const picked = options.find((o) => String(o.value) === e.target.value);
-          if (picked) onChange(picked.value);
-        }}
+        title={title}
+        className="h-auto w-fit shrink-0 gap-1 rounded-full border-transparent bg-transparent py-1 pr-1.5 pl-1.5 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground data-[popup-open]:bg-muted data-[popup-open]:text-foreground"
       >
+        <Icon className="size-4 shrink-0" />
+        <span className="max-w-16 truncate text-[11px] font-medium">{display}</span>
+      </SelectTrigger>
+      <SelectContent align="start">
         {options.map((o) => (
-          <option key={o.value} value={String(o.value)}>
+          <SelectItem
+            key={o.value}
+            value={String(o.value)}
+            className="focus:bg-transparent focus:text-primary"
+          >
             {o.label}
-          </option>
+          </SelectItem>
         ))}
-      </select>
-    </label>
+      </SelectContent>
+    </Select>
   );
 }
