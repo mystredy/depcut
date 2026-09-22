@@ -7,6 +7,7 @@ import {
   type UrlImportPlatform,
 } from "@/lib/marketplace/url-import";
 import { prisma } from "@/lib/prisma";
+import { escapeHtml } from "@/lib/telegram/send-code";
 import { createTranscriptionGeneration } from "@/lib/transcriptions/db";
 
 type TelegramMessage = {
@@ -150,7 +151,7 @@ async function sendStudioCodeOptions(botToken: string, chatId: number | string):
 async function handleEditCodeCallback(
   brandId: string,
   chatId: number | string,
-  edit: (text: string) => Promise<void>,
+  edit: (text: string, parseMode?: "HTML") => Promise<void>,
 ): Promise<void> {
   const user = await prisma.user.findUnique({ select: { id: true }, where: { telegramChatId: String(chatId) } });
   if (!user) {
@@ -169,8 +170,11 @@ async function handleEditCodeCallback(
 
   const code = await generateEditCode(assignment.brand.name);
   await prisma.submissionEditCode.create({ data: { brandId, code, userId: user.id } });
+  // <code> renders as monospace and is tap-to-copy in Telegram's own
+  // clients — the reason this reply needs parse_mode: "HTML" at all.
   await edit(
-    `✅ Your edit code for ${assignment.brand.name}: ${code}\n\nPaste it into Edit code on your Pro submission — one-time use.`,
+    `✅ Your edit code for ${escapeHtml(assignment.brand.name)}: <code>${code}</code>\n\nPaste it into Edit code on your Pro submission — one-time use.`,
+    "HTML",
   );
 }
 
@@ -271,10 +275,11 @@ async function handleCallbackQuery(cq: TelegramCallbackQuery, botToken: string):
   const messageId = cq.message?.message_id;
   if (chatId === undefined || messageId === undefined) return;
 
-  const edit = (text: string) =>
+  const edit = (text: string, parseMode?: "HTML") =>
     callTelegramApi(botToken, "editMessageText", {
       chat_id: chatId,
       message_id: messageId,
+      parse_mode: parseMode,
       reply_markup: { inline_keyboard: [] },
       text: truncate(text),
     });
