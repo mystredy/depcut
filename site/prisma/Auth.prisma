@@ -62,6 +62,7 @@ model User {
   studioMemberships StudioMember[]
   studioInvitesSent StudioInvite[]   @relation("StudioInvitesSent")
   studioActivity    StudioActivity[]
+  blogPostsCreated  BlogPost[]       @relation("BlogPostCreatedBy")
 
   @@map("user")
 }

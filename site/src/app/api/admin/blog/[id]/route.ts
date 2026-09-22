@@ -17,6 +17,7 @@ const updateSchema = z.object({
   excerpt: z.string().trim().max(500).nullable().optional(),
   contentMarkdown: z.string().trim().min(1).max(200_000).optional(),
   authorName: z.string().trim().max(120).nullable().optional(),
+  tag: z.string().trim().max(60).nullable().optional(),
   published: z.boolean().optional(),
 });
 
@@ -58,12 +59,17 @@ export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
     data: {
       authorName: body.authorName === undefined ? undefined : body.authorName || null,
       contentMarkdown: body.contentMarkdown,
+      // A row from before the creator link existed has no owner on record —
+      // credit whoever touches it first rather than leave it blank forever.
+      createdByUserId: existing.createdByUserId ?? request.depcut.userId,
       excerpt: body.excerpt === undefined ? undefined : body.excerpt || null,
       published: body.published,
       publishedAt,
       slug: body.slug,
+      tag: body.tag === undefined ? undefined : body.tag || null,
       title: body.title,
     },
+    include: { createdBy: { select: { displayName: true, id: true, image: true, name: true } } },
     where: { id },
   });
 

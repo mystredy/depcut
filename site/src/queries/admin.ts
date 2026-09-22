@@ -2051,11 +2051,13 @@ export type AdminBlogPost = {
   excerpt: string | null;
   contentMarkdown: string;
   authorName: string | null;
+  tag: string | null;
   hasCoverImage: boolean;
   published: boolean;
   publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  createdBy: { id: string; name: string; displayName: string | null; image: string | null } | null;
 };
 
 export function useAdminBlogPosts() {
@@ -2074,6 +2076,7 @@ export function useCreateBlogPost() {
       excerpt?: string;
       contentMarkdown: string;
       authorName?: string;
+      tag?: string;
       published: boolean;
     }) =>
       apiFetch<{ post: AdminBlogPost }>("/api/admin/blog", {
@@ -2097,6 +2100,7 @@ export function useUpdateBlogPost() {
       excerpt?: string | null;
       contentMarkdown?: string;
       authorName?: string | null;
+      tag?: string | null;
       published?: boolean;
     }) =>
       apiFetch<{ post: AdminBlogPost }>(`/api/admin/blog/${id}`, {

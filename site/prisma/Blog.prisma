@@ -12,9 +12,15 @@ model BlogPost {
   excerpt       String?
   contentMarkdown String
   authorName    String?
+  tag           String?
   hasCoverImage Boolean   @default(false)
   published     Boolean   @default(false)
   publishedAt   DateTime?
+  // Whichever admin's account created this row — shown as an avatar in the
+  // admin list. Separate from authorName, which is the public byline and can
+  // read as anything ("DepCut Team", a pen name) regardless of who wrote it.
+  createdByUserId String?
+  createdBy       User?   @relation("BlogPostCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

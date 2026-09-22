@@ -17,7 +17,10 @@ export const GET = withDepCutAuth(async (request) => {
     );
   }
 
-  const posts = await prisma.blogPost.findMany({ orderBy: { createdAt: "desc" } });
+  const posts = await prisma.blogPost.findMany({
+    include: { createdBy: { select: { displayName: true, id: true, image: true, name: true } } },
+    orderBy: { createdAt: "desc" },
+  });
   return NextResponse.json({ posts });
 });
 
@@ -29,6 +32,7 @@ const createSchema = z.object({
   excerpt: z.string().trim().max(500).optional(),
   contentMarkdown: z.string().trim().min(1).max(200_000),
   authorName: z.string().trim().max(120).optional(),
+  tag: z.string().trim().max(60).optional(),
   published: z.boolean().default(false),
 });
 
@@ -55,12 +59,15 @@ export const POST = withDepCutAuth(async (request) => {
     data: {
       authorName: body.authorName || null,
       contentMarkdown: body.contentMarkdown,
+      createdByUserId: request.depcut.userId,
       excerpt: body.excerpt || null,
       published: body.published,
       publishedAt: body.published ? new Date() : null,
       slug: body.slug,
+      tag: body.tag || null,
       title: body.title,
     },
+    include: { createdBy: { select: { displayName: true, id: true, image: true, name: true } } },
   });
 
   return NextResponse.json({ post }, { status: 201 });
