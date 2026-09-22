@@ -82,6 +82,98 @@ async function sendTelegramVideo(
   }
 }
 
+// "Viral King" -> "VK"; a one-word name falls back to its own first two
+// letters, padded if it's a single character.
+function studioCodePrefix(brandName: string): string {
+  const words = brandName.trim().split(/\s+/).filter(Boolean);
+  const raw = words.length >= 2 ? words[0][0] + words[1][0] : (words[0] ?? "XX").padEnd(2, "X").slice(0, 2);
+  return raw.toUpperCase();
+}
+
+function randomEditCodeDigits(): string {
+  return String(Math.floor(10_000_000 + Math.random() * 90_000_000));
+}
+
+// Prefix from the studio's name + 8 random digits, retried against
+// SubmissionEditCode's own id until it lands on one that isn't taken — same
+// collision-retry shape as /api/account/telegram-link's randomPin() loop.
+async function generateEditCode(brandName: string): Promise<string> {
+  const prefix = studioCodePrefix(brandName);
+  let code = prefix + randomEditCodeDigits();
+  while (await prisma.submissionEditCode.findUnique({ select: { code: true }, where: { code } })) {
+    code = prefix + randomEditCodeDigits();
+  }
+  return code;
+}
+
+// "code" asks which studio (Brand) to generate a single-use Pro submission
+// edit code for. Always goes through the button, even for an artist with
+// only one assignment, so they see — and confirm — which studio the code is
+// actually for before it's issued.
+async function sendStudioCodeOptions(botToken: string, chatId: number | string): Promise<void> {
+  const user = await prisma.user.findUnique({
+    select: { id: true },
+    where: { telegramChatId: String(chatId) },
+  });
+  if (!user) {
+    await callTelegramApi(botToken, "sendMessage", {
+      chat_id: chatId,
+      text: "Link your DepCut account first (Preferences → Link Telegram), then try again.",
+    });
+    return;
+  }
+
+  const assignments = await prisma.artistBrandAssignment.findMany({
+    include: { brand: { select: { id: true, name: true } } },
+    where: { userId: user.id },
+  });
+  if (assignments.length === 0) {
+    await callTelegramApi(botToken, "sendMessage", {
+      chat_id: chatId,
+      text: "You're not assigned to a studio yet — ask an admin to assign one before requesting a code.",
+    });
+    return;
+  }
+
+  await callTelegramApi(botToken, "sendMessage", {
+    chat_id: chatId,
+    reply_markup: {
+      inline_keyboard: assignments.map((a) => [{ callback_data: `ecb:${a.brand.id}`, text: a.brand.name }]),
+    },
+    text: "Which studio is this edit code for?",
+  });
+}
+
+// Redeems the studio picked from sendStudioCodeOptions's keyboard into a
+// fresh, single-use SubmissionEditCode. Re-checks the assignment rather than
+// trusting the button, in case it was revoked between the prompt and the tap.
+async function handleEditCodeCallback(
+  brandId: string,
+  chatId: number | string,
+  edit: (text: string) => Promise<void>,
+): Promise<void> {
+  const user = await prisma.user.findUnique({ select: { id: true }, where: { telegramChatId: String(chatId) } });
+  if (!user) {
+    await edit("⚠️ Link your DepCut account first (Preferences → Link Telegram), then try again.");
+    return;
+  }
+
+  const assignment = await prisma.artistBrandAssignment.findUnique({
+    include: { brand: { select: { name: true } } },
+    where: { userId_brandId: { userId: user.id, brandId } },
+  });
+  if (!assignment) {
+    await edit("⚠️ You're no longer assigned to that studio.");
+    return;
+  }
+
+  const code = await generateEditCode(assignment.brand.name);
+  await prisma.submissionEditCode.create({ data: { brandId, code, userId: user.id } });
+  await edit(
+    `✅ Your edit code for ${assignment.brand.name}: ${code}\n\nPaste it into Edit code on your Pro submission — one-time use.`,
+  );
+}
+
 const PLATFORM_LABELS: Record<UrlImportPlatform, string> = {
   facebook: "Facebook",
   instagram: "Instagram",
@@ -177,8 +269,7 @@ async function handleCallbackQuery(cq: TelegramCallbackQuery, botToken: string):
 
   const chatId = cq.message?.chat?.id;
   const messageId = cq.message?.message_id;
-  const url = cq.message?.text?.match(URL_RE)?.[0];
-  if (chatId === undefined || messageId === undefined || !url) return;
+  if (chatId === undefined || messageId === undefined) return;
 
   const edit = (text: string) =>
     callTelegramApi(botToken, "editMessageText", {
@@ -187,6 +278,14 @@ async function handleCallbackQuery(cq: TelegramCallbackQuery, botToken: string):
       reply_markup: { inline_keyboard: [] },
       text: truncate(text),
     });
+
+  if (cq.data?.startsWith("ecb:")) {
+    await handleEditCodeCallback(cq.data.slice(4), chatId, edit);
+    return;
+  }
+
+  const url = cq.message?.text?.match(URL_RE)?.[0];
+  if (!url) return;
 
   if (cq.data === "dl") {
     await edit("⏳ Downloading…");
@@ -319,6 +418,11 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
         };
         await callTelegramApi(botToken, "sendMessage", { chat_id: chatId, text: replies[result] });
       }
+      return;
+    }
+
+    if (trigger.toLowerCase() === "code") {
+      if (botToken) await sendStudioCodeOptions(botToken, chatId);
       return;
     }
 

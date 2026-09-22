@@ -103,6 +103,12 @@ model Brand {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   connections SocialConnection[]
+  // Pro artists authorized to submit for this studio, the single-use edit
+  // codes issued for it, and the submissions matched to it — see
+  // ProSubmissionCodes.prisma.
+  artistAssignments ArtistBrandAssignment[]
+  editCodes         SubmissionEditCode[]
+  submissions       Submission[]
 
   @@map("brand")
 }

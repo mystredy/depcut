@@ -26,6 +26,12 @@ export type UrlImportResult = {
   // it inline; Facebook has no @handle convention at all, so this is null
   // there unless one happens to appear in the title text.
   handle: string | null;
+  // The channel/account's own stable platform id, when the source hands one
+  // over — currently only YouTube (videoDetails.author.id, the "UC..." id).
+  // Used to match a submitted video against a Brand's connected YouTube
+  // channel (see /api/submissions/[id]/edit-code) without relying on
+  // `handle`, which YouTube's legacy /user/ username often doesn't have.
+  channelId: string | null;
   sourceUrl: string;
 };
 
@@ -86,6 +92,7 @@ async function extractYoutube(url: string): Promise<UrlImportResult> {
   }
   const d = info.videoDetails;
   return {
+    channelId: d.author?.id ?? null,
     description: d.description ?? "",
     handle: d.author?.user ?? null,
     platform: "youtube",
@@ -110,6 +117,7 @@ async function extractTiktok(url: string): Promise<UrlImportResult> {
   const caption = data.title ?? "";
   const tags = [...caption.matchAll(/#(\w+)/g)].map((m) => m[1]);
   return {
+    channelId: null,
     description: caption,
     handle: data.author_unique_id ? `@${data.author_unique_id}` : null,
     platform: "tiktok",
@@ -180,7 +188,7 @@ async function extractViaOpenGraph(
   // Facebook has no @handle convention, so this stays null there unless
   // the title happens to include one.
   const handleMatch = combined.match(/@([\w.]{2,30})/);
-  return { description, handle: handleMatch ? `@${handleMatch[1]}` : null, platform, sourceUrl: url, tags, thumbnailUrl, title, videoUrl };
+  return { channelId: null, description, handle: handleMatch ? `@${handleMatch[1]}` : null, platform, sourceUrl: url, tags, thumbnailUrl, title, videoUrl };
 }
 
 // X's own oEmbed, same as TikTok's — documented, free, no auth. Only gives
@@ -195,6 +203,7 @@ async function extractX(url: string): Promise<UrlImportResult> {
   const tags = [...text.matchAll(/#(\w+)/g)].map((m) => m[1]);
   const handle = data.author_url ? `@${new URL(data.author_url).pathname.replace(/^\//, "")}` : null;
   return {
+    channelId: null,
     description: text,
     handle,
     platform: "x",

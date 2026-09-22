@@ -115,6 +115,12 @@ model Submission {
   duration          Int?
   publishingid      String?
   editCode          String?
+  // The studio (Brand) this Pro submission is for — set once an edit code
+  // or a matching YouTube link is verified. See ProSubmissionCodes.prisma
+  // and /api/submissions/[id]/edit-code.
+  brandId           String?
+  brand             Brand?            @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  editCodeRedemptions SubmissionEditCode[]
   watermarkEnabled  Boolean           @default(false)
   watermarkText     String?
   burnInCaptions    Boolean           @default(false)
@@ -159,6 +165,7 @@ model Submission {
   @@index([reviewStatus])
   @@index([status])
   @@index([projectId])
+  @@index([brandId])
   @@map("submission")
 }
 

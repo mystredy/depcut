@@ -77,6 +77,9 @@ export type Submission = {
   duration: number | null;
   publishingid: string | null;
   editCode: string | null;
+  // The studio (Brand) this Pro submission is for — set once an edit code or
+  // a matching YouTube link is verified. See useVerifyEditCode.
+  brand: { id: string; name: string } | null;
   watermarkEnabled: boolean;
   watermarkText: string | null;
   burnInCaptions: boolean;
@@ -228,6 +231,36 @@ export function useDisconnectWorkspace(submissionId: string) {
     mutationFn: (provider: string) =>
       apiFetch<{ ok: boolean }>(`/api/submissions/${submissionId}/workspace-links/${provider}`, {
         method: "DELETE",
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: submissionQueryKey(submissionId) });
+    },
+  });
+}
+
+export type VerifyEditCodeResult = {
+  valid: true;
+  kind: "code" | "youtube";
+  brandName: string;
+  packageTitle?: string;
+  packageDescription?: string;
+  packageTags?: string;
+  videoPulled?: boolean;
+};
+
+// Submit Project's Check button — redeems a studio edit code, or matches a
+// YouTube link against a studio's connected channel. See
+// /api/submissions/[id]/edit-code for what each branch does; both set which
+// studio (Brand) this submission is for, so the query is invalidated to pick
+// up the server-side write (assets in particular, when a video was pulled
+// in — the page reads those straight off the query, not local state).
+export function useVerifyEditCode(submissionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (value: string) =>
+      apiFetch<VerifyEditCodeResult>(`/api/submissions/${submissionId}/edit-code`, {
+        body: JSON.stringify({ value }),
+        method: "POST",
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: submissionQueryKey(submissionId) });

@@ -52,9 +52,11 @@ import {
   useSubmission,
   useSubmitSubmission,
   useUploadSubmissionAsset,
+  useVerifyEditCode,
 } from "@/queries/submissions";
 import { MEDIA_CORS } from "@/cut/lib/mediaCors";
 import { formatCredits } from "@/lib/credits/format-credits";
+import { useTelegramLinkStatus } from "@/queries/telegramLink";
 
 const THUMB_WIDTH = 480;
 const THUMB_HEIGHT = 270;
@@ -261,6 +263,11 @@ export default function SubmitProjectEditorPage() {
   const account = useAccount();
   const isProTier = account.data?.creatorTier === "Pro";
   const categories = useCategories();
+  // The edit-code check proves the request came from a real, reachable
+  // person rather than a script — the same reason unlinking the bot requires
+  // a code sent to that chat (see /api/account/telegram-link's DELETE).
+  const telegramLink = useTelegramLinkStatus();
+  const telegramLinked = telegramLink.data?.linked === true;
 
   const { data, isLoading, isError } = useSubmission(id);
   const submission = data?.submission ?? null;
@@ -304,6 +311,7 @@ export default function SubmitProjectEditorPage() {
   const [couponChecking, setCouponChecking] = useState(false);
   const [couponValidated, setCouponValidated] = useState(false);
   const [couponMessage, setCouponMessage] = useState<string | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
 
   // Workspace linking — "connected" is hydrated from submission.workspaceLinks
   // below (real rows, see SubmissionWorkspaceLink), same as every other field
@@ -318,6 +326,7 @@ export default function SubmitProjectEditorPage() {
   const [connectError, setConnectError] = useState<string | null>(null);
   const connectWorkspace = useConnectWorkspace(id);
   const disconnectWorkspace = useDisconnectWorkspace(id);
+  const verifyEditCode = useVerifyEditCode(id);
 
   // Hydrate local field state from the fetched draft exactly once — after
   // that, this page (not the server) is the source of truth for what's on
@@ -447,6 +456,7 @@ export default function SubmitProjectEditorPage() {
     setCouponCode(value);
     setCouponValidated(false);
     setCouponMessage(null);
+    setCouponError(null);
     scheduleAutosave({ editCode: value });
   };
 
@@ -651,16 +661,29 @@ export default function SubmitProjectEditorPage() {
     }
   };
 
-  const validateCoupon = () => {
-    if (!couponFormatValid) return;
+  const validateCoupon = async () => {
+    if (!couponFormatValid || !telegramLinked) return;
     setCouponChecking(true);
     setCouponMessage(null);
-    // No coupons backend exists — this only checks the code's shape.
-    setTimeout(() => {
-      setCouponChecking(false);
+    setCouponError(null);
+    try {
+      const result = await verifyEditCode.mutateAsync(couponCode.trim());
       setCouponValidated(true);
-      setCouponMessage(`"${couponCode.trim().toUpperCase()}" looks valid.`);
-    }, 600);
+      if (result.kind === "youtube") {
+        if (result.packageTitle) setPackageTitle(result.packageTitle);
+        if (result.packageDescription) setDescription(result.packageDescription);
+        if (result.packageTags) setTags(result.packageTags);
+        setCouponMessage(
+          `Matched to ${result.brandName}.${result.videoPulled ? "" : " Couldn't pull the video automatically — upload it below."}`
+        );
+      } else {
+        setCouponMessage(`Matched to ${result.brandName}.`);
+      }
+    } catch (e) {
+      setCouponError(e instanceof ApiError ? e.message : "Couldn't check that just now — try again.");
+    } finally {
+      setCouponChecking(false);
+    }
   };
 
   const balanceLabel = useMemo(() => {
@@ -718,9 +741,12 @@ export default function SubmitProjectEditorPage() {
   // their own cut) doesn't apply.
   const isInternalSource = Boolean(submission?.projectId);
   const connectedWorkspaces = workspaces.filter((w) => w.connected);
-  const isAlphanumeric = /^[a-zA-Z0-9]+$/.test(couponCode.trim());
-  const startsWithTwoLetters = /^[a-zA-Z]{2}/.test(couponCode.trim());
-  const couponFormatValid = couponCode.trim().length >= 8 && startsWithTwoLetters && isAlphanumeric;
+  // Real validation happens server-side (see /api/submissions/[id]/edit-code)
+  // — this just decides whether Check is clickable yet.
+  const EDIT_CODE_RE = /^[a-zA-Z]{2}\d{8}$/;
+  const YOUTUBE_URL_RE = /^https?:\/\/(www\.|m\.)?(youtube\.com\/|youtu\.be\/)/i;
+  const couponTrimmed = couponCode.trim();
+  const couponFormatValid = EDIT_CODE_RE.test(couponTrimmed) || YOUTUBE_URL_RE.test(couponTrimmed);
 
   // Doesn't require uploads to finish — only that something's been picked.
   // Submit locks the row in and lets those uploads keep running in the
@@ -1266,16 +1292,16 @@ export default function SubmitProjectEditorPage() {
                   <Input
                     value={couponCode}
                     onChange={(e) => updateCouponCode(e.target.value)}
-                    placeholder="e.g. AB123456"
-                    className="uppercase"
+                    placeholder="Studio code (e.g. VK12345678) or a YouTube link"
                     disabled={!isDraft}
                   />
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={!couponFormatValid || couponChecking || !isDraft}
+                    disabled={!couponFormatValid || couponChecking || !isDraft || !telegramLinked}
                     onClick={validateCoupon}
+                    title={telegramLinked ? undefined : "Connect Telegram to check an edit code"}
                   >
                     {couponChecking ? <Loader2 className="size-3.5 animate-spin" /> : "Check"}
                   </Button>
@@ -1284,6 +1310,21 @@ export default function SubmitProjectEditorPage() {
                   <p className="flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
                     <CheckCircle2 className="size-3.5 shrink-0" />
                     {couponMessage}
+                  </p>
+                )}
+                {couponError && (
+                  <p className="flex items-center gap-1.5 text-[11px] text-destructive">
+                    <AlertCircle className="size-3.5 shrink-0" />
+                    {couponError}
+                  </p>
+                )}
+                {!telegramLink.isLoading && !telegramLinked && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Connect Telegram before checking an edit code —{" "}
+                    <a href={`${base}/settings/profile`} className="font-medium text-primary hover:underline">
+                      link it in Preferences
+                    </a>
+                    .
                   </p>
                 )}
               </div>
