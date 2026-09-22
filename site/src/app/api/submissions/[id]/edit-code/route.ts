@@ -29,8 +29,11 @@ function invalidCodeResponse() {
 }
 
 // A code is single-use and belongs to whoever it was issued to — see
-// lib/telegram/commands.ts's handleEditCodeCallback. Redeeming it sets which
-// studio (Brand) this submission is for.
+// lib/telegram/commands.ts's handleEditCodeCallback. Checking it here only
+// confirms it's real, unused, and theirs, and sets which studio (Brand) this
+// submission is for — it isn't spent yet. It's only marked used at actual
+// Submit time (see /api/submissions/[id]/submit), so an artist who checks a
+// code and then abandons the draft hasn't burned it.
 async function redeemCode(submissionId: string, userId: string, code: string) {
   const row = await prisma.submissionEditCode.findUnique({
     include: { brand: { select: { name: true } } },
@@ -38,13 +41,7 @@ async function redeemCode(submissionId: string, userId: string, code: string) {
   });
   if (!row || row.userId !== userId || row.usedAt) return invalidCodeResponse();
 
-  await prisma.$transaction([
-    prisma.submissionEditCode.update({
-      data: { usedAt: new Date(), usedBySubmissionId: submissionId },
-      where: { code },
-    }),
-    prisma.submission.update({ data: { brandId: row.brandId }, where: { id: submissionId } }),
-  ]);
+  await prisma.submission.update({ data: { brandId: row.brandId }, where: { id: submissionId } });
 
   return NextResponse.json({ brandName: row.brand.name, kind: "code" as const, valid: true });
 }
