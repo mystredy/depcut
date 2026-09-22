@@ -132,8 +132,10 @@ export type InferenceProvider = {
   responseProviderIDs?: string[];
   listModels: (modalities: InferenceModality[]) => Promise<InferenceModel[]>;
   // Only implemented by a provider whose voices are a queryable account
-  // catalog (ElevenLabs) rather than a small hardcoded set (Gemini).
-  listVoices?: () => Promise<VoiceOption[]>;
+  // catalog (ElevenLabs) rather than a small hardcoded set (Gemini). With no
+  // query, the account's own voices; with one, a lookup by voice id or a
+  // name search across the provider's public voice library.
+  listVoices?: (query?: string) => Promise<VoiceOption[]>;
   completeText?: (
     request: ChatCompletionRequest,
   ) => Promise<TextCompletionResult>;

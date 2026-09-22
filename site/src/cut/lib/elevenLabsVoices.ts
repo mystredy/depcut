@@ -14,20 +14,26 @@ export type ElevenLabsVoice = {
 
 let cache: Promise<ElevenLabsVoice[]> | null = null;
 
-/** The account's voices, fetched once per page load and reused by every
- * mounted picker. */
-export function fetchElevenLabsVoices(): Promise<ElevenLabsVoice[]> {
-  cache ??= fetch("/api/inference/voices?provider=elevenlabs", {
-    headers: { "x-depcut-client-id": "depcut-cut" },
-  })
-    .then(async (res) => {
+/** The account's voices (no `query`), fetched once per page load and reused
+ * by every mounted picker; a `query` instead looks up a voice by exact id or
+ * searches ElevenLabs' public voice library by name — the "+" add flow —
+ * and is never cached, since each search's result is one-off. */
+export function fetchElevenLabsVoices(query?: string): Promise<ElevenLabsVoice[]> {
+  const q = query?.trim();
+  const fetchOnce = () =>
+    fetch(`/api/inference/voices?provider=elevenlabs${q ? `&q=${encodeURIComponent(q)}` : ""}`, {
+      headers: { "x-depcut-client-id": "depcut-cut" },
+    }).then(async (res) => {
       if (!res.ok) throw new Error("Could not load ElevenLabs voices.");
       const body = (await res.json()) as { data?: ElevenLabsVoice[] };
       return body.data ?? [];
-    })
-    .catch((e) => {
-      cache = null;
-      throw e;
     });
+
+  if (q) return fetchOnce();
+
+  cache ??= fetchOnce().catch((e) => {
+    cache = null;
+    throw e;
+  });
   return cache;
 }

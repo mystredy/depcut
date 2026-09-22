@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 const querySchema = z.object({
   provider: z.string().min(1).max(100),
+  q: z.string().trim().min(1).max(100).optional(),
 });
 
 // Voice listing, not asset generation: free, like /api/inference/models.
@@ -20,6 +21,7 @@ export const GET = withDepCutAuth(async (request) => {
 
   const parsed = querySchema.safeParse({
     provider: request.nextUrl.searchParams.get("provider"),
+    q: request.nextUrl.searchParams.get("q") ?? undefined,
   });
   if (!parsed.success) {
     return validationErrorResponse(parsed.error);
@@ -33,6 +35,6 @@ export const GET = withDepCutAuth(async (request) => {
     );
   }
 
-  const voices = await provider.listVoices();
+  const voices = await provider.listVoices(parsed.data.q);
   return NextResponse.json({ data: voices });
 });

@@ -62,19 +62,63 @@ export function createAudioAssetProvider(
     }
   }
 
+  // A bare ElevenLabs voice id — the "+" add flow tries this first so
+  // pasting an id resolves to exactly that voice instead of a name search.
+  const voiceIdPattern = /^[A-Za-z0-9]{15,25}$/;
+
   // Voice catalog for text-to-speech (ai-suite/text-to-speech's voice picker):
-  // the account's premade and added voices, each with the labels (gender,
-  // accent, age, use case, …) ElevenLabs attaches and a hosted sample clip
-  // the picker can play without spending a generation.
-  async function listVoices(): Promise<VoiceOption[]> {
+  // no query lists the account's premade and added voices; a query first
+  // tries an exact id lookup, then falls back to a name search across
+  // ElevenLabs' public voice library — the "+" add-by-id-or-name flow. Every
+  // result carries the labels (gender, accent, age, use case, …) ElevenLabs
+  // attaches and a hosted sample clip the picker can play without spending a
+  // generation.
+  async function listVoices(query?: string): Promise<VoiceOption[]> {
     ensureConfigured(configured);
+    const q = query?.trim();
     try {
-      const { voices } = await client.voices.getAll();
+      if (!q) {
+        const { voices } = await client.voices.getAll();
+        return voices.map((voice) => ({
+          id: voice.voiceId,
+          name: voice.name ?? voice.voiceId,
+          category: voice.category,
+          labels: voice.labels,
+          previewUrl: voice.previewUrl,
+        }));
+      }
+
+      if (voiceIdPattern.test(q)) {
+        try {
+          const voice = await client.voices.get(q);
+          return [
+            {
+              id: voice.voiceId,
+              name: voice.name ?? voice.voiceId,
+              category: voice.category,
+              labels: voice.labels,
+              previewUrl: voice.previewUrl,
+            },
+          ];
+        } catch {
+          // Not a real id (or not one this account can reach) — fall
+          // through and try it as a name instead.
+        }
+      }
+
+      const { voices } = await client.voices.getShared({ search: q, pageSize: 20 });
       return voices.map((voice) => ({
         id: voice.voiceId,
         name: voice.name ?? voice.voiceId,
         category: voice.category,
-        labels: voice.labels,
+        labels: {
+          gender: voice.gender,
+          accent: voice.accent,
+          age: voice.age,
+          use_case: voice.useCase,
+          descriptive: voice.descriptive,
+          ...(voice.language ? { language: voice.language } : {}),
+        },
         previewUrl: voice.previewUrl,
       }));
     } catch (error) {
