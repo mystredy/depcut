@@ -95,6 +95,15 @@ export function useCreditsRecheck(): void {
 const OFFLOAD_ABOVE_BYTES = 1024 * 1024;
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
+function postOnce(path: string, payload: string, signal?: AbortSignal) {
+  return fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-depcut-client-id": CLIENT_ID },
+    body: payload,
+    signal,
+  });
+}
+
 /** POST one of DepCut's hosted inference routes with the user's session. */
 export const hostedPost = async (path: string, body: unknown, signal?: AbortSignal) => {
   let payload = JSON.stringify(body);
@@ -104,12 +113,27 @@ export const hostedPost = async (path: string, body: unknown, signal?: AbortSign
   if (new Blob([payload]).size > MAX_BODY_BYTES) {
     throw new Error("That request carries too much attached media to send. Use fewer references.");
   }
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-depcut-client-id": CLIENT_ID },
-    body: payload,
-    signal,
-  });
+  let res: Response;
+  try {
+    res = await postOnce(path, payload, signal);
+  } catch (e) {
+    // fetch() rejecting (rather than resolving with a 4xx/5xx) means the
+    // connection itself died mid-flight — never reached the server as an HTTP
+    // response ("Load failed" on Safari, "Failed to fetch" on Chrome). A slow
+    // generation (music, video, a long ElevenLabs script) is the likeliest
+    // thing to hit this on a flaky mobile connection, so one retry is cheap
+    // insurance against a one-off drop. Never retry a caller-cancelled
+    // request — that abort was on purpose.
+    if (signal?.aborted) throw e;
+    await new Promise((r) => setTimeout(r, 1000));
+    try {
+      res = await postOnce(path, payload, signal);
+    } catch {
+      throw new Error(
+        "Connection dropped while generating. If it had already finished, it may still have used credits — check your balance before trying again."
+      );
+    }
+  }
   noteBalance(res);
   return res;
 };
