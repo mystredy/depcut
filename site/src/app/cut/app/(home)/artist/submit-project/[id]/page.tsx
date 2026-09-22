@@ -673,6 +673,8 @@ export default function SubmitProjectEditorPage() {
         if (result.packageTitle) setPackageTitle(result.packageTitle);
         if (result.packageDescription) setDescription(result.packageDescription);
         if (result.packageTags) setTags(result.packageTags);
+        if (result.handle) setWatermarkText(result.handle);
+        if (result.voiceScript) setVocalScript(result.voiceScript);
         setCouponMessage(
           `Matched to ${result.studioName}.${result.videoPulled ? "" : " Couldn't pull the video automatically — upload it below."}`
         );

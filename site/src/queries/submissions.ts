@@ -245,7 +245,9 @@ export type VerifyEditCodeResult = {
   packageTitle?: string;
   packageDescription?: string;
   packageTags?: string;
+  handle?: string | null;
   videoPulled?: boolean;
+  voiceScript?: string | null;
 };
 
 // Submit Project's Check button — redeems a studio edit code, or matches a

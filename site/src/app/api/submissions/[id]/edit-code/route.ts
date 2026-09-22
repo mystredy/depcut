@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { submissionVideoKey, putObject } from "@/cut/server/cloud/r2";
+import { putObject, submissionVerificationKey, submissionVideoKey } from "@/cut/server/cloud/r2";
+import { transcribeCloud } from "@/cut/server/cloud/transcribe";
 import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import {
   detectUrlImportPlatform,
@@ -46,10 +47,32 @@ async function redeemCode(submissionId: string, userId: string, code: string) {
   return NextResponse.json({ studioName: row.studio.name, kind: "code" as const, valid: true });
 }
 
+// Fetches a URL into a Buffer bounded by a 20s timeout — shared by the video
+// pull and (indirectly) nothing else, but kept as its own helper since it's
+// used twice against the same resolved download URL below.
+async function fetchBuffer(url: string): Promise<{ buffer: Buffer; mime: string } | null> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+  if (!res.ok) return null;
+  return { buffer: Buffer.from(await res.arrayBuffer()), mime: res.headers.get("content-type") ?? "video/mp4" };
+}
+
+async function upsertAsset(submissionId: string, type: "video" | "verification", key: string, fileName: string) {
+  await prisma.submissionAsset.upsert({
+    create: { fileName, status: "complete", storageKey: key, submissionId, type },
+    update: { error: null, fileName, status: "complete", storageKey: key },
+    where: { submissionId_type: { submissionId, type } },
+  });
+}
+
 // A YouTube link identifies the studio by matching its channel against every
 // studio this artist is assigned to — the same result a code would have
-// given, arrived at a different way. Also pulls title/description/tags, and
-// best-effort pulls the video itself into the submission's video asset slot.
+// given, arrived at a different way. Also pulls title/description/tags,
+// the channel handle (into the watermark field), and — each best-effort,
+// since they're slow, can fail independently, and shouldn't block the
+// channel match/autofill that already succeeded — the video itself (into
+// both the video and verification export slots) and a transcript (into the
+// voice-over/script field, via the same hosted transcription Speech to Text
+// and the Telegram bot's Transcript button use, metered the same way).
 async function matchYoutubeLink(submissionId: string, userId: string, url: string) {
   let result: Awaited<ReturnType<typeof extractFromUrl>>;
   try {
@@ -79,50 +102,72 @@ async function matchYoutubeLink(submissionId: string, userId: string, url: strin
     );
   }
 
-  // Best-effort: YouTube's format-resolving call is known to hang in this
-  // environment for some videos (see resolveDownloadUrl's own guard) — a
-  // failure here still leaves the channel match and title/description/tags
-  // autofill intact, it just means the video needs a manual upload.
-  let videoPulled = false;
-  try {
-    const download = await resolveDownloadUrl(result);
-    if (download) {
-      const videoRes = await fetch(download.url, { signal: AbortSignal.timeout(20_000) });
-      if (videoRes.ok) {
-        const buffer = Buffer.from(await videoRes.arrayBuffer());
-        const mime = videoRes.headers.get("content-type") ?? "video/mp4";
-        const key = submissionVideoKey(userId, submissionId, "video.mp4");
-        await putObject(key, buffer, mime);
-        await prisma.submissionAsset.upsert({
-          create: { fileName: "video.mp4", status: "complete", storageKey: key, submissionId, type: "video" },
-          update: { error: null, fileName: "video.mp4", status: "complete", storageKey: key },
-          where: { submissionId_type: { submissionId, type: "video" } },
-        });
-        videoPulled = true;
-      }
-    }
-  } catch (e) {
-    console.error("edit-code: youtube video pull failed —", e);
-  }
-
+  // Persisted immediately, before the slower best-effort steps below — a
+  // stall or failure pulling the video or transcribing it should never cost
+  // the channel match and autofill that already succeeded.
   await prisma.submission.update({
     data: {
       studioId: matched.studioId,
       ...(result.description ? { packageDescription: result.description } : {}),
       ...(result.tags.length ? { packageTags: result.tags.join(", ") } : {}),
       ...(result.title ? { packageTitle: result.title } : {}),
+      ...(result.handle ? { watermarkText: result.handle } : {}),
     },
     where: { id: submissionId },
   });
 
+  // Best-effort: YouTube's format-resolving call is known to hang in this
+  // environment for some videos (see resolveDownloadUrl's own guard) — a
+  // failure here just means the video and verification export need a
+  // manual upload.
+  let videoPulled = false;
+  try {
+    const download = await resolveDownloadUrl(result);
+    const fetched = download ? await fetchBuffer(download.url) : null;
+    if (fetched) {
+      const videoKey = submissionVideoKey(userId, submissionId, "video.mp4");
+      const verificationKey = submissionVerificationKey(userId, submissionId, "video.mp4");
+      await putObject(videoKey, fetched.buffer, fetched.mime);
+      await putObject(verificationKey, fetched.buffer, fetched.mime);
+      await Promise.all([
+        upsertAsset(submissionId, "video", videoKey, "video.mp4"),
+        upsertAsset(submissionId, "verification", verificationKey, "video.mp4"),
+      ]);
+      videoPulled = true;
+    }
+  } catch (e) {
+    console.error("edit-code: youtube video pull failed —", e);
+  }
+
+  // Best-effort, same reasoning — and metered against this artist's own
+  // inference credits, same as running Speech to Text themselves.
+  let voiceScript: string | null = null;
+  try {
+    const form = new FormData();
+    form.append("sourceUrl", url);
+    const res = await transcribeCloud.transcribe(userId, new Request("http://internal/transcribe", { body: form, method: "POST" }));
+    const body = (await res.json().catch(() => null)) as { cues?: { text: string }[] } | null;
+    if (res.ok) {
+      const transcript = (body?.cues ?? []).map((c) => c.text).join(" ").trim();
+      if (transcript) {
+        voiceScript = transcript;
+        await prisma.submission.update({ data: { voiceScript: transcript }, where: { id: submissionId } });
+      }
+    }
+  } catch (e) {
+    console.error("edit-code: youtube transcription failed —", e);
+  }
+
   return NextResponse.json({
     studioName: matched.studio.name,
     kind: "youtube" as const,
+    handle: result.handle,
     packageDescription: result.description,
     packageTags: result.tags.join(", "),
     packageTitle: result.title,
     valid: true,
     videoPulled,
+    voiceScript,
   });
 }
 
