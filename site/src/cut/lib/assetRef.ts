@@ -62,6 +62,22 @@ export interface AssetRef {
   handle?: string;
 }
 
+// A library asset's stored name is whatever its original filename was —
+// fine most of the time, but a phone camera-roll export or a social-media
+// download sometimes leaves a raw UUID or a long numeric id with no human
+// content in it at all. Falls back to a plain "Video · Sep 21" style label
+// for exactly those, so the reference picker and @mentions never show a
+// meaningless string of hex or digits.
+const RAW_ID_NAME = /^-?(?:[0-9a-f]{6,}(?:-[0-9a-f]{4,}){2,}|\d{10,})/i;
+
+function friendlyAssetName(name: string, kind: AssetRefKind, addedAt: number): string {
+  const stem = name.replace(/\.[a-z0-9]{2,5}$/i, "");
+  if (!RAW_ID_NAME.test(stem)) return name;
+  const label = kind === "video" ? "Video" : kind === "audio" ? "Audio" : kind === "image" ? "Image" : "File";
+  const date = new Date(addedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `${label} · ${date}`;
+}
+
 export const refFromAsset = (a: MediaAsset): AssetRef => ({
   scope: "project",
   id: a.id,
@@ -76,7 +92,7 @@ export const refFromAsset = (a: MediaAsset): AssetRef => ({
 export const refFromLibrary = (a: LibraryAsset): AssetRef => ({
   scope: "library",
   id: a.id,
-  name: a.name,
+  name: friendlyAssetName(a.name, a.type, a.addedAt),
   kind: a.type,
   url: libraryMediaUrl(a.fileName, a.residency),
   duration: a.duration,
