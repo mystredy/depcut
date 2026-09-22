@@ -18,7 +18,13 @@ const FULL_WIDTH_ROUTES = new Set([
   "/admin/content/videos",
   "/admin/content/audio",
   "/admin/submissions",
+  "/admin/blog",
 ]);
+
+// A route this can't list by exact pathname (it carries a dynamic id) opts
+// out by prefix instead — the blog post editor is its own full-bleed canvas,
+// same reasoning as FULL_WIDTH_ROUTES above.
+const FULL_WIDTH_PREFIXES = ["/admin/blog/"];
 
 const COLLAPSED_STORAGE_KEY = "admin-sidebar-collapsed";
 
@@ -44,7 +50,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const current = findAdminNavItem(pathname);
   const Icon = current?.icon;
-  const fullWidth = FULL_WIDTH_ROUTES.has(pathname);
+  const fullWidth = FULL_WIDTH_ROUTES.has(pathname) || FULL_WIDTH_PREFIXES.some((p) => pathname.startsWith(p));
 
   return (
     <>
