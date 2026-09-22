@@ -79,6 +79,9 @@ function youtubeErrorMessage(e: unknown): string {
   if (raw.includes("Sign in to confirm")) {
     return "YouTube is blocking this server's requests right now — try again later.";
   }
+  if (raw === "timeout") {
+    return "YouTube took too long to respond — try again in a moment.";
+  }
   return raw || "Couldn't read that YouTube video.";
 }
 
@@ -86,7 +89,15 @@ async function extractYoutube(url: string): Promise<UrlImportResult> {
   if (!ytdl.validateURL(url)) throw new UrlImportError("That doesn't look like a valid YouTube video link.");
   let info: Awaited<ReturnType<typeof ytdl.getBasicInfo>>;
   try {
-    info = await ytdl.getBasicInfo(url);
+    // getBasicInfo has hung indefinitely against YouTube from this
+    // environment for some videos, same as getInfo below — guarded with the
+    // same 20s race so a hang fails fast with a real error instead of
+    // leaving the caller (Check, the Telegram Download button) waiting
+    // forever.
+    info = await Promise.race([
+      ytdl.getBasicInfo(url),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 20_000)),
+    ]);
   } catch (e) {
     throw new UrlImportError(youtubeErrorMessage(e));
   }

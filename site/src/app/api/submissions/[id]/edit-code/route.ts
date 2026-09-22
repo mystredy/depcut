@@ -87,7 +87,7 @@ async function matchYoutubeLink(submissionId: string, userId: string, url: strin
   try {
     const download = await resolveDownloadUrl(result);
     if (download) {
-      const videoRes = await fetch(download.url);
+      const videoRes = await fetch(download.url, { signal: AbortSignal.timeout(20_000) });
       if (videoRes.ok) {
         const buffer = Buffer.from(await videoRes.arrayBuffer());
         const mime = videoRes.headers.get("content-type") ?? "video/mp4";
