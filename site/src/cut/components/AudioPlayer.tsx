@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 
-const BAR_COUNT = 56;
+const BAR_COUNT = 96;
 
 function formatTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -56,8 +56,19 @@ function useWaveform(src: string): number[] | null {
 }
 
 // A styled play/pause + waveform scrubber for a generated clip, in place of
-// the browser's bare <audio controls>.
-export function AudioPlayer({ src, className }: { src: string; className?: string }) {
+// the browser's bare <audio controls>. `accent` is an optional Tailwind
+// gradient ("from-orange-400 to-rose-400") — pass a card's own accent to tie
+// the player to it (played bars and the play button pick it up) instead of
+// the flat default; every existing caller that doesn't pass one is unchanged.
+export function AudioPlayer({
+  src,
+  className,
+  accent,
+}: {
+  src: string;
+  className?: string;
+  accent?: string;
+}) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
@@ -107,7 +118,13 @@ export function AudioPlayer({ src, className }: { src: string; className?: strin
   const progress = duration > 0 ? current / duration : 0;
 
   return (
-    <div className={cn("flex items-center gap-3 rounded-xl border bg-muted/30 p-3", className)}>
+    <div
+      className={cn(
+        "flex items-center gap-3 border bg-muted/30 p-3",
+        accent ? "rounded-full pl-1.5" : "rounded-xl",
+        className,
+      )}
+    >
       {/* eslint-disable-next-line jsx-a11y/media-has-caption -- generated speech has no separate caption track */}
       <audio ref={audioRef} src={src} preload="metadata" className="hidden" />
 
@@ -115,7 +132,13 @@ export function AudioPlayer({ src, className }: { src: string; className?: strin
         type="button"
         onClick={toggle}
         aria-label={playing ? "Pause" : "Play"}
-        className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm transition-transform active:scale-95"
+        className={cn(
+          "grid size-9 shrink-0 place-items-center rounded-full shadow-sm transition-transform active:scale-95",
+          accent
+            ? cn("bg-gradient-to-br text-white", accent)
+            : "bg-primary text-primary-foreground",
+          playing && accent && "animate-pulse",
+        )}
       >
         {playing ? (
           <Pause className="size-4 fill-current" />
@@ -124,28 +147,46 @@ export function AudioPlayer({ src, className }: { src: string; className?: strin
         )}
       </button>
 
-      <div className="min-w-0 flex-1 space-y-1.5">
+      <div className={cn("min-w-0 flex-1", !accent && "space-y-1.5")}>
         {peaks ? (
           <button
             type="button"
             aria-label="Seek"
-            className="flex h-8 w-full items-center gap-[2px]"
+            className="relative flex h-8 w-full items-center gap-px"
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
               const ratio = (e.clientX - rect.left) / rect.width;
               seek(Math.min(1, Math.max(0, ratio)) * duration);
             }}
           >
+            {/* Muted base bars set the track's shape and width. */}
             {peaks.map((v, i) => (
               <span
                 key={i}
-                className={cn(
-                  "min-h-[3px] flex-1 rounded-full transition-colors",
-                  i / BAR_COUNT < progress ? "bg-primary" : "bg-muted-foreground/25",
-                )}
+                className="min-h-[3px] flex-1 rounded-full bg-muted-foreground/25"
                 style={{ height: `${Math.max(v * 100, 10)}%` }}
               />
             ))}
+            {/* A second, identically laid-out copy on top, revealed by a
+                clip-path that transitions on every progress tick instead of
+                each bar flipping color individually — the sweep reads as one
+                continuous motion instead of a stepped one. */}
+            <div
+              aria-hidden
+              className="absolute inset-0 flex items-center gap-px overflow-hidden transition-[clip-path] duration-200 ease-linear"
+              style={{ clipPath: `inset(0 ${100 - progress * 100}% 0 0)` }}
+            >
+              {peaks.map((v, i) => (
+                <span
+                  key={i}
+                  className={cn(
+                    "min-h-[3px] flex-1 rounded-full",
+                    accent ? cn("bg-gradient-to-b", accent) : "bg-primary",
+                  )}
+                  style={{ height: `${Math.max(v * 100, 10)}%` }}
+                />
+              ))}
+            </div>
           </button>
         ) : (
           <Slider
@@ -156,11 +197,19 @@ export function AudioPlayer({ src, className }: { src: string; className?: strin
             onValueChange={(value) => seek(Array.isArray(value) ? value[0] : value)}
           />
         )}
-        <div className="flex justify-between text-[10px] tabular-nums text-muted-foreground">
-          <span>{formatTime(current)}</span>
-          <span>{formatTime(duration)}</span>
-        </div>
+        {!accent && (
+          <div className="flex justify-between text-[10px] tabular-nums text-muted-foreground">
+            <span>{formatTime(current)}</span>
+            <span>{formatTime(duration)}</span>
+          </div>
+        )}
       </div>
+
+      {accent && (
+        <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+          {formatTime(playing || current > 0 ? current : duration)}
+        </span>
+      )}
     </div>
   );
 }
