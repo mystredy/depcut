@@ -38,7 +38,6 @@ export const GET = withDepCutAuth(async (request: DepCutAuthenticatedRequest, co
       backgroundImageKey: studio.backgroundImageKey,
       bio: studio.bio,
       id: studio.id,
-      linkedAccounts: studio.linkedAccounts ?? {},
       name: studio.name,
       role: membership?.role ?? null,
       showFollowerCount: studio.showFollowerCount,
@@ -56,7 +55,6 @@ const updateSchema = z
     bio: z.string().trim().max(150).nullable().optional(),
     showFollowerCount: z.boolean().optional(),
     spaceType: z.string().trim().min(1).max(40).optional(),
-    linkedAccounts: z.record(z.string(), z.string().trim().max(160)).optional(),
   })
   .strict();
 
@@ -90,11 +88,6 @@ export const PATCH = withDepCutAuth(async (request: DepCutAuthenticatedRequest, 
     data.showFollowerCount = parsed.data.showFollowerCount;
     changes.push("show follower count");
   }
-  if (parsed.data.linkedAccounts !== undefined) {
-    data.linkedAccounts = parsed.data.linkedAccounts;
-    changes.push("linked accounts");
-  }
-
   if (changes.length === 0) {
     return NextResponse.json({ error: "Invalid request", message: "Nothing to update." }, { status: 400 });
   }
@@ -112,7 +105,6 @@ export const PATCH = withDepCutAuth(async (request: DepCutAuthenticatedRequest, 
         backgroundImageKey: updated.backgroundImageKey,
         bio: updated.bio,
         id: updated.id,
-        linkedAccounts: updated.linkedAccounts ?? {},
         name: updated.name,
         role: membership.role,
         showFollowerCount: updated.showFollowerCount,

@@ -59,7 +59,12 @@ import { ImageCropDialog } from "@/cut/components/ImageCropDialog";
 import { CachedImg } from "@/cut/components/CachedImg";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { useCutBase } from "@/cut/lib/nav";
-import { isConnectionUsable, STUDIO_SOURCE_PLATFORM, YOUTUBE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
+import {
+  isConnectionUsable,
+  platformProfileUrl,
+  STUDIO_SOURCE_PLATFORM,
+  YOUTUBE_PLATFORMS,
+} from "@/lib/marketplace/oauth-providers";
 import { PLATFORM_ICONS } from "@/lib/marketplace/platform-icons";
 import { SOCIAL_APP_SEED } from "@/lib/marketplace/social-apps-seed";
 import { cn } from "@/lib/utils";
@@ -208,7 +213,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
     );
   }
 
-  const { studio } = data;
+  const { studio, connections } = data;
   const isManager = studio.role != null;
   const visibleDrops = (drops.data?.drops ?? []).filter((d) => d.status !== "error");
   const playableDrops = visibleDrops.filter((d) => d.status === "complete");
@@ -386,6 +391,24 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
         )}
 
         {studio.bio && <p className="mt-3 max-w-sm text-sm text-foreground/90">{studio.bio}</p>}
+
+        {connections.length > 0 && (
+          <div className="mt-3 flex items-center gap-1.5">
+            <Link2 className="size-3.5 shrink-0 text-muted-foreground" />
+            {connections.map((c) => {
+              const Icon = PLATFORM_ICONS[c.platform];
+              if (!Icon) return null;
+              const href = platformProfileUrl(c.platform, c.accountHandle);
+              return href ? (
+                <a key={c.id} href={href} target="_blank" rel="noopener noreferrer">
+                  <Icon className="size-5 rounded-[25%]" />
+                </a>
+              ) : (
+                <Icon key={c.id} className="size-5 rounded-[25%]" />
+              );
+            })}
+          </div>
+        )}
 
         {isManager && (
           <div className="mt-4 flex items-center gap-2">

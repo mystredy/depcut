@@ -24,8 +24,16 @@ export type Studio = {
   avatarImageKey: string | null;
   backgroundImageKey: string | null;
   showFollowerCount: boolean;
-  linkedAccounts: Record<string, string>;
   updatedAt: string;
+};
+
+// The public "which platforms is this studio on" row — platform + handle
+// only, never the token fields StudioConnection (below) carries. Returned
+// alongside the public studio fetch, not the manager-only connections list.
+export type PublicStudioConnection = {
+  id: string;
+  platform: string;
+  accountHandle: string;
 };
 
 // Fixed-key R2 objects (see studioAvatarKey/studioBackgroundKey in r2.ts) —
@@ -76,7 +84,10 @@ export function useCreateStudio() {
 export function useStudioByUsername(username: string | null) {
   return useQuery({
     enabled: !!username,
-    queryFn: () => apiFetch<{ studio: Studio }>(`/api/studios/by-username/${username}`),
+    queryFn: () =>
+      apiFetch<{ studio: Studio; connections: PublicStudioConnection[] }>(
+        `/api/studios/by-username/${username}`
+      ),
     queryKey: studioQueryKey(username ?? ""),
   });
 }
@@ -90,7 +101,6 @@ export function useUpdateStudio(id: string) {
       bio?: string | null;
       showFollowerCount?: boolean;
       spaceType?: string;
-      linkedAccounts?: Record<string, string>;
     }) =>
       apiFetch<{ studio: Studio }>(`/api/studios/${id}`, {
         body: JSON.stringify(input),

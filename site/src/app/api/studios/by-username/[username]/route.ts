@@ -5,6 +5,7 @@ import {
   withDepCutAuth,
   type DepCutAuthenticatedRequest,
 } from "@/lib/depcut-api-auth";
+import { STUDIO_SOURCE_PLATFORM } from "@/lib/marketplace/oauth-providers";
 import { prisma } from "@/lib/prisma";
 import { getStudioMembership } from "@/lib/studio/access";
 
@@ -23,13 +24,26 @@ export const GET = withDepCutAuth(async (request: DepCutAuthenticatedRequest, co
 
   const membership = await getStudioMembership(request.depcut.userId, studio.id);
 
+  // The public "which platforms is this studio on" row — just the platform
+  // and its handle, never the token fields GET /api/studios/[id]/connections
+  // returns (that route stays manager-only for that reason).
+  const connections = await prisma.socialConnection.findMany({
+    orderBy: { createdAt: "asc" },
+    select: { accountHandle: true, id: true, platform: true },
+    where: {
+      accountHandle: { not: null },
+      platform: { not: STUDIO_SOURCE_PLATFORM },
+      studioId: studio.id,
+    },
+  });
+
   return NextResponse.json({
+    connections,
     studio: {
       avatarImageKey: studio.avatarImageKey,
       backgroundImageKey: studio.backgroundImageKey,
       bio: studio.bio,
       id: studio.id,
-      linkedAccounts: studio.linkedAccounts ?? {},
       name: studio.name,
       role: membership?.role ?? null,
       showFollowerCount: studio.showFollowerCount,

@@ -1,9 +1,9 @@
 // A studio: a user-created connected-account-equivalent, YouTube-channel
 // style — nothing exists until an account explicitly creates one, and an
 // account can own or manage several. Each has its own managers
-// (StudioMember), public profile, publicly-displayed linked-account
-// handles, connected publish destinations (SocialConnection.studioId), and
-// drop feed (Drop.studioId).
+// (StudioMember), public profile, connected publish destinations
+// (SocialConnection.studioId, whose accountHandle is what the public
+// profile shows), and drop feed (Drop.studioId).
 model Studio {
   id                 String   @id @default(cuid())
   name               String
@@ -21,10 +21,6 @@ model Studio {
   spaceType          String   @default("Creator")
   ownerId            String
   owner              User     @relation("StudioOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  // { facebook?: "handle", instagram?: "handle", ... } — public display text
-  // only, no token. Distinct from `connections`, which are real
-  // OAuth-backed publish destinations.
-  linkedAccounts     Json?
   members            StudioMember[]
   invites            StudioInvite[]
   activity           StudioActivity[]

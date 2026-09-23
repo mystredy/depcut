@@ -189,6 +189,25 @@ export function getOAuthProvider(platform: string): OAuthProviderConfig | null {
   return OAUTH_PROVIDERS[platform] ?? null;
 }
 
+// The profile URL a connection's accountHandle resolves to, in the exact
+// format each fetchProfile above actually produces it — Threads and YouTube
+// keep the "@" in the URL, X strips it. Only threads/x/youtube ever set
+// accountHandle (see fetchProfile above); everything else returns null so a
+// caller never guesses at a URL scheme this file doesn't already know is
+// right, rather than link somewhere wrong.
+export function platformProfileUrl(platform: string, handle: string): string | null {
+  switch (platform) {
+    case "threads":
+      return `https://www.threads.net/${handle}`;
+    case "x":
+      return `https://x.com/${handle.replace(/^@/, "")}`;
+    case "youtube":
+      return `https://www.youtube.com/${handle}`;
+    default:
+      return null;
+  }
+}
+
 // Platforms with a real "Connect" flow — everything in SOCIAL_APP_SEED
 // except Telegram, which is bot-token based, not OAuth.
 export const OAUTH_CAPABLE_PLATFORMS = Object.keys(OAUTH_PROVIDERS);
