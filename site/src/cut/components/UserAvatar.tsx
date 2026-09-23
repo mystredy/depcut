@@ -1,5 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { useLocalImageCache } from "@/lib/useLocalImageCache";
 
 // The signed-in user's picture, or the first letter of the name they go by.
 //
@@ -18,9 +19,10 @@ export function UserAvatar({
   className?: string;
   initialClassName?: string;
 }) {
+  const cachedImage = useLocalImageCache(image, `avatar:${image}`);
   return (
     <Avatar className={className}>
-      {image && <AvatarImage src={image} alt="" referrerPolicy="no-referrer" />}
+      {image && <AvatarImage src={cachedImage ?? image} alt="" referrerPolicy="no-referrer" />}
       <AvatarFallback className={cn(initialClassName)}>
         {(name.trim()[0] ?? "?").toUpperCase()}
       </AvatarFallback>

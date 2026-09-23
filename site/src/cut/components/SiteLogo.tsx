@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { cn } from "@/lib/utils";
+import { useLocalImageCache } from "@/lib/useLocalImageCache";
 
 const DEFAULT_LOGO = "/deepw-logo.svg";
 
@@ -21,10 +22,12 @@ function sourcesFor(theme: "light" | "dark", compact: boolean): string[] {
 function ThemedMark({ theme, alt, compact }: { theme: "light" | "dark"; alt: string; compact: boolean }) {
   const sources = sourcesFor(theme, compact);
   const [step, setStep] = useState(0);
+  const activeSource = sources[step];
+  const cachedSrc = useLocalImageCache(activeSource, `logo:${activeSource}`);
   return (
     // eslint-disable-next-line @next/next/no-img-element -- admin-uploaded bytes, not a Next-optimizable asset
     <img
-      src={sources[step]}
+      src={cachedSrc ?? activeSource}
       alt={alt}
       draggable={false}
       className={cn(
