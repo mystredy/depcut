@@ -7,6 +7,12 @@
   "name": "depcut-worker",
   "main": "cf/worker.ts",
   "compatibility_date": "2026-07-01",
+  // hosts.ts (shared with the rest of the site) reads process.env at module
+  // scope for its overridable host constants — a plain Node global that
+  // workerd doesn't provide without this flag ("process is not defined" on
+  // deploy otherwise). The container half of this same deploy is unaffected;
+  // it's a normal Node process regardless of this Worker-only setting.
+  "compatibility_flags": ["nodejs_compat"],
   // Streams the container's stdout/stderr into Workers Logs (wrangler tail).
   "observability": { "enabled": true },
   "containers": [
