@@ -101,6 +101,18 @@ export function PostEditor({ postId }: { postId: string | null }) {
   const [createdOnce, setCreatedOnce] = useState(false);
   const hasSavedVersion = Boolean(post) || createdOnce;
 
+  // editVersionRef bumps on every field change; savedVersionRef records which
+  // version a completed save actually covered. A save's onSuccess only clears
+  // dirty when the two still match — if the user changed something else while
+  // that request was in flight, editVersionRef has since moved on, dirty stays
+  // true, and the effect below schedules the next save with the CURRENT
+  // (freshest) field values. savingRef is a synchronous lock so a fired timer
+  // can never start a second request while one is already in flight, however
+  // pending (react-query's own isPending) happens to be lagging.
+  const editVersionRef = useRef(0);
+  const savedVersionRef = useRef(0);
+  const savingRef = useRef(false);
+
   // Seeds the form once the real post arrives — guarded so a background
   // refetch (e.g. after the tag popover saves elsewhere) never clobbers
   // whatever's mid-edit here.
@@ -118,7 +130,10 @@ export function PostEditor({ postId }: { postId: string | null }) {
     }
   }, [postId, post, loadedId]);
 
-  const markDirty = () => setDirty(true);
+  const markDirty = () => {
+    editVersionRef.current += 1;
+    setDirty(true);
+  };
 
   const applyLinePrefix = (prefix: string) => {
     const el = textareaRef.current;
@@ -166,8 +181,14 @@ export function PostEditor({ postId }: { postId: string | null }) {
   const pending = create.isPending || update.isPending;
 
   const save = () => {
-    if (!valid || pending) return;
+    if (!valid || savingRef.current) return;
+    savingRef.current = true;
     setError(null);
+
+    // Captured now, before the request goes out — this is the version of
+    // local state this specific payload represents, independent of whatever
+    // editVersionRef climbs to while the request is in flight.
+    const versionAtSend = editVersionRef.current;
     const input = {
       authorName: authorName.trim() || undefined,
       contentMarkdown: contentMarkdown.trim(),
@@ -177,19 +198,47 @@ export function PostEditor({ postId }: { postId: string | null }) {
       tags,
       title: title.trim(),
     };
-    const onError = (e: unknown) => setError(e instanceof Error ? e.message : "Couldn't save — try again.");
+
+    const onSettled = () => {
+      savingRef.current = false;
+    };
+    const onError = (e: unknown) => {
+      setError(e instanceof Error ? e.message : "Couldn't save — try again.");
+      onSettled();
+    };
+    // Only clears dirty if nothing changed after this payload was built —
+    // otherwise editVersionRef has moved past versionAtSend, dirty stays
+    // true, and the autosave effect (pending flips false on this same
+    // settle) schedules a follow-up save with the current field values.
+    const onSaved = () => {
+      savedVersionRef.current = versionAtSend;
+      setDirty(editVersionRef.current !== versionAtSend);
+    };
+
     if (post) {
       update.mutate(
         { id: post.id, ...input },
-        { onError, onSuccess: () => setDirty(false) }
+        {
+          onError,
+          onSuccess: () => {
+            onSaved();
+            onSettled();
+          },
+        }
       );
     } else {
       create.mutate(input, {
         onError,
         onSuccess: (result) => {
-          setDirty(false);
+          onSaved();
           setCreatedOnce(true);
+          // Set before the route change so the "seed form from server post"
+          // effect below sees loadedId already matching once `post` arrives
+          // from the refetch, instead of re-seeding from the row as it stood
+          // at create time and stomping anything typed since.
+          setLoadedId(result.post.id);
           router.replace(`/admin/blog/${result.post.id}`);
+          onSettled();
         },
       });
     }
