@@ -14,15 +14,19 @@
 
 import { prisma } from "../src/lib/prisma";
 
-const posts = await prisma.blogPost.findMany({
-  select: { id: true, tag: true, tags: true, title: true },
-  where: { tag: { not: null }, tags: { equals: [] } },
-});
+async function main() {
+  const posts = await prisma.blogPost.findMany({
+    select: { id: true, tag: true, tags: true, title: true },
+    where: { tag: { not: null }, tags: { equals: [] } },
+  });
 
-for (const post of posts) {
-  await prisma.blogPost.update({ data: { tags: [post.tag!] }, where: { id: post.id } });
-  console.log(`${post.id} (${post.title}): tag "${post.tag}" -> tags`);
+  for (const post of posts) {
+    await prisma.blogPost.update({ data: { tags: [post.tag!] }, where: { id: post.id } });
+    console.log(`${post.id} (${post.title}): tag "${post.tag}" -> tags`);
+  }
+
+  console.log(`Done — migrated ${posts.length} post(s).`);
+  await prisma.$disconnect();
 }
 
-console.log(`Done — migrated ${posts.length} post(s).`);
-await prisma.$disconnect();
+void main();
