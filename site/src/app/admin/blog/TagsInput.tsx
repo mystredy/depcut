@@ -15,15 +15,28 @@ type Props = {
 // A chip input for a post's labels — type a label, press Enter or "," to add
 // it as a chip, Backspace on an empty draft removes the last one. Shared by
 // the editor's post-settings dialog and the list row's quick-tag popover.
+//
+// commit() splits the draft on "," rather than trusting the keydown handler
+// to have already isolated one label — a paste, an IME, or (as hit while
+// testing this) an automated "type" action can land a comma in the input's
+// value without ever firing a "," keydown.
 export function TagsInput({ value, onChange, placeholder, className }: Props) {
   const [draft, setDraft] = useState("");
 
   const commit = () => {
-    const label = draft.trim();
+    const incoming = draft
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
     setDraft("");
-    if (!label) return;
-    if (value.some((tag) => tag.toLowerCase() === label.toLowerCase())) return;
-    onChange([...value, label]);
+    if (incoming.length === 0) return;
+
+    const next = [...value];
+    for (const label of incoming) {
+      if (next.some((tag) => tag.toLowerCase() === label.toLowerCase())) continue;
+      next.push(label);
+    }
+    onChange(next);
   };
 
   return (
