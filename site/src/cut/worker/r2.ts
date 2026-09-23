@@ -22,8 +22,6 @@ export {
   projectHlsRoot as hlsRoot,
   projectMediaKey as mediaKey,
   projectPreviewKey as previewKey,
-  submissionVerificationKey,
-  submissionVideoKey,
 } from "../server/cloud/r2";
 
 const R2_BUCKET = "deepw-media";

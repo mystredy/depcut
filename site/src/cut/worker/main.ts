@@ -5,7 +5,6 @@ import { overlayKeysOf, runExportJob } from "./exportJob";
 import { runHlsJob } from "./hlsJob";
 import { runImportUrlJob } from "./importUrlJob";
 import { deleteObjects } from "./r2";
-import { runSubmissionYoutubeJob } from "./submissionYoutubeJob";
 
 // The cloud render worker: a headless loop that claims CutRenderJob rows the
 // hosted API queues (export, preview, import_url), executes them with the
@@ -56,7 +55,7 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 /** The kinds someone is watching happen: an export or a URL import has a
  * progress bar on screen, while a hover proxy and a share card are background
  * polish nobody is waiting on. */
-const WATCHED_KINDS = ["export", "import_url", "submission_youtube"];
+const WATCHED_KINDS = ["export", "import_url"];
 
 /** Atomically claim the next queued job: the updateMany's state guard makes
  * exactly one worker win each row, so replicas never double-run a job.
@@ -156,12 +155,6 @@ async function runJob(job: ClaimedJob): Promise<void> {
       });
     } else if (job.kind === "import_url") {
       const result = await runImportUrlJob(job, () => entry.canceled);
-      await prisma.cutRenderJob.updateMany({
-        where: { id: job.id, state: "running" },
-        data: { state: "done", progress: 1, result: result as unknown as Prisma.InputJsonValue },
-      });
-    } else if (job.kind === "submission_youtube") {
-      const result = await runSubmissionYoutubeJob(job);
       await prisma.cutRenderJob.updateMany({
         where: { id: job.id, state: "running" },
         data: { state: "done", progress: 1, result: result as unknown as Prisma.InputJsonValue },

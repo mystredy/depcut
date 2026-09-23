@@ -1,13 +1,20 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import type { Prisma } from "@/generated/prisma/client";
-import { wakeRenderWorker } from "@/cut/server/cloud/wake";
+import { putObject, submissionVerificationKey, submissionVideoKey } from "@/cut/server/cloud/r2";
+import { transcribeCloud } from "@/cut/server/cloud/transcribe";
 import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { detectUrlImportPlatform, extractFromUrl, UrlImportError } from "@/lib/marketplace/url-import";
+import { downloadYoutubeVideo, extractAudioForTranscription } from "@/lib/marketplace/youtubeDownload";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
+// The video pull + transcribe steps below can run well past Vercel's
+// default function timeout — see youtubeDownload.ts's own per-step budgets.
+export const maxDuration = 180;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -42,15 +49,22 @@ async function redeemCode(submissionId: string, userId: string, code: string) {
   return NextResponse.json({ studioName: row.studio.name, kind: "code" as const, valid: true });
 }
 
+async function upsertAsset(submissionId: string, type: "video" | "verification", key: string, fileName: string) {
+  await prisma.submissionAsset.upsert({
+    create: { fileName, status: "complete", storageKey: key, submissionId, type },
+    update: { error: null, fileName, status: "complete", storageKey: key },
+    where: { submissionId_type: { submissionId, type } },
+  });
+}
+
 // A YouTube link identifies the studio by matching its channel against every
 // studio this artist is assigned to — the same result a code would have
 // given, arrived at a different way. Also pulls title/description/tags and
-// the channel handle (into the watermark field) synchronously. The video
-// itself needs yt-dlp, which only runs on the Cut cloud render worker (this
-// route runs on Vercel, which can't shell out to it — see
-// src/cut/server/urlDownload.ts) — queued there instead, and never blocks
-// this response. The client polls that job and transcribes once it lands
-// (see /api/submissions/[id]/edit-code/transcribe).
+// the channel handle (into the watermark field). The video itself and its
+// transcript are each best-effort, since they're slow and can fail
+// independently — see youtubeDownload.ts for how they're actually pulled
+// (a vendored yt-dlp binary, since this route runs on Vercel, which has
+// neither yt-dlp nor Python installed).
 async function matchYoutubeLink(submissionId: string, userId: string, url: string) {
   let result: Awaited<ReturnType<typeof extractFromUrl>>;
   try {
@@ -94,18 +108,46 @@ async function matchYoutubeLink(submissionId: string, userId: string, url: strin
     where: { id: submissionId },
   });
 
-  // Queue the video pull on the render worker rather than attempt it here —
-  // see this function's doc comment. A submission's own row carries the
-  // studio/metadata already written above regardless of how this job goes;
-  // the job only owns the video and verification export.
-  const job = await prisma.cutRenderJob.create({
-    data: {
-      kind: "submission_youtube",
-      spec: { submissionId, url } as unknown as Prisma.InputJsonValue,
-      userId,
-    },
-  });
-  wakeRenderWorker();
+  let videoPulled = false;
+  let voiceScript: string | null = null;
+  const tmp = await mkdtemp(path.join(os.tmpdir(), "submission-yt-"));
+  try {
+    const videoFile = await downloadYoutubeVideo(url, tmp);
+    if (videoFile) {
+      const videoKey = submissionVideoKey(userId, submissionId, "video.mp4");
+      const verificationKey = submissionVerificationKey(userId, submissionId, "video.mp4");
+      const bytes = await readFile(videoFile);
+      await putObject(videoKey, bytes, "video/mp4");
+      await putObject(verificationKey, bytes, "video/mp4");
+      await Promise.all([
+        upsertAsset(submissionId, "video", videoKey, "video.mp4"),
+        upsertAsset(submissionId, "verification", verificationKey, "video.mp4"),
+      ]);
+      videoPulled = true;
+
+      const audio = await extractAudioForTranscription(videoFile, tmp);
+      if (audio) {
+        const form = new FormData();
+        form.append("audio", new Blob([new Uint8Array(audio)], { type: "audio/mp4" }), "audio.m4a");
+        const res = await transcribeCloud.transcribe(
+          userId,
+          new Request("http://internal/transcribe", { body: form, method: "POST" }),
+        );
+        const body = (await res.json().catch(() => null)) as { cues?: { text: string }[] } | null;
+        if (res.ok) {
+          const transcript = (body?.cues ?? []).map((c) => c.text).join(" ").trim();
+          if (transcript) {
+            voiceScript = transcript;
+            await prisma.submission.update({ data: { voiceScript: transcript }, where: { id: submissionId } });
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error("edit-code: youtube video pull failed —", e);
+  } finally {
+    void rm(tmp, { recursive: true, force: true });
+  }
 
   return NextResponse.json({
     studioName: matched.studio.name,
@@ -115,7 +157,8 @@ async function matchYoutubeLink(submissionId: string, userId: string, url: strin
     packageTags: result.tags.join(", "),
     packageTitle: result.title,
     valid: true,
-    videoJobId: job.id,
+    videoPulled,
+    voiceScript,
   });
 }
 

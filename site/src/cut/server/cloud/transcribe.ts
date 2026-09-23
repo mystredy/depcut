@@ -17,7 +17,7 @@ import { err } from "./util";
 
 // The client sends sub-megabyte chunks of 16-bit mono PCM; anything bigger is
 // not ours and would blow past inline-audio comfort anyway.
-const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
+export const MAX_AUDIO_BYTES = 4 * 1024 * 1024;
 const ROUTE = "/api/cut-cloud/transcribe/";
 const PROVIDER = "elevenlabs";
 const MODEL = elevenLabsModels.scribe;
