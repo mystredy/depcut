@@ -182,6 +182,7 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
           role: state.role,
           studioId,
           tokenExpiresAt: longLived.expiresIn ? new Date(Date.now() + longLived.expiresIn * 1000) : null,
+          userId: request.depcut.userId,
         });
         return oauthPopupHtml({
           message: `${state.label || page.name} is now connected.`,
@@ -250,6 +251,7 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
     role: state.role,
     studioId,
     tokenExpiresAt,
+    userId: request.depcut.userId,
   });
 
   return oauthPopupHtml({

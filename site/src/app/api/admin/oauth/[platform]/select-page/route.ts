@@ -58,6 +58,7 @@ export const GET = withDepCutAuth(async (request, context: RouteContext) => {
     // to store, so leave it unset. Reconnect if Meta ever invalidates it
     // (a password change, deauth, or periodic re-verification).
     tokenExpiresAt: null,
+    userId: request.depcut.userId,
   });
 
   return oauthPopupHtml({

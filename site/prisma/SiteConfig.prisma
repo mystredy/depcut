@@ -133,16 +133,16 @@ model SocialConnection {
   tokenExpiresAt    DateTime?
   brandId           String?
   brand             Brand?    @relation(fields: [brandId], references: [id], onDelete: SetNull)
-  // Set when a DepCut user connects their own account (see
-  // /api/social-connections/[platform]/start) rather than an admin
-  // connecting a shared brand account from /admin/social/connections. Null
-  // for every admin-owned connection.
+  // The DepCut user who ran the OAuth connect — the super user for an
+  // admin/brand-pool connection, or the studio manager for a studio
+  // connection. Set by upsertSocialConnection on every connect and
+  // reconnect (see /api/admin/oauth/[platform]/callback and
+  // /api/admin/oauth/[platform]/select-page).
   userId            String?
   user              User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   // Set when a studio's Repurpose panel connects an account — see
-  // /api/studios/[id]/oauth/[platform]/start. The real, common case for a
-  // user-initiated connection; bare `userId` above stays for a hypothetical
-  // connection tied to an account directly, not a studio.
+  // /api/studios/[id]/oauth/[platform]/start. Null for an admin/brand-pool
+  // connection.
   studioId          String?
   studio            Studio?   @relation(fields: [studioId], references: [id], onDelete: Cascade)
   createdAt         DateTime  @default(now())

@@ -17,6 +17,7 @@ export async function upsertSocialConnection(opts: {
   refreshToken?: string;
   tokenExpiresAt: Date | null;
   studioId?: string;
+  userId: string;
 }) {
   const existing = opts.platformAccountId
     ? await prisma.socialConnection.findFirst({
@@ -40,6 +41,7 @@ export async function upsertSocialConnection(opts: {
         refreshToken: opts.refreshToken,
         status: "active",
         tokenExpiresAt: opts.tokenExpiresAt,
+        userId: opts.userId,
       },
       where: { id: existing.id },
     });
@@ -57,6 +59,7 @@ export async function upsertSocialConnection(opts: {
       role: opts.role,
       studioId: opts.studioId,
       tokenExpiresAt: opts.tokenExpiresAt,
+      userId: opts.userId,
     },
   });
 }
