@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronUp,
   EllipsisVertical,
+  ExternalLink,
   Info,
   Link2,
   Loader2,
@@ -101,6 +102,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
   const [posting, setPosting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedDropId, setCopiedDropId] = useState<string | null>(null);
+  const [copiedConnectionId, setCopiedConnectionId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editingAvatar, setEditingAvatar] = useState(false);
   const [editingBackground, setEditingBackground] = useState(false);
@@ -199,6 +201,16 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
       await navigator.clipboard.writeText(`${window.location.origin}/@${data.studio.username}?drop=${dropId}`);
       setCopiedDropId(dropId);
       setTimeout(() => setCopiedDropId(null), 2000);
+    } catch {
+      // Clipboard access can be denied by the browser — nothing further to do here.
+    }
+  };
+
+  const copyConnectionLink = async (url: string, connectionId: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedConnectionId(connectionId);
+      setTimeout(() => setCopiedConnectionId(null), 2000);
     } catch {
       // Clipboard access can be denied by the browser — nothing further to do here.
     }
@@ -399,12 +411,23 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
               const Icon = PLATFORM_ICONS[c.platform];
               if (!Icon) return null;
               const href = platformProfileUrl(c.platform, c.accountHandle);
-              return href ? (
-                <a key={c.id} href={href} target="_blank" rel="noopener noreferrer">
-                  <Icon className="size-5 rounded-[25%]" />
-                </a>
-              ) : (
-                <Icon key={c.id} className="size-5 rounded-[25%]" />
+              if (!href) return <Icon key={c.id} className="size-5 rounded-[25%]" />;
+              return (
+                <DropdownMenu key={c.id}>
+                  <DropdownMenuTrigger className="rounded-[25%]">
+                    <Icon className="size-5 rounded-[25%]" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem onClick={() => void copyConnectionLink(href, c.id)}>
+                      <Link2 className="size-3.5" />
+                      {copiedConnectionId === c.id ? "Copied!" : "Copy link"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => window.open(href, "_blank", "noopener,noreferrer")}>
+                      <ExternalLink className="size-3.5" />
+                      Visit link
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               );
             })}
           </div>
