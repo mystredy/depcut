@@ -206,12 +206,19 @@ function ConnectionCard({ connection }: { connection: AdminSocialConnection }) {
   return (
     <div className="relative flex items-start justify-between gap-3 rounded-2xl border bg-card p-4">
       <div className="flex items-start gap-3">
-        <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
-          {connection.profileImage ? (
-            // eslint-disable-next-line @next/next/no-img-element -- external platform avatar, not an optimizable local asset
-            <img src={connection.profileImage} alt="" className="size-full object-cover" />
-          ) : (
-            <PlatformIcon platform={connection.platform} className="size-4" />
+        <div className="relative size-9 shrink-0">
+          <div className="flex size-9 items-center justify-center overflow-hidden rounded-full bg-muted">
+            {connection.profileImage ? (
+              // eslint-disable-next-line @next/next/no-img-element -- external platform avatar, not an optimizable local asset
+              <img src={connection.profileImage} alt="" className="size-full object-cover" />
+            ) : (
+              <PlatformIcon platform={connection.platform} className="size-4" />
+            )}
+          </div>
+          {connection.profileImage && (
+            <div className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full border border-card bg-background">
+              <PlatformIcon platform={connection.platform} className="size-2.5" />
+            </div>
           )}
         </div>
         <div>
