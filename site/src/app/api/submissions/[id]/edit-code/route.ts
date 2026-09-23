@@ -119,10 +119,14 @@ async function matchYoutubeLink(submissionId: string, userId: string, url: strin
   // Best-effort: YouTube's format-resolving call is known to hang in this
   // environment for some videos (see resolveDownloadUrl's own guard) — a
   // failure here just means the video and verification export need a
-  // manual upload.
+  // manual upload. Resolved once and reused for transcription below —
+  // ElevenLabs fetches sourceUrl itself expecting a direct audio/video
+  // file, so a youtube.com page link 400s there; only the resolved direct
+  // download URL is fetchable.
   let videoPulled = false;
+  let download: Awaited<ReturnType<typeof resolveDownloadUrl>> | null = null;
   try {
-    const download = await resolveDownloadUrl(result);
+    download = await resolveDownloadUrl(result);
     const fetched = download ? await fetchBuffer(download.url) : null;
     if (fetched) {
       const videoKey = submissionVideoKey(userId, submissionId, "video.mp4");
@@ -140,22 +144,26 @@ async function matchYoutubeLink(submissionId: string, userId: string, url: strin
   }
 
   // Best-effort, same reasoning — and metered against this artist's own
-  // inference credits, same as running Speech to Text themselves.
+  // inference credits, same as running Speech to Text themselves. Skipped
+  // entirely when resolution above failed: there's no direct file URL to
+  // hand ElevenLabs, so there's nothing worth spending credits attempting.
   let voiceScript: string | null = null;
-  try {
-    const form = new FormData();
-    form.append("sourceUrl", url);
-    const res = await transcribeCloud.transcribe(userId, new Request("http://internal/transcribe", { body: form, method: "POST" }));
-    const body = (await res.json().catch(() => null)) as { cues?: { text: string }[] } | null;
-    if (res.ok) {
-      const transcript = (body?.cues ?? []).map((c) => c.text).join(" ").trim();
-      if (transcript) {
-        voiceScript = transcript;
-        await prisma.submission.update({ data: { voiceScript: transcript }, where: { id: submissionId } });
+  if (download) {
+    try {
+      const form = new FormData();
+      form.append("sourceUrl", download.url);
+      const res = await transcribeCloud.transcribe(userId, new Request("http://internal/transcribe", { body: form, method: "POST" }));
+      const body = (await res.json().catch(() => null)) as { cues?: { text: string }[] } | null;
+      if (res.ok) {
+        const transcript = (body?.cues ?? []).map((c) => c.text).join(" ").trim();
+        if (transcript) {
+          voiceScript = transcript;
+          await prisma.submission.update({ data: { voiceScript: transcript }, where: { id: submissionId } });
+        }
       }
+    } catch (e) {
+      console.error("edit-code: youtube transcription failed —", e);
     }
-  } catch (e) {
-    console.error("edit-code: youtube transcription failed —", e);
   }
 
   return NextResponse.json({

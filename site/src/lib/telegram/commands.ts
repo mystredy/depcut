@@ -358,8 +358,14 @@ async function handleCallbackQuery(cq: TelegramCallbackQuery, botToken: string):
       userId: user.id,
     };
     try {
+      // ElevenLabs fetches sourceUrl itself expecting a direct audio/video
+      // file — a social page link 400s there, so resolve it to a direct
+      // download URL first, the same way the Download button does.
+      const extracted = await extractFromUrl(url);
+      const download = await resolveDownloadUrl(extracted);
+      if (!download) throw new Error(`Can't transcribe from ${PLATFORM_LABELS[extracted.platform]} yet.`);
       const form = new FormData();
-      form.append("sourceUrl", url);
+      form.append("sourceUrl", download.url);
       const res = await transcribeCloud.transcribe(user.id, new Request("http://internal/transcribe", { body: form, method: "POST" }));
       const body = (await res.json().catch(() => null)) as { cues?: { text: string }[]; error?: string; message?: string } | null;
       if (!res.ok) throw new Error(body?.message ?? body?.error ?? "Transcription failed.");
