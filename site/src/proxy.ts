@@ -116,7 +116,7 @@ const underPath = (pathname: string, prefix: string) =>
 // as usernameSchema (lib/username.ts). Resolves to its profile page; a
 // studio's own management surfaces (settings, etc.) stay under /app/studio/…
 // rather than growing sub-paths under the handle.
-const STUDIO_HANDLE = /^\/@([a-z][a-z0-9_]{2,19})\/?$/;
+const STUDIO_HANDLE = /^\/@([a-z][a-z0-9_.]{2,19})\/?$/;
 
 const passesThrough = (pathname: string) =>
   PASSTHROUGH.some((p) => underPath(pathname, p));
@@ -227,9 +227,14 @@ export const config = {
   // Page routes (skip Next internals and files with an extension) plus every
   // Cut API path — including media/export files with extensions — so the
   // hosted 404 and local CORS above cover all of them. "/sitemap.xml" is
-  // matched explicitly so depcut.app can serve its own sitemap.
+  // matched explicitly so depcut.app can serve its own sitemap. "/@:path*" is
+  // matched explicitly too: usernameSchema allows dots, so a studio handle
+  // like /@viralvibes2.2 would otherwise get excluded by the dot check above
+  // (aimed at real static files, e.g. favicon.ico) before STUDIO_HANDLE ever
+  // gets a chance to rewrite it.
   matcher: [
     "/((?!_next/|.*\\..*).*)",
+    "/@:path*",
     "/api/cut/:path*",
     "/sitemap.xml",
   ],
