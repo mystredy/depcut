@@ -19,6 +19,7 @@ import {
   Pencil,
   Quote,
   Send,
+  Settings,
   Trash2,
 } from "lucide-react";
 
@@ -85,6 +86,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
   const [tags, setTags] = useState<string[]>([]);
   const [published, setPublished] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [loadedId, setLoadedId] = useState<string | null>(null);
@@ -346,6 +348,13 @@ export function PostEditor({ postId }: { postId: string | null }) {
             <ToolbarButton title="Numbered list" onClick={() => applyLinePrefix("1. ")}>
               <ListOrdered className="size-3.5" />
             </ToolbarButton>
+            <div className="flex-1" />
+            <ToolbarButton
+              title={settingsVisible ? "Hide post settings" : "Show post settings"}
+              onClick={() => setSettingsVisible((v) => !v)}
+            >
+              <Settings className="size-3.5" />
+            </ToolbarButton>
           </div>
 
           {post?.hasCoverImage && (
@@ -381,7 +390,9 @@ export function PostEditor({ postId }: { postId: string | null }) {
 
         {/* Settings sidebar — Blogger keeps this panel visible alongside the
             editor instead of behind a modal, so post settings (labels,
-            published state, permalink, …) stay reachable while writing. */}
+            published state, permalink, …) stay reachable while writing.
+            The toolbar's gear toggles it, same as Blogger's own. */}
+        {settingsVisible && (
         <aside className="sticky top-[52px] w-72 shrink-0 self-start">
           <div className="max-h-[calc(100vh-84px)] overflow-y-auto rounded-xl border bg-card p-4">
             <h2 className="text-sm font-semibold">Post settings</h2>
@@ -511,6 +522,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
             </div>
           </div>
         </aside>
+        )}
       </div>
     </div>
   );
