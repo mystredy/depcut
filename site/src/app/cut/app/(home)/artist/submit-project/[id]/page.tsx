@@ -46,11 +46,13 @@ import {
   type AssetType,
   type AutosaveSubmissionInput,
   type Submission,
+  pollSubmissionVideoJob,
   useAutosaveSubmission,
   useConnectWorkspace,
   useDisconnectWorkspace,
   useSubmission,
   useSubmitSubmission,
+  useTranscribeSubmissionVideo,
   useUploadSubmissionAsset,
   useVerifyEditCode,
 } from "@/queries/submissions";
@@ -327,6 +329,7 @@ export default function SubmitProjectEditorPage() {
   const connectWorkspace = useConnectWorkspace(id);
   const disconnectWorkspace = useDisconnectWorkspace(id);
   const verifyEditCode = useVerifyEditCode(id);
+  const transcribeVideo = useTranscribeSubmissionVideo(id);
 
   // Hydrate local field state from the fetched draft exactly once — after
   // that, this page (not the server) is the source of truth for what's on
@@ -661,6 +664,24 @@ export default function SubmitProjectEditorPage() {
     }
   };
 
+  // Runs after validateCoupon's youtube branch queues the video pull —
+  // waits for the render-worker job (src/cut/worker/submissionYoutubeJob.ts),
+  // then transcribes what it landed. Fire-and-forget from the caller: Check
+  // has already reset by the time this settles, so it only updates the
+  // message and (on success) the script field.
+  const pullVideoAndTranscribe = async (jobId: string, studioName: string) => {
+    const job = await pollSubmissionVideoJob(jobId);
+    if (job.state !== "done") {
+      setCouponMessage(`Matched to ${studioName}. Couldn't pull the video automatically — upload it below.`);
+      return;
+    }
+    const transcribed = await transcribeVideo.mutateAsync().catch(() => null);
+    if (transcribed?.voiceScript) setVocalScript(transcribed.voiceScript);
+    setCouponMessage(
+      `Matched to ${studioName}. Video pulled in.${transcribed?.voiceScript ? "" : " Add the voice-over/script manually."}`
+    );
+  };
+
   const validateCoupon = async () => {
     if (!couponFormatValid || !telegramLinked) return;
     setCouponChecking(true);
@@ -674,10 +695,12 @@ export default function SubmitProjectEditorPage() {
         if (result.packageDescription) setDescription(result.packageDescription);
         if (result.packageTags) setTags(result.packageTags);
         if (result.handle) setWatermarkText(result.handle);
-        if (result.voiceScript) setVocalScript(result.voiceScript);
-        setCouponMessage(
-          `Matched to ${result.studioName}.${result.videoPulled ? "" : " Couldn't pull the video automatically — upload it below."}`
-        );
+        if (result.videoJobId) {
+          setCouponMessage(`Matched to ${result.studioName}. Pulling the video…`);
+          void pullVideoAndTranscribe(result.videoJobId, result.studioName);
+        } else {
+          setCouponMessage(`Matched to ${result.studioName}.`);
+        }
       } else {
         setCouponMessage(`Matched to ${result.studioName}.`);
       }

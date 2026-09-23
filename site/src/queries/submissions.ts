@@ -246,8 +246,10 @@ export type VerifyEditCodeResult = {
   packageDescription?: string;
   packageTags?: string;
   handle?: string | null;
-  videoPulled?: boolean;
-  voiceScript?: string | null;
+  // Set on the youtube branch: the render-worker job pulling the video and
+  // verification export — see src/cut/worker/submissionYoutubeJob.ts. Poll
+  // it with pollSubmissionVideoJob, then call useTranscribeSubmissionVideo.
+  videoJobId?: string | null;
 };
 
 // Submit Project's Check button — redeems a studio edit code, or matches a
@@ -264,6 +266,52 @@ export function useVerifyEditCode(submissionId: string) {
         body: JSON.stringify({ value }),
         method: "POST",
       }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: submissionQueryKey(submissionId) });
+    },
+  });
+}
+
+// Polls a submission_youtube render-worker job (videoJobId from
+// useVerifyEditCode) to a terminal state — same cadence/budget as the Cut
+// editor's own cloud job polling (src/cut/lib/media.ts's
+// pollImportUrlJob), reimplemented here rather than shared: that helper
+// goes through Cut's local/cloud CutBackend abstraction, which this plain
+// hosted page has no reason to pull in. A dropped single poll doesn't fail
+// the wait; only several in a row, or the ten-minute budget, do.
+export async function pollSubmissionVideoJob(jobId: string): Promise<{ state: string; error?: string }> {
+  const deadline = Date.now() + 10 * 60 * 1000;
+  const MAX_STRIKES = 6;
+  let strikes = 0;
+  for (;;) {
+    if (Date.now() > deadline) return { error: "Timed out.", state: "error" };
+    await new Promise((r) => setTimeout(r, 3000));
+    let res: { id: string; kind: string; state: string; error?: string } | null = null;
+    try {
+      res = await apiFetch<{ id: string; kind: string; state: string; error?: string }>(
+        `/api/cut-cloud/jobs/${jobId}`,
+      );
+    } catch {
+      // Network blip — a strike, counted below.
+    }
+    if (!res) {
+      if (++strikes >= MAX_STRIKES) return { error: "Couldn't pull the video.", state: "error" };
+      continue;
+    }
+    if (res.state === "done" || res.state === "error" || res.state === "canceled") return res;
+  }
+}
+
+export type TranscribeVideoResult = { message?: string; voiceScript: string | null };
+
+// Called once pollSubmissionVideoJob reports the video landed — transcribes
+// it. See /api/submissions/[id]/edit-code/transcribe for why this is a
+// separate call rather than something the render-worker job does itself.
+export function useTranscribeSubmissionVideo(submissionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<TranscribeVideoResult>(`/api/submissions/${submissionId}/edit-code/transcribe`, { method: "POST" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: submissionQueryKey(submissionId) });
     },
