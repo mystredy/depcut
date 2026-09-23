@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
-import { CutFooter } from "@/app/cut/_components/landing/CutFooter";
-import { CutTopNav } from "@/app/cut/_components/landing/CutTopNav";
-import { Eyebrow, GlassCard } from "@/app/cut/_components/landing/dark/DarkPrimitives";
-import { BG, TEXT } from "@/app/cut/_components/landing/dark/theme";
+import { Eyebrow } from "@/app/cut/_components/landing/dark/DarkPrimitives";
 import { DEPCUT_CANONICAL } from "@/cut/lib/hosts";
+import { collectCategories } from "@/lib/blog/categories";
 import { prisma } from "@/lib/prisma";
+
+import { BlogShell } from "./_components/BlogShell";
+import { CategoryChips } from "./_components/CategoryChips";
+import { PostCard } from "./_components/PostCard";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +24,6 @@ export const metadata: Metadata = {
   },
 };
 
-function formatDate(d: Date): string {
-  return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-}
-
 // The public index at /blog — every published post, newest first. Draft
 // posts never reach this query at all (see the admin's own unfiltered list
 // at /admin/blog).
@@ -35,22 +32,10 @@ export default async function BlogIndexPage() {
     orderBy: { publishedAt: "desc" },
     where: { published: true },
   });
+  const categories = collectCategories(posts);
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        width: "100%",
-        background: BG,
-        color: TEXT,
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        WebkitFontSmoothing: "antialiased",
-        overflowX: "hidden",
-      }}
-    >
-      <style>{`html, body { background: ${BG}; overflow-x: hidden; }`}</style>
-      <CutTopNav />
-
+    <BlogShell>
       <section className="mx-auto w-full max-w-5xl px-6 pt-16 pb-8 md:px-12 md:pt-20">
         <div className="flex flex-col items-center text-center">
           <Eyebrow>Blog</Eyebrow>
@@ -65,45 +50,17 @@ export default async function BlogIndexPage() {
       </section>
 
       <section className="mx-auto w-full max-w-5xl px-6 pb-24 md:px-12">
+        <CategoryChips categories={categories} />
         {posts.length === 0 ? (
           <p className="py-12 text-center text-sm text-white/50">Nothing posted yet — check back soon.</p>
         ) : (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             {posts.map((post) => (
-              <Link key={post.id} href={`/blog/${post.slug}`} className="no-underline">
-                <GlassCard fill className="h-full transition-transform hover:-translate-y-0.5">
-                  <div className="flex h-full flex-col">
-                    {post.hasCoverImage && (
-                      // eslint-disable-next-line @next/next/no-img-element -- a presigned/admin-uploaded asset, not a Next-optimizable static one
-                      <img
-                        src={`/api/admin/blog/${post.id}/cover`}
-                        alt=""
-                        className="h-40 w-full object-cover"
-                      />
-                    )}
-                    <div className="flex flex-1 flex-col p-6">
-                      <p className="text-[12px] font-medium text-white/40">
-                        {post.publishedAt ? formatDate(post.publishedAt) : ""}
-                        {post.authorName ? ` · ${post.authorName}` : ""}
-                      </p>
-                      <h2 className="mt-2 text-[18px] font-semibold tracking-[-0.01em] text-white">
-                        {post.title}
-                      </h2>
-                      {post.excerpt && (
-                        <p className="mt-2.5 line-clamp-3 text-[14px] leading-[1.55] text-white/55">
-                          {post.excerpt}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </GlassCard>
-              </Link>
+              <PostCard key={post.id} post={post} />
             ))}
           </div>
         )}
       </section>
-
-      <CutFooter />
-    </main>
+    </BlogShell>
   );
 }

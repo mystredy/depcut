@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 
-import { CutFooter } from "@/app/cut/_components/landing/CutFooter";
-import { CutTopNav } from "@/app/cut/_components/landing/CutTopNav";
-import { BG, TEXT } from "@/app/cut/_components/landing/dark/theme";
 import { DEPCUT_CANONICAL } from "@/cut/lib/hosts";
+import { categorySlug } from "@/lib/blog/categories";
 import { prisma } from "@/lib/prisma";
+
+import { BlogShell } from "../_components/BlogShell";
 
 export const dynamic = "force-dynamic";
 
@@ -59,20 +60,7 @@ export default async function BlogPostPage({ params }: RouteParams) {
   if (!post) notFound();
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        width: "100%",
-        background: BG,
-        color: TEXT,
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-        WebkitFontSmoothing: "antialiased",
-        overflowX: "hidden",
-      }}
-    >
-      <style>{`html, body { background: ${BG}; overflow-x: hidden; }`}</style>
-      <CutTopNav />
-
+    <BlogShell>
       <article className="mx-auto box-border w-full max-w-3xl px-6 py-12 md:px-10 md:py-20">
         <header className="mb-10">
           <h1 className="text-[clamp(32px,5.5vw,52px)] font-semibold leading-[1.05] tracking-[-0.01em] text-white">
@@ -82,6 +70,19 @@ export default async function BlogPostPage({ params }: RouteParams) {
             {post.publishedAt ? formatDate(post.publishedAt) : ""}
             {post.authorName ? ` · ${post.authorName}` : ""}
           </p>
+          {post.tags.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              {post.tags.map((tag) => (
+                <Link
+                  key={tag}
+                  href={`/blog/category/${categorySlug(tag)}`}
+                  className="rounded-full border border-white/15 px-2.5 py-1 text-[12px] font-medium text-white/55 no-underline transition-colors hover:border-white/30 hover:text-white"
+                >
+                  {tag}
+                </Link>
+              ))}
+            </div>
+          )}
         </header>
 
         {post.hasCoverImage && (
@@ -97,8 +98,6 @@ export default async function BlogPostPage({ params }: RouteParams) {
           <ReactMarkdown>{post.contentMarkdown}</ReactMarkdown>
         </div>
       </article>
-
-      <CutFooter />
-    </main>
+    </BlogShell>
   );
 }

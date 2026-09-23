@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { DEPCUT_CANONICAL } from "@/cut/lib/hosts";
+import { collectCategories } from "@/lib/blog/categories";
 import { prisma } from "@/lib/prisma";
 
 // Served at depcut.app/sitemap.xml via the proxy rewrite (src/proxy.ts).
@@ -8,9 +9,10 @@ import { prisma } from "@/lib/prisma";
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const posts = await prisma.blogPost.findMany({
     orderBy: { publishedAt: "desc" },
-    select: { slug: true, updatedAt: true },
+    select: { slug: true, tags: true, updatedAt: true },
     where: { published: true },
   });
+  const categories = collectCategories(posts);
 
   return [
     {
@@ -33,6 +35,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: post.updatedAt,
       changeFrequency: "monthly" as const,
       priority: 0.5,
+    })),
+    ...categories.map((category) => ({
+      url: `${DEPCUT_CANONICAL}/blog/category/${category.slug}`,
+      changeFrequency: "weekly" as const,
+      priority: 0.4,
     })),
     {
       url: `${DEPCUT_CANONICAL}/privacy`,
