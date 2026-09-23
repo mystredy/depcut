@@ -193,7 +193,13 @@ export function PostEditor({ postId }: { postId: string | null }) {
   const valid = Boolean(title.trim() && slug.trim() && contentMarkdown.trim());
   const pending = create.isPending || update.isPending;
 
-  const save = () => {
+  // The top-bar button always forces published: true — its label already
+  // promises that ("Publish" / "Update"), so it needs to actually do it
+  // rather than just re-save whatever the sidebar switch currently holds.
+  // Passed as an override instead of going through setPublished() first,
+  // since that state update wouldn't be visible in this same synchronous
+  // call's closure yet.
+  const save = (overrides?: { published?: boolean }) => {
     if (!valid || savingRef.current) return;
     savingRef.current = true;
     setError(null);
@@ -202,15 +208,17 @@ export function PostEditor({ postId }: { postId: string | null }) {
     // local state this specific payload represents, independent of whatever
     // editVersionRef climbs to while the request is in flight.
     const versionAtSend = editVersionRef.current;
+    const nextPublished = overrides?.published ?? published;
     const input = {
       authorName: authorName.trim() || undefined,
       contentMarkdown: contentMarkdown.trim(),
       excerpt: excerpt.trim() || undefined,
-      published,
+      published: nextPublished,
       slug: slug.trim(),
       tags,
       title: title.trim(),
     };
+    if (nextPublished !== published) setPublished(nextPublished);
 
     const onSettled = () => {
       savingRef.current = false;
@@ -330,7 +338,12 @@ export function PostEditor({ postId }: { postId: string | null }) {
           {preview ? <Pencil className="size-3.5" /> : <Eye className="size-3.5" />}
           {preview ? "Edit" : "Preview"}
         </Button>
-        <Button type="button" disabled={!valid || pending} onClick={save} className="gap-1.5 rounded-full">
+        <Button
+          type="button"
+          disabled={!valid || pending}
+          onClick={() => save({ published: true })}
+          className="gap-1.5 rounded-full"
+        >
           {pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           {published ? "Update" : "Publish"}
         </Button>
