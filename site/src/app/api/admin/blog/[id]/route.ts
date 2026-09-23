@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { normalizeTags } from "@/lib/blog/categories";
 import { isDepCutSuperUser, notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 import { blogCoverKey, del } from "@/cut/server/cloud/r2";
@@ -17,7 +18,7 @@ const updateSchema = z.object({
   excerpt: z.string().trim().max(500).nullable().optional(),
   contentMarkdown: z.string().trim().min(1).max(200_000).optional(),
   authorName: z.string().trim().max(120).nullable().optional(),
-  tag: z.string().trim().max(60).nullable().optional(),
+  tags: z.array(z.string().trim().min(1).max(60)).max(10).optional(),
   published: z.boolean().optional(),
 });
 
@@ -66,7 +67,7 @@ export const PATCH = withDepCutAuth(async (request, context: RouteContext) => {
       published: body.published,
       publishedAt,
       slug: body.slug,
-      tag: body.tag === undefined ? undefined : body.tag || null,
+      tags: body.tags === undefined ? undefined : normalizeTags(body.tags),
       title: body.title,
     },
     include: { createdBy: { select: { displayName: true, id: true, image: true, name: true } } },

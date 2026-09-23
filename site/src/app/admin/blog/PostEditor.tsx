@@ -46,6 +46,8 @@ import {
   useUploadBlogCover,
 } from "@/queries/admin";
 
+import { TagsInput } from "./TagsInput";
+
 function slugify(title: string): string {
   return title
     .toLowerCase()
@@ -89,7 +91,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
   const [excerpt, setExcerpt] = useState("");
   const [contentMarkdown, setContentMarkdown] = useState("");
   const [authorName, setAuthorName] = useState("");
-  const [tag, setTag] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
   const [published, setPublished] = useState(false);
   const [preview, setPreview] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -110,7 +112,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
       setExcerpt(post.excerpt ?? "");
       setContentMarkdown(post.contentMarkdown);
       setAuthorName(post.authorName ?? "");
-      setTag(post.tag ?? "");
+      setTags(post.tags ?? []);
       setPublished(post.published);
       setLoadedId(post.id);
     }
@@ -172,7 +174,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
       excerpt: excerpt.trim() || undefined,
       published,
       slug: slug.trim(),
-      tag: tag.trim() || undefined,
+      tags,
       title: title.trim(),
     };
     const onError = (e: unknown) => setError(e instanceof Error ? e.message : "Couldn't save — try again.");
@@ -201,7 +203,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
     const timer = setTimeout(save, 1200);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, slug, excerpt, contentMarkdown, authorName, tag, published, dirty, valid, pending]);
+  }, [title, slug, excerpt, contentMarkdown, authorName, tags, published, dirty, valid, pending]);
 
   if (postId && posts.isLoading) {
     return <Skeleton className="h-96 w-full" />;
@@ -367,29 +369,27 @@ export function PostEditor({ postId }: { postId: string | null }) {
                 placeholder="One or two sentences shown in the blog list and link previews."
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Author</Label>
-                <Input
-                  value={authorName}
-                  onChange={(e) => {
-                    setAuthorName(e.target.value);
-                    markDirty();
-                  }}
-                  placeholder="DepCut Team"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Tag</Label>
-                <Input
-                  value={tag}
-                  onChange={(e) => {
-                    setTag(e.target.value);
-                    markDirty();
-                  }}
-                  placeholder="Make Money, Tech…"
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Author</Label>
+              <Input
+                value={authorName}
+                onChange={(e) => {
+                  setAuthorName(e.target.value);
+                  markDirty();
+                }}
+                placeholder="DepCut Team"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Tags</Label>
+              <TagsInput
+                value={tags}
+                onChange={(next) => {
+                  setTags(next);
+                  markDirty();
+                }}
+                placeholder="Make Money, Tech…"
+              />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Cover image</Label>

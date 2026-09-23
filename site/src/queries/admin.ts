@@ -2103,7 +2103,7 @@ export type AdminBlogPost = {
   excerpt: string | null;
   contentMarkdown: string;
   authorName: string | null;
-  tag: string | null;
+  tags: string[];
   hasCoverImage: boolean;
   published: boolean;
   publishedAt: string | null;
@@ -2128,7 +2128,7 @@ export function useCreateBlogPost() {
       excerpt?: string;
       contentMarkdown: string;
       authorName?: string;
-      tag?: string;
+      tags?: string[];
       published: boolean;
     }) =>
       apiFetch<{ post: AdminBlogPost }>("/api/admin/blog", {
@@ -2152,7 +2152,7 @@ export function useUpdateBlogPost() {
       excerpt?: string | null;
       contentMarkdown?: string;
       authorName?: string | null;
-      tag?: string | null;
+      tags?: string[];
       published?: boolean;
     }) =>
       apiFetch<{ post: AdminBlogPost }>(`/api/admin/blog/${id}`, {

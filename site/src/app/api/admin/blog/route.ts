@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { normalizeTags } from "@/lib/blog/categories";
 import { isDepCutSuperUser, withDepCutAuth } from "@/lib/depcut-api-auth";
 import { prisma } from "@/lib/prisma";
 
@@ -32,7 +33,7 @@ const createSchema = z.object({
   excerpt: z.string().trim().max(500).optional(),
   contentMarkdown: z.string().trim().min(1).max(200_000),
   authorName: z.string().trim().max(120).optional(),
-  tag: z.string().trim().max(60).optional(),
+  tags: z.array(z.string().trim().min(1).max(60)).max(10).optional(),
   published: z.boolean().default(false),
 });
 
@@ -64,7 +65,7 @@ export const POST = withDepCutAuth(async (request) => {
       published: body.published,
       publishedAt: body.published ? new Date() : null,
       slug: body.slug,
-      tag: body.tag || null,
+      tags: normalizeTags(body.tags ?? []),
       title: body.title,
     },
     include: { createdBy: { select: { displayName: true, id: true, image: true, name: true } } },

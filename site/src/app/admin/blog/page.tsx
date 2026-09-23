@@ -12,7 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -30,6 +29,8 @@ import {
   useDeleteBlogPost,
   useUpdateBlogPost,
 } from "@/queries/admin";
+
+import { TagsInput } from "./TagsInput";
 
 type Filter = "all" | "published" | "draft";
 
@@ -140,12 +141,11 @@ function PostRow({ post: p, onDelete }: { post: AdminBlogPost; onDelete: () => v
   const update = useUpdateBlogPost();
   const [copied, setCopied] = useState(false);
   const [tagOpen, setTagOpen] = useState(false);
-  const [tagValue, setTagValue] = useState(p.tag ?? "");
+  const [tagsValue, setTagsValue] = useState(p.tags);
 
-  const saveTag = () => {
-    setTagOpen(false);
-    const next = tagValue.trim();
-    if (next !== (p.tag ?? "")) update.mutate({ id: p.id, tag: next || null });
+  const saveTags = (next: string[]) => {
+    setTagsValue(next);
+    if (JSON.stringify(next) !== JSON.stringify(p.tags)) update.mutate({ id: p.id, tags: next });
   };
 
   return (
@@ -177,11 +177,14 @@ function PostRow({ post: p, onDelete }: { post: AdminBlogPost; onDelete: () => v
                 })}
               </span>
             </span>
-            {p.tag && (
-              <span className="rounded-full border px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                {p.tag}
+            {p.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full border px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+              >
+                {tag}
               </span>
-            )}
+            ))}
           </p>
           <p className="mt-0.5 truncate text-[11px] text-muted-foreground/60">/blog/{p.slug}</p>
         </div>
@@ -231,31 +234,24 @@ function PostRow({ post: p, onDelete }: { post: AdminBlogPost; onDelete: () => v
             open={tagOpen}
             onOpenChange={(o) => {
               setTagOpen(o);
-              if (o) setTagValue(p.tag ?? "");
+              if (o) setTagsValue(p.tags);
             }}
           >
             <PopoverTrigger
               render={
-                <Button size="icon-sm" variant="ghost" title="Tag">
+                <Button size="icon-sm" variant="ghost" title="Tags">
                   <Tag className="size-3.5" />
                 </Button>
               }
             />
-            <PopoverContent align="end" className="w-56 p-2">
+            <PopoverContent align="end" className="w-64 p-2">
               <p className="px-1 pb-1.5 text-xs font-medium text-muted-foreground">Tag this post</p>
-              <div className="flex items-center gap-1.5">
-                <Input
-                  autoFocus
-                  value={tagValue}
-                  onChange={(e) => setTagValue(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && saveTag()}
-                  placeholder="Make Money, Tech…"
-                  className="h-7 text-xs"
-                />
-                <Button size="sm" className="h-7 shrink-0 px-2 text-xs" onClick={saveTag}>
-                  Save
-                </Button>
-              </div>
+              <TagsInput
+                value={tagsValue}
+                onChange={saveTags}
+                placeholder="Make Money, Tech…"
+                className="text-xs"
+              />
             </PopoverContent>
           </Popover>
           <Link

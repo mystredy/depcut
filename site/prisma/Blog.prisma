@@ -12,7 +12,16 @@ model BlogPost {
   excerpt       String?
   contentMarkdown String
   authorName    String?
+  // Deprecated, superseded by tags below — kept only so the one-time backfill
+  // script can still read old single-tag rows through the Prisma client.
+  // Stop writing to this field; drop the column once tags is confirmed to
+  // hold every row's data.
   tag           String?
+  // Free-text labels a post can carry, shown as clickable chips on /blog and
+  // /blog/[slug] that link to /blog/category/[slug]. A category has no row of
+  // its own — its slug is derived from the label (see lib/blog/categories.ts)
+  // and a category page just filters published posts whose tags match it.
+  tags          String[]  @default([])
   hasCoverImage Boolean   @default(false)
   published     Boolean   @default(false)
   publishedAt   DateTime?
