@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
@@ -50,6 +50,23 @@ function slugify(title: string): string {
     .replace(/^-|-$/g, "");
 }
 
+// Below this width there's not enough room for the editor and a 288px
+// settings sidebar side by side. Read via useSyncExternalStore rather than
+// a mount effect + setState, so it stays live across an actual window
+// resize instead of only being checked once.
+const NARROW_VIEWPORT_QUERY = "(max-width: 1023px)";
+function subscribeToNarrowViewport(callback: () => void) {
+  const mql = window.matchMedia(NARROW_VIEWPORT_QUERY);
+  mql.addEventListener("change", callback);
+  return () => mql.removeEventListener("change", callback);
+}
+function isNarrowViewport() {
+  return window.matchMedia(NARROW_VIEWPORT_QUERY).matches;
+}
+function isNarrowViewportServer() {
+  return false;
+}
+
 function ToolbarButton({
   onClick,
   title,
@@ -86,7 +103,11 @@ export function PostEditor({ postId }: { postId: string | null }) {
   const [tags, setTags] = useState<string[]>([]);
   const [published, setPublished] = useState(false);
   const [preview, setPreview] = useState(false);
-  const [settingsVisible, setSettingsVisible] = useState(true);
+  // null until the user explicitly clicks the gear — until then, the sidebar
+  // just follows the live viewport width (see isNarrowViewport above).
+  const [settingsOverride, setSettingsOverride] = useState<boolean | null>(null);
+  const narrow = useSyncExternalStore(subscribeToNarrowViewport, isNarrowViewport, isNarrowViewportServer);
+  const settingsVisible = settingsOverride ?? !narrow;
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [loadedId, setLoadedId] = useState<string | null>(null);
@@ -351,7 +372,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
             <div className="flex-1" />
             <ToolbarButton
               title={settingsVisible ? "Hide post settings" : "Show post settings"}
-              onClick={() => setSettingsVisible((v) => !v)}
+              onClick={() => setSettingsOverride(!settingsVisible)}
             >
               <Settings className="size-3.5" />
             </ToolbarButton>
