@@ -227,14 +227,29 @@ export const config = {
   // Page routes (skip Next internals and files with an extension) plus every
   // Cut API path — including media/export files with extensions — so the
   // hosted 404 and local CORS above cover all of them. "/sitemap.xml" is
-  // matched explicitly so depcut.app can serve its own sitemap. "/@:path*" is
-  // matched explicitly too: usernameSchema allows dots, so a studio handle
-  // like /@viralvibes2.2 would otherwise get excluded by the dot check above
-  // (aimed at real static files, e.g. favicon.ico) before STUDIO_HANDLE ever
-  // gets a chance to rewrite it.
+  // matched explicitly so depcut.app can serve its own sitemap.
+  //
+  // usernameSchema allows dots, so a studio handle like /@viralvibes2.2, or
+  // /app/studio/viralvibes2.2 (and its settings page), would otherwise get
+  // excluded by the dot check above (aimed at real static files, e.g.
+  // favicon.ico) before ever reaching STUDIO_HANDLE or the generic
+  // /app -> /cut/app rewrite — confirmed live as a genuine 404.
+  //
+  // The entries below are path-to-regexp's own plain-param syntax, not the
+  // raw regex the first entry uses — confirmed live to be the only style
+  // that reliably reaches the dot-excluded path. Both a capturing-group
+  // regex entry (mirroring the first entry's own style) and a ":name*"
+  // wildcard segment broke silently: the regex form actually regressed
+  // *unrelated* already-working routes (matched live, undone), and the
+  // wildcard form just never matched at all (no proxy.ts execution time
+  // logged for a request that should have hit it). A plain "/:name" param
+  // with no modifier is what actually works, so each dotted-username path is
+  // spelled out explicitly rather than covered by one wildcard.
   matcher: [
     "/((?!_next/|.*\\..*).*)",
-    "/@:path*",
+    "/@:handle",
+    "/app/studio/:username",
+    "/app/studio/:username/settings",
     "/api/cut/:path*",
     "/sitemap.xml",
   ],
