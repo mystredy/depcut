@@ -25,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ImageCropDialog } from "@/cut/components/ImageCropDialog";
+import { CachedImg } from "@/cut/components/CachedImg";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import {
   IMPORTABLE_PLATFORMS,
@@ -314,8 +315,7 @@ function SetupSection({
       <div className="relative">
         <div className="relative h-28 w-full overflow-hidden rounded-xl bg-muted">
           {studioBackgroundUrl(studio) && (
-            // eslint-disable-next-line @next/next/no-img-element -- own R2-backed route, not an optimizable remote image
-            <img src={studioBackgroundUrl(studio)!} alt="" className="size-full object-cover" />
+            <CachedImg src={studioBackgroundUrl(studio)!} alt="" className="size-full object-cover" />
           )}
           <button
             type="button"

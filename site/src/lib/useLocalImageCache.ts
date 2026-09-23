@@ -1,8 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 const CACHE_PREFIX = "depcut:img-cache:v1:";
+
+// localStorage has no change event for writes made from this same tab (the
+// native `storage` event only fires in other tabs), so components reading
+// through useSyncExternalStore below need their own way to be told a key
+// they read has a new value — this is that.
+const listeners = new Set<() => void>();
+
+function emitChange() {
+  for (const listener of listeners) listener();
+}
+
+function subscribe(onStoreChange: () => void) {
+  listeners.add(onStoreChange);
+  return () => listeners.delete(onStoreChange);
+}
 
 function readCache(key: string): string | null {
   try {
@@ -15,6 +30,7 @@ function readCache(key: string): string | null {
 function writeCache(key: string, dataUrl: string) {
   try {
     localStorage.setItem(CACHE_PREFIX + key, dataUrl);
+    emitChange();
   } catch {
     // Quota exceeded or storage unavailable (private mode) — fine to skip.
   }
@@ -40,37 +56,32 @@ async function fetchAsDataUrl(url: string): Promise<string | null> {
   }
 }
 
+const noCachedValue = () => null;
+
 /**
- * Paints `url` immediately (same as a plain `<img src>`), then — once
- * mounted on the client — swaps in a copy from localStorage if one exists
- * from a previous visit, so a later hard refresh or a cold cache no longer
- * costs a network round trip. Always refetches `url` in the background and
- * updates the stored copy when it changes, so a replaced logo or avatar
- * still catches up eventually.
+ * Paints `url` immediately (same as a plain `<img src>`) until a localStorage
+ * copy from a previous visit is available, so a later hard refresh or a cold
+ * HTTP cache no longer costs a network round trip. Always refetches `url` in
+ * the background and updates the stored copy when it changes, so a replaced
+ * logo or avatar still catches up eventually.
  */
 export function useLocalImageCache(
   url: string | null | undefined,
   cacheKey: string,
 ): string | null | undefined {
-  const [src, setSrc] = useState<string | null | undefined>(url);
+  const cached = useSyncExternalStore(subscribe, () => readCache(cacheKey), noCachedValue);
 
   useEffect(() => {
-    setSrc(url);
     if (!url) return;
-
-    const cached = readCache(cacheKey);
-    if (cached) setSrc(cached);
-
     let cancelled = false;
     fetchAsDataUrl(url).then((dataUrl) => {
-      if (cancelled || !dataUrl || dataUrl === cached) return;
+      if (cancelled || !dataUrl || dataUrl === readCache(cacheKey)) return;
       writeCache(cacheKey, dataUrl);
-      setSrc(dataUrl);
     });
     return () => {
       cancelled = true;
     };
   }, [url, cacheKey]);
 
-  return src;
+  return cached ?? url;
 }

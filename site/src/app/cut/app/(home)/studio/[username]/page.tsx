@@ -56,6 +56,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { DropDialog } from "@/cut/components/DropDialog";
 import { ImageCropDialog } from "@/cut/components/ImageCropDialog";
+import { CachedImg } from "@/cut/components/CachedImg";
 import { UserAvatar } from "@/cut/components/UserAvatar";
 import { useCutBase } from "@/cut/lib/nav";
 import { isConnectionUsable, STUDIO_SOURCE_PLATFORM, YOUTUBE_PLATFORMS } from "@/lib/marketplace/oauth-providers";
@@ -216,8 +217,7 @@ export default function StudioPage({ params }: { params: Promise<{ username: str
     <div className="pb-24">
       <div className="relative h-32 w-full overflow-hidden rounded-b-2xl bg-muted sm:h-40">
         {studioBackgroundUrl(studio) && (
-          // eslint-disable-next-line @next/next/no-img-element -- own R2-backed route, not an optimizable remote image
-          <img src={studioBackgroundUrl(studio)!} alt="" className="size-full object-cover" />
+          <CachedImg src={studioBackgroundUrl(studio)!} alt="" className="size-full object-cover" />
         )}
         {isManager && (
           <>
