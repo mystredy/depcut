@@ -2191,6 +2191,43 @@ export function useRemoveBlogCover() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminBlogPostsQueryKey }),
   });
 }
+
+export type BlogDraftContext = { type: "selection" | "post"; text: string };
+export type BlogDraftResult =
+  | { kind: "answer"; answer: string }
+  | { kind: "draft"; title?: string; contentMarkdown: string };
+
+// The editor's "Write with AI" action. "write" generates a title + body from
+// a prompt when there's nothing to work from yet, or revises `context.text`
+// (a selection or the whole post) when there is. "ask" answers a question
+// against `context.text` instead — nothing to apply, just a read. Not cached
+// under the posts query key since it never touches a stored post itself.
+export function useGenerateBlogDraft() {
+  return useMutation({
+    mutationFn: async ({
+      prompt,
+      action,
+      context,
+    }: {
+      prompt: string;
+      action: "ask" | "write";
+      context?: BlogDraftContext;
+    }): Promise<BlogDraftResult> => {
+      const result = await apiFetch<{ answer?: string; title?: string; contentMarkdown?: string }>(
+        "/api/admin/blog/ai-draft",
+        {
+          body: JSON.stringify({ action, context, prompt }),
+          method: "POST",
+        },
+      );
+      if (action === "ask") {
+        return { answer: result.answer ?? "", kind: "answer" };
+      }
+      return { contentMarkdown: result.contentMarkdown ?? "", kind: "draft", title: result.title };
+    },
+  });
+}
+
 export function useAdminOnboardingSlides() {
   return useQuery({
     queryFn: () => apiFetch<{ slides: AdminOnboardingSlide[] }>("/api/admin/onboarding-slides"),
