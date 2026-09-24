@@ -12,7 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate && node scripts/copy-mediapipe-assets.mjs && node scripts/fetch-yt-dlp.mjs",
+    "postinstall": "prisma generate && node scripts/copy-mediapipe-assets.mjs",
     "db:generate": "prisma generate",
     "db:pull": "prisma db pull",
     "prisma:dev": "dotenv -e .env.development -- npx prisma migrate dev",

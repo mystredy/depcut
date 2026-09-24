@@ -246,8 +246,21 @@ export type VerifyEditCodeResult = {
   packageDescription?: string;
   packageTags?: string;
   handle?: string | null;
-  videoPulled?: boolean;
+  // Set on the youtube branch: transcribed directly from the YouTube link
+  // (ElevenLabs Scribe takes a source URL, no need to wait on the
+  // verification export pull below) — null if that didn't land, in which
+  // case useTranscribeSubmissionVideo still gets a chance once it does.
   voiceScript?: string | null;
+  // Set on the youtube branch: whether the verification export (a copy of
+  // the published video, proving the artist's own Video upload matches it)
+  // was pulled in and uploaded — synchronously within this same request
+  // (see /api/submissions/[id]/edit-code). The Video slot itself is never
+  // auto-filled; that's the artist's own manual upload.
+  verificationPulled?: boolean;
+  // Set on the youtube branch: whether the thumbnail was pulled in — same
+  // request, independent of verificationPulled (one external call can fail
+  // without the other).
+  thumbnailPulled?: boolean;
 };
 
 // Submit Project's Check button — redeems a studio edit code, or matches a
@@ -264,6 +277,23 @@ export function useVerifyEditCode(submissionId: string) {
         body: JSON.stringify({ value }),
         method: "POST",
       }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: submissionQueryKey(submissionId) });
+    },
+  });
+}
+
+export type TranscribeVideoResult = { message?: string; voiceScript: string | null };
+
+// Fallback transcription from the uploaded video file itself, for when
+// useVerifyEditCode's inline YouTube-URL transcript didn't land but the
+// video was still pulled in (videoPulled). See
+// /api/submissions/[id]/edit-code/transcribe.
+export function useTranscribeSubmissionVideo(submissionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<TranscribeVideoResult>(`/api/submissions/${submissionId}/edit-code/transcribe`, { method: "POST" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: submissionQueryKey(submissionId) });
     },

@@ -51,6 +51,7 @@ import {
   useDisconnectWorkspace,
   useSubmission,
   useSubmitSubmission,
+  useTranscribeSubmissionVideo,
   useUploadSubmissionAsset,
   useVerifyEditCode,
 } from "@/queries/submissions";
@@ -327,6 +328,7 @@ export default function SubmitProjectEditorPage() {
   const connectWorkspace = useConnectWorkspace(id);
   const disconnectWorkspace = useDisconnectWorkspace(id);
   const verifyEditCode = useVerifyEditCode(id);
+  const transcribeVideo = useTranscribeSubmissionVideo(id);
 
   // Hydrate local field state from the fetched draft exactly once — after
   // that, this page (not the server) is the source of truth for what's on
@@ -673,11 +675,27 @@ export default function SubmitProjectEditorPage() {
         if (result.packageTitle) setPackageTitle(result.packageTitle);
         if (result.packageDescription) setDescription(result.packageDescription);
         if (result.packageTags) setTags(result.packageTags);
-        if (result.handle) setWatermarkText(result.handle);
+        if (result.handle) {
+          setWatermarkText(result.handle);
+          setWatermarkEnabled(true);
+        }
         if (result.voiceScript) setVocalScript(result.voiceScript);
-        setCouponMessage(
-          `Matched to ${result.studioName}.${result.videoPulled ? "" : " Couldn't pull the video automatically — upload it below."}`
-        );
+
+        if (result.voiceScript) {
+          setCouponMessage(`Matched to ${result.studioName}. Script pulled in — upload the video below.`);
+        } else if (result.verificationPulled) {
+          // The inline YouTube-URL transcript didn't land, but the
+          // verification export did — try transcribing from that as a
+          // fallback.
+          setCouponMessage(`Matched to ${result.studioName}. Transcribing…`);
+          const transcribed = await transcribeVideo.mutateAsync().catch(() => null);
+          if (transcribed?.voiceScript) setVocalScript(transcribed.voiceScript);
+          setCouponMessage(
+            `Matched to ${result.studioName}.${transcribed?.voiceScript ? "" : " Add the voice-over/script manually."} Upload the video below.`
+          );
+        } else {
+          setCouponMessage(`Matched to ${result.studioName}. Upload the video below.`);
+        }
       } else {
         setCouponMessage(`Matched to ${result.studioName}.`);
       }
@@ -749,6 +767,18 @@ export default function SubmitProjectEditorPage() {
   const YOUTUBE_URL_RE = /^https?:\/\/(www\.|m\.)?(youtube\.com\/|youtu\.be\/)/i;
   const couponTrimmed = couponCode.trim();
   const couponFormatValid = EDIT_CODE_RE.test(couponTrimmed) || YOUTUBE_URL_RE.test(couponTrimmed);
+  // Set by a successful Check (see /api/submissions/[id]/edit-code), which
+  // spends a studio code immediately rather than at Submit — couponValidated
+  // covers the instant right after Check succeeds, before the invalidated
+  // query refetches; submission.studio covers every load after that.
+  const editCodeLocked = couponValidated || Boolean(submission?.studio);
+  // A matched channel's watermark isn't optional once locked — forced on
+  // (and the toggle/text both disabled) regardless of the stored flag,
+  // which predates this fix on submissions validated before it shipped.
+  // Ties to watermarkText rather than editCodeLocked alone so a studio-code
+  // match with no captured handle still leaves the toggle freely settable.
+  const watermarkForced = editCodeLocked && Boolean(watermarkText.trim());
+  const watermarkOn = watermarkForced || watermarkEnabled;
 
   // Doesn't require uploads to finish — only that something's been picked.
   // Submit locks the row in and lets those uploads keep running in the
@@ -773,7 +803,7 @@ export default function SubmitProjectEditorPage() {
           description.trim() &&
           tags.trim() &&
           Boolean(submission?.studio))) &&
-      (!watermarkEnabled || watermarkText.trim())
+      (!watermarkOn || watermarkText.trim())
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -991,7 +1021,8 @@ export default function SubmitProjectEditorPage() {
                 value={vocalScript}
                 onChange={(e) => updateVocalScript(e.target.value)}
                 placeholder="The voice-over or subtitle script used in this video"
-                rows={1}
+                rows={4}
+                className="field-sizing-fixed resize-y"
                 disabled={!isDraft}
                 required
               />
@@ -1300,17 +1331,31 @@ export default function SubmitProjectEditorPage() {
                     value={couponCode}
                     onChange={(e) => updateCouponCode(e.target.value)}
                     placeholder="Studio code (e.g. VK12345678) or a YouTube link"
-                    disabled={!isDraft}
+                    disabled={!isDraft || editCodeLocked}
                   />
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={!couponFormatValid || couponChecking || !isDraft || !telegramLinked}
+                    disabled={editCodeLocked || !couponFormatValid || couponChecking || !isDraft || !telegramLinked}
                     onClick={validateCoupon}
                     title={telegramLinked ? undefined : "Connect Telegram to check an edit code"}
+                    className={
+                      editCodeLocked
+                        ? "border-emerald-600/40 bg-emerald-600/10 text-emerald-600 disabled:opacity-100 dark:text-emerald-400"
+                        : undefined
+                    }
                   >
-                    {couponChecking ? <Loader2 className="size-3.5 animate-spin" /> : "Check"}
+                    {editCodeLocked ? (
+                      <span className="flex items-center gap-1.5">
+                        <CheckCircle2 className="size-3.5" />
+                        Validated
+                      </span>
+                    ) : couponChecking ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      "Check"
+                    )}
                   </Button>
                 </div>
                 {couponMessage && (
@@ -1336,7 +1381,7 @@ export default function SubmitProjectEditorPage() {
                 )}
               </div>
 
-              {couponValidated && (
+              {editCodeLocked && (
                 <>
                   <div className="flex items-center justify-between gap-4 rounded-xl border bg-background p-3">
                     <div>
@@ -1344,19 +1389,19 @@ export default function SubmitProjectEditorPage() {
                       <p className="text-[11px] text-muted-foreground">Brand the submitted video.</p>
                     </div>
                     <Switch
-                      checked={watermarkEnabled}
+                      checked={watermarkOn}
                       onCheckedChange={updateWatermarkEnabled}
-                      disabled={!isDraft}
+                      disabled={!isDraft || editCodeLocked}
                       aria-label="Enable watermark"
                     />
                   </div>
-                  {watermarkEnabled && (
+                  {watermarkOn && (
                     <Input
                       value={watermarkText}
                       onChange={(e) => updateWatermarkText(e.target.value)}
                       placeholder="Watermark text, e.g. @yourhandle"
-                      disabled={!isDraft}
-                      required={watermarkEnabled}
+                      disabled={!isDraft || editCodeLocked}
+                      required={watermarkOn}
                     />
                   )}
 

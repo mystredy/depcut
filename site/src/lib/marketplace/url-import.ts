@@ -32,6 +32,12 @@ export type UrlImportResult = {
   // channel (see /api/submissions/[id]/edit-code) without relying on
   // `handle`, which YouTube's legacy /user/ username often doesn't have.
   channelId: string | null;
+  // The source video's own stable id — currently only YouTube. Different URL
+  // shapes (youtu.be/X, youtube.com/watch?v=X, .../shorts/X) all point at
+  // the same upload; this is what lets a caller dedupe by video rather than
+  // by exact URL text (see /api/submissions/[id]/edit-code's duplicate
+  // check).
+  videoId: string | null;
   sourceUrl: string;
 };
 
@@ -60,12 +66,6 @@ export function detectUrlImportPlatform(url: string): UrlImportPlatform | null {
   return null;
 }
 
-// Basic info only (title/description/keywords) — deliberately not getInfo,
-// which also resolves downloadable format URLs: that request hung
-// indefinitely against YouTube from this environment during testing, while
-// getBasicInfo returned cleanly. Revisit if/when actual video download is
-// wired up.
-//
 // YouTube's own bot-check ("Sign in to confirm you're not a bot") is a real,
 // common failure for ytdl-style requests from a cloud server IP — ytdl-core
 // surfaces it as a plain Error whose message is that exact sentence, which
@@ -85,8 +85,63 @@ function youtubeErrorMessage(e: unknown): string {
   return raw || "Couldn't read that YouTube video.";
 }
 
-async function extractYoutube(url: string): Promise<UrlImportResult> {
-  if (!ytdl.validateURL(url)) throw new UrlImportError("That doesn't look like a valid YouTube video link.");
+const RAPIDAPI_HOST = "youtube-v2.p.rapidapi.com";
+
+type RapidApiVideoDetails = {
+  title?: string;
+  author?: string;
+  description?: string;
+  channel_id?: string;
+  keywords?: string[];
+  thumbnails?: { url: string }[];
+};
+
+// Fallback source for YouTube metadata, for when ytdl-core's getBasicInfo
+// (extractYoutubeViaYtdlCore below, tried first) fails — a plain HTTPS call
+// to a hosted API instead of youtube.com itself, so it isn't subject to the
+// same bot-check/hang behavior. Throws on any problem (not configured,
+// non-2xx, an empty/error body) so the caller knows to give up rather than
+// silently returning nothing.
+async function extractYoutubeViaRapidApi(url: string, videoId: string): Promise<UrlImportResult> {
+  const apiKey = process.env.RAPIDAPI_KEY?.trim();
+  if (!apiKey) throw new UrlImportError("RapidAPI is not configured.");
+
+  const res = await Promise.race([
+    fetch(`https://${RAPIDAPI_HOST}/video/details?video_id=${encodeURIComponent(videoId)}`, {
+      headers: {
+        "Content-Type": "application/json",
+        "x-rapidapi-host": RAPIDAPI_HOST,
+        "x-rapidapi-key": apiKey,
+      },
+    }),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 10_000)),
+  ]);
+  if (!res.ok) throw new UrlImportError(`RapidAPI returned ${res.status}.`);
+
+  const data = (await res.json()) as RapidApiVideoDetails;
+  if (!data.title) throw new UrlImportError("RapidAPI returned no video details.");
+
+  return {
+    channelId: data.channel_id ?? null,
+    description: data.description ?? "",
+    handle: data.author ?? null,
+    platform: "youtube",
+    sourceUrl: url,
+    tags: data.keywords ?? [],
+    thumbnailUrl: data.thumbnails?.at(-1)?.url ?? null,
+    title: data.title,
+    videoId,
+    videoUrl: null,
+  };
+}
+
+// Primary source for YouTube metadata — basic info only (title/description/
+// keywords), deliberately not getInfo, which also resolves downloadable
+// format URLs: that request hung indefinitely against YouTube from this
+// environment during testing, while getBasicInfo returned cleanly. Revisit
+// if/when actual video download is wired up. On failure, the caller falls
+// back to extractYoutubeViaRapidApi below.
+async function extractYoutubeViaYtdlCore(url: string, videoId: string): Promise<UrlImportResult> {
   let info: Awaited<ReturnType<typeof ytdl.getBasicInfo>>;
   try {
     // getBasicInfo has hung indefinitely against YouTube from this
@@ -111,8 +166,123 @@ async function extractYoutube(url: string): Promise<UrlImportResult> {
     tags: d.keywords ?? [],
     thumbnailUrl: d.thumbnails.at(-1)?.url ?? null,
     title: d.title,
+    videoId,
     videoUrl: null,
   };
+}
+
+// The video id straight from the URL's own shape — no network call, unlike
+// extractFromUrl below. Lets a caller do something cheap with the id (like
+// a duplicate check) before spending an API call on metadata that a dupe
+// would just throw away.
+export function extractYoutubeVideoId(url: string): string | null {
+  return ytdl.validateURL(url) ? ytdl.getVideoID(url) : null;
+}
+
+async function extractYoutube(url: string): Promise<UrlImportResult> {
+  if (!ytdl.validateURL(url)) throw new UrlImportError("That doesn't look like a valid YouTube video link.");
+  const videoId = ytdl.getVideoID(url);
+  try {
+    return await extractYoutubeViaYtdlCore(url, videoId);
+  } catch (e) {
+    console.error(
+      "[url-import] ytdl-core YouTube lookup failed, falling back to RapidAPI —",
+      e instanceof Error ? e.message : e,
+    );
+    return extractYoutubeViaRapidApi(url, videoId);
+  }
+}
+
+const RAPIDAPI_DOWNLOAD_HOST = "youtube-info-download-api.p.rapidapi.com";
+
+type RapidApiDownloadStart = { success?: boolean; progress_url?: string };
+type RapidApiDownloadProgress = { success?: number; download_url?: string };
+
+// Each fetch below is otherwise unguarded — a hung connection (seen from
+// this environment against both this host and i.ytimg.com) would then block
+// past even the 2-minute polling budget the loop below thinks it's bounded
+// by, since that budget is only checked between iterations, not during a
+// single in-flight call.
+function fetchWithTimeout(url: string, init: RequestInit | undefined, ms: number): Promise<Response> {
+  return Promise.race([
+    fetch(url, init),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms)),
+  ]);
+}
+
+// The actual video bytes for a YouTube link, via a hosted download API
+// rather than resolving a direct googlevideo.com URL ourselves (ytdl-core's
+// getInfo hangs against YouTube from this environment — see
+// resolveDownloadUrl below). Kicks off an async job, polls its progress_url,
+// then fetches the resulting download_url. "720" is a resolution number,
+// not a format name — the API's own mp4/best/hd/video/18 aliases all fail
+// with "Unknown format." Returns null on any failure (not configured, no
+// progress within budget, a bad response) rather than throwing — callers
+// treat a missing video as a lesser failure than a missing metadata match.
+export async function downloadYoutubeVideo(url: string): Promise<{ buffer: Buffer; mime: string } | null> {
+  const apiKey = process.env.RAPIDAPI_KEY?.trim();
+  if (!apiKey) return null;
+
+  try {
+    const headers = { "x-rapidapi-host": RAPIDAPI_DOWNLOAD_HOST, "x-rapidapi-key": apiKey };
+    const startRes = await fetchWithTimeout(
+      `https://${RAPIDAPI_DOWNLOAD_HOST}/ajax/download.php?format=720&add_info=0&url=${encodeURIComponent(url)}`,
+      { headers },
+      15_000,
+    );
+    const start = (await startRes.json()) as RapidApiDownloadStart;
+    if (!start.success || !start.progress_url) return null;
+
+    const deadline = Date.now() + 2 * 60_000;
+    let downloadUrl: string | null = null;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const progressRes = await fetchWithTimeout(start.progress_url, undefined, 10_000).catch(() => null);
+      if (!progressRes) continue;
+      const progress = (await progressRes.json()) as RapidApiDownloadProgress;
+      if (progress.success === 1 && progress.download_url) {
+        downloadUrl = progress.download_url;
+        break;
+      }
+    }
+    if (!downloadUrl) return null;
+
+    const fileRes = await fetchWithTimeout(downloadUrl, undefined, 30_000);
+    if (!fileRes.ok) return null;
+    return { buffer: Buffer.from(await fileRes.arrayBuffer()), mime: fileRes.headers.get("content-type") ?? "video/mp4" };
+  } catch (e) {
+    console.error("[url-import] RapidAPI YouTube video download failed —", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+// The video's thumbnail. Tried this via the same host's info endpoint
+// (/ajax/api.php?function=i) first — its response is otherwise rich and
+// accurate, but the top-level thumbnail field it returns for the requested
+// video itself is broken (always .../vi/undefined/..., even though it
+// correctly resolves other videos' thumbnails in its own relatedVideos
+// list). i.ytimg.com's own CDN needs no API call at all: it's a plain,
+// unauthenticated URL that exists for every public upload — but a video
+// without a real maxresdefault (most don't) still 200s there with a fixed
+// 120x90, ~1KB grey placeholder rather than 404ing, so size (not status) is
+// what actually tells a real thumbnail apart — a real hqdefault, the
+// smallest size YouTube guarantees for nearly every video, is itself
+// ~10x that.
+const PLACEHOLDER_MAX_BYTES = 5000;
+
+export async function fetchYoutubeThumbnail(videoId: string): Promise<{ buffer: Buffer; mime: string } | null> {
+  for (const size of ["maxresdefault", "hqdefault"]) {
+    try {
+      const res = await fetchWithTimeout(`https://i.ytimg.com/vi/${videoId}/${size}.jpg`, undefined, 15_000);
+      if (!res.ok) continue;
+      const buffer = Buffer.from(await res.arrayBuffer());
+      if (buffer.byteLength < PLACEHOLDER_MAX_BYTES) continue;
+      return { buffer, mime: "image/jpeg" };
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 // TikTok's caption is one field, hashtags typed inline — same shape DepCut's
@@ -136,6 +306,7 @@ async function extractTiktok(url: string): Promise<UrlImportResult> {
     tags,
     thumbnailUrl: data.thumbnail_url ?? null,
     title: "",
+    videoId: null,
     videoUrl: null,
   };
 }
@@ -199,7 +370,18 @@ async function extractViaOpenGraph(
   // Facebook has no @handle convention, so this stays null there unless
   // the title happens to include one.
   const handleMatch = combined.match(/@([\w.]{2,30})/);
-  return { channelId: null, description, handle: handleMatch ? `@${handleMatch[1]}` : null, platform, sourceUrl: url, tags, thumbnailUrl, title, videoUrl };
+  return {
+    channelId: null,
+    description,
+    handle: handleMatch ? `@${handleMatch[1]}` : null,
+    platform,
+    sourceUrl: url,
+    tags,
+    thumbnailUrl,
+    title,
+    videoId: null,
+    videoUrl,
+  };
 }
 
 // X's own oEmbed, same as TikTok's — documented, free, no auth. Only gives
@@ -222,6 +404,7 @@ async function extractX(url: string): Promise<UrlImportResult> {
     tags,
     thumbnailUrl: null,
     title: "",
+    videoId: null,
     videoUrl: null,
   };
 }

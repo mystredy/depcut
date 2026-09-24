@@ -8,12 +8,6 @@ export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-// "VK12345678" — 2 letters + 8 digits, matching edit-code/route.ts's CODE_RE.
-// A submission's editCode only holds a code-shaped string when the artist
-// checked a studio code rather than a YouTube link — nothing to spend here
-// for the YouTube path, since it never created a SubmissionEditCode row.
-const CODE_RE = /^[A-Za-z]{2}\d{8}$/;
-
 // The creator hit Submit. Doesn't wait on uploads — validates that
 // everything required has at least been *picked* (not necessarily
 // finished), locks the row out of further editing, records intent
@@ -74,29 +68,6 @@ export const POST = withDepCutAuth(async (request, context: RouteContext) => {
       },
       { status: 400 },
     );
-  }
-
-  // Spend the studio edit code now, at the moment it's actually used to
-  // submit — not back when Check merely confirmed it was valid. updateMany's
-  // usedAt: null in the where clause makes this an atomic claim: if the same
-  // code was already spent by another submission (checked into more than one
-  // draft, then submitted from a different one first), count is 0 and this
-  // submit is rejected rather than silently double-spending the code.
-  const editCode = submission.editCode?.trim().toUpperCase() ?? "";
-  if (submission.extension === "pro" && CODE_RE.test(editCode)) {
-    const spent = await prisma.submissionEditCode.updateMany({
-      data: { usedAt: new Date(), usedBySubmissionId: id },
-      where: { code: editCode, userId: submission.userId, usedAt: null },
-    });
-    if (spent.count === 0) {
-      return NextResponse.json(
-        {
-          error: "edit_code_no_longer_valid",
-          message: "Your edit code is no longer valid — check it again before submitting.",
-        },
-        { status: 400 },
-      );
-    }
   }
 
   await prisma.submission.update({

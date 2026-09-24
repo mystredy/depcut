@@ -1,20 +1,25 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { putObject, submissionVerificationKey, submissionVideoKey } from "@/cut/server/cloud/r2";
+import { putObject, submissionThumbnailKey, submissionVerificationKey } from "@/cut/server/cloud/r2";
 import { transcribeCloud } from "@/cut/server/cloud/transcribe";
 import { notFoundResponse, withDepCutAuth } from "@/lib/depcut-api-auth";
-import { detectUrlImportPlatform, extractFromUrl, UrlImportError } from "@/lib/marketplace/url-import";
-import { downloadYoutubeVideo, extractAudioForTranscription } from "@/lib/marketplace/youtubeDownload";
+import {
+  detectUrlImportPlatform,
+  downloadYoutubeVideo,
+  extractFromUrl,
+  extractYoutubeVideoId,
+  fetchYoutubeThumbnail,
+  UrlImportError,
+} from "@/lib/marketplace/url-import";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
-// The video pull + transcribe steps below can run well past Vercel's
-// default function timeout — see youtubeDownload.ts's own per-step budgets.
-export const maxDuration = 180;
+// The verification-export pull below can take up to ~2 minutes on top of
+// metadata and transcription — matches the maxDuration other long
+// external-API routes in this codebase use (browser/run, analytics/run,
+// jobs/worker, ...).
+export const maxDuration = 300;
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -32,11 +37,11 @@ function invalidCodeResponse() {
 }
 
 // A code is single-use and belongs to whoever it was issued to — see
-// lib/telegram/commands.ts's handleEditCodeCallback. Checking it here only
-// confirms it's real, unused, and theirs, and sets which studio this
-// submission is for — it isn't spent yet. It's only marked used at actual
-// Submit time (see /api/submissions/[id]/submit), so an artist who checks a
-// code and then abandons the draft hasn't burned it.
+// lib/telegram/commands.ts's handleEditCodeCallback. Checking it here spends
+// it immediately: sets which studio this submission is for and marks the
+// code used, so the artist can't hand the same code to a second submission.
+// The client locks the edit-code field and the Check button once this
+// succeeds (see the studio field on the submission it reads back).
 async function redeemCode(submissionId: string, userId: string, code: string) {
   const row = await prisma.submissionEditCode.findUnique({
     include: { studio: { select: { name: true } } },
@@ -44,28 +49,134 @@ async function redeemCode(submissionId: string, userId: string, code: string) {
   });
   if (!row || row.userId !== userId || row.usedAt) return invalidCodeResponse();
 
+  // usedAt: null in the where clause makes this an atomic claim — a code
+  // that raced to a second Check in between the lookup above and here comes
+  // back with count 0 instead of silently double-spending it.
+  const spent = await prisma.submissionEditCode.updateMany({
+    data: { usedAt: new Date(), usedBySubmissionId: submissionId },
+    where: { code, usedAt: null },
+  });
+  if (spent.count === 0) return invalidCodeResponse();
+
   await prisma.submission.update({ data: { studioId: row.studioId }, where: { id: submissionId } });
 
   return NextResponse.json({ studioName: row.studio.name, kind: "code" as const, valid: true });
 }
 
-async function upsertAsset(submissionId: string, type: "video" | "verification", key: string, fileName: string) {
-  await prisma.submissionAsset.upsert({
-    create: { fileName, status: "complete", storageKey: key, submissionId, type },
-    update: { error: null, fileName, status: "complete", storageKey: key },
-    where: { submissionId_type: { submissionId, type } },
-  });
+// ElevenLabs' Scribe model can transcribe straight from a YouTube link — no
+// need to wait on our own video pull first. Best-effort: any failure here
+// (not configured, YouTube-side hiccup, timeout) just means no script yet —
+// not a failed Check. If the video pull below lands anyway, the client can
+// still fall back to /api/submissions/[id]/edit-code/transcribe, which
+// transcribes from the uploaded file instead. Guarded with a timeout so a
+// stuck transcription never holds up the whole Check response.
+async function transcribeYoutubeUrl(userId: string, url: string): Promise<string | null> {
+  try {
+    const form = new FormData();
+    form.append("sourceUrl", url);
+    const res = await Promise.race([
+      transcribeCloud.transcribe(userId, new Request("http://internal/transcribe", { body: form, method: "POST" })),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 45_000)),
+    ]);
+    if (!res.ok) return null;
+    const body = (await res.json().catch(() => null)) as { cues?: { text: string }[] } | null;
+    const transcript = (body?.cues ?? []).map((c) => c.text).join(" ").trim();
+    return transcript || null;
+  } catch (e) {
+    console.error("[edit-code] inline YouTube transcription failed —", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+// Uploads the pulled video into the verification-export slot only — proof
+// the artist's own upload (the Video slot, filled in manually) matches what
+// actually published on the matched channel. Best-effort, like
+// transcribeYoutubeUrl above: any failure just means no verification export
+// yet, not a failed Check — the studio match, metadata, and transcript
+// already succeeded by the time this runs and shouldn't be thrown away over
+// it.
+async function pullVerificationExport(submissionId: string, userId: string, url: string): Promise<boolean> {
+  try {
+    const video = await downloadYoutubeVideo(url);
+    if (!video) return false;
+
+    const fileName = "video.mp4";
+    const verificationKey = submissionVerificationKey(userId, submissionId, fileName);
+
+    await putObject(verificationKey, video.buffer, video.mime);
+
+    await prisma.submissionAsset.upsert({
+      where: { submissionId_type: { submissionId, type: "verification" } },
+      create: { submissionId, type: "verification", fileName, storageKey: verificationKey, status: "complete" },
+      update: { error: null, fileName, status: "complete", storageKey: verificationKey },
+    });
+
+    return true;
+  } catch (e) {
+    console.error("[edit-code] inline YouTube verification-export pull failed —", e instanceof Error ? e.message : e);
+    return false;
+  }
+}
+
+// Same best-effort shape as pullVerificationExport above, for the thumbnail slot.
+// Overwrites any existing thumbnail — matches Check's overall behavior of
+// re-deriving everything from the matched video, same as title/description
+// pulling in over the artist's own typed draft values.
+async function pullYoutubeThumbnail(submissionId: string, userId: string, videoId: string): Promise<boolean> {
+  try {
+    const thumbnail = await fetchYoutubeThumbnail(videoId);
+    if (!thumbnail) return false;
+
+    const key = submissionThumbnailKey(userId, submissionId);
+    await putObject(key, thumbnail.buffer, thumbnail.mime);
+
+    await prisma.submissionAsset.upsert({
+      where: { submissionId_type: { submissionId, type: "thumbnail" } },
+      create: { submissionId, type: "thumbnail", fileName: "thumbnail.jpg", status: "complete", storageKey: key },
+      update: { error: null, fileName: "thumbnail.jpg", status: "complete", storageKey: key },
+    });
+
+    return true;
+  } catch (e) {
+    console.error("[edit-code] inline YouTube thumbnail pull failed —", e instanceof Error ? e.message : e);
+    return false;
+  }
 }
 
 // A YouTube link identifies the studio by matching its channel against every
 // studio this artist is assigned to — the same result a code would have
-// given, arrived at a different way. Also pulls title/description/tags and
-// the channel handle (into the watermark field). The video itself and its
-// transcript are each best-effort, since they're slow and can fail
-// independently — see youtubeDownload.ts for how they're actually pulled
-// (a vendored yt-dlp binary, since this route runs on Vercel, which has
-// neither yt-dlp nor Python installed).
+// given, arrived at a different way. Also pulls title/description/tags, the
+// channel handle (into the watermark field), a transcript, a thumbnail, and
+// a verification-export copy of the published video, all synchronously
+// within this request. The Video slot itself stays manual — that's the
+// artist's own upload, not the published video.
 async function matchYoutubeLink(submissionId: string, userId: string, url: string) {
+  // A studio code is single-use by construction (redeemCode spends it); a
+  // YouTube link has no such owner, so the same video could otherwise
+  // validate any number of submissions. Checked first, before spending an
+  // API call on metadata a dupe would just throw away — videoId comes
+  // straight from the URL's own shape (extractYoutubeVideoId), no network
+  // call needed. Canonicalized by video id — not the raw URL text — so
+  // youtu.be/X, youtube.com/watch?v=X, and .../shorts/X (all the same
+  // upload) can't dodge this by differing in shape. Checked against
+  // editCode, which this function is the only writer of for a YouTube match
+  // (see the update below) — paired with studioId set, that's "this exact
+  // video already validated a different submission."
+  const videoId = extractYoutubeVideoId(url);
+  const canonicalUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : url;
+  if (videoId) {
+    const dupe = await prisma.submission.findFirst({
+      select: { id: true },
+      where: { editCode: canonicalUrl, id: { not: submissionId }, studioId: { not: null } },
+    });
+    if (dupe) {
+      return NextResponse.json(
+        { error: "video_already_used", message: "This video has already been used to verify a different submission." },
+        { status: 400 },
+      );
+    }
+  }
+
   let result: Awaited<ReturnType<typeof extractFromUrl>>;
   try {
     result = await extractFromUrl(url);
@@ -94,60 +205,27 @@ async function matchYoutubeLink(submissionId: string, userId: string, url: strin
     );
   }
 
-  // Persisted immediately, before the slower best-effort steps below — a
-  // stall or failure pulling the video or transcribing it should never cost
-  // the channel match and autofill that already succeeded.
+  const [voiceScript, verificationPulled, thumbnailPulled] = await Promise.all([
+    transcribeYoutubeUrl(userId, url),
+    pullVerificationExport(submissionId, userId, url),
+    videoId ? pullYoutubeThumbnail(submissionId, userId, videoId) : Promise.resolve(false),
+  ]);
+
   await prisma.submission.update({
     data: {
       studioId: matched.studioId,
+      editCode: canonicalUrl,
       ...(result.description ? { packageDescription: result.description } : {}),
       ...(result.tags.length ? { packageTags: result.tags.join(", ") } : {}),
       ...(result.title ? { packageTitle: result.title } : {}),
-      ...(result.handle ? { watermarkText: result.handle } : {}),
+      // A matched channel's watermark isn't optional — see the client's
+      // editCodeLocked, which forces the toggle on and disables both it and
+      // the text field once this lands, alongside the edit-code field itself.
+      ...(result.handle ? { watermarkEnabled: true, watermarkText: result.handle } : {}),
+      ...(voiceScript ? { voiceScript } : {}),
     },
     where: { id: submissionId },
   });
-
-  let videoPulled = false;
-  let voiceScript: string | null = null;
-  const tmp = await mkdtemp(path.join(os.tmpdir(), "submission-yt-"));
-  try {
-    const videoFile = await downloadYoutubeVideo(url, tmp);
-    if (videoFile) {
-      const videoKey = submissionVideoKey(userId, submissionId, "video.mp4");
-      const verificationKey = submissionVerificationKey(userId, submissionId, "video.mp4");
-      const bytes = await readFile(videoFile);
-      await putObject(videoKey, bytes, "video/mp4");
-      await putObject(verificationKey, bytes, "video/mp4");
-      await Promise.all([
-        upsertAsset(submissionId, "video", videoKey, "video.mp4"),
-        upsertAsset(submissionId, "verification", verificationKey, "video.mp4"),
-      ]);
-      videoPulled = true;
-
-      const audio = await extractAudioForTranscription(videoFile, tmp);
-      if (audio) {
-        const form = new FormData();
-        form.append("audio", new Blob([new Uint8Array(audio)], { type: "audio/mp4" }), "audio.m4a");
-        const res = await transcribeCloud.transcribe(
-          userId,
-          new Request("http://internal/transcribe", { body: form, method: "POST" }),
-        );
-        const body = (await res.json().catch(() => null)) as { cues?: { text: string }[] } | null;
-        if (res.ok) {
-          const transcript = (body?.cues ?? []).map((c) => c.text).join(" ").trim();
-          if (transcript) {
-            voiceScript = transcript;
-            await prisma.submission.update({ data: { voiceScript: transcript }, where: { id: submissionId } });
-          }
-        }
-      }
-    }
-  } catch (e) {
-    console.error("edit-code: youtube video pull failed —", e);
-  } finally {
-    void rm(tmp, { recursive: true, force: true });
-  }
 
   return NextResponse.json({
     studioName: matched.studio.name,
@@ -156,8 +234,9 @@ async function matchYoutubeLink(submissionId: string, userId: string, url: strin
     packageDescription: result.description,
     packageTags: result.tags.join(", "),
     packageTitle: result.title,
+    thumbnailPulled,
     valid: true,
-    videoPulled,
+    verificationPulled,
     voiceScript,
   });
 }
