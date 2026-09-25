@@ -7,6 +7,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { EditorContent, generateJSON, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown, type MarkdownStorage } from "tiptap-markdown";
+import CodeMirror from "@uiw/react-codemirror";
+import { html as htmlLang } from "@codemirror/lang-html";
+import { githubDark, githubLight } from "@uiw/codemirror-theme-github";
 import {
   ArrowLeft,
   Bold,
@@ -45,6 +48,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { isDark, useTheme } from "@/cut/components/ThemeProvider";
 import { ApiError } from "@/queries/apiClient";
 import {
   adminBlogPostsQueryKey,
@@ -149,6 +153,8 @@ function ToolbarButton({
 
 export function PostEditor({ postId }: { postId: string | null }) {
   const router = useRouter();
+  const { theme } = useTheme();
+  const codeEditorDark = isDark(theme);
   const queryClient = useQueryClient();
   const posts = useAdminBlogPosts();
   const post = postId ? (posts.data?.posts.find((p) => p.id === postId) ?? null) : null;
@@ -724,22 +730,25 @@ export function PostEditor({ postId }: { postId: string | null }) {
           {mode === "compose" ? (
             <EditorContent editor={composeEditor} />
           ) : mode === "html" ? (
-            <div className="min-h-[60vh] py-6">
-              <textarea
+            <div className="overflow-hidden rounded-xl border py-2 [&_.cm-editor]:bg-transparent [&_.cm-gutters]:bg-transparent">
+              <CodeMirror
                 value={htmlDraft}
-                onChange={(e) => {
-                  const html = e.target.value;
-                  setHtmlDraft(html);
+                onChange={(next) => {
+                  setHtmlDraft(next);
                   try {
-                    composeEditor?.commands.setContent(generateJSON(html, COMPOSE_EXTENSIONS));
+                    composeEditor?.commands.setContent(generateJSON(next, COMPOSE_EXTENSIONS));
                   } catch {
                     // Mid-edit HTML can be momentarily unparseable (an
                     // unclosed tag, etc.) — contentMarkdown just stays at its
                     // last valid value until a keystroke parses cleanly.
                   }
                 }}
+                extensions={[htmlLang()]}
+                theme={codeEditorDark ? githubDark : githubLight}
+                basicSetup={{ foldGutter: false }}
                 placeholder="Write HTML…"
-                className="min-h-[60vh] w-full resize-none border-0 bg-transparent font-mono text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/40"
+                minHeight="60vh"
+                className="text-sm"
               />
             </div>
           ) : (
