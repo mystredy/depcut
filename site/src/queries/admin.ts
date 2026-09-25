@@ -2277,6 +2277,53 @@ export function useGenerateBlogImage() {
   });
 }
 
+export type BlogContentVideoInput =
+  | { kind: "file"; file: File }
+  | { kind: "url"; url: string }
+  | { kind: "base64"; dataBase64: string; contentType: string };
+
+// Same shape as useAddBlogContentImage, for api/admin/blog/[id]/videos —
+// Upload/Generate/Library all land here; a YouTube link never does (it has
+// nothing to store).
+export function useAddBlogContentVideo() {
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: BlogContentVideoInput }) => {
+      if (input.kind === "file") {
+        return apiFetch<{ id: string; url: string }>(`/api/admin/blog/${id}/videos`, {
+          body: input.file,
+          headers: { "Content-Type": input.file.type },
+          method: "POST",
+        });
+      }
+      const body =
+        input.kind === "url"
+          ? { url: input.url }
+          : { contentType: input.contentType, dataBase64: input.dataBase64 };
+      return apiFetch<{ id: string; url: string }>(`/api/admin/blog/${id}/videos`, {
+        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+    },
+  });
+}
+
+// Same reasoning as useGenerateBlogImage — a standalone inference call, no
+// CutProject needed. No provider/model specified: the router falls back to
+// whichever configured provider supports kind: "video" (see
+// ProviderRegistry.assetProvider), same as image generation already omits
+// them.
+export function useGenerateBlogVideo() {
+  return useMutation({
+    mutationFn: ({ prompt }: { prompt: string }) =>
+      apiFetch<{ outputs: { dataBase64?: string; contentType?: string }[] }>("/api/inference/assets", {
+        body: JSON.stringify({ kind: "video", prompt }),
+        headers: { "Content-Type": "application/json", "x-depcut-client-id": "depcut-blog" },
+        method: "POST",
+      }),
+  });
+}
+
 export type BlogChatThreadSummary = { id: string; title: string; createdAt: string; updatedAt: string };
 export type BlogChatThreadFull = BlogChatThreadSummary & { data: unknown };
 

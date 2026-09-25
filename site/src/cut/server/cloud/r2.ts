@@ -177,6 +177,12 @@ export const blogCoverKey = (postId: string) => `blog/${postId}/cover`;
 export const blogContentImageKey = (postId: string, imageId: string) =>
   `blog/${postId}/content/${imageId}`;
 
+/** Same scheme as blogContentImageKey, for an uploaded/generated video file
+ * a post embeds inline (as opposed to a YouTube link, which needs no
+ * storage of its own). */
+export const blogContentVideoKey = (postId: string, videoId: string) =>
+  `blog/${postId}/content-video/${videoId}`;
+
 export function presignPut(key: string, mime: string): Promise<string> {
   return getSignedUrl(
     r2(),
