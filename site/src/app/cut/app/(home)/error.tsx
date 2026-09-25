@@ -24,6 +24,18 @@ export default function AppError({
   // the effect below kicks off the actual reload.
   const [reloading] = useState(() => chunkError && !hasAttemptedChunkReload());
 
+  // This boundary only ever renders inside the app section, so it's always
+  // correct for it to look like the app — white in light mode, not the
+  // marketing page's fixed cream. Normally AppSurfaceBackground (mounted
+  // higher up) is what flags that, but the one case this boundary exists
+  // for is exactly the case where that may never have mounted: a stale JS
+  // chunk failing to load. No cleanup — this is one-directional insurance,
+  // not a toggle to hand back; AppSurfaceBackground still owns removing it
+  // once the app section actually unmounts.
+  useEffect(() => {
+    document.documentElement.classList.add("app-surface");
+  }, []);
+
   useEffect(() => {
     // A stale chunk reference (this build redeployed since the page
     // loaded) isn't a real crash; reset() can't fix it since it doesn't
