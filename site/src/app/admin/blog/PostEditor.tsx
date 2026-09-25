@@ -48,6 +48,7 @@ import {
   adminBlogPostsQueryKey,
   useAdminBlogPosts,
   useCreateBlogPost,
+  useImportBlogYoutube,
   useRemoveBlogCover,
   useSetBlogCoverFromUrl,
   useUpdateBlogPost,
@@ -144,6 +145,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
   const uploadCover = useUploadBlogCover();
   const removeCover = useRemoveBlogCover();
   const setCoverFromUrl = useSetBlogCoverFromUrl();
+  const importYoutube = useImportBlogYoutube();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const coverInput = useRef<HTMLInputElement>(null);
 
@@ -354,6 +356,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
   // does above), so an AI edit flows through the identical dirty/autosave
   // path a manual edit does. Never a direct DB write.
   const blogEditorActions: BlogEditorActions = {
+    importYoutube: (url) => importYoutube.mutateAsync({ url }),
     setCoverFromUrl: async (url) => {
       if (!post) throw new Error("Save this post once before setting a cover.");
       await setCoverFromUrl.mutateAsync({ id: post.id, url });

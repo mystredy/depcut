@@ -1,7 +1,9 @@
+import type { BlogYoutubeImport } from "@/queries/admin";
+
 // The blog chat agent's tool catalog and dispatcher. Deliberately small —
 // covers everything the old one-shot "Write with AI" dialog did (title,
-// body, and now excerpt/tags too), plus setting a cover from a URL, nothing
-// more:
+// body, and now excerpt/tags too), plus setting a cover from a URL and
+// importing a YouTube video's metadata/transcript, nothing more:
 //  - set_slug is left out: the slug already auto-derives from the title
 //    (see PostEditor's slugify/slugTouched) unless hand-edited, and a direct
 //    tool would bypass the uniqueness check the PATCH route does.
@@ -14,8 +16,18 @@
 //    directly — the chat agent has no image-gen tool or file picker here,
 //    only text turns, so a URL (the user's own, or one they found) is the
 //    only input it can realistically act on.
+//  - import_youtube is read-only — it hands the agent a video's title,
+//    description, tags, thumbnail, and (best-effort) transcript so it can
+//    write the post itself with the other tools; it never touches the post
+//    on its own.
 
-export type BlogAiToolName = "set_title" | "set_excerpt" | "set_tags" | "update_content" | "set_cover_from_url";
+export type BlogAiToolName =
+  | "set_title"
+  | "set_excerpt"
+  | "set_tags"
+  | "update_content"
+  | "set_cover_from_url"
+  | "import_youtube";
 
 export type BlogAiToolDef = {
   name: BlogAiToolName;
@@ -79,6 +91,17 @@ export const BLOG_AI_TOOLS: BlogAiToolDef[] = [
     },
     name: "set_cover_from_url",
   },
+  {
+    description:
+      "Fetch a YouTube video's title, description, tags, thumbnail URL, and transcript (when available), to write a blog post from. Read-only — call set_title/set_excerpt/set_tags/update_content/set_cover_from_url afterward to actually build the post from what this returns.",
+    inputSchema: {
+      additionalProperties: false,
+      properties: { url: { description: "The YouTube video URL.", type: "string" } },
+      required: ["url"],
+      type: "object",
+    },
+    name: "import_youtube",
+  },
 ];
 
 // The setters PostEditor already has — a tool call runs one of these
@@ -93,9 +116,16 @@ export type BlogEditorActions = {
   setTags: (tags: string[]) => void;
   setContent: (contentMarkdown: string) => void;
   setCoverFromUrl: (url: string) => Promise<void>;
+  importYoutube: (url: string) => Promise<BlogYoutubeImport>;
 };
 
-export type BlogToolResult = { ok: true; summary: string } | { ok: false; error: string };
+// `data` rides along on a successful import_youtube call — the model reads
+// the whole result object (see useBlogAiChat's function_response), while the
+// UI chip shows only `summary`, so the fetched title/description/tags/
+// transcript don't get rendered as a wall of text in the chat.
+export type BlogToolResult =
+  | { ok: true; summary: string; data?: unknown }
+  | { ok: false; error: string };
 
 export async function runBlogAiTool(
   name: string,
@@ -136,6 +166,21 @@ export async function runBlogAiTool(
         return { ok: true, summary: "Cover image set." };
       } catch (err) {
         return { error: err instanceof Error ? err.message : "Could not set that cover image.", ok: false };
+      }
+    }
+    case "import_youtube": {
+      const url = typeof args.url === "string" ? args.url.trim() : "";
+      if (!url) return { error: "url is required.", ok: false };
+      try {
+        const result = await actions.importYoutube(url);
+        const parts = [
+          result.transcript ? `a ${result.transcript.trim().split(/\s+/).length}-word transcript` : "no transcript",
+          `${result.tags.length} tag${result.tags.length === 1 ? "" : "s"}`,
+          result.thumbnailUrl ? "a thumbnail" : "no thumbnail",
+        ];
+        return { data: result, ok: true, summary: `Imported "${result.title}" — ${parts.join(", ")}.` };
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : "Could not import that video.", ok: false };
       }
     }
     default:

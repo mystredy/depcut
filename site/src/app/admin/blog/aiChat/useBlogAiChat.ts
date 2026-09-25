@@ -37,10 +37,14 @@ const INSTRUCTIONS = [
   "title, excerpt, tags, and body (a <post_state> block on the latest",
   "message), and you can change any of them directly with the tools you're",
   "given, plus set its cover image from a URL — don't ask permission first",
-  "for an edit the user already asked for. Use plain text only to answer a",
-  "question, explain what you did, or ask for clarification — never restate",
-  "the whole post back in chat text, since your tools already show the",
-  "change in the editor. Keep replies short.",
+  "for an edit the user already asked for. If asked to write a post from a",
+  "YouTube link, call import_youtube first to get the video's title,",
+  "description, tags, thumbnail, and transcript, then use the other tools",
+  "to actually write the post from that material — import_youtube itself",
+  "only reads the video, it doesn't change the post. Use plain text only to",
+  "answer a question, explain what you did, or ask for clarification —",
+  "never restate the whole post back in chat text, since your tools already",
+  "show the change in the editor. Keep replies short.",
 ].join(" ");
 
 const toolDeclarations = () =>

@@ -2185,6 +2185,28 @@ export function useUploadBlogCover() {
   });
 }
 
+export type BlogYoutubeImport = {
+  title: string;
+  description: string;
+  tags: string[];
+  thumbnailUrl: string | null;
+  transcript: string | null;
+};
+
+// Read-only: the blog chat agent's import_youtube tool. No query
+// invalidation — this doesn't change the post, the agent does that itself
+// afterward with the other tools once it has what this returns.
+export function useImportBlogYoutube() {
+  return useMutation({
+    mutationFn: ({ url }: { url: string }) =>
+      apiFetch<BlogYoutubeImport>("/api/admin/blog/youtube-import", {
+        body: JSON.stringify({ url }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      }),
+  });
+}
+
 export function useSetBlogCoverFromUrl() {
   const queryClient = useQueryClient();
   return useMutation({
