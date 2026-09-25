@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, Mail, Plus, Share2 } from "lucide-react";
+import { Check, Copy, Mail, Plus, Share, Share2 } from "lucide-react";
 
 import {
   Dialog,
@@ -91,7 +91,19 @@ function openShare(platform: SharePlatform, url: string, title: string) {
   window.open(href, "_blank", "noopener,noreferrer,width=600,height=600");
 }
 
-export function ShareBar({ url, title }: { url: string; title: string }) {
+export function ShareBar({
+  url,
+  title,
+  variant = "row",
+}: {
+  url: string;
+  title: string;
+  // "row": the share icon, a few quick platforms, and a "+" for the rest —
+  // used at the bottom of a post. "icon": just the share glyph, for a
+  // header byline where the row's platform icons would be too heavy.
+  // Both open the exact same modal.
+  variant?: "row" | "icon";
+}) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -108,34 +120,45 @@ export function ShareBar({ url, title }: { url: string; title: string }) {
 
   return (
     <>
-      <div className="flex items-center gap-2">
+      {variant === "icon" ? (
         <button
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Share this post"
-          className="grid size-9 shrink-0 place-items-center rounded-full border border-white/15 text-white/70 transition-colors hover:border-white/30 hover:text-white"
+          className="grid size-9 shrink-0 place-items-center text-white/70 transition-colors hover:text-white"
         >
-          <Share2 className="size-4" />
+          <Share className="size-5" />
         </button>
-        {QUICK_PLATFORMS.map((platform) => (
+      ) : (
+        <div className="flex items-center gap-2">
           <button
-            key={platform.key}
             type="button"
-            onClick={() => openShare(platform, url, title)}
-            aria-label={`Share on ${platform.label}`}
+            onClick={() => setOpen(true)}
+            aria-label="Share this post"
+            className="grid size-9 shrink-0 place-items-center rounded-full border border-white/15 text-white/70 transition-colors hover:border-white/30 hover:text-white"
           >
-            <platform.icon className="size-9" />
+            <Share2 className="size-4" />
           </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label="More share options"
-          className="grid size-9 shrink-0 place-items-center rounded-[25%] border border-white/15 text-white/50 transition-colors hover:border-white/30 hover:text-white"
-        >
-          <Plus className="size-4" />
-        </button>
-      </div>
+          {QUICK_PLATFORMS.map((platform) => (
+            <button
+              key={platform.key}
+              type="button"
+              onClick={() => openShare(platform, url, title)}
+              aria-label={`Share on ${platform.label}`}
+            >
+              <platform.icon className="size-9" />
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-label="More share options"
+            className="grid size-9 shrink-0 place-items-center rounded-[25%] border border-white/15 text-white/50 transition-colors hover:border-white/30 hover:text-white"
+          >
+            <Plus className="size-4" />
+          </button>
+        </div>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">

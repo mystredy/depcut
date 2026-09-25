@@ -7,6 +7,7 @@ import { DEPCUT_CANONICAL } from "@/cut/lib/hosts";
 import { categorySlug } from "@/lib/blog/categories";
 import { prisma } from "@/lib/prisma";
 
+import { AuthorAvatar } from "../_components/AuthorAvatar";
 import { BlogShell } from "../_components/BlogShell";
 import { ShareBar } from "../_components/ShareBar";
 
@@ -60,6 +61,9 @@ export default async function BlogPostPage({ params }: RouteParams) {
   const post = await getPost(slug);
   if (!post) notFound();
 
+  const authorName = post.authorName?.trim() || "DepCut Team";
+  const postUrl = `${DEPCUT_CANONICAL}/blog/${post.slug}`;
+
   return (
     <BlogShell>
       <article className="mx-auto box-border w-full max-w-3xl px-6 py-12 md:px-10 md:py-20">
@@ -67,10 +71,23 @@ export default async function BlogPostPage({ params }: RouteParams) {
           <h1 className="text-[clamp(32px,5.5vw,52px)] font-semibold leading-[1.05] tracking-[-0.01em] text-white">
             {post.title}
           </h1>
-          <p className="mt-4 text-[13px] font-medium text-white/40">
-            {post.publishedAt ? formatDate(post.publishedAt) : ""}
-            {post.authorName ? ` · ${post.authorName}` : ""}
-          </p>
+          <div className="mt-5 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <AuthorAvatar
+                name={authorName}
+                className="flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
+              />
+              <div className="text-[13px] leading-tight">
+                <p className="font-medium text-white/70">
+                  by <span className="font-semibold text-white">{authorName}</span>
+                </p>
+                <p className="mt-0.5 text-white/40">
+                  Published: {post.publishedAt ? formatDate(post.publishedAt) : "—"}
+                </p>
+              </div>
+            </div>
+            <ShareBar url={postUrl} title={post.title} variant="icon" />
+          </div>
         </header>
 
         {post.hasCoverImage && (
@@ -100,7 +117,7 @@ export default async function BlogPostPage({ params }: RouteParams) {
               ))}
             </div>
           )}
-          <ShareBar url={`${DEPCUT_CANONICAL}/blog/${post.slug}`} title={post.title} />
+          <ShareBar url={postUrl} title={post.title} />
         </footer>
       </article>
     </BlogShell>
