@@ -13,13 +13,20 @@ import type { BlogYoutubeImport } from "@/queries/admin";
 //    just this selection") — a persistent panel has no "what was selected
 //    when I opened this" moment. update_content replaces the whole body.
 //  - set_cover_from_url takes a URL rather than generating/uploading a file
-//    directly — the chat agent has no image-gen tool or file picker here,
-//    only text turns, so a URL (the user's own, or one they found) is the
-//    only input it can realistically act on.
+//    directly for the COVER specifically — a real image-gen tool exists now
+//    (generate_image, generate_video below) for the post body, but the
+//    cover stays URL-only since nothing asks for an AI-generated cover yet.
 //  - import_youtube is read-only — it hands the agent a video's title,
 //    description, tags, thumbnail, and (best-effort) transcript so it can
 //    write the post itself with the other tools; it never touches the post
 //    on its own.
+//  - generate_image/generate_video are the same read-only shape: each hands
+//    back a durable url (never touching the post itself), which the agent
+//    then splices into the body itself via update_content — same division
+//    of labor as import_youtube, and the reason PostEditor's onInsert
+//    equivalents (the manual toolbar's dialogs) aren't reused directly: the
+//    agent doesn't pick a spot in the doc the way a toolbar click does, it
+//    rewrites the whole body with the reference already in the right place.
 
 export type BlogAiToolName =
   | "set_title"
@@ -27,7 +34,9 @@ export type BlogAiToolName =
   | "set_tags"
   | "update_content"
   | "set_cover_from_url"
-  | "import_youtube";
+  | "import_youtube"
+  | "generate_image"
+  | "generate_video";
 
 export type BlogAiToolDef = {
   name: BlogAiToolName;
@@ -102,6 +111,28 @@ export const BLOG_AI_TOOLS: BlogAiToolDef[] = [
     },
     name: "import_youtube",
   },
+  {
+    description:
+      "Generate an image from a text prompt and get back a durable url to it. Read-only — it doesn't touch the post. Call update_content afterward with Markdown image syntax (![alt text](url)) inserted at the right spot in the body to actually add it. Only works on a post that's been saved at least once.",
+    inputSchema: {
+      additionalProperties: false,
+      properties: { prompt: { description: "What the image should show.", type: "string" } },
+      required: ["prompt"],
+      type: "object",
+    },
+    name: "generate_image",
+  },
+  {
+    description:
+      "Generate a short video clip from a text prompt and get back a durable url to it. Read-only — it doesn't touch the post. Call update_content afterward with a plain Markdown link to the url (e.g. [▶ Watch video](url)) inserted at the right spot in the body — the public post page renders that exact link shape as a real playable embed automatically, so nothing more is needed. Only works on a post that's been saved at least once.",
+    inputSchema: {
+      additionalProperties: false,
+      properties: { prompt: { description: "What the video should show.", type: "string" } },
+      required: ["prompt"],
+      type: "object",
+    },
+    name: "generate_video",
+  },
 ];
 
 // The setters PostEditor already has — a tool call runs one of these
@@ -117,6 +148,8 @@ export type BlogEditorActions = {
   setContent: (contentMarkdown: string) => void;
   setCoverFromUrl: (url: string) => Promise<void>;
   importYoutube: (url: string) => Promise<BlogYoutubeImport>;
+  generateImage: (prompt: string) => Promise<string>;
+  generateVideo: (prompt: string) => Promise<string>;
 };
 
 // `data` rides along on a successful import_youtube call — the model reads
@@ -181,6 +214,26 @@ export async function runBlogAiTool(
         return { data: result, ok: true, summary: `Imported "${result.title}" — ${parts.join(", ")}.` };
       } catch (err) {
         return { error: err instanceof Error ? err.message : "Could not import that video.", ok: false };
+      }
+    }
+    case "generate_image": {
+      const prompt = typeof args.prompt === "string" ? args.prompt.trim() : "";
+      if (!prompt) return { error: "prompt is required.", ok: false };
+      try {
+        const url = await actions.generateImage(prompt);
+        return { data: { url }, ok: true, summary: `Generated an image: ${url}` };
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : "Could not generate that image.", ok: false };
+      }
+    }
+    case "generate_video": {
+      const prompt = typeof args.prompt === "string" ? args.prompt.trim() : "";
+      if (!prompt) return { error: "prompt is required.", ok: false };
+      try {
+        const url = await actions.generateVideo(prompt);
+        return { data: { url }, ok: true, summary: `Generated a video: ${url}` };
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : "Could not generate that video.", ok: false };
       }
     }
     default:

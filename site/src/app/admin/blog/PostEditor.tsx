@@ -63,7 +63,11 @@ import { useAccountProfile, visibleName } from "@/queries/accountProfile";
 import {
   adminBlogPostsQueryKey,
   useAdminBlogPosts,
+  useAddBlogContentImage,
+  useAddBlogContentVideo,
   useCreateBlogPost,
+  useGenerateBlogImage,
+  useGenerateBlogVideo,
   useImportBlogYoutube,
   useRemoveBlogCover,
   useSetBlogCoverFromUrl,
@@ -186,6 +190,10 @@ export function PostEditor({ postId }: { postId: string | null }) {
   const uploadCover = useUploadBlogCover();
   const removeCover = useRemoveBlogCover();
   const setCoverFromUrl = useSetBlogCoverFromUrl();
+  const generateBlogImage = useGenerateBlogImage();
+  const addBlogContentImage = useAddBlogContentImage();
+  const generateBlogVideo = useGenerateBlogVideo();
+  const addBlogContentVideo = useAddBlogContentVideo();
   const importYoutube = useImportBlogYoutube();
   const { data: session } = authClient.useSession();
   const accountProfile = useAccountProfile();
@@ -586,6 +594,28 @@ export function PostEditor({ postId }: { postId: string | null }) {
     setCoverFromUrl: async (url) => {
       if (!post) throw new Error("Save this post once before setting a cover.");
       await setCoverFromUrl.mutateAsync({ id: post.id, url });
+    },
+    generateImage: async (prompt) => {
+      if (!post) throw new Error("Save this post once before generating an image.");
+      const gen = await generateBlogImage.mutateAsync({ prompt });
+      const out = gen.outputs.find((o) => o.dataBase64);
+      if (!out?.dataBase64) throw new Error("The model returned no image.");
+      const result = await addBlogContentImage.mutateAsync({
+        id: post.id,
+        input: { contentType: out.contentType || "image/png", dataBase64: out.dataBase64, kind: "base64" },
+      });
+      return result.url;
+    },
+    generateVideo: async (prompt) => {
+      if (!post) throw new Error("Save this post once before generating a video.");
+      const gen = await generateBlogVideo.mutateAsync({ prompt });
+      const out = gen.outputs.find((o) => o.dataBase64);
+      if (!out?.dataBase64) throw new Error("The model returned no video.");
+      const result = await addBlogContentVideo.mutateAsync({
+        id: post.id,
+        input: { contentType: out.contentType || "video/mp4", dataBase64: out.dataBase64, kind: "base64" },
+      });
+      return result.url;
     },
     setContent: (next) => {
       setContentMarkdown(next);
