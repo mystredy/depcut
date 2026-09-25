@@ -45,13 +45,20 @@ const nextConfig: NextConfig = {
   // instead), and the override only targets the Linux variants, so macOS
   // installs (where the engine's local AI one-shots actually run) are
   // untouched.
-  turbopack: process.env.VERCEL
-    ? {
-        resolveAlias: {
-          "@/cut/server/http/next": "./src/cut/server/http/hosted-stub.ts",
-        },
-      }
-    : undefined,
+  // Pins the workspace root so Turbopack doesn't get confused by an unrelated
+  // lockfile elsewhere on a dev machine (e.g. a stray one in the user's home
+  // directory), which otherwise makes it infer the wrong root and fail to
+  // resolve the next package.
+  turbopack: {
+    root: __dirname,
+    ...(process.env.VERCEL
+      ? {
+          resolveAlias: {
+            "@/cut/server/http/next": "./src/cut/server/http/hosted-stub.ts",
+          },
+        }
+      : {}),
+  },
 };
 
 const withMDX = createMDX({
