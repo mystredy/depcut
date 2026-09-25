@@ -8,6 +8,7 @@ import { categorySlug } from "@/lib/blog/categories";
 import { prisma } from "@/lib/prisma";
 
 import { BlogShell } from "../_components/BlogShell";
+import { ShareBar } from "../_components/ShareBar";
 
 export const dynamic = "force-dynamic";
 
@@ -70,19 +71,6 @@ export default async function BlogPostPage({ params }: RouteParams) {
             {post.publishedAt ? formatDate(post.publishedAt) : ""}
             {post.authorName ? ` · ${post.authorName}` : ""}
           </p>
-          {post.tags.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-1.5">
-              {post.tags.map((tag) => (
-                <Link
-                  key={tag}
-                  href={`/blog/category/${categorySlug(tag)}`}
-                  className="rounded-full border border-white/15 px-2.5 py-1 text-[12px] font-medium text-white/55 no-underline transition-colors hover:border-white/30 hover:text-white"
-                >
-                  {tag}
-                </Link>
-              ))}
-            </div>
-          )}
         </header>
 
         {post.hasCoverImage && (
@@ -97,6 +85,23 @@ export default async function BlogPostPage({ params }: RouteParams) {
         <div className="prose prose-invert max-w-none prose-headings:font-semibold prose-headings:tracking-normal prose-h2:mt-10 prose-h2:border-t prose-h2:border-white/15 prose-h2:pt-8 prose-a:font-semibold prose-a:text-white prose-strong:text-white prose-p:text-white/70 prose-li:text-white/70">
           <ReactMarkdown>{post.contentMarkdown}</ReactMarkdown>
         </div>
+
+        <footer className="mt-12 space-y-6 border-t border-white/10 pt-8">
+          {post.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {post.tags.map((tag) => (
+                <Link
+                  key={tag}
+                  href={`/blog/category/${categorySlug(tag)}`}
+                  className="rounded-full border border-white/15 px-2.5 py-1 text-[12px] font-medium text-white/55 no-underline transition-colors hover:border-white/30 hover:text-white"
+                >
+                  {tag}
+                </Link>
+              ))}
+            </div>
+          )}
+          <ShareBar url={`${DEPCUT_CANONICAL}/blog/${post.slug}`} title={post.title} />
+        </footer>
       </article>
     </BlogShell>
   );
