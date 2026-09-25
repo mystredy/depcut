@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 
 import { DEPCUT_CANONICAL } from "@/cut/lib/hosts";
 import { categorySlug } from "@/lib/blog/categories";
@@ -56,6 +56,39 @@ function formatDate(d: Date): string {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 }
 
+// Matches exactly the canonical form the editor's "Insert video" button
+// writes (insertVideo in PostEditor.tsx) — nothing else. A post's stored
+// Markdown never carries a real embed, just an ordinary link (safe to
+// store, safe to round-trip); this is what turns that one specific link
+// shape into a real, playable embed at render time instead.
+const YOUTUBE_WATCH_URL = /^https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{6,20})$/;
+
+const MARKDOWN_COMPONENTS: Components = {
+  a({ href, children, ...props }) {
+    const match = href ? YOUTUBE_WATCH_URL.exec(href) : null;
+    if (match) {
+      const videoId = match[1];
+      return (
+        <span className="relative my-8 block aspect-video overflow-hidden rounded-2xl bg-black">
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+            title="YouTube video"
+            className="absolute inset-0 size-full border-0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerPolicy="strict-origin-when-cross-origin"
+            allowFullScreen
+          />
+        </span>
+      );
+    }
+    return (
+      <a href={href} {...props}>
+        {children}
+      </a>
+    );
+  },
+};
+
 export default async function BlogPostPage({ params }: RouteParams) {
   const { slug } = await params;
   const post = await getPost(slug);
@@ -100,7 +133,7 @@ export default async function BlogPostPage({ params }: RouteParams) {
         )}
 
         <div className="prose prose-invert max-w-none prose-headings:font-semibold prose-headings:tracking-normal prose-h2:mt-10 prose-h2:border-t prose-h2:border-white/15 prose-h2:pt-8 prose-a:font-semibold prose-a:text-white prose-strong:text-white prose-p:text-white/70 prose-li:text-white/70">
-          <ReactMarkdown>{post.contentMarkdown}</ReactMarkdown>
+          <ReactMarkdown components={MARKDOWN_COMPONENTS}>{post.contentMarkdown}</ReactMarkdown>
         </div>
 
         <footer className="mt-12 space-y-6 border-t border-white/10 pt-8">
