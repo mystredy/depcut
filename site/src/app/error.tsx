@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { isAppSurfacePath } from "@/components/AppSurfaceBackground";
 import { attemptChunkReloadOnce, hasAttemptedChunkReload, isChunkLoadError } from "@/lib/chunkLoadError";
 import { reportSiteError } from "@/lib/reportSiteError";
 
@@ -18,10 +20,21 @@ export default function RootError({
   reset: () => void;
 }) {
   const chunkError = isChunkLoadError(error);
+  const pathname = usePathname();
   // A pure read, captured once on first render, so the very first paint
   // already shows "loading" instead of flashing the crash screen before
   // the effect below kicks off the actual reload.
   const [reloading] = useState(() => chunkError && !hasAttemptedChunkReload());
+
+  // A stale chunk can fail before the route's own layout — and the
+  // AppSurfaceBackground it mounts — ever renders, which unwinds the error
+  // straight past that layout to this boundary instead. Flag the surface
+  // here too, but only on a path that's actually an app surface: this
+  // boundary also catches crashes on the marketing pages, which keep their
+  // fixed cream background.
+  useEffect(() => {
+    if (isAppSurfacePath(pathname)) document.documentElement.classList.add("app-surface");
+  }, [pathname]);
 
   useEffect(() => {
     // A stale chunk reference (this build redeployed since the page — or a

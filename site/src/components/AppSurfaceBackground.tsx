@@ -15,3 +15,18 @@ export function AppSurfaceBackground() {
 
   return null;
 }
+
+const APP_SURFACE_PREFIXES = ["/app", "/admin", "/s", "/depcutvision/settings"];
+
+const underPath = (pathname: string, prefix: string) =>
+  pathname === prefix || pathname.startsWith(`${prefix}/`);
+
+// Every route whose own layout mounts AppSurfaceBackground above — used by the
+// root error boundary (src/app/error.tsx), which has no layout of its own and
+// so can't rely on one of those already having flagged the html element: a
+// stale chunk failing to load can throw before any of those layouts (and the
+// AppSurfaceBackground they mount) ever render, which unwinds the error past
+// them straight to the root boundary.
+export function isAppSurfacePath(pathname: string): boolean {
+  return APP_SURFACE_PREFIXES.some((prefix) => underPath(pathname, prefix));
+}
