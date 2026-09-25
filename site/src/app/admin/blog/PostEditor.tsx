@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { EditorContent, generateJSON, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import TiptapImage from "@tiptap/extension-image";
 import { Markdown, type MarkdownStorage } from "tiptap-markdown";
 import CodeMirror from "@uiw/react-codemirror";
 import { html as htmlLang } from "@codemirror/lang-html";
@@ -117,11 +118,17 @@ const PARAGRAPH_STYLES: { label: string; prefix: string; level: 1 | 2 | 3 | 4 | 
 
 // Shared by the Compose editor and by HTML view's generateJSON parse, so
 // typed HTML is always read into the exact same schema Compose renders with.
+// Image is listed explicitly: StarterKit has no image node on its own, so an
+// <img> typed or pasted into HTML mode had no schema node to parse into and
+// generateJSON silently dropped it — it never made it into the post body at
+// all, in any mode. (The post's own cover image is unrelated: a separate
+// field rendered above the editor, not part of this document.)
 const COMPOSE_EXTENSIONS = [
   StarterKit.configure({
     heading: { levels: [1, 2, 3, 4] },
     link: { openOnClick: false },
   }),
+  TiptapImage,
   Markdown.configure({ html: false }),
 ];
 
