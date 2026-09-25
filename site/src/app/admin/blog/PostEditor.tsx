@@ -699,6 +699,41 @@ export function PostEditor({ postId }: { postId: string | null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [title, slug, excerpt, contentMarkdown, authorName, tags, published, dirty, valid, pending, isLive, knownMissing]);
 
+  // Once a post is live, dirty edits have no autosave safety net at all
+  // (see above) until Update is clicked — so leaving with dirty state is the
+  // one way a real edit silently vanishes. beforeunload only covers closing
+  // the tab or a hard reload; it never fires for the back arrow or a sidebar
+  // link, which just unmount this page client-side, so that needs its own
+  // guard on any in-app link click.
+  useEffect(() => {
+    if (!dirty) return;
+    const warnUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warnUnload);
+    return () => window.removeEventListener("beforeunload", warnUnload);
+  }, [dirty]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const guard = (e: MouseEvent) => {
+      const anchor = (e.target as HTMLElement)?.closest?.("a[href]");
+      const href = anchor?.getAttribute("href");
+      if (!href || href.startsWith("#")) return;
+      const leave = window.confirm(
+        isLive
+          ? "You have unsaved changes that won't be saved until you click Update. Leave anyway?"
+          : "You have unsaved changes. Leave anyway?",
+      );
+      if (!leave) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    document.addEventListener("click", guard, true);
+    return () => document.removeEventListener("click", guard, true);
+  }, [dirty, isLive]);
+
   if (postId && posts.isLoading) {
     return <Skeleton className="h-96 w-full" />;
   }
