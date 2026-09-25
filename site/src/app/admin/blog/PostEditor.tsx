@@ -23,10 +23,12 @@ import {
   Loader2,
   Pencil,
   Quote,
+  Redo2,
   Send,
   Settings,
   Sparkles,
   Trash2,
+  Undo2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -122,14 +124,24 @@ const COMPOSE_EXTENSIONS = [
 function ToolbarButton({
   onClick,
   title,
+  disabled,
   children,
 }: {
   onClick: () => void;
   title: string;
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <Button type="button" size="icon-sm" variant="ghost" title={title} onMouseDown={(e) => e.preventDefault()} onClick={onClick}>
+    <Button
+      type="button"
+      size="icon-sm"
+      variant="ghost"
+      title={title}
+      disabled={disabled}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+    >
       {children}
     </Button>
   );
@@ -287,6 +299,13 @@ export function PostEditor({ postId }: { postId: string | null }) {
       el.setSelectionRange(start, start + core.length);
     });
   };
+
+  // Undo/redo only has a real history to work with in Compose (Tiptap's
+  // built-in History extension, from StarterKit) — Markdown/HTML are plain
+  // controlled textareas with no tracked history, so the buttons are
+  // disabled outside Compose rather than faking it.
+  const undo = () => composeEditor?.chain().focus().undo().run();
+  const redo = () => composeEditor?.chain().focus().redo().run();
 
   // Every toolbar action needs two implementations — Compose drives the
   // Tiptap editor's own commands, Markdown edits the raw text directly.
@@ -632,6 +651,13 @@ export function PostEditor({ postId }: { postId: string | null }) {
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
+            <div className="mx-1 h-4 w-px bg-border" />
+            <ToolbarButton title="Undo" disabled={mode !== "compose"} onClick={undo}>
+              <Undo2 className="size-3.5" />
+            </ToolbarButton>
+            <ToolbarButton title="Redo" disabled={mode !== "compose"} onClick={redo}>
+              <Redo2 className="size-3.5" />
+            </ToolbarButton>
             <div className="mx-1 h-4 w-px bg-border" />
             <DropdownMenu>
               <DropdownMenuTrigger
