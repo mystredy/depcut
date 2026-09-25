@@ -649,99 +649,105 @@ export function PostEditor({ postId }: { postId: string | null }) {
       <div className="flex min-w-0 flex-1 gap-6 pt-3">
         {/* Editor column */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="sticky top-[52px] z-10 flex items-center gap-0.5 overflow-x-auto rounded-xl border bg-muted px-1.5 py-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                title="Editing mode"
-                className="flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-[min(var(--radius-md),12px)] px-1.5 text-foreground outline-none select-none hover:bg-muted-foreground/10"
-              >
-                {mode === "markdown" ? (
-                  <CodeXml className="size-3.5" />
-                ) : mode === "html" ? (
-                  <FileCode className="size-3.5" />
-                ) : (
-                  <Pencil className="size-3.5" />
-                )}
-                <ChevronDown className="size-3" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                <DropdownMenuRadioGroup
-                  value={mode}
-                  onValueChange={(value) => {
-                    const next = value as typeof mode;
-                    // HTML view is a plain textarea, not its own live editor —
-                    // seed it from the Compose doc's current HTML right as we
-                    // switch in, same as Compose itself re-seeds from
-                    // contentMarkdown when its own deps change.
-                    if (next === "html") setHtmlDraft(composeEditor?.getHTML() ?? "");
-                    setMode(next);
-                  }}
+          <div className="sticky top-[52px] z-10 flex items-center gap-0.5 rounded-xl border bg-muted px-1.5 py-1">
+            {/* Formatting controls scroll as one strip on a narrow screen — there's
+                always more of them than a phone-width card fits — while AI and
+                Settings stay fixed at the end, outside the scroll area, so they're
+                reachable without hunting through the strip first. */}
+            <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  title="Editing mode"
+                  className="flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-[min(var(--radius-md),12px)] px-1.5 text-foreground outline-none select-none hover:bg-muted-foreground/10"
                 >
-                  <DropdownMenuRadioItem value="markdown">
-                    <CodeXml className="size-3.5" /> Markdown
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="html">
-                    <FileCode className="size-3.5" /> HTML
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="compose">
-                    <Pencil className="size-3.5" /> Compose
-                  </DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <div className="mx-1 h-4 w-px bg-border" />
-            <ToolbarButton title="Undo" onClick={undo}>
-              <Undo2 className="size-3.5" />
-            </ToolbarButton>
-            <ToolbarButton title="Redo" onClick={redo}>
-              <Redo2 className="size-3.5" />
-            </ToolbarButton>
-            <div className="mx-1 h-4 w-px bg-border" />
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                title="Paragraph style"
-                className="flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-[min(var(--radius-md),12px)] px-2 text-xs font-medium text-foreground outline-none select-none hover:bg-muted-foreground/10"
-              >
-                Paragraph
-                <ChevronDown className="size-3" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                {PARAGRAPH_STYLES.map((style) => (
-                  <DropdownMenuItem
-                    key={style.label}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => applyParagraphStyle(style)}
+                  {mode === "markdown" ? (
+                    <CodeXml className="size-3.5" />
+                  ) : mode === "html" ? (
+                    <FileCode className="size-3.5" />
+                  ) : (
+                    <Pencil className="size-3.5" />
+                  )}
+                  <ChevronDown className="size-3" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuRadioGroup
+                    value={mode}
+                    onValueChange={(value) => {
+                      const next = value as typeof mode;
+                      // HTML view is a plain textarea, not its own live editor —
+                      // seed it from the Compose doc's current HTML right as we
+                      // switch in, same as Compose itself re-seeds from
+                      // contentMarkdown when its own deps change.
+                      if (next === "html") setHtmlDraft(composeEditor?.getHTML() ?? "");
+                      setMode(next);
+                    }}
                   >
-                    {style.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <ToolbarButton title="Quote" onClick={toggleQuote}>
-              <Quote className="size-3.5" />
-            </ToolbarButton>
-            <div className="mx-1 h-4 w-px bg-border" />
-            <ToolbarButton title="Bold" onClick={toggleBold}>
-              <Bold className="size-3.5" />
-            </ToolbarButton>
-            <ToolbarButton title="Italic" onClick={toggleItalic}>
-              <Italic className="size-3.5" />
-            </ToolbarButton>
-            <ToolbarButton title="Link" onClick={insertLink}>
-              <Link2 className="size-3.5" />
-            </ToolbarButton>
-            <div className="mx-1 h-4 w-px bg-border" />
-            <ToolbarButton title="Bullet list" onClick={toggleBulletList}>
-              <List className="size-3.5" />
-            </ToolbarButton>
-            <ToolbarButton title="Numbered list" onClick={toggleOrderedList}>
-              <ListOrdered className="size-3.5" />
-            </ToolbarButton>
-            <div className="flex-1" />
+                    <DropdownMenuRadioItem value="markdown">
+                      <CodeXml className="size-3.5" /> Markdown
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="html">
+                      <FileCode className="size-3.5" /> HTML
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="compose">
+                      <Pencil className="size-3.5" /> Compose
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <div className="mx-1 h-4 w-px bg-border" />
+              <ToolbarButton title="Undo" onClick={undo}>
+                <Undo2 className="size-3.5" />
+              </ToolbarButton>
+              <ToolbarButton title="Redo" onClick={redo}>
+                <Redo2 className="size-3.5" />
+              </ToolbarButton>
+              <div className="mx-1 h-4 w-px bg-border" />
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  title="Paragraph style"
+                  className="flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-[min(var(--radius-md),12px)] px-2 text-xs font-medium text-foreground outline-none select-none hover:bg-muted-foreground/10"
+                >
+                  Paragraph
+                  <ChevronDown className="size-3" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {PARAGRAPH_STYLES.map((style) => (
+                    <DropdownMenuItem
+                      key={style.label}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => applyParagraphStyle(style)}
+                    >
+                      {style.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <ToolbarButton title="Quote" onClick={toggleQuote}>
+                <Quote className="size-3.5" />
+              </ToolbarButton>
+              <div className="mx-1 h-4 w-px bg-border" />
+              <ToolbarButton title="Bold" onClick={toggleBold}>
+                <Bold className="size-3.5" />
+              </ToolbarButton>
+              <ToolbarButton title="Italic" onClick={toggleItalic}>
+                <Italic className="size-3.5" />
+              </ToolbarButton>
+              <ToolbarButton title="Link" onClick={insertLink}>
+                <Link2 className="size-3.5" />
+              </ToolbarButton>
+              <div className="mx-1 h-4 w-px bg-border" />
+              <ToolbarButton title="Bullet list" onClick={toggleBulletList}>
+                <List className="size-3.5" />
+              </ToolbarButton>
+              <ToolbarButton title="Numbered list" onClick={toggleOrderedList}>
+                <ListOrdered className="size-3.5" />
+              </ToolbarButton>
+            </div>
+            <div className="mx-1 h-4 w-px shrink-0 bg-border" />
             <ToolbarButton title="Blog AI" onClick={() => setChatPanelOpen((v) => !v)}>
               <Sparkles className="size-3.5" />
             </ToolbarButton>
-            <div className="mx-1 h-4 w-px bg-border" />
+            <div className="mx-1 h-4 w-px shrink-0 bg-border" />
             <ToolbarButton
               title={settingsVisible ? "Hide post settings" : "Show post settings"}
               onClick={() => setSettingsOverride(!settingsVisible)}
