@@ -56,18 +56,31 @@ function formatDate(d: Date): string {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 }
 
-// Matches exactly the canonical form the editor's "Insert video" button
-// writes (insertVideo in PostEditor.tsx) — nothing else. A post's stored
+// Matches exactly the canonical form the editor's "Insert video" dialog's
+// URL tab writes (VideoInsertDialog.tsx) — nothing else. A post's stored
 // Markdown never carries a real embed, just an ordinary link (safe to
 // store, safe to round-trip); this is what turns that one specific link
 // shape into a real, playable embed at render time instead.
 const YOUTUBE_WATCH_URL = /^https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{6,20})$/;
 
+// Same reasoning, for a self-hosted video (Upload/Generate/Library tabs) —
+// its link is our own video-serving route, so the href itself is already a
+// valid <video> src, no extraction needed.
+function isSelfHostedVideoUrl(href: string): boolean {
+  try {
+    const url = new URL(href, DEPCUT_CANONICAL);
+    if (url.origin !== new URL(DEPCUT_CANONICAL).origin) return false;
+    return /^\/api\/admin\/blog\/[^/]+\/videos\/[^/]+$/.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
 const MARKDOWN_COMPONENTS: Components = {
   a({ href, children, ...props }) {
-    const match = href ? YOUTUBE_WATCH_URL.exec(href) : null;
-    if (match) {
-      const videoId = match[1];
+    const youtubeMatch = href ? YOUTUBE_WATCH_URL.exec(href) : null;
+    if (youtubeMatch) {
+      const videoId = youtubeMatch[1];
       return (
         <span className="relative my-8 block aspect-video overflow-hidden rounded-2xl bg-black">
           <iframe
@@ -80,6 +93,9 @@ const MARKDOWN_COMPONENTS: Components = {
           />
         </span>
       );
+    }
+    if (href && isSelfHostedVideoUrl(href)) {
+      return <video controls className="my-8 w-full rounded-2xl bg-black" src={href} />;
     }
     return (
       <a href={href} {...props}>
