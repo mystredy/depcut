@@ -35,3 +35,23 @@ model BlogPost {
 
   @@index([published, publishedAt])
 }
+
+// One AI chat thread attached to a blog post — the post editor's persistent
+// chat panel, mirroring CutChatThread (prisma/Cut.prisma)'s shape: `data` is
+// an opaque JSON message list the server never parses. Scoped by postId
+// only, not per-admin-user — any super user can pick up any other super
+// user's chat on a post, matching how blog posts are shared admin content
+// rather than single-owner like a CutProject. No FK/cascade for the same
+// reason CutChatThread has none; deleting a post sweeps its threads via
+// DELETE /api/admin/blog/[id] instead.
+model BlogChatThread {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  title     String   @default("New chat")
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([postId, updatedAt])
+}

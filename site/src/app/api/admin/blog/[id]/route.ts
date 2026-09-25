@@ -97,6 +97,9 @@ export const DELETE = withDepCutAuth(async (request, context: RouteContext) => {
   if (existing.hasCoverImage) {
     await del([blogCoverKey(id)]);
   }
+  // BlogChatThread has no FK to sweep it automatically (same deliberately
+  // self-contained style as CutChatThread) — sweep it here instead.
+  await prisma.blogChatThread.deleteMany({ where: { postId: id } });
 
   return NextResponse.json({ ok: true });
 });

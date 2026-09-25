@@ -53,7 +53,8 @@ import {
   useUploadBlogCover,
 } from "@/queries/admin";
 
-import { AiDraftDialog, type AiDraftTarget } from "./AiDraftDialog";
+import { BlogChatPanel } from "./BlogChatPanel";
+import type { BlogEditorActions } from "./aiChat/tools";
 import { TagsInput } from "./TagsInput";
 
 function slugify(title: string): string {
@@ -159,7 +160,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
   // parses into the Compose doc, which re-derives contentMarkdown from it.
   const [mode, setMode] = useState<"compose" | "markdown" | "html">("compose");
   const [htmlDraft, setHtmlDraft] = useState("");
-  const [aiDraftTarget, setAiDraftTarget] = useState<AiDraftTarget | null>(null);
+  const [chatPanelOpen, setChatPanelOpen] = useState(false);
   // null until the user explicitly clicks the gear — until then, the sidebar
   // just follows the live viewport width (see isNarrowViewport above).
   const [settingsOverride, setSettingsOverride] = useState<boolean | null>(null);
@@ -345,49 +346,41 @@ export function PostEditor({ postId }: { postId: string | null }) {
     applyLinePrefix("1. ");
   };
 
-  // Overwrites the title and body with a generated draft, same as typing
-  // them in by hand — contentMarkdown drives Markdown/HTML mode directly,
-  // and Compose needs its own doc pushed too since it only picks up
-  // contentMarkdown on a mode switch (see composeEditor's deps above).
-  const applyAiDraft = (draftResult: { title: string; contentMarkdown: string }) => {
-    setTitle(draftResult.title);
-    if (!slugTouched) setSlug(slugify(draftResult.title));
-    setContentMarkdown(draftResult.contentMarkdown);
-    if (mode === "compose") composeEditor?.commands.setContent(draftResult.contentMarkdown);
-    markDirty();
+  // The blog chat panel's tools mutate the post through these — the exact
+  // same setters manual typing uses (including the title→slug auto-sync and
+  // Compose's own doc needing a separate push, same as html-mode typing
+  // does above), so an AI edit flows through the identical dirty/autosave
+  // path a manual edit does. Never a direct DB write.
+  const blogEditorActions: BlogEditorActions = {
+    setContent: (next) => {
+      setContentMarkdown(next);
+      if (mode === "compose") composeEditor?.commands.setContent(next);
+      markDirty();
+    },
+    setExcerpt: (next) => {
+      setExcerpt(next);
+      markDirty();
+    },
+    setTags: (next) => {
+      setTags(next);
+      markDirty();
+    },
+    setTitle: (next) => {
+      setTitle(next);
+      if (!slugTouched) setSlug(slugify(next));
+      markDirty();
+    },
   };
 
-  // Same as above but leaves the title alone — for "revise the whole post"
-  // (as opposed to "write a new one"), only the body should change.
-  const applyAiDraftContent = (contentMarkdown: string) => {
-    setContentMarkdown(contentMarkdown);
-    if (mode === "compose") composeEditor?.commands.setContent(contentMarkdown);
-    markDirty();
-  };
+  // Snapshotted fresh on every chat turn — what the agent sees of the post
+  // right now, folded into its next message (see useBlogAiChat).
+  const getPostState = () => ({ contentMarkdown, excerpt, published, tags, title });
 
-  // Decides what the AI agent is actually working on, from what's true at
-  // the moment the toolbar button is clicked: a real Compose selection means
-  // "revise this text," an already-written post with nothing selected means
-  // "revise the post," and a blank post means "write one." Not a mode the
-  // user picks — inferred from editor state, the same way clicking Bold
-  // acts on whatever's currently selected.
-  const openAiDraft = () => {
-    if (mode === "compose" && composeEditor) {
-      const { from, to } = composeEditor.state.selection;
-      if (from !== to) {
-        const text = composeEditor.state.doc.textBetween(from, to, "\n");
-        if (text.trim()) {
-          setAiDraftTarget({ kind: "selection", range: { from, to }, text });
-          return;
-        }
-      }
-    }
-    if (contentMarkdown.trim()) {
-      setAiDraftTarget({ kind: "post", text: contentMarkdown });
-      return;
-    }
-    setAiDraftTarget({ kind: "new" });
-  };
+  // Before the first save there's no real post id for chat threads to
+  // attach to, and this component remounts on that first save (see the
+  // autosave effect's own comment below) — so the panel only ever mounts
+  // once a real id exists, from whichever of these two sources has it first.
+  const chatPostId = post?.id ?? (createdOnce ? loadedId : null);
 
   // Title and slug both get a fallback in save() below when empty, so all
   // that's actually required to start saving is some body content.
@@ -510,31 +503,17 @@ export function PostEditor({ postId }: { postId: string | null }) {
   // Autosaves a valid draft shortly after the last keystroke, so nothing is
   // ever lost waiting for a manual save. Once the post is live, this stops —
   // edits sit as "Unsaved" until the author clicks Update, so a live post
-  // never changes on its own mid-edit. Also paused while the AI dialog is
-  // open: a brand-new post's first save navigates from /admin/blog/new to
-  // /admin/blog/[id], which remounts this whole component — firing that
-  // mid-generation would silently close the dialog and drop whatever the
-  // agent was about to hand back before the author ever saw it.
+  // never changes on its own mid-edit. A brand-new post's first save
+  // navigates from /admin/blog/new to /admin/blog/[id], which remounts this
+  // whole component — the chat panel only ever mounts once chatPostId
+  // exists (i.e. after that first save), so this firing mid-chat is not a
+  // concern the way it was for the old one-shot AI dialog.
   useEffect(() => {
-    if (!dirty || !valid || pending || isLive || knownMissing || aiDraftTarget) return;
+    if (!dirty || !valid || pending || isLive || knownMissing) return;
     const timer = setTimeout(save, 1200);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    title,
-    slug,
-    excerpt,
-    contentMarkdown,
-    authorName,
-    tags,
-    published,
-    dirty,
-    valid,
-    pending,
-    isLive,
-    knownMissing,
-    aiDraftTarget,
-  ]);
+  }, [title, slug, excerpt, contentMarkdown, authorName, tags, published, dirty, valid, pending, isLive, knownMissing]);
 
   if (postId && posts.isLoading) {
     return <Skeleton className="h-96 w-full" />;
@@ -551,7 +530,8 @@ export function PostEditor({ postId }: { postId: string | null }) {
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex min-h-0">
+    <div className="flex min-w-0 flex-1 flex-col">
       {/* Top bar — spans the full width above both the editor and the
           settings sidebar, Blogger's own layout. */}
       <div className="sticky top-0 z-20 flex items-center gap-3 bg-background pb-3">
@@ -685,7 +665,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
               <ListOrdered className="size-3.5" />
             </ToolbarButton>
             <div className="flex-1" />
-            <ToolbarButton title="Write with AI" onClick={openAiDraft}>
+            <ToolbarButton title="Blog AI" onClick={() => setChatPanelOpen((v) => !v)}>
               <Sparkles className="size-3.5" />
             </ToolbarButton>
             <div className="mx-1 h-4 w-px bg-border" />
@@ -881,16 +861,25 @@ export function PostEditor({ postId }: { postId: string | null }) {
         </aside>
         )}
       </div>
+    </div>
 
-      {aiDraftTarget && (
-        <AiDraftDialog
-          target={aiDraftTarget}
-          composeEditor={composeEditor}
-          onApplyNew={applyAiDraft}
-          onApplyContent={applyAiDraftContent}
-          onClose={() => setAiDraftTarget(null)}
+    {chatPanelOpen && (
+      chatPostId ? (
+        <BlogChatPanel
+          postId={chatPostId}
+          actions={blogEditorActions}
+          getPostState={getPostState}
+          onClose={() => setChatPanelOpen(false)}
         />
-      )}
+      ) : (
+        <aside className="flex min-h-0 w-[340px] shrink-0 flex-col items-center justify-center gap-3 border-l border-border bg-card p-6 text-center">
+          <p className="text-xs text-muted-foreground">Save this post once to start chatting.</p>
+          <Button type="button" variant="outline" size="sm" onClick={() => setChatPanelOpen(false)}>
+            Close
+          </Button>
+        </aside>
+      )
+    )}
     </div>
   );
 }

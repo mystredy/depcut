@@ -26,6 +26,7 @@ export const adminChatTemplatesQueryKey = ["admin", "chat-templates"] as const;
 export const adminAiEnginesQueryKey = ["admin", "ai-engines"] as const;
 export const adminLegalPagesQueryKey = ["admin", "legal-pages"] as const;
 export const adminBlogPostsQueryKey = ["admin", "blog-posts"] as const;
+export const adminBlogChatThreadsQueryKey = (postId: string) => ["admin", "blog-chat-threads", postId] as const;
 export const adminOnboardingSlidesQueryKey = ["admin", "onboarding-slides"] as const;
 export const adminFinanceSettingsQueryKey = ["admin", "finance-settings"] as const;
 export const adminTelegramNotificationsQueryKey = ["admin", "telegram-notifications"] as const;
@@ -2192,38 +2193,49 @@ export function useRemoveBlogCover() {
   });
 }
 
-export type BlogDraftContext = { type: "selection" | "post"; text: string };
-export type BlogDraftResult =
-  | { kind: "answer"; answer: string }
-  | { kind: "draft"; title?: string; contentMarkdown: string };
+export type BlogChatThreadSummary = { id: string; title: string; createdAt: string; updatedAt: string };
+export type BlogChatThreadFull = BlogChatThreadSummary & { data: unknown };
 
-// The editor's "Write with AI" action. "write" generates a title + body from
-// a prompt when there's nothing to work from yet, or revises `context.text`
-// (a selection or the whole post) when there is. "ask" answers a question
-// against `context.text` instead — nothing to apply, just a read. Not cached
-// under the posts query key since it never touches a stored post itself.
-export function useGenerateBlogDraft() {
+// The post editor's chat panel — thread history metadata for the "Past
+// threads" flyout. See api/admin/blog/[id]/chats/route.ts.
+export function useBlogChatThreads(postId: string | null) {
+  return useQuery({
+    enabled: Boolean(postId),
+    queryFn: () => apiFetch<{ threads: BlogChatThreadSummary[] }>(`/api/admin/blog/${postId}/chats`),
+    queryKey: adminBlogChatThreadsQueryKey(postId ?? ""),
+  });
+}
+
+// One thread's full transcript, fetched lazily when a thread is picked from
+// history (the list above only ever hands back metadata).
+export async function fetchBlogChatThread(postId: string, chatId: string): Promise<BlogChatThreadFull> {
+  const { thread } = await apiFetch<{ thread: BlogChatThreadFull }>(`/api/admin/blog/${postId}/chats/${chatId}`);
+  return thread;
+}
+
+// Saved once per settled chat turn — id is client-generated (minted when
+// "New chat" is clicked), so this is always the row's first write too.
+export function useSaveBlogChatThread(postId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      prompt,
-      action,
-      context,
-    }: {
-      prompt: string;
-      action: "ask" | "write";
-      context?: BlogDraftContext;
-    }): Promise<BlogDraftResult> => {
-      const result = await apiFetch<{ answer?: string; title?: string; contentMarkdown?: string }>(
-        "/api/admin/blog/ai-draft",
-        {
-          body: JSON.stringify({ action, context, prompt }),
-          method: "POST",
-        },
-      );
-      if (action === "ask") {
-        return { answer: result.answer ?? "", kind: "answer" };
-      }
-      return { contentMarkdown: result.contentMarkdown ?? "", kind: "draft", title: result.title };
+    mutationFn: ({ chatId, title, data }: { chatId: string; title?: string; data: unknown }) =>
+      apiFetch<{ ok: boolean }>(`/api/admin/blog/${postId}/chats/${chatId}`, {
+        body: JSON.stringify({ data, title }),
+        method: "PUT",
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminBlogChatThreadsQueryKey(postId) });
+    },
+  });
+}
+
+export function useDeleteBlogChatThread(postId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (chatId: string) =>
+      apiFetch<{ ok: boolean }>(`/api/admin/blog/${postId}/chats/${chatId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminBlogChatThreadsQueryKey(postId) });
     },
   });
 }
