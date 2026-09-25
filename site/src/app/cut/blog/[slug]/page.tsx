@@ -66,7 +66,7 @@ export default async function BlogPostPage({ params }: RouteParams) {
 
   return (
     <BlogShell>
-      <article className="mx-auto box-border w-full max-w-5xl px-6 py-12 md:px-10 md:py-20">
+      <article className="mx-auto box-border w-full max-w-5xl px-3 py-12 md:px-10 md:py-20">
         <header className="mb-10">
           <h1 className="text-[clamp(32px,5.5vw,52px)] font-semibold leading-[1.05] tracking-[-0.01em] text-white">
             {post.title}
