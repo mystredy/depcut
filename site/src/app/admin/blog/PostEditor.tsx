@@ -8,8 +8,9 @@ import { EditorContent, generateJSON, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TiptapImage from "@tiptap/extension-image";
 import { Markdown, type MarkdownStorage } from "tiptap-markdown";
-import CodeMirror from "@uiw/react-codemirror";
+import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { html as htmlLang } from "@codemirror/lang-html";
+import { redo as cmRedo, undo as cmUndo } from "@codemirror/commands";
 import { githubDark, githubLight } from "@uiw/codemirror-theme-github";
 import {
   ArrowLeft,
@@ -172,6 +173,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
   const setCoverFromUrl = useSetBlogCoverFromUrl();
   const importYoutube = useImportBlogYoutube();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const codeMirrorRef = useRef<ReactCodeMirrorRef>(null);
   const coverInput = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState("");
@@ -313,12 +315,35 @@ export function PostEditor({ postId }: { postId: string | null }) {
     });
   };
 
-  // Undo/redo only has a real history to work with in Compose (Tiptap's
-  // built-in History extension, from StarterKit) — Markdown/HTML are plain
-  // controlled textareas with no tracked history, so the buttons are
-  // disabled outside Compose rather than faking it.
-  const undo = () => composeEditor?.chain().focus().undo().run();
-  const redo = () => composeEditor?.chain().focus().redo().run();
+  // Each mode keeps its own history, so undo/redo goes to whichever one is
+  // actually on screen: Compose has Tiptap's built-in History (from
+  // StarterKit); HTML is a real CodeMirror instance with its own; Markdown
+  // is a plain <textarea>, which still has the browser's native undo stack
+  // — execCommand is deprecated but remains the only way to reach it
+  // programmatically (there's no non-deprecated API for a plain textarea's
+  // history), so a toolbar button can drive it the same way Cmd+Z would.
+  const undo = () => {
+    if (mode === "compose") {
+      composeEditor?.chain().focus().undo().run();
+    } else if (mode === "html") {
+      const view = codeMirrorRef.current?.view;
+      if (view) cmUndo(view);
+    } else {
+      textareaRef.current?.focus();
+      document.execCommand("undo");
+    }
+  };
+  const redo = () => {
+    if (mode === "compose") {
+      composeEditor?.chain().focus().redo().run();
+    } else if (mode === "html") {
+      const view = codeMirrorRef.current?.view;
+      if (view) cmRedo(view);
+    } else {
+      textareaRef.current?.focus();
+      document.execCommand("redo");
+    }
+  };
 
   // Every toolbar action needs two implementations — Compose drives the
   // Tiptap editor's own commands, Markdown edits the raw text directly.
@@ -665,10 +690,10 @@ export function PostEditor({ postId }: { postId: string | null }) {
               </DropdownMenuContent>
             </DropdownMenu>
             <div className="mx-1 h-4 w-px bg-border" />
-            <ToolbarButton title="Undo" disabled={mode !== "compose"} onClick={undo}>
+            <ToolbarButton title="Undo" onClick={undo}>
               <Undo2 className="size-3.5" />
             </ToolbarButton>
-            <ToolbarButton title="Redo" disabled={mode !== "compose"} onClick={redo}>
+            <ToolbarButton title="Redo" onClick={redo}>
               <Redo2 className="size-3.5" />
             </ToolbarButton>
             <div className="mx-1 h-4 w-px bg-border" />
@@ -739,6 +764,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
           ) : mode === "html" ? (
             <div className="overflow-hidden rounded-xl border py-2 [&_.cm-editor]:bg-transparent [&_.cm-gutters]:bg-transparent">
               <CodeMirror
+                ref={codeMirrorRef}
                 value={htmlDraft}
                 onChange={(next) => {
                   setHtmlDraft(next);
