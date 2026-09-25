@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, ChevronDown, History, Loader2, Plus, Sparkles, Trash2, Wrench, X } from "lucide-react";
+import Markdown from "react-markdown";
 
+import { baseMarkdownComponents } from "@/cut/components/markdownComponents";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -230,11 +232,11 @@ function BlogChatSession({
               {m.text && (
                 <div
                   className={cn(
-                    "max-w-[85%] rounded-xl px-2.5 py-1.5 text-[12.5px] leading-relaxed whitespace-pre-wrap",
+                    "ai-md max-w-[85%] rounded-xl px-2.5 py-1.5 text-[12.5px] leading-relaxed",
                     m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
                   )}
                 >
-                  {m.text}
+                  <Markdown components={baseMarkdownComponents}>{m.text}</Markdown>
                 </div>
               )}
               {m.role === "assistant" &&
