@@ -39,8 +39,16 @@ export async function apiFetch<T>(
     } catch {
       // Non-JSON error body; fall back to status text.
     }
+    // Most routes in this codebase put their human-readable text in `error`
+    // (it doubles as the machine code below) rather than `message` — only a
+    // minority set both. `message` and the first validation issue still win
+    // when present; `error` is the fallback ahead of the generic status
+    // text, not the other way around, or most server errors would render as
+    // "Bad Request" (or blank — HTTP/2 responses often carry no status text
+    // at all, which is what surfaced this: a real server message reaching
+    // the client as an empty string).
     throw new ApiError(
-      body.message ?? body.issues?.[0]?.message ?? response.statusText,
+      body.message ?? body.issues?.[0]?.message ?? body.error ?? response.statusText,
       response.status,
       body.error ?? null,
     );
