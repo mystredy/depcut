@@ -640,7 +640,7 @@ export function ProjectsHome() {
 
   const renderGallery = (shown: { p: ProjectSummary; r: Residency }[]) => (
     <Marquee
-      className="grid min-h-[42vh] grid-cols-[repeat(auto-fill,minmax(100px,1fr))] content-start gap-5"
+      className="grid min-h-[42vh] grid-cols-[repeat(auto-fill,minmax(100px,1fr))] content-start gap-3 sm:gap-5"
       selected={selected}
       setSelected={setSelected}
     >
@@ -846,7 +846,7 @@ export function ProjectsHome() {
         void importFilesAsProjects(e.dataTransfer.files, surfaceDropFolder);
       }}
     >
-    <div className="relative mx-auto w-full max-w-6xl px-10 py-9">
+    <div className="relative mx-auto w-full max-w-6xl px-3 py-9 sm:px-10">
       {importing > 0 && (
         <div className="pointer-events-none fixed right-6 bottom-6 z-50 flex items-center gap-2 rounded-full bg-foreground/90 px-3.5 py-2.5 text-background shadow-lg">
           <Loader2 className="size-5 animate-spin" />
