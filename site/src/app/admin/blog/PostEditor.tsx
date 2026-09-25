@@ -752,7 +752,6 @@ export function PostEditor({ postId }: { postId: string | null }) {
                 }}
                 extensions={[htmlLang()]}
                 theme={codeEditorDark ? githubDark : githubLight}
-                basicSetup={{ foldGutter: false }}
                 placeholder="Write HTML…"
                 minHeight="60vh"
                 className="text-sm"
