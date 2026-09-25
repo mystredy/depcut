@@ -649,7 +649,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
       <div className="flex min-w-0 flex-1 gap-6 pt-3">
         {/* Editor column */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="sticky top-[52px] z-10 flex items-center gap-0.5 rounded-xl border bg-muted px-1.5 py-1">
+          <div className="sticky top-[52px] z-10 flex items-center gap-0.5 overflow-x-auto rounded-xl border bg-muted px-1.5 py-1">
             <DropdownMenu>
               <DropdownMenuTrigger
                 title="Editing mode"
