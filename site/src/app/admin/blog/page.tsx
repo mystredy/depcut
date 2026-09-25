@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, Copy, Eye, Newspaper, Pencil, Plus, Tag, Trash2 } from "lucide-react";
+import { Check, Copy, Eye, EllipsisVertical, Newspaper, Pencil, Plus, Tag, Trash2 } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -12,7 +12,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -220,30 +225,6 @@ function PostRow({ post: p, onDelete }: { post: AdminBlogPost; onDelete: () => v
               </Button>
             </>
           )}
-          <Popover
-            open={tagOpen}
-            onOpenChange={(o) => {
-              setTagOpen(o);
-              if (o) setTagsValue(p.tags);
-            }}
-          >
-            <PopoverTrigger
-              render={
-                <Button size="icon-sm" variant="ghost" title="Tags">
-                  <Tag className="size-3.5" />
-                </Button>
-              }
-            />
-            <PopoverContent align="end" className="w-64 p-2">
-              <p className="px-1 pb-1.5 text-xs font-medium text-muted-foreground">Tag this post</p>
-              <TagsInput
-                value={tagsValue}
-                onChange={saveTags}
-                placeholder="Make Money, Tech…"
-                className="text-xs"
-              />
-            </PopoverContent>
-          </Popover>
           <Link
             href={`/admin/blog/${p.id}`}
             title="Edit"
@@ -251,11 +232,39 @@ function PostRow({ post: p, onDelete }: { post: AdminBlogPost; onDelete: () => v
           >
             <Pencil className="size-3.5" />
           </Link>
-          <Button size="icon-sm" variant="ghost" title="Delete" onClick={onDelete}>
-            <Trash2 className="size-3.5 text-destructive" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button size="icon-sm" variant="ghost" title="More">
+                  <EllipsisVertical className="size-3.5" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => {
+                  setTagsValue(p.tags);
+                  setTagOpen(true);
+                }}
+              >
+                <Tag className="size-3.5" /> Edit tags
+              </DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onClick={onDelete}>
+                <Trash2 className="size-3.5" /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
+
+      <Dialog open={tagOpen} onOpenChange={setTagOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Tag this post</DialogTitle>
+          </DialogHeader>
+          <TagsInput value={tagsValue} onChange={saveTags} placeholder="Make Money, Tech…" />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
