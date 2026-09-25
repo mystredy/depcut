@@ -2185,6 +2185,19 @@ export function useUploadBlogCover() {
   });
 }
 
+export function useSetBlogCoverFromUrl() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, url }: { id: string; url: string }) =>
+      apiFetch<{ ok: true }>(`/api/admin/blog/${id}/cover`, {
+        body: JSON.stringify({ url }),
+        headers: { "Content-Type": "application/json" },
+        method: "PUT",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminBlogPostsQueryKey }),
+  });
+}
+
 export function useRemoveBlogCover() {
   const queryClient = useQueryClient();
   return useMutation({

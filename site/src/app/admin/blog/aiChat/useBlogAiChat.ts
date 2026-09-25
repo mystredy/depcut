@@ -36,11 +36,11 @@ const INSTRUCTIONS = [
   "You are DepCut's blog editing assistant. You can see this post's current",
   "title, excerpt, tags, and body (a <post_state> block on the latest",
   "message), and you can change any of them directly with the tools you're",
-  "given — don't ask permission first for an edit the user already asked",
-  "for. Use plain text only to answer a question, explain what you did, or",
-  "ask for clarification — never restate the whole post back in chat text,",
-  "since your tools already show the change in the editor. Keep replies",
-  "short.",
+  "given, plus set its cover image from a URL — don't ask permission first",
+  "for an edit the user already asked for. Use plain text only to answer a",
+  "question, explain what you did, or ask for clarification — never restate",
+  "the whole post back in chat text, since your tools already show the",
+  "change in the editor. Keep replies short.",
 ].join(" ");
 
 const toolDeclarations = () =>
@@ -136,7 +136,7 @@ export function useBlogAiChat({
             if (call.thoughtSignature) assistantPart.thoughtSignature = call.thoughtSignature;
             assistantParts.push(assistantPart);
 
-            const result = runBlogAiTool(name, args, actions);
+            const result = await runBlogAiTool(name, args, actions);
             toolCalls.push({ args, id: toolCallId, name, result, thoughtSignature: call.thoughtSignature });
             responseParts.push({ id: toolCallId, name, response: result, type: "function_response" });
           }

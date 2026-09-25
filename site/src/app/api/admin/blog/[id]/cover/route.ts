@@ -45,16 +45,45 @@ export const PUT = withDepCutAuth(async (request, context: RouteContext) => {
   if (!existing) return notFoundResponse();
 
   const contentType = request.headers.get("content-type")?.split(";")[0].trim() ?? "";
-  if (!ALLOWED_TYPES.has(contentType)) {
-    return NextResponse.json({ error: "Unsupported image type." }, { status: 415 });
+
+  // The blog AI agent sets a cover by URL rather than a file picker, so this
+  // verb also takes {url} as JSON — fetched here rather than client-side to
+  // dodge CORS, then validated exactly like a direct upload.
+  let data: Buffer;
+  let imageContentType: string;
+  if (contentType === "application/json") {
+    const body = (await request.json().catch(() => null)) as { url?: unknown } | null;
+    const url = typeof body?.url === "string" ? body.url : "";
+    if (!url) return NextResponse.json({ error: "url is required." }, { status: 400 });
+
+    let fetched: Response;
+    try {
+      fetched = await fetch(url);
+    } catch {
+      return NextResponse.json({ error: "Could not fetch that URL." }, { status: 400 });
+    }
+    if (!fetched.ok) {
+      return NextResponse.json({ error: `Fetching that URL failed (${fetched.status}).` }, { status: 400 });
+    }
+
+    imageContentType = fetched.headers.get("content-type")?.split(";")[0].trim() ?? "";
+    if (!ALLOWED_TYPES.has(imageContentType)) {
+      return NextResponse.json({ error: "That URL isn't a PNG, WebP, or JPEG image." }, { status: 415 });
+    }
+    data = Buffer.from(await fetched.arrayBuffer());
+  } else {
+    if (!ALLOWED_TYPES.has(contentType)) {
+      return NextResponse.json({ error: "Unsupported image type." }, { status: 415 });
+    }
+    imageContentType = contentType;
+    data = Buffer.from(await request.arrayBuffer());
   }
 
-  const data = Buffer.from(await request.arrayBuffer());
   if (data.byteLength === 0 || data.byteLength > MAX_BYTES) {
     return NextResponse.json({ error: "Image too large." }, { status: 413 });
   }
 
-  await putObject(blogCoverKey(id), data, contentType);
+  await putObject(blogCoverKey(id), data, imageContentType);
   await prisma.blogPost.update({ data: { hasCoverImage: true }, where: { id } });
 
   return NextResponse.json({ ok: true });
