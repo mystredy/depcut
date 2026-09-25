@@ -169,6 +169,14 @@ export const studioBackgroundKey = (studioId: string) => `studio/${studioId}/bac
  * tells a caller whether one has ever been uploaded. */
 export const blogCoverKey = (postId: string) => `blog/${postId}/cover`;
 
+/** One of a blog post's inline body images — unlike the single cover slot,
+ * a post can hold many of these, each its own id, with no DB row tracking
+ * them: a post's set of content images is exactly whatever URLs its own
+ * contentMarkdown references (![alt](url)), so there's nothing else to keep
+ * in sync. */
+export const blogContentImageKey = (postId: string, imageId: string) =>
+  `blog/${postId}/content/${imageId}`;
+
 export function presignPut(key: string, mime: string): Promise<string> {
   return getSignedUrl(
     r2(),

@@ -2228,6 +2228,55 @@ export function useRemoveBlogCover() {
   });
 }
 
+export type BlogContentImageInput =
+  | { kind: "file"; file: File }
+  | { kind: "url"; url: string }
+  | { kind: "base64"; dataBase64: string; contentType: string };
+
+// The Insert Image popover's every source (paste a URL, upload a file, an
+// AI-generated result, a media library pick) lands here — see
+// api/admin/blog/[id]/images/route.ts for why they all funnel through one
+// route. No query invalidation: unlike the cover, nothing in the post row
+// tracks these; the returned url is just inserted into the editor's own
+// content, which the normal autosave already covers.
+export function useAddBlogContentImage() {
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: BlogContentImageInput }) => {
+      if (input.kind === "file") {
+        return apiFetch<{ id: string; url: string }>(`/api/admin/blog/${id}/images`, {
+          body: input.file,
+          headers: { "Content-Type": input.file.type },
+          method: "POST",
+        });
+      }
+      const body =
+        input.kind === "url"
+          ? { url: input.url }
+          : { contentType: input.contentType, dataBase64: input.dataBase64 };
+      return apiFetch<{ id: string; url: string }>(`/api/admin/blog/${id}/images`, {
+        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+    },
+  });
+}
+
+// A standalone inference call — no CutProject needed, unlike Cut's own
+// image generation (which uploads the result into a project's media
+// store). The bytes come back as base64; the caller re-hosts them through
+// useAddBlogContentImage to get a durable url.
+export function useGenerateBlogImage() {
+  return useMutation({
+    mutationFn: ({ prompt }: { prompt: string }) =>
+      apiFetch<{ outputs: { dataBase64?: string; contentType?: string }[] }>("/api/inference/assets", {
+        body: JSON.stringify({ kind: "image", prompt }),
+        headers: { "Content-Type": "application/json", "x-depcut-client-id": "depcut-blog" },
+        method: "POST",
+      }),
+  });
+}
+
 export type BlogChatThreadSummary = { id: string; title: string; createdAt: string; updatedAt: string };
 export type BlogChatThreadFull = BlogChatThreadSummary & { data: unknown };
 

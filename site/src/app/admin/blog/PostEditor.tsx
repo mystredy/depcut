@@ -39,6 +39,7 @@ import {
   Strikethrough,
   Trash2,
   Undo2,
+  Video,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -71,6 +72,7 @@ import {
 } from "@/queries/admin";
 
 import { BlogChatPanel } from "./BlogChatPanel";
+import { ImageInsertDialog } from "./ImageInsertDialog";
 import type { BlogEditorActions } from "./aiChat/tools";
 import { TagsInput } from "./TagsInput";
 
@@ -93,6 +95,26 @@ function fallbackSlug(content: string): string {
   const base = slugify(content.trim().slice(0, 60)) || "post";
   const suffix = Math.random().toString(36).slice(2, 7);
   return `${base}-${suffix}`;
+}
+
+// Recognizes the handful of real YouTube URL shapes (watch, youtu.be short
+// link, /embed/, /shorts/) and pulls out just the video id — null for
+// anything else, including a non-YouTube URL. Matches the same id shape
+// the public page's embed check (BlogPostPage) uses.
+function extractYoutubeId(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  const host = parsed.hostname.replace(/^www\./, "");
+  if (host === "youtu.be") return parsed.pathname.slice(1) || null;
+  if (host !== "youtube.com" && host !== "m.youtube.com") return null;
+  if (parsed.pathname === "/watch") return parsed.searchParams.get("v");
+  if (parsed.pathname.startsWith("/embed/")) return parsed.pathname.split("/")[2] ?? null;
+  if (parsed.pathname.startsWith("/shorts/")) return parsed.pathname.split("/")[2] ?? null;
+  return null;
 }
 
 // Below this width there's not enough room for the editor and a 288px
@@ -225,6 +247,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
   const [mdPast, setMdPast] = useState<string[]>([]);
   const [mdFuture, setMdFuture] = useState<string[]>([]);
   const [chatPanelOpen, setChatPanelOpen] = useState(false);
+  const [imageDialogOpen, setImageDialogOpen] = useState(false);
   // null until the user explicitly clicks the gear — until then, the sidebar
   // just follows the live viewport width (see isNarrowViewport above).
   const [settingsOverride, setSettingsOverride] = useState<boolean | null>(null);
@@ -521,14 +544,44 @@ export function PostEditor({ postId }: { postId: string | null }) {
     insertAtCursor("\n\n---\n\n");
   };
 
-  const insertImage = () => {
-    const url = window.prompt("Image URL", "https://");
-    if (!url) return;
+  // The toolbar button just opens ImageInsertDialog (URL/upload/generate/
+  // library) — this is what its onInsert callback actually does with the
+  // URL it ends up with, whichever tab produced it.
+  const insertImageUrl = (url: string) => {
     if (mode === "compose" && composeEditor) {
       composeEditor.chain().focus().setImage({ src: url }).run();
       return;
     }
     insertAtCursor(`![](${url})`);
+  };
+
+  // No custom node, no markdown-storage plumbing: a video is just a link
+  // whose text says so — always safe to store (Markdown already handles a
+  // plain link natively) and always safe to round-trip. The public page
+  // (BlogPostPage) is what turns a link matching this exact canonical form
+  // into a real embed at render time; here it only needs to look right.
+  const insertVideo = () => {
+    const raw = window.prompt("YouTube video URL", "https://");
+    if (!raw) return;
+    const videoId = extractYoutubeId(raw.trim());
+    if (!videoId) {
+      window.alert("That doesn't look like a YouTube video URL.");
+      return;
+    }
+    const canonicalUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const label = "▶ Watch on YouTube";
+    if (mode === "compose" && composeEditor) {
+      composeEditor
+        .chain()
+        .focus()
+        .insertContent({
+          type: "paragraph",
+          content: [{ type: "text", marks: [{ type: "link", attrs: { href: canonicalUrl } }], text: label }],
+        })
+        .run();
+      return;
+    }
+    insertAtCursor(`\n\n[${label}](${canonicalUrl})\n\n`);
   };
 
   const insertEmoji = (emoji: string) => {
@@ -929,8 +982,11 @@ export function PostEditor({ postId }: { postId: string | null }) {
               <ToolbarButton title="Link" onClick={insertLink}>
                 <Link2 className="size-3.5" />
               </ToolbarButton>
-              <ToolbarButton title="Insert image" onClick={insertImage}>
+              <ToolbarButton title="Insert image" onClick={() => setImageDialogOpen(true)}>
                 <ImagePlus className="size-3.5" />
+              </ToolbarButton>
+              <ToolbarButton title="Insert video" onClick={insertVideo}>
+                <Video className="size-3.5" />
               </ToolbarButton>
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -1183,6 +1239,13 @@ export function PostEditor({ postId }: { postId: string | null }) {
         </aside>
       )
     )}
+
+    <ImageInsertDialog
+      open={imageDialogOpen}
+      onOpenChange={setImageDialogOpen}
+      postId={post?.id ?? null}
+      onInsert={insertImageUrl}
+    />
     </div>
   );
 }
