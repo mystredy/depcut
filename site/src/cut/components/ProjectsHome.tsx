@@ -640,7 +640,7 @@ export function ProjectsHome() {
 
   const renderGallery = (shown: { p: ProjectSummary; r: Residency }[]) => (
     <Marquee
-      className="grid min-h-[42vh] grid-cols-[repeat(auto-fill,minmax(100px,1fr))] content-start gap-3 sm:gap-5"
+      className="grid min-h-[42vh] grid-cols-[repeat(auto-fill,minmax(100px,1fr))] content-start gap-1 sm:gap-5"
       selected={selected}
       setSelected={setSelected}
     >
