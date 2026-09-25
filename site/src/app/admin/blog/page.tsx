@@ -161,30 +161,20 @@ function PostRow({ post: p, onDelete }: { post: AdminBlogPost; onDelete: () => v
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{p.title}</p>
-          <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs">
-            <span className="flex items-center gap-1">
-              {p.published ? (
-                <span className="font-medium text-emerald-600 dark:text-emerald-400">Published</span>
-              ) : (
-                <span className="font-medium text-amber-600 dark:text-amber-400">Draft</span>
-              )}
-              <span className="text-muted-foreground">
-                ·{" "}
-                {new Date(p.published && p.publishedAt ? p.publishedAt : p.updatedAt).toLocaleDateString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
-              </span>
+          <p className="mt-0.5 flex items-center gap-1 text-xs whitespace-nowrap">
+            {p.published ? (
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">Published</span>
+            ) : (
+              <span className="font-medium text-amber-600 dark:text-amber-400">Draft</span>
+            )}
+            <span className="text-muted-foreground">
+              ·{" "}
+              {new Date(p.published && p.publishedAt ? p.publishedAt : p.updatedAt).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
             </span>
-            {p.tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-full border px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
-              >
-                {tag}
-              </span>
-            ))}
           </p>
           <p className="mt-0.5 truncate text-[11px] text-muted-foreground/60">/blog/{p.slug}</p>
         </div>
