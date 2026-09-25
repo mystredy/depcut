@@ -49,6 +49,10 @@ export const GET = async (request: Request, context: RouteContext) => {
       "Content-Length": String(object.contentLength),
       "Content-Type": object.contentType,
       "X-Content-Type-Options": "nosniff",
+      // A 206 with no Content-Range is an invalid partial response — see
+      // the cover-image route's same fix for how this actually breaks a
+      // real <img> load (Safari range-requests it and rejects the result).
+      ...(object.contentRange ? { "Content-Range": object.contentRange } : {}),
     },
   });
 };

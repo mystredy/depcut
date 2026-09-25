@@ -28,6 +28,12 @@ export const GET = async (request: Request, context: RouteContext) => {
       "Content-Length": String(object.contentLength),
       "Content-Type": object.contentType,
       "X-Content-Type-Options": "nosniff",
+      // A 206 with no Content-Range is an invalid partial response — Safari
+      // (the one browser that actually range-requests a plain <img>, for a
+      // large JPEG like a cover photo) rejects it outright and shows the
+      // broken-image icon instead of the picture. object.status is only
+      // ever 206 when getObjectRange already computed this.
+      ...(object.contentRange ? { "Content-Range": object.contentRange } : {}),
     },
   });
 };
