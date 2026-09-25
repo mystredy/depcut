@@ -4,13 +4,13 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { EditorContent, generateJSON, useEditor } from "@tiptap/react";
+import { EditorContent, generateJSON, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TiptapImage from "@tiptap/extension-image";
 import { Markdown, type MarkdownStorage } from "tiptap-markdown";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { html as htmlLang } from "@codemirror/lang-html";
-import { redo as cmRedo, undo as cmUndo } from "@codemirror/commands";
+import { redo as cmRedo, redoDepth, undo as cmUndo, undoDepth } from "@codemirror/commands";
 import { githubDark, githubLight } from "@uiw/codemirror-theme-github";
 import {
   ArrowLeft,
@@ -201,6 +201,19 @@ export function PostEditor({ postId }: { postId: string | null }) {
   // parses into the Compose doc, which re-derives contentMarkdown from it.
   const [mode, setMode] = useState<"compose" | "markdown" | "html">("compose");
   const [htmlDraft, setHtmlDraft] = useState("");
+  // CodeMirror's own history, tracked separately from Compose's — reset to
+  // false/false on every mode switch since the CodeMirror instance itself
+  // remounts fresh each time (it only renders while mode === "html"), so a
+  // stale true from a previous visit to this mode never lingers.
+  const [htmlCanUndo, setHtmlCanUndo] = useState(false);
+  const [htmlCanRedo, setHtmlCanRedo] = useState(false);
+  // The Markdown textarea's undo/redo used to ride on the browser's own
+  // native history via execCommand — which works for performing the action,
+  // but has no reliable, standard way to ask "is there anything to undo?"
+  // across browsers. This is a real (small) history stack instead: one
+  // snapshot per edit, so canUndo/canRedo are exact, not guessed.
+  const [mdPast, setMdPast] = useState<string[]>([]);
+  const [mdFuture, setMdFuture] = useState<string[]>([]);
   const [chatPanelOpen, setChatPanelOpen] = useState(false);
   // null until the user explicitly clicks the gear — until then, the sidebar
   // just follows the live viewport width (see isNarrowViewport above).
@@ -266,6 +279,19 @@ export function PostEditor({ postId }: { postId: string | null }) {
     [mode, loadedId],
   );
 
+  // Tiptap's own History extension (bundled in StarterKit) tracks whether
+  // there's anything to undo/redo, but reading editor.can() once wouldn't
+  // stay current as the user types — useEditorState subscribes to the
+  // editor's transactions and re-renders only when this selected slice
+  // actually changes.
+  const composeHistory = useEditorState({
+    editor: composeEditor,
+    selector: (snapshot) => ({
+      canRedo: snapshot.editor?.can().redo() ?? false,
+      canUndo: snapshot.editor?.can().undo() ?? false,
+    }),
+  });
+
   // Seeds the form once the real post arrives — guarded so a background
   // refetch (e.g. after the tag popover saves elsewhere) never clobbers
   // whatever's mid-edit here.
@@ -294,8 +320,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
     const stripped = line.replace(/^(#{1,6}\s+|>\s+)/, "");
     const nextLine = prefix + stripped;
     const next = value.slice(0, lineStart) + nextLine + value.slice(lineEnd);
-    setContentMarkdown(next);
-    markDirty();
+    recordMarkdownEdit(next);
     requestAnimationFrame(() => {
       el.focus();
       const pos = lineStart + nextLine.length;
@@ -316,8 +341,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
     const trailing = raw.slice(leading.length).match(/\s*$/)?.[0] ?? "";
     const core = raw.slice(leading.length, raw.length - trailing.length) || placeholder;
     const next = value.slice(0, s) + leading + before + core + after + trailing + value.slice(e);
-    setContentMarkdown(next);
-    markDirty();
+    recordMarkdownEdit(next);
     requestAnimationFrame(() => {
       el.focus();
       const start = s + leading.length + before.length;
@@ -332,8 +356,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
     if (!el) return;
     const { selectionStart: s, selectionEnd: e, value } = el;
     const next = value.slice(0, s) + text + value.slice(e);
-    setContentMarkdown(next);
-    markDirty();
+    recordMarkdownEdit(next);
     requestAnimationFrame(() => {
       el.focus();
       const pos = s + text.length;
@@ -341,13 +364,36 @@ export function PostEditor({ postId }: { postId: string | null }) {
     });
   };
 
+  // The Markdown textarea's own undo/redo — one snapshot per edit. Called
+  // from the textarea's onChange (a fresh entry pushed before applying the
+  // new value) and from the toolbar buttons below.
+  const recordMarkdownEdit = (next: string) => {
+    setMdPast((past) => [...past, contentMarkdown]);
+    setMdFuture([]);
+    setContentMarkdown(next);
+    markDirty();
+  };
+  const markdownUndo = () => {
+    if (mdPast.length === 0) return;
+    const previous = mdPast[mdPast.length - 1];
+    setMdPast((past) => past.slice(0, -1));
+    setMdFuture((future) => [...future, contentMarkdown]);
+    setContentMarkdown(previous);
+    markDirty();
+  };
+  const markdownRedo = () => {
+    if (mdFuture.length === 0) return;
+    const next = mdFuture[mdFuture.length - 1];
+    setMdFuture((future) => future.slice(0, -1));
+    setMdPast((past) => [...past, contentMarkdown]);
+    setContentMarkdown(next);
+    markDirty();
+  };
+
   // Each mode keeps its own history, so undo/redo goes to whichever one is
   // actually on screen: Compose has Tiptap's built-in History (from
   // StarterKit); HTML is a real CodeMirror instance with its own; Markdown
-  // is a plain <textarea>, which still has the browser's native undo stack
-  // — execCommand is deprecated but remains the only way to reach it
-  // programmatically (there's no non-deprecated API for a plain textarea's
-  // history), so a toolbar button can drive it the same way Cmd+Z would.
+  // is the stack above.
   const undo = () => {
     if (mode === "compose") {
       composeEditor?.chain().focus().undo().run();
@@ -356,7 +402,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
       if (view) cmUndo(view);
     } else {
       textareaRef.current?.focus();
-      document.execCommand("undo");
+      markdownUndo();
     }
   };
   const redo = () => {
@@ -367,9 +413,13 @@ export function PostEditor({ postId }: { postId: string | null }) {
       if (view) cmRedo(view);
     } else {
       textareaRef.current?.focus();
-      document.execCommand("redo");
+      markdownRedo();
     }
   };
+  const canUndo =
+    mode === "compose" ? (composeHistory?.canUndo ?? false) : mode === "html" ? htmlCanUndo : mdPast.length > 0;
+  const canRedo =
+    mode === "compose" ? (composeHistory?.canRedo ?? false) : mode === "html" ? htmlCanRedo : mdFuture.length > 0;
 
   // Every toolbar action needs two implementations — Compose drives the
   // Tiptap editor's own commands, Markdown edits the raw text directly.
@@ -745,8 +795,16 @@ export function PostEditor({ postId }: { postId: string | null }) {
                       // HTML view is a plain textarea, not its own live editor —
                       // seed it from the Compose doc's current HTML right as we
                       // switch in, same as Compose itself re-seeds from
-                      // contentMarkdown when its own deps change.
-                      if (next === "html") setHtmlDraft(composeEditor?.getHTML() ?? "");
+                      // contentMarkdown when its own deps change. Its CodeMirror
+                      // instance only exists while mode === "html" (unmounted
+                      // otherwise), so its history is always fresh on the way
+                      // in — reset the tracked can-undo/can-redo to match before
+                      // the first onUpdate fires.
+                      if (next === "html") {
+                        setHtmlDraft(composeEditor?.getHTML() ?? "");
+                        setHtmlCanUndo(false);
+                        setHtmlCanRedo(false);
+                      }
                       setMode(next);
                     }}
                   >
@@ -763,10 +821,10 @@ export function PostEditor({ postId }: { postId: string | null }) {
                 </DropdownMenuContent>
               </DropdownMenu>
               <div className="mx-1 h-4 w-px bg-border" />
-              <ToolbarButton title="Undo" onClick={undo}>
+              <ToolbarButton title="Undo" disabled={!canUndo} onClick={undo}>
                 <Undo2 className="size-3.5" />
               </ToolbarButton>
-              <ToolbarButton title="Redo" onClick={redo}>
+              <ToolbarButton title="Redo" disabled={!canRedo} onClick={redo}>
                 <Redo2 className="size-3.5" />
               </ToolbarButton>
               <div className="mx-1 h-4 w-px bg-border" />
@@ -887,6 +945,10 @@ export function PostEditor({ postId }: { postId: string | null }) {
                     // last valid value until a keystroke parses cleanly.
                   }
                 }}
+                onUpdate={(viewUpdate) => {
+                  setHtmlCanUndo(undoDepth(viewUpdate.state) > 0);
+                  setHtmlCanRedo(redoDepth(viewUpdate.state) > 0);
+                }}
                 extensions={[htmlLang()]}
                 theme={codeEditorDark ? githubDark : githubLight}
                 placeholder="Write HTML…"
@@ -899,10 +961,7 @@ export function PostEditor({ postId }: { postId: string | null }) {
               <textarea
                 ref={textareaRef}
                 value={contentMarkdown}
-                onChange={(e) => {
-                  setContentMarkdown(e.target.value);
-                  markDirty();
-                }}
+                onChange={(e) => recordMarkdownEdit(e.target.value)}
                 placeholder="Write in Markdown…"
                 className="min-h-[60vh] w-full resize-none border-0 bg-transparent font-mono text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/40"
               />
