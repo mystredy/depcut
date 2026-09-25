@@ -20,18 +20,23 @@ import {
   CloudOff,
   CodeXml,
   FileCode,
+  ImagePlus,
   ImageUp,
   Italic,
   Link2,
   List,
   ListOrdered,
   Loader2,
+  Minus,
   Pencil,
   Quote,
   Redo2,
+  RemoveFormatting,
   Send,
   Settings,
+  Smile,
   Sparkles,
+  Strikethrough,
   Trash2,
   Undo2,
 } from "lucide-react";
@@ -116,6 +121,11 @@ const PARAGRAPH_STYLES: { label: string; prefix: string; level: 1 | 2 | 3 | 4 | 
   { label: "Subheading", prefix: "### ", level: 3 },
   { label: "Minor heading", prefix: "#### ", level: 4 },
 ];
+
+// A small curated set rather than a full picker library — plain Unicode
+// characters, so they insert as ordinary text in every mode (Compose,
+// Markdown source, HTML source) with nothing to serialize or parse.
+const EMOJI_CHOICES = ["😀", "😂", "😍", "👍", "🎉", "🔥", "❤️", "✨", "😢", "🙌", "💡", "✅"];
 
 // Shared by the Compose editor and by HTML view's generateJSON parse, so
 // typed HTML is always read into the exact same schema Compose renders with.
@@ -315,6 +325,22 @@ export function PostEditor({ postId }: { postId: string | null }) {
     });
   };
 
+  // Drops fresh text in at the caret — an emoji, an image markdown link, a
+  // horizontal rule — rather than wrapping or replacing whatever's selected.
+  const insertAtCursor = (text: string) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const { selectionStart: s, selectionEnd: e, value } = el;
+    const next = value.slice(0, s) + text + value.slice(e);
+    setContentMarkdown(next);
+    markDirty();
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = s + text.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
+
   // Each mode keeps its own history, so undo/redo goes to whichever one is
   // actually on screen: Compose has Tiptap's built-in History (from
   // StarterKit); HTML is a real CodeMirror instance with its own; Markdown
@@ -405,6 +431,48 @@ export function PostEditor({ postId }: { postId: string | null }) {
       return;
     }
     applyLinePrefix("1. ");
+  };
+
+  const toggleStrike = () => {
+    if (mode === "compose" && composeEditor) {
+      composeEditor.chain().focus().toggleStrike().run();
+      return;
+    }
+    wrapSelection("~~", "~~", "strikethrough text");
+  };
+
+  const insertHorizontalRule = () => {
+    if (mode === "compose" && composeEditor) {
+      composeEditor.chain().focus().setHorizontalRule().run();
+      return;
+    }
+    insertAtCursor("\n\n---\n\n");
+  };
+
+  const insertImage = () => {
+    const url = window.prompt("Image URL", "https://");
+    if (!url) return;
+    if (mode === "compose" && composeEditor) {
+      composeEditor.chain().focus().setImage({ src: url }).run();
+      return;
+    }
+    insertAtCursor(`![](${url})`);
+  };
+
+  const insertEmoji = (emoji: string) => {
+    if (mode === "compose" && composeEditor) {
+      composeEditor.chain().focus().insertContent(emoji).run();
+      return;
+    }
+    insertAtCursor(emoji);
+  };
+
+  // Strips marks (bold, italic, strikethrough, links…) and block formatting
+  // (headings, quotes) back to plain paragraphs. Only meaningful against
+  // Tiptap's own rich-text doc, so it's Compose-only — raw Markdown/HTML
+  // source has nothing analogous to "clear formatting" without deleting text.
+  const clearFormatting = () => {
+    composeEditor?.chain().focus().unsetAllMarks().clearNodes().run();
   };
 
   // The blog chat panel's tools mutate the post through these — the exact
@@ -732,15 +800,52 @@ export function PostEditor({ postId }: { postId: string | null }) {
               <ToolbarButton title="Italic" onClick={toggleItalic}>
                 <Italic className="size-3.5" />
               </ToolbarButton>
+              <ToolbarButton title="Strikethrough" onClick={toggleStrike}>
+                <Strikethrough className="size-3.5" />
+              </ToolbarButton>
+              <ToolbarButton
+                title="Clear formatting"
+                disabled={mode !== "compose"}
+                onClick={clearFormatting}
+              >
+                <RemoveFormatting className="size-3.5" />
+              </ToolbarButton>
+              <div className="mx-1 h-4 w-px bg-border" />
               <ToolbarButton title="Link" onClick={insertLink}>
                 <Link2 className="size-3.5" />
               </ToolbarButton>
+              <ToolbarButton title="Insert image" onClick={insertImage}>
+                <ImagePlus className="size-3.5" />
+              </ToolbarButton>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  title="Insert emoji"
+                  className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-[min(var(--radius-md),12px)] text-foreground outline-none select-none hover:bg-muted-foreground/10"
+                >
+                  <Smile className="size-3.5" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="grid w-auto grid-cols-6 gap-0.5 p-1.5">
+                  {EMOJI_CHOICES.map((emoji) => (
+                    <DropdownMenuItem
+                      key={emoji}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => insertEmoji(emoji)}
+                      className="flex size-8 items-center justify-center px-0 py-0 text-base"
+                    >
+                      {emoji}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <div className="mx-1 h-4 w-px bg-border" />
               <ToolbarButton title="Bullet list" onClick={toggleBulletList}>
                 <List className="size-3.5" />
               </ToolbarButton>
               <ToolbarButton title="Numbered list" onClick={toggleOrderedList}>
                 <ListOrdered className="size-3.5" />
+              </ToolbarButton>
+              <ToolbarButton title="Horizontal rule" onClick={insertHorizontalRule}>
+                <Minus className="size-3.5" />
               </ToolbarButton>
             </div>
             <div className="mx-1 h-4 w-px shrink-0 bg-border" />
