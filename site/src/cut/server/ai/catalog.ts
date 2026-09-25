@@ -105,7 +105,19 @@ Time math (get this right):
 - timeline_t = clip.start + (source_t − clip.in) / clip.speed, valid while source_t is inside [in, out]. Each watch result's clip block carries this formula with the real numbers filled in.
 - The same source can appear in several clips — map per clip.
 
-Cutting speech well: pace is part of the message. Keep a beat of the speaker's own pause between sentences (~0.3s) and a slightly longer one between thoughts (~0.5s) — shorten a long pause to that beat instead of deleting it, and speech butted directly together reads as rushed. Cut loose and let refine_speech_cuts set the breath at each edge. Prefer split_at + delete_item, then place_clip to close the gap (a beat of black may be wanted — ask the cut, not the tool); trim_clip only tightens a clip's edges.`,
+Cutting speech well: pace is part of the message. Keep a beat of the speaker's own pause between sentences (~0.3s) and a slightly longer one between thoughts (~0.5s) — shorten a long pause to that beat instead of deleting it, and speech butted directly together reads as rushed. Cut loose and let refine_speech_cuts set the breath at each edge. Prefer split_at + delete_item, then place_clip to close the gap (a beat of black may be wanted — ask the cut, not the tool); trim_clip only tightens a clip's edges.
+Alternating between two performances of the same song on matching lyrics (a cover vs the official video, a duet, two covers) is its own recipe — read the lyric-sync-cut skill.`,
+
+  "lyric-sync-cut": `# Lyric-synced comparison cuts
+For "sync this cover to the official video", "cut between the two so they alternate on the same lyric" — a duet-style comparison edit between two performances of the same song (a fan cover vs the official music video, two different covers). No dedicated tool for this: it's an ordinary alternating build on track 0 once you know where the lyrics land in each source.
+
+1. Both performances must already be project assets — import_url or have the user attach them before you start.
+2. Build your own lyric map for each source by ear, not by guessing: listen_audio(asset_id, from?, to?) in ~20–30s stretches across the whole source, noting (lyric line, source-seconds) as you go. The two recordings drift in tempo against each other, so match segments by lyric TEXT between the two maps, never by wall-clock position — and never invent a line you didn't actually hear.
+3. Pick cut points on lyric lines both sources share, each segment at least as long as asked (default ~5s), alternating which source is "up," end to end through the requested section. watch_video the shot around a candidate cut to confirm it doesn't land mid-motion.
+4. Build it in order: for each segment, add_clip the asset (appended at the end) then trim_clip its in/out to that source's window for that lyric — a clip's timeline length is (out-in)/speed, so it lands right after the previous segment with no gap to close.
+5. Audio: decide which source's sound plays under each segment (usually whichever is "up") and set_clip_muted the other for that span — or, if the user wants one continuous bed (e.g. keep the original song's audio the whole way through), mute every clip from the other source instead.
+6. Two unrelated sources rarely share a frame size or crop — set_framing (fill + pan) per clip so both sides fill the project frame consistently.
+7. Refine by ear: listen_audio across each cut point; a clipped word means the trim landed mid-syllable — nudge in/out a few frames and recheck.`,
 
   "transitions-and-fades": `# Transitions, animations, looks & fades
 Route the ask to the right feature:
