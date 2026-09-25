@@ -56,7 +56,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { isDark, useTheme } from "@/cut/components/ThemeProvider";
+import { authClient } from "@/lib/auth-client";
 import { ApiError } from "@/queries/apiClient";
+import { useAccountProfile, visibleName } from "@/queries/accountProfile";
 import {
   adminBlogPostsQueryKey,
   useAdminBlogPosts,
@@ -182,9 +184,17 @@ export function PostEditor({ postId }: { postId: string | null }) {
   const removeCover = useRemoveBlogCover();
   const setCoverFromUrl = useSetBlogCoverFromUrl();
   const importYoutube = useImportBlogYoutube();
+  const { data: session } = authClient.useSession();
+  const accountProfile = useAccountProfile();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const codeMirrorRef = useRef<ReactCodeMirrorRef>(null);
   const coverInput = useRef<HTMLInputElement>(null);
+  // Applied at most once, the first time the signed-in account's name is
+  // known — a brand-new post's Author field defaults to it, but never
+  // fights the author if they've since typed something (including clearing
+  // it back to blank) or if this is an existing post loading its own saved
+  // authorName.
+  const authorDefaultAppliedRef = useRef(false);
 
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -308,6 +318,18 @@ export function PostEditor({ postId }: { postId: string | null }) {
       setLoadedId(post.id);
     }
   }, [postId, post, loadedId]);
+
+  // Defaults a new, unsaved post's Author field to whoever's writing it —
+  // most posts are written by the person creating them, so this saves
+  // retyping a name that was empty (and showing only as placeholder text)
+  // by default.
+  useEffect(() => {
+    if (postId || authorDefaultAppliedRef.current || authorName || !session) return;
+    const name = visibleName(accountProfile.data, session.user.name);
+    if (!name) return;
+    setAuthorName(name);
+    authorDefaultAppliedRef.current = true;
+  }, [postId, session, accountProfile.data, authorName]);
 
   const applyLinePrefix = (prefix: string) => {
     const el = textareaRef.current;
