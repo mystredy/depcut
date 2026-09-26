@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 
+import { AI_TOOLS } from "@/cut/server/ai/catalog";
 import { apiFetch } from "@/queries/apiClient";
 import type { AdminProjectChatThread, AdminProjectDoc } from "@/queries/admin";
 
@@ -18,17 +19,43 @@ const BASE_INSTRUCTIONS = [
   "You are helping a DepCut admin write a reusable \"skill\" — a markdown",
   "playbook the Cut video editor's own AI agent reads before working in an",
   "area it's unsure about (see list_skills/read_skill in its tool list).",
-  "You're given one real project's edit log (every add/move/trim/delete a",
-  "person or the agent made, in order, with timestamps) and every AI chat",
-  "thread that project ever had, below. Study the actual pattern in them —",
-  "what the person kept redoing, in what order, and why (their own chat",
-  "messages often say why) — and propose a skill: a short name (kebab-case)",
-  "and step-by-step instructions written the way the existing skills in",
-  "cut/server/ai/catalog.ts read (imperative, concrete tool names, no fluff).",
-  "Ask the admin questions when the pattern is ambiguous rather than",
-  "guessing. When they're happy with a draft, give it back as a fenced code",
-  "block so it's easy to copy into the skill form.",
+  "You're given the Cut agent's full tool catalog, every skill it can",
+  "already read, one real project's edit log (every add/move/trim/delete a",
+  "person or the agent made, in order, with timestamps), and every AI chat",
+  "thread that project ever had — all below. Study the actual pattern in the",
+  "log and chats — what the person kept redoing, in what order, and why",
+  "(their own chat messages often say why) — and propose a skill: a short",
+  "name (kebab-case) and step-by-step instructions written the way the",
+  "existing skills read (imperative, concrete tool names FROM THE CATALOG",
+  "BELOW ONLY — never invent a tool that isn't listed there). Check the",
+  "existing skills first: if one already covers this, say so and propose",
+  "refining it (same name) instead of a near-duplicate. Ask the admin",
+  "questions when the pattern is ambiguous rather than guessing. When",
+  "they're happy with a draft, give it back as a fenced code block so it's",
+  "easy to copy into the skill form.",
 ].join(" ");
+
+/** Cut's whole tool catalog, name + description only (no schemas — the
+ * builder isn't calling them, just needs to reference real names). Static
+ * and small enough to inline every turn rather than fetch. */
+const toolCatalogText = AI_TOOLS.map((t) => `- ${t.name}: ${t.description}`).join("\n");
+
+// The current full skill set (built-in + admin-authored, already merged —
+// see resolveSkills) — fetched once per page load and reused across every
+// project the admin picks, same route the Cut agent itself reads.
+let skillCatalog: Promise<{ index: string[]; skills: Record<string, string> }> | null = null;
+
+async function loadSkillCatalogText(): Promise<string> {
+  skillCatalog ??= apiFetch<{ index: string[]; skills: Record<string, string> }>("/api/agent-skills?agent=cut").catch(
+    (e) => {
+      skillCatalog = null;
+      throw e;
+    },
+  );
+  const { index, skills } = await skillCatalog;
+  if (index.length === 0) return "(none yet)";
+  return index.map((name) => `### ${name}\n${skills[name]}`).join("\n\n");
+}
 
 function buildProjectReference(project: AdminProjectDoc, threads: AdminProjectChatThread[]): string {
   const doc = project.doc as { editLog?: { t: number; summary: string }[] };
@@ -86,11 +113,20 @@ export function useSkillBuilderChat({
 
       void (async () => {
         try {
+          const skillsText = await loadSkillCatalogText();
+          const instructions = [
+            BASE_INSTRUCTIONS,
+            "\n## Cut agent's tool catalog",
+            toolCatalogText,
+            "\n## Skills the Cut agent can already read",
+            skillsText,
+            "\n" + buildProjectReference(project, threads),
+          ].join("\n");
           const body = await apiFetch<ResponseBody>("/api/admin/agent-skills/builder-chat", {
             body: JSON.stringify({
               depcutProvider,
               input: history.map((m) => ({ content: [{ text: m.text }], role: m.role })),
-              instructions: `${BASE_INSTRUCTIONS}\n\n${buildProjectReference(project, threads)}`,
+              instructions,
               model,
             }),
             method: "POST",
