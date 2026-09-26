@@ -106,6 +106,17 @@ function overlayLabel(o: Overlay): string {
   return `title "${trunc(o.text)}"`;
 }
 
+/** Same as overlayLabel but never quotes a title's own text — used to prefix
+ * a CHANGE line, where a text edit already states the new text in the change
+ * itself; quoting it again in the label read as "title \"X\": text changed
+ * to \"X\"", the same string twice. */
+function overlayKindLabel(o: Overlay): string {
+  if (o.kind === "shape") return `${o.shape} shape`;
+  if (o.kind === "sticker") return "sticker";
+  if (o.kind === "effect") return `${o.effect} effect`;
+  return "title";
+}
+
 function diffOverlays(before: Overlay[], after: Overlay[]): string[] {
   const lines: string[] = [];
   const beforeMap = byId(before);
@@ -126,9 +137,9 @@ function diffOverlays(before: Overlay[], after: Overlay[]): string[] {
     const pText = overlayText(p);
     const oText = overlayText(o);
     if (pText !== null && oText !== null && pText !== oText) {
-      changes.push(`text changed to "${trunc(oText)}"`);
+      changes.push(`text changed from "${trunc(pText)}" to "${trunc(oText)}"`);
     }
-    if (changes.length > 0) lines.push(`${overlayLabel(o)}: ${changes.join("; ")}`);
+    if (changes.length > 0) lines.push(`${overlayKindLabel(o)}: ${changes.join("; ")}`);
   }
   return lines;
 }
