@@ -8,6 +8,25 @@ export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+// Super-user only: read any account's project doc in full — currently used
+// by the AI Skill Builder (/admin/ai/skills/cut) to pull a chosen project's
+// edit log as reference material while drafting a skill. No ownership
+// constraint, same as DELETE below.
+export const GET = withDepCutAuth(async (request, context: RouteContext) => {
+  if (!(await isDepCutSuperUser(request.depcut.userId))) {
+    return NextResponse.json({ error: "Forbidden", message: "Only super users can view this." }, { status: 403 });
+  }
+  const { id } = await context.params;
+  const project = await prisma.cutProject.findUnique({
+    select: { id: true, name: true, userId: true, doc: true, updatedAt: true },
+    where: { id },
+  });
+  if (!project) {
+    return NextResponse.json({ error: "Not found", message: "Project not found." }, { status: 404 });
+  }
+  return NextResponse.json({ project });
+});
+
 // Super-user only: delete any account's project — the Content → Projects
 // list's right-click "Delete project" action, for moderating a report
 // without going through the owner. Reuses deleteProjectCascade verbatim

@@ -156,6 +156,17 @@ const SECTIONS: NavSection[] = [
   { kind: "leaf", id: "support-requests", label: "Support Requests", icon: HelpCircle, color: "text-red-500", href: "/admin/support" },
   {
     kind: "group",
+    id: "ai-skills",
+    label: "AI Skills",
+    icon: Sparkles,
+    color: "text-violet-500",
+    children: [
+      { label: "Cut Agent", href: "/admin/ai/skills/cut", icon: Clapperboard, color: "text-violet-500" },
+      { label: "Blog Agent", href: "/admin/ai/skills/blog", icon: Newspaper, color: "text-orange-500" },
+    ],
+  },
+  {
+    kind: "group",
     id: "chat-settings",
     label: "Chat Settings",
     icon: MessageSquare,

@@ -28,6 +28,9 @@ export const adminAiEnginesQueryKey = ["admin", "ai-engines"] as const;
 export const adminLegalPagesQueryKey = ["admin", "legal-pages"] as const;
 export const adminBlogPostsQueryKey = ["admin", "blog-posts"] as const;
 export const adminBlogChatThreadsQueryKey = (postId: string) => ["admin", "blog-chat-threads", postId] as const;
+export const adminAgentSkillsQueryKey = (agent: "cut" | "blog") => ["admin", "agent-skills", agent] as const;
+export const adminProjectDocQueryKey = (id: string) => ["admin", "project-doc", id] as const;
+export const adminProjectChatsQueryKey = (id: string) => ["admin", "project-chats", id] as const;
 export const adminOnboardingSlidesQueryKey = ["admin", "onboarding-slides"] as const;
 export const adminFinanceSettingsQueryKey = ["admin", "finance-settings"] as const;
 export const adminTelegramNotificationsQueryKey = ["admin", "telegram-notifications"] as const;
@@ -2412,5 +2415,93 @@ export function useUpdateOnboardingSlide() {
         method: "PATCH",
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminOnboardingSlidesQueryKey }),
+  });
+}
+
+// AI Skills — /admin/ai/skills. Admin-authored skills for the Cut editor
+// agent and the blog admin agent, merged server-side (resolveSkills) with
+// Cut's own code-shipped skills at read time; this CRUD only ever touches
+// the admin-authored rows.
+export type AdminAgentSkill = {
+  id: string;
+  agent: "cut" | "blog";
+  name: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function useAdminAgentSkills(agent: "cut" | "blog") {
+  return useQuery({
+    queryFn: () => apiFetch<{ skills: AdminAgentSkill[] }>(`/api/admin/agent-skills?agent=${agent}`),
+    queryKey: adminAgentSkillsQueryKey(agent),
+  });
+}
+
+export function useCreateAgentSkill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { agent: "cut" | "blog"; name: string; body: string }) =>
+      apiFetch<{ skill: AdminAgentSkill }>("/api/admin/agent-skills", {
+        body: JSON.stringify(input),
+        method: "POST",
+      }),
+    onSuccess: (_data, variables) =>
+      queryClient.invalidateQueries({ queryKey: adminAgentSkillsQueryKey(variables.agent) }),
+  });
+}
+
+export function useUpdateAgentSkill(agent: "cut" | "blog") {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: { id: string; name?: string; body?: string }) =>
+      apiFetch<{ skill: AdminAgentSkill }>(`/api/admin/agent-skills/${id}`, {
+        body: JSON.stringify(input),
+        method: "PATCH",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminAgentSkillsQueryKey(agent) }),
+  });
+}
+
+export function useDeleteAgentSkill(agent: "cut" | "blog") {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<{ ok: true }>(`/api/admin/agent-skills/${id}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminAgentSkillsQueryKey(agent) }),
+  });
+}
+
+// The Skill Builder's reference material — a chosen Cut project's full doc
+// (edit log included) and every AI chat thread ever synced for it.
+export type AdminProjectDoc = {
+  id: string;
+  name: string;
+  userId: string;
+  doc: Record<string, unknown>;
+  updatedAt: string;
+};
+
+export function useAdminProjectDoc(id: string | null) {
+  return useQuery({
+    enabled: !!id,
+    queryFn: () => apiFetch<{ project: AdminProjectDoc }>(`/api/admin/content/projects/${id}`),
+    queryKey: adminProjectDocQueryKey(id ?? ""),
+  });
+}
+
+export type AdminProjectChatThread = {
+  id: string;
+  projectId: string;
+  userId: string;
+  data: unknown;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export function useAdminProjectChats(id: string | null) {
+  return useQuery({
+    enabled: !!id,
+    queryFn: () => apiFetch<{ threads: AdminProjectChatThread[] }>(`/api/admin/content/projects/${id}/chats`),
+    queryKey: adminProjectChatsQueryKey(id ?? ""),
   });
 }
