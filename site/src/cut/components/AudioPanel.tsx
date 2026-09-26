@@ -21,7 +21,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AudioModelPicker } from "@/cut/components/AudioModelPicker";
 import { DictationControl } from "@/cut/components/MicDictation";
+import { ElevenLabsVoicePicker } from "@/cut/components/ElevenLabsVoicePicker";
 import { PillSelect } from "@/cut/components/PillSelect";
 import { SectionTitle } from "@/cut/components/SectionTitle";
 import { SubTabs } from "@/cut/components/SubTabs";
@@ -41,6 +43,7 @@ import {
 import { LiveElapsed } from "@/cut/components/Elapsed";
 import { clearAssetDrag, setAssetDragData } from "@/cut/lib/assetDrag";
 import { MUSIC_VARIANTS, synthesizeMusic, type MusicVariant } from "@/cut/lib/audioGen";
+import { DEFAULT_AUDIO_MODEL, resolveAudioModel, type AudioModel } from "@/cut/lib/audioModels";
 import { draggingRef, hasRefDrag } from "@/cut/lib/assetRef";
 import { useMusicGen } from "@/cut/lib/musicGen";
 import { STOCK_MUSIC } from "@/cut/lib/stockMusicManifest";
@@ -51,7 +54,7 @@ import { enrichAsset } from "@/cut/lib/media";
 import { usePreviewAudio } from "@/cut/lib/previewAudio";
 import { useEditor } from "@/cut/lib/store";
 import { formatTime } from "@/cut/lib/time";
-import { NoCreditsError, synthesizeSpeech } from "@/cut/lib/tts";
+import { NoCreditsError, synthesizeElevenLabsSpeech, synthesizeSpeech } from "@/cut/lib/tts";
 import { useLocalPref } from "@/cut/lib/uiState";
 import { DUCK_DEFAULT } from "@/cut/lib/voiceover";
 import { useSpeakerVoice, useSpeechLanguage, VoicePicker } from "@/cut/components/VoicePicker";
@@ -362,6 +365,8 @@ function MusicGenerator({ projectId }: { projectId: string }) {
 function VoiceGenerator({ projectId }: { projectId: string }) {
   const voice = useSpeakerVoice();
   const language = useSpeechLanguage();
+  const [audioModel, setAudioModel] = useState<AudioModel>(() => resolveAudioModel(DEFAULT_AUDIO_MODEL));
+  const [elevenVoiceId, setElevenVoiceId] = useState<string | null>(null);
   const [script, setScript] = useState("");
   const [direction, setDirection] = useState("");
   // How many syntheses are in flight — several can run at once, so the button
@@ -385,6 +390,10 @@ function VoiceGenerator({ projectId }: { projectId: string }) {
   const generate = async () => {
     const text = script.trim();
     if (!text) return;
+    if (audioModel.provider === "elevenlabs" && !elevenVoiceId) {
+      setError({ text: "Choose a voice first." });
+      return;
+    }
     setPending((p) => p + 1);
     // The Audio rail tile spins while this runs — the tab is often closed
     // before the voice lands.
@@ -398,12 +407,20 @@ function VoiceGenerator({ projectId }: { projectId: string }) {
       const lead = text.replace(/\s+/g, " ").trim().slice(0, 200);
       // synthesizeSpeech reads the direction for a "say it in X" ask and
       // translates the script into that language before speaking it.
-      const { asset } = await synthesizeSpeech(projectId, [{ text, at: 0 }], {
-        voice,
-        direction,
-        language,
-        name: `AI voice — ${lead}`,
-      });
+      // ElevenLabs speaks the script exactly as written — no direction/language.
+      const { asset } =
+        audioModel.provider === "elevenlabs"
+          ? await synthesizeElevenLabsSpeech(projectId, text, {
+              model: audioModel.model,
+              voiceId: elevenVoiceId!,
+              name: `AI voice — ${lead}`,
+            })
+          : await synthesizeSpeech(projectId, [{ text, at: 0 }], {
+              voice,
+              direction,
+              language,
+              name: `AI voice — ${lead}`,
+            });
       // The Audio tab is the only surface that badges its own rail icon: a
       // voiceover the user generated here, finishing while they stepped away,
       // rides a count. Chat- and scene-made voiceovers never badge — the chat
@@ -427,70 +444,82 @@ function VoiceGenerator({ projectId }: { projectId: string }) {
 
   return (
     <div className="voice-generator flex flex-col gap-3.5">
-      {/* Voice settings first — pick how the voice sounds, then script it. */}
-      <VoicePicker
-        direction={direction}
-        onError={(e) => fail(e, "Could not play the sample.")}
-      />
+      {/* Model first — it decides which voice picker (and settings) show below. */}
+      <AudioModelPicker model={audioModel} onChange={setAudioModel} />
 
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-1">
-          <SectionTitle>Voice direction</SectionTitle>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger
-                className="voice-direction-info grid size-4 place-items-center text-muted-foreground transition-colors hover:text-foreground"
-                aria-label="About voice direction"
+      {audioModel.provider === "elevenlabs" ? (
+        <ElevenLabsVoicePicker
+          voiceId={elevenVoiceId}
+          onChange={(v) => setElevenVoiceId(v.id)}
+          onError={(e) => fail(e, "Could not load ElevenLabs voices.")}
+        />
+      ) : (
+        <VoicePicker
+          direction={direction}
+          onError={(e) => fail(e, "Could not play the sample.")}
+        />
+      )}
+
+      {audioModel.provider === "gemini" && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-1">
+            <SectionTitle>Voice direction</SectionTitle>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger
+                  className="voice-direction-info grid size-4 place-items-center text-muted-foreground transition-colors hover:text-foreground"
+                  aria-label="About voice direction"
+                >
+                  <Info className="size-3.5" />
+                </TooltipTrigger>
+                <TooltipContent side="right" className="max-w-60">
+                  Optional. Tell the voice how to deliver the lines — its tone, pace, and energy, or
+                  ask it to speak in another language.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <div className="relative">
+            <textarea
+              ref={directionInput}
+              rows={2}
+              className="voice-direction min-h-[52px] w-full resize-y rounded-lg border border-input bg-transparent py-2 pr-9 pl-2.5 text-[12.5px] leading-relaxed outline-none focus:border-ring"
+              placeholder="Say warmly, like an old friend"
+              value={direction}
+              onChange={(e) => setDirection(e.target.value)}
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="voice-direction-presets absolute top-1.5 right-1 grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Direction presets"
               >
-                <Info className="size-3.5" />
-              </TooltipTrigger>
-              <TooltipContent side="right" className="max-w-60">
-                Optional. Tell the voice how to deliver the lines — its tone, pace, and energy, or
-                ask it to speak in another language.
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-        <div className="relative">
-          <textarea
-            ref={directionInput}
-            rows={2}
-            className="voice-direction min-h-[52px] w-full resize-y rounded-lg border border-input bg-transparent py-2 pr-9 pl-2.5 text-[12.5px] leading-relaxed outline-none focus:border-ring"
-            placeholder="Say warmly, like an old friend"
-            value={direction}
-            onChange={(e) => setDirection(e.target.value)}
-          />
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              className="voice-direction-presets absolute top-1.5 right-1 grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label="Direction presets"
-            >
-              <ChevronDown className="size-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              {DIRECTION_PRESETS.map((p) => (
-                <DropdownMenuItem key={p.label} onClick={() => setDirection(p.text)}>
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-[12px] font-medium">{p.label}</span>
-                    <span className="truncate text-[11px] text-muted-foreground">{p.text}</span>
-                  </div>
-                  {direction === p.text && <Check className="size-3.5 shrink-0" />}
+                <ChevronDown className="size-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                {DIRECTION_PRESETS.map((p) => (
+                  <DropdownMenuItem key={p.label} onClick={() => setDirection(p.text)}>
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <span className="text-[12px] font-medium">{p.label}</span>
+                      <span className="truncate text-[11px] text-muted-foreground">{p.text}</span>
+                    </div>
+                    {direction === p.text && <Check className="size-3.5 shrink-0" />}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => {
+                    setDirection("");
+                    // The menu hands focus back to the trigger on close; take it after.
+                    setTimeout(() => directionInput.current?.focus(), 0);
+                  }}
+                >
+                  <span className="text-[12px] font-medium">Custom…</span>
                 </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  setDirection("");
-                  // The menu hands focus back to the trigger on close; take it after.
-                  setTimeout(() => directionInput.current?.focus(), 0);
-                }}
-              >
-                <span className="text-[12px] font-medium">Custom…</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="h-px shrink-0 bg-border" />
 
