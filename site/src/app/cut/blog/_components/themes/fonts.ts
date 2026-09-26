@@ -4,62 +4,51 @@
 // not the Cut editor. A theme names its faces through THEME_FONTS below,
 // never a raw <link> or an unloaded font-family string, so what themes.ts
 // promised (Fraunces, Playfair Display, JetBrains Mono, …) actually renders.
-import {
-  Archivo,
-  Baloo_2,
-  Caveat,
-  Fraunces,
-  IBM_Plex_Mono,
-  IBM_Plex_Sans,
-  JetBrains_Mono,
-  Libre_Franklin,
-  Playfair_Display,
-  Quicksand,
-  Sora,
-  Source_Serif_4,
-  Space_Grotesk,
-  Unbounded,
-} from "next/font/google";
+//
+// Each font is its own module under googleFonts/ rather than one
+// next/font/google() call per line here — Turbopack's font resolver
+// ("next/font/google queries have exactly one entry") was
+// nondeterministically failing on a different font each Vercel build when
+// this many calls shared one module.
+import { fontFamily as archivo } from "./googleFonts/archivo";
+import { fontFamily as baloo2 } from "./googleFonts/baloo2";
+import { fontFamily as caveatFamily } from "./googleFonts/caveat";
+import { fontFamily as fraunces } from "./googleFonts/fraunces";
+import { fontFamily as ibmPlexMono } from "./googleFonts/ibmPlexMono";
+import { fontFamily as ibmPlexSans } from "./googleFonts/ibmPlexSans";
+import { fontFamily as jetbrainsMono } from "./googleFonts/jetbrainsMono";
+import { fontFamily as libreFranklin } from "./googleFonts/libreFranklin";
+import { fontFamily as playfairDisplay } from "./googleFonts/playfairDisplay";
+import { fontFamily as quicksand } from "./googleFonts/quicksand";
+import { fontFamily as sora } from "./googleFonts/sora";
+import { fontFamily as sourceSerif4 } from "./googleFonts/sourceSerif4";
+import { fontFamily as spaceGrotesk } from "./googleFonts/spaceGrotesk";
+import { fontFamily as unbounded } from "./googleFonts/unbounded";
 
 import type { BlogThemeId } from "@/lib/blog/themes";
 
-const archivo = Archivo({ subsets: ["latin"], weight: ["700", "800", "900"], preload: false });
-const baloo2 = Baloo_2({ subsets: ["latin"], weight: ["600", "700"], preload: false });
-const caveat = Caveat({ subsets: ["latin"], weight: ["600", "700"], preload: false });
-const fraunces = Fraunces({ subsets: ["latin"], weight: ["400", "500", "600"], preload: false });
-const ibmPlexMono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500", "600"], preload: false });
-const ibmPlexSans = IBM_Plex_Sans({ subsets: ["latin"], weight: ["400", "500", "600"], preload: false });
-const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500", "600", "700"], preload: false });
-const libreFranklin = Libre_Franklin({ subsets: ["latin"], weight: ["600", "700", "800"], preload: false });
-const playfairDisplay = Playfair_Display({ subsets: ["latin"], weight: ["600", "700", "800"], preload: false });
-const quicksand = Quicksand({ subsets: ["latin"], weight: ["500", "600", "700"], preload: false });
-const sora = Sora({ subsets: ["latin"], weight: ["500", "600", "700"], preload: false });
-const sourceSerif4 = Source_Serif_4({ subsets: ["latin"], weight: ["500", "600", "700"], preload: false });
-const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], weight: ["500", "600", "700"], preload: false });
-const unbounded = Unbounded({ subsets: ["latin"], weight: ["600", "700", "800"], preload: false });
-
-const SANS = `${ibmPlexSans.style.fontFamily}, system-ui, sans-serif`;
-const MONO = `${ibmPlexMono.style.fontFamily}, ui-monospace, monospace`;
+const SANS = `${ibmPlexSans}, system-ui, sans-serif`;
+const MONO = `${ibmPlexMono}, ui-monospace, monospace`;
 
 /** A theme's two faces, as ready-to-use font-family values (loaded family
  * plus a plain fallback) — never the loaded font object itself, so callers
  * just drop these into an inline style. */
 export const THEME_FONTS: Record<BlogThemeId, { headline: string; body: string }> = {
   glass: { headline: "inherit", body: "inherit" },
-  ledger: { headline: `${sourceSerif4.style.fontFamily}, Georgia, serif`, body: SANS },
-  bulletin: { headline: `${archivo.style.fontFamily}, system-ui, sans-serif`, body: SANS },
-  quietPaper: { headline: `${fraunces.style.fontFamily}, Georgia, serif`, body: SANS },
-  nightdesk: { headline: `${spaceGrotesk.style.fontFamily}, system-ui, sans-serif`, body: SANS },
-  deck: { headline: `${sora.style.fontFamily}, system-ui, sans-serif`, body: SANS },
-  digest: { headline: `${libreFranklin.style.fontFamily}, system-ui, sans-serif`, body: SANS },
-  broadsheet: { headline: `${playfairDisplay.style.fontFamily}, Georgia, serif`, body: SANS },
-  terminal: { headline: `${jetbrainsMono.style.fontFamily}, ui-monospace, monospace`, body: MONO },
-  polaroid: { headline: `${baloo2.style.fontFamily}, system-ui, sans-serif`, body: SANS },
-  brutalist: { headline: `${unbounded.style.fontFamily}, system-ui, sans-serif`, body: MONO },
-  pastelStack: { headline: `${quicksand.style.fontFamily}, system-ui, sans-serif`, body: SANS },
+  ledger: { headline: `${sourceSerif4}, Georgia, serif`, body: SANS },
+  bulletin: { headline: `${archivo}, system-ui, sans-serif`, body: SANS },
+  quietPaper: { headline: `${fraunces}, Georgia, serif`, body: SANS },
+  nightdesk: { headline: `${spaceGrotesk}, system-ui, sans-serif`, body: SANS },
+  deck: { headline: `${sora}, system-ui, sans-serif`, body: SANS },
+  digest: { headline: `${libreFranklin}, system-ui, sans-serif`, body: SANS },
+  broadsheet: { headline: `${playfairDisplay}, Georgia, serif`, body: SANS },
+  terminal: { headline: `${jetbrainsMono}, ui-monospace, monospace`, body: MONO },
+  polaroid: { headline: `${baloo2}, system-ui, sans-serif`, body: SANS },
+  brutalist: { headline: `${unbounded}, system-ui, sans-serif`, body: MONO },
+  pastelStack: { headline: `${quicksand}, system-ui, sans-serif`, body: SANS },
   indexCard: { headline: SANS, body: SANS },
 };
 
 /** Polaroid's handwritten-style tag accent — the one face no other theme
  * shares, so it isn't worth a THEME_FONTS slot of its own. */
-export const CAVEAT_FONT = `${caveat.style.fontFamily}, cursive`;
+export const CAVEAT_FONT = `${caveatFamily}, cursive`;
