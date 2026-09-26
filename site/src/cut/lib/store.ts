@@ -15,6 +15,7 @@ import type {
   AudioClip,
   ClipAnim,
   ClipSpan,
+  EditLogEntry,
   LibraryTemplate,
   MediaAsset,
   Overlay,
@@ -37,6 +38,7 @@ import type {
   TransitionStyle,
   VideoClip,
 } from "./types";
+import { describeDocChange } from "./editLog";
 import type { VideoProject } from "./genvideo/types";
 import { fillSlot } from "./genvideo/fillSlot";
 import { apiFetch, apiJson, getBackend, hasLocalCompute, reportClientError } from "./backend";
@@ -242,6 +244,10 @@ export interface EditorState {
    * so their chat cards render on machines that never ran the job. Outside the
    * undo history, like assets. */
   renders: RenderRecord[];
+  /** One line per commit that changed the doc, oldest first — what a manual
+   * drag/trim or an AI tool call actually did, for get_edit_log to hand the
+   * assistant. Persisted on ProjectDoc.editLog, capped at EDIT_LOG_CAP. */
+  editLog: EditLogEntry[];
   /** The doc's first-open presentation (ProjectDoc.firstOpen), carried so the
    * editor can apply it and saves keep it. */
   firstOpen?: ProjectDoc["firstOpen"];
@@ -544,6 +550,8 @@ export interface EditorState {
 const HISTORY_CAP = 100;
 /** Most chat render records a doc keeps — settled cards past this fall off. */
 export const RENDERS_CAP = 100;
+/** Most edit log lines a doc keeps — oldest entries fall off past this. */
+export const EDIT_LOG_CAP = 400;
 const history: DocSnapshot[] = [];
 const future: DocSnapshot[] = [];
 /** A checkpoint captured on pointerdown/focus but not yet committed: it lands
@@ -1052,7 +1060,9 @@ export const useEditor = create<EditorState>((baseSet, get) => {
   };
 
   /** Seal the deferred checkpoint: commit it to history only if the doc
-   * changed since it was taken; otherwise drop it and leave redo intact. */
+   * changed since it was taken; otherwise drop it and leave redo intact. Also
+   * appends a plain-English line per real change to the edit log, diffing the
+   * same before/after pair the undo checkpoint captures. */
   const flush = () => {
     if (!pending) return;
     const p = pending;
@@ -1062,6 +1072,13 @@ export const useEditor = create<EditorState>((baseSet, get) => {
       if (history.length > HISTORY_CAP) history.shift();
       future.length = 0; // a real edit invalidates the redo branch
       syncHistoryFlags();
+      const lines = describeDocChange(p.snap, snapshot(), get().assets);
+      if (lines.length > 0) {
+        const t = Date.now();
+        set((s) => ({
+          editLog: [...s.editLog, ...lines.map((summary) => ({ t, summary }))].slice(-EDIT_LOG_CAP),
+        }));
+      }
     }
   };
 
@@ -1183,6 +1200,7 @@ export const useEditor = create<EditorState>((baseSet, get) => {
     aiOpen: typeof window !== "undefined" && localStorage.getItem("cut-ai-open") === "1",
     genvideo: undefined,
     renders: [],
+    editLog: [],
 
     loadProject: async (id, opts) => {
       // In-place re-reads (the viewer's change poll, a conflict reload) say so
@@ -1230,6 +1248,7 @@ export const useEditor = create<EditorState>((baseSet, get) => {
         exportOpen: false,
         genvideo: undefined,
         renders: [],
+        editLog: [],
         firstOpen: undefined,
       });
       hydrating = false;
@@ -1335,6 +1354,7 @@ export const useEditor = create<EditorState>((baseSet, get) => {
           subtitleStatus: merged.cues.length > 0 ? "ready" : "idle",
           genvideo: doc.genvideo ?? undefined,
           renders: Array.isArray(doc.renders) ? doc.renders : [],
+          editLog: Array.isArray(doc.editLog) ? doc.editLog : [],
           firstOpen: doc.firstOpen,
           loaded: true,
           loadEpoch: get().loadEpoch + 1,
@@ -3921,19 +3941,39 @@ export const useEditor = create<EditorState>((baseSet, get) => {
       flush(); // commit any uncommitted edit before stepping back
       const prev = history.pop();
       if (!prev) return;
-      future.push(snapshot());
+      const cur = snapshot();
+      future.push(cur);
       restoreDoc(prev);
       syncHistoryFlags();
+      const lines = describeDocChange(cur, prev, get().assets);
+      if (lines.length > 0) {
+        const t = Date.now();
+        set((s) => ({
+          editLog: [...s.editLog, ...lines.map((summary) => ({ t, summary: `Undo: ${summary}` }))].slice(
+            -EDIT_LOG_CAP
+          ),
+        }));
+      }
     },
 
     redo: () => {
       flush();
       const next = future.pop();
       if (!next) return;
-      history.push(snapshot());
+      const cur = snapshot();
+      history.push(cur);
       if (history.length > HISTORY_CAP) history.shift();
       restoreDoc(next);
       syncHistoryFlags();
+      const lines = describeDocChange(cur, next, get().assets);
+      if (lines.length > 0) {
+        const t = Date.now();
+        set((s) => ({
+          editLog: [...s.editLog, ...lines.map((summary) => ({ t, summary: `Redo: ${summary}` }))].slice(
+            -EDIT_LOG_CAP
+          ),
+        }));
+      }
     },
   };
 });
@@ -4042,6 +4082,7 @@ export function serializeDoc(s: {
   subtitles: SubtitlesBlock;
   genvideo?: VideoProject;
   renders: RenderRecord[];
+  editLog: EditLogEntry[];
   firstOpen?: ProjectDoc["firstOpen"];
 }): Partial<ProjectDoc> {
   return {
@@ -4064,6 +4105,7 @@ export function serializeDoc(s: {
     // to the PUT handler, so a dismissed plan could otherwise never be cleared.
     genvideo: s.genvideo ?? null,
     renders: s.renders,
+    editLog: s.editLog,
     firstOpen: s.firstOpen,
   };
 }

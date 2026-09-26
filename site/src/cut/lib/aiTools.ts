@@ -375,6 +375,12 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       return buildAiContext({ fullCues: true });
   },
 
+  get_edit_log: (s, input) => {
+      const limit = isNum(input.limit) ? Math.max(1, Math.round(input.limit)) : 200;
+      const entries = s.editLog.slice(-limit);
+      return { entries, total: s.editLog.length };
+  },
+
   capture_frame: () => {
       const canvas = document.querySelector<HTMLCanvasElement>(".stage canvas");
       if (!canvas) throw new ToolError("No preview canvas on screen.");

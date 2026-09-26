@@ -17,6 +17,14 @@ export const AI_PANEL_TOOLS = [
     inputSchema: obj({}),
   },
   {
+    name: "get_edit_log",
+    description:
+      "Read the project's edit log: one plain-English line per change that has landed on this cut, oldest first, with when it happened — added/removed/moved/trimmed clips and audio, overlay and transition edits, captions, undo/redo. Covers every edit regardless of who made it (a drag in the timeline or a tool call in an earlier turn), so this is how you see the moves that built the cut, not just its current shape. Use it when asked to explain, summarize, or reason about how or why the project was edited.",
+    inputSchema: obj({
+      limit: num("Most recent N entries to return (default 200)"),
+    }),
+  },
+  {
     name: "watch_video",
     description:
       "Watch a video source with your own eyes: samples its frames at scene changes plus a steady floor into timestamped contact-sheet images, and returns the detected scene-change times (natural cut candidates). Pass clip_id to watch a timeline clip's source (the result includes that clip's source↔timeline time math) or asset_id for any project video or image. The stamp burned into each cell is SOURCE seconds — what trim_clip's in/out use — not timeline seconds. Coverage is capped per call: survey the whole range first, then call again with a narrow from/to and a small interval_seconds where the cut needs care; the result says where coverage stopped. Read the watching-and-cutting skill before editing footage by content.",

@@ -925,6 +925,19 @@ export const SIDE_PANEL_TABS: SidePanelTab[] = [
   "publish",
 ];
 
+/** One line of the project's edit log — a plain-English record of a change
+ * that landed on the doc, from a manual drag/trim in the UI or an AI tool
+ * call alike. Appended whenever an edit actually commits (see
+ * describeDocChange in lib/editLog.ts and flush() in lib/store.ts), so the
+ * AI agent can answer "what did I do and when", not just read the cut's
+ * current shape. */
+export interface EditLogEntry {
+  /** Epoch ms when the edit committed. */
+  t: number;
+  /** One-line, human-readable description of what changed. */
+  summary: string;
+}
+
 export interface ProjectDoc {
   version: 1;
   name: string;
@@ -983,6 +996,8 @@ export interface ProjectDoc {
   genvideo?: VideoProject | null;
   /** Chat-launched video renders, running and settled — see RenderRecord. */
   renders?: RenderRecord[];
+  /** The project's edit log: one line per commit, oldest first. */
+  editLog?: EditLogEntry[];
   /** How the project presents itself the first time a browser opens it: the
    * editor reads this and applies it once, then the layout is the user's own.
    * Seeded template docs (public/cut-starter) carry it; absent means an

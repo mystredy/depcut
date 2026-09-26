@@ -8,6 +8,7 @@
 // Tools that read or steer the view; everything else counts as a mutation.
 const READ_ONLY = new Set([
   "get_state",
+  "get_edit_log",
   "list_skills",
   "read_skill",
   "capture_frame",
