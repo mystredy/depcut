@@ -95,6 +95,7 @@ export function ShareBar({
   url,
   title,
   variant = "row",
+  mode = "dark",
 }: {
   url: string;
   title: string;
@@ -103,9 +104,16 @@ export function ShareBar({
   // header byline where the row's platform icons would be too heavy.
   // Both open the exact same modal.
   variant?: "row" | "icon";
+  // The post page's own icon/border colors are white-on-dark by default
+  // (every blog theme used to share the same dark chrome); a light theme's
+  // post page passes "light" so this doesn't disappear against its background.
+  mode?: "light" | "dark";
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const ink = mode === "light" ? "text-black/60 hover:text-black" : "text-white/70 hover:text-white";
+  const inkFaint = mode === "light" ? "text-black/45 hover:text-black" : "text-white/50 hover:text-white";
+  const ring = mode === "light" ? "border-black/15 hover:border-black/30" : "border-white/15 hover:border-white/30";
 
   const copyLink = async () => {
     try {
@@ -125,7 +133,7 @@ export function ShareBar({
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Share this post"
-          className="grid size-9 shrink-0 place-items-center text-white/70 transition-colors hover:text-white"
+          className={cn("grid size-9 shrink-0 place-items-center transition-colors", ink)}
         >
           <Share className="size-5" />
         </button>
@@ -135,7 +143,7 @@ export function ShareBar({
             type="button"
             onClick={() => setOpen(true)}
             aria-label="Share this post"
-            className="grid size-9 shrink-0 place-items-center rounded-full border border-white/15 text-white/70 transition-colors hover:border-white/30 hover:text-white"
+            className={cn("grid size-9 shrink-0 place-items-center rounded-full border transition-colors", ring, ink)}
           >
             <Share2 className="size-4" />
           </button>
@@ -153,7 +161,7 @@ export function ShareBar({
             type="button"
             onClick={() => setOpen(true)}
             aria-label="More share options"
-            className="grid size-9 shrink-0 place-items-center rounded-[25%] border border-white/15 text-white/50 transition-colors hover:border-white/30 hover:text-white"
+            className={cn("grid size-9 shrink-0 place-items-center rounded-[25%] border transition-colors", ring, inkFaint)}
           >
             <Plus className="size-4" />
           </button>
