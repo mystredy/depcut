@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ChevronDown, Loader2, Sparkles, X } from "lucide-react";
+import { ChevronDown, Loader2, Sparkles, Wrench, X } from "lucide-react";
 import Markdown from "react-markdown";
 
 import { baseMarkdownComponents } from "@/cut/components/markdownComponents";
@@ -183,15 +183,27 @@ function ChatSession({
         )}
         {messages.map((m) => (
           <div key={m.id} className={cn("flex flex-col gap-1", m.role === "user" && "items-end")}>
-            <div
-              className={cn(
-                "ai-md max-w-[90%] rounded-xl px-2.5 py-1.5 text-[12.5px] leading-relaxed",
-                m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
-              )}
-            >
-              <Markdown components={baseMarkdownComponents}>{m.text}</Markdown>
-            </div>
-            {m.role === "assistant" && (
+            {m.text && (
+              <div
+                className={cn(
+                  "ai-md max-w-[90%] rounded-xl px-2.5 py-1.5 text-[12.5px] leading-relaxed",
+                  m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
+                )}
+              >
+                <Markdown components={baseMarkdownComponents}>{m.text}</Markdown>
+              </div>
+            )}
+            {m.role === "assistant" &&
+              m.toolCalls.map((call) => (
+                <div
+                  key={call.id}
+                  className="flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-[10.5px] text-muted-foreground"
+                >
+                  <Wrench className="size-3" />
+                  {call.result.ok ? call.result.summary : `${call.name} failed: ${call.result.error}`}
+                </div>
+              ))}
+            {m.role === "assistant" && m.text.trim() && (
               <Button size="sm" variant="outline" onClick={() => onUseAsSkill(extractDraft(m.text))}>
                 Use as new skill
               </Button>
