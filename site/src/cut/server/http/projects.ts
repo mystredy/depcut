@@ -147,6 +147,7 @@ export const projectsApi = {
         // normalized to undefined so the doc at rest never stores null.
         genvideo: body.genvideo !== undefined ? body.genvideo ?? undefined : existing.genvideo,
         renders: Array.isArray(body.renders) ? body.renders : existing.renders,
+        editLog: Array.isArray(body.editLog) ? body.editLog : existing.editLog,
       };
       await writeProject(id, doc);
       return Response.json({ ok: true, updatedAt: doc.updatedAt });
