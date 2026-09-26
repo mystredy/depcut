@@ -5,7 +5,7 @@ export const elevenLabsModels = {
   music: "music_v1",
   // Speech-to-text (cut/server/cloud/transcribe.ts).
   scribe: "scribe_v2",
-  // Text-to-speech (ai-suite/text-to-speech), priced by character in
+  // Text-to-speech (ai/text-to-speech), priced by character in
   // provider-pricing.ts's elevenLabsCreditPricing pattern match.
   speechV3: "eleven_v3",
   speechMultilingualV2: "eleven_multilingual_v2",

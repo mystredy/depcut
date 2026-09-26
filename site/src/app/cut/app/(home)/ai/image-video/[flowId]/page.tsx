@@ -454,7 +454,7 @@ export default function FlowThreadPage() {
           <Button size="sm" onClick={() => flow.refetch()}>
             Try again
           </Button>
-          <Button size="sm" variant="outline" onClick={() => router.push(`${base}/ai-suite/image-video`)}>
+          <Button size="sm" variant="outline" onClick={() => router.push(`${base}/ai/image-video`)}>
             Back to Flows
           </Button>
         </div>
@@ -469,7 +469,7 @@ export default function FlowThreadPage() {
           size="icon"
           variant="ghost"
           title="Back to Flows"
-          onClick={() => router.push(`${base}/ai-suite/image-video`)}
+          onClick={() => router.push(`${base}/ai/image-video`)}
         >
           <ArrowLeft className="size-4" />
         </Button>

@@ -86,7 +86,7 @@ export default function ImageVideoGalleryPage() {
   const create = useCreateFlow();
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
 
-  const openFlow = (id: string) => router.push(`${base}/ai-suite/image-video/${id}`);
+  const openFlow = (id: string) => router.push(`${base}/ai/image-video/${id}`);
 
   const newFlow = () => {
     create.mutate(undefined, { onSuccess: ({ flow }) => openFlow(flow.id) });

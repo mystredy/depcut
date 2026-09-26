@@ -1956,7 +1956,7 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
           voices: voices.map((v) => ({ id: v.id, name: v.name, labels: v.labels ?? {} })),
           total: voices.length,
           ...(voices.length === 0
-            ? { note: "No ElevenLabs voices in this account yet — add one in the ai-suite text-to-speech page, or use a gemini voice instead." }
+            ? { note: "No ElevenLabs voices in this account yet — add one in the ai/text-to-speech page, or use a gemini voice instead." }
             : {}),
         };
       }

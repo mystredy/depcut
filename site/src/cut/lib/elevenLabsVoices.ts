@@ -1,7 +1,7 @@
 "use client";
 
 // ElevenLabs' own voice catalog, fetched from the account (unlike Gemini's
-// fixed persona set — see voices.ts) — the ai-suite text-to-speech page's
+// fixed persona set — see voices.ts) — the ai/text-to-speech page's
 // ElevenLabs voice picker reads this. A voice's `labels` (gender, accent,
 // age, use case, …) come straight from ElevenLabs, not a DepCut catalog.
 export type ElevenLabsVoice = {

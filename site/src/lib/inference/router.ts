@@ -252,7 +252,7 @@ export function createProviderRegistry() {
     // video (see gemini-music.ts).
     createGeminiMusicAssetProvider(),
     // ElevenLabs (audio-studio.ts): reached only by an explicit
-    // request.provider = "elevenlabs" — for speech (ai-suite/text-to-speech's
+    // request.provider = "elevenlabs" — for speech (ai/text-to-speech's
     // Audio Model picker) and, later, its own music modes. Listed after both
     // Gemini asset providers above so neither's capability fallback ever
     // picks it by accident; its own capabilities list stays music-only for

@@ -2,7 +2,7 @@
 // avatars by user id, so a list of otherwise-identical icons (a Generations
 // card, a voice-picker row) doesn't read as one flat block, and a given id's
 // color never changes across reloads. Shared by MediaGenerationHistory's
-// cards and the ElevenLabs voice picker (ai-suite/text-to-speech).
+// cards and the ElevenLabs voice picker (ai/text-to-speech).
 const ACCENTS = [
   "from-orange-400 to-rose-400",
   "from-violet-400 to-indigo-500",

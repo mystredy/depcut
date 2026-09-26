@@ -286,7 +286,7 @@ const MAX_ELEVENLABS_CHARS = 5000;
 
 /** One hosted ElevenLabs speech call: a single script in, a playable clip out
  * — no PCM decoding or WAV assembly, since ElevenLabs (unlike Gemini TTS)
- * returns an already-encoded clip (mp3 by default) and the ai-suite
+ * returns an already-encoded clip (mp3 by default) and the ai
  * text-to-speech page only ever sends one segment at a time, not a timeline
  * of cues to lay out and mix. `speed` is ElevenLabs' own voice_settings.speed
  * (1.0 = default); omitted when left at the default so the request matches

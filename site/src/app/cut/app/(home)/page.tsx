@@ -7,7 +7,7 @@ import { GROUPS } from "@/cut/lib/navData";
 import { useCutBase } from "@/cut/lib/nav";
 import { cn } from "@/lib/utils";
 
-const AI_SUITE_TOOLS = GROUPS.find((g) => g.key === "ai-suite")!.children;
+const AI_SUITE_TOOLS = GROUPS.find((g) => g.key === "ai")!.children;
 // The generate box below the row is Text to Video, so it leads the row
 // instead of sitting wherever it falls in the shared nav order.
 const STUDIO_TOOLS = [
@@ -32,7 +32,7 @@ export default function DashboardPage() {
           return (
             <Link
               key={slug}
-              href={`${base}/ai-suite/${slug}`}
+              href={`${base}/ai/${slug}`}
               aria-current={selected ? "page" : undefined}
               className={cn(
                 "flex h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors",

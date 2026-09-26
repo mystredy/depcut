@@ -1,7 +1,7 @@
 import { elevenLabsModels } from "@/lib/inference/elevenlabs-models";
 import { geminiTtsModels } from "@/lib/inference/gemini-models";
 
-// Text-to-speech model catalog (ai-suite/text-to-speech's Audio Model picker).
+// Text-to-speech model catalog (ai/text-to-speech's Audio Model picker).
 // Gemini speaks through DepCut's own persona catalog (voices.ts); ElevenLabs
 // speaks through its own account voice catalog (listVoices, fetched from
 // /api/inference/voices) — the picker below only decides which backend and

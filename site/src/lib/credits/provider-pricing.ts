@@ -487,7 +487,7 @@ const elevenLabsRunModelPricing: Record<ElevenLabsRunModel, ProviderCreditPricin
   [elevenLabsModels.scribe]: { durationSecondCostMicros: usdWithMargin("0.000111") },
   // Same per-character rate elevenLabsCreditPricing's pattern match below
   // already applies to these ids — listed explicitly here too since they're
-  // now named run models (elevenlabs-models.ts) the ai-suite text-to-speech
+  // now named run models (elevenlabs-models.ts) the ai/text-to-speech
   // page selects directly.
   [elevenLabsModels.speechV3]: { characterCostMicros: usdWithMargin("0.0001") },
   [elevenLabsModels.speechMultilingualV2]: { characterCostMicros: usdWithMargin("0.0001") },

@@ -66,7 +66,7 @@ export function createAudioAssetProvider(
   // pasting an id resolves to exactly that voice instead of a name search.
   const voiceIdPattern = /^[A-Za-z0-9]{15,25}$/;
 
-  // Voice catalog for text-to-speech (ai-suite/text-to-speech's voice picker):
+  // Voice catalog for text-to-speech (ai/text-to-speech's voice picker):
   // no query lists the account's premade and added voices; a query first
   // tries an exact id lookup, then falls back to a name search across
   // ElevenLabs' public voice library — the "+" add-by-id-or-name flow. Every

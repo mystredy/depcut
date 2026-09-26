@@ -31,7 +31,7 @@ export type NavGroup = { key: string; label: string; icon: LucideIcon; children:
 
 export const GROUPS: NavGroup[] = [
   {
-    key: "ai-suite",
+    key: "ai",
     label: "AI suite",
     icon: Sparkles,
     children: [

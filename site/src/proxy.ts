@@ -177,6 +177,14 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
+  // The AI suite's nav group key (and route segment) was renamed from
+  // ai-suite to ai — old bookmarks/links still work.
+  if (underPath(pathname, "/app/ai-suite")) {
+    const url = req.nextUrl.clone();
+    url.pathname = `/app/ai${pathname.slice("/app/ai-suite".length)}`;
+    return NextResponse.redirect(url, 308);
+  }
+
   if (underPath(pathname, "/api")) return NextResponse.next();
 
   const handleMatch = STUDIO_HANDLE.exec(pathname);
