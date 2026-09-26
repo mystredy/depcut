@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { apiFetch } from "@/queries/apiClient";
 import { categoriesQueryKey } from "@/queries/categories";
+import type { BlogThemeId } from "@/lib/blog/themes";
 
 export const adminUsersQueryKey = (q?: string) => ["admin", "users", q ?? ""] as const;
 export const adminUsageQueryKey = ["admin", "usage"] as const;
@@ -987,6 +988,30 @@ export function useUpdateAdminSettings() {
         method: "PATCH",
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: adminSettingsQueryKey }),
+  });
+}
+
+// The public blog's site-wide theme (admin/blog/theme) — see
+// lib/blog/themes.ts for the catalog and lib/blogSettings.ts for the cached
+// public read /blog and /blog/category/[slug] use.
+export const blogThemeQueryKey = ["admin", "blog-theme"] as const;
+
+export function useBlogTheme() {
+  return useQuery({
+    queryFn: () => apiFetch<{ theme: BlogThemeId }>("/api/admin/blog/theme"),
+    queryKey: blogThemeQueryKey,
+  });
+}
+
+export function useUpdateBlogTheme() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (theme: BlogThemeId) =>
+      apiFetch<{ theme: BlogThemeId }>("/api/admin/blog/theme", {
+        body: JSON.stringify({ theme }),
+        method: "PATCH",
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: blogThemeQueryKey }),
   });
 }
 

@@ -3,11 +3,12 @@ import type { Metadata } from "next";
 import { Eyebrow } from "@/app/cut/_components/landing/dark/DarkPrimitives";
 import { DEPCUT_CANONICAL } from "@/cut/lib/hosts";
 import { collectCategories } from "@/lib/blog/categories";
+import { blogTheme } from "@/lib/blogSettings";
 import { prisma } from "@/lib/prisma";
 
 import { BlogShell } from "./_components/BlogShell";
 import { CategoryChips } from "./_components/CategoryChips";
-import { PostCard } from "./_components/PostCard";
+import { BlogPostList } from "./_components/themes";
 
 export const dynamic = "force-dynamic";
 
@@ -28,10 +29,13 @@ export const metadata: Metadata = {
 // posts never reach this query at all (see the admin's own unfiltered list
 // at /admin/blog).
 export default async function BlogIndexPage() {
-  const posts = await prisma.blogPost.findMany({
-    orderBy: { publishedAt: "desc" },
-    where: { published: true },
-  });
+  const [posts, theme] = await Promise.all([
+    prisma.blogPost.findMany({
+      orderBy: { publishedAt: "desc" },
+      where: { published: true },
+    }),
+    blogTheme(),
+  ]);
   const categories = collectCategories(posts);
 
   return (
@@ -54,11 +58,7 @@ export default async function BlogIndexPage() {
         {posts.length === 0 ? (
           <p className="py-12 text-center text-sm text-white/50">Nothing posted yet — check back soon.</p>
         ) : (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            {posts.map((post) => (
-              <PostCard key={post.id} post={post} />
-            ))}
-          </div>
+          <BlogPostList theme={theme} posts={posts} />
         )}
       </section>
     </BlogShell>

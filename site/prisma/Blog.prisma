@@ -36,6 +36,17 @@ model BlogPost {
   @@index([published, publishedAt])
 }
 
+// The public blog's site-wide visual theme — a singleton row, same pattern
+// as AppSettings (SiteConfig.prisma): one id fixed to "singleton", upserted
+// rather than ever having a second row. `theme` is a BlogThemeId
+// (lib/blog/themes.ts) stored as a plain string so adding a new theme never
+// needs a migration — an unrecognized value just resolves to the default
+// (resolveBlogTheme) instead of erroring.
+model BlogSettings {
+  id    String @id @default("singleton")
+  theme String @default("glass")
+}
+
 // One AI chat thread attached to a blog post — the post editor's persistent
 // chat panel, mirroring CutChatThread (prisma/Cut.prisma)'s shape: `data` is
 // an opaque JSON message list the server never parses. Scoped by postId

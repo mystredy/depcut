@@ -4,11 +4,12 @@ import { notFound } from "next/navigation";
 import { Eyebrow } from "@/app/cut/_components/landing/dark/DarkPrimitives";
 import { DEPCUT_CANONICAL } from "@/cut/lib/hosts";
 import { categorySlug, collectCategories } from "@/lib/blog/categories";
+import { blogTheme } from "@/lib/blogSettings";
 import { prisma } from "@/lib/prisma";
 
 import { BlogShell } from "../../_components/BlogShell";
 import { CategoryChips } from "../../_components/CategoryChips";
-import { PostCard } from "../../_components/PostCard";
+import { BlogPostList } from "../../_components/themes";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,7 @@ export async function generateMetadata({ params }: RouteParams): Promise<Metadat
 
 export default async function BlogCategoryPage({ params }: RouteParams) {
   const { slug } = await params;
-  const category = await getCategory(slug);
+  const [category, theme] = await Promise.all([getCategory(slug), blogTheme()]);
   if (!category) notFound();
 
   return (
@@ -73,11 +74,7 @@ export default async function BlogCategoryPage({ params }: RouteParams) {
 
       <section className="mx-auto w-full max-w-5xl px-6 pb-24 md:px-12">
         <CategoryChips activeSlug={slug} categories={category.allCategories} />
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          {category.posts.map((post) => (
-            <PostCard key={post.id} post={post} />
-          ))}
-        </div>
+        <BlogPostList theme={theme} posts={category.posts} />
       </section>
     </BlogShell>
   );

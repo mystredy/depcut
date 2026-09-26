@@ -147,7 +147,7 @@ const SECTIONS: NavSection[] = [
       { label: "Comments", href: soon("Blog — Comments"), icon: MessageSquare, color: "text-blue-500" },
       { label: "Pages", href: soon("Blog — Pages"), icon: FileText, color: "text-zinc-500" },
       { label: "Layout", href: soon("Blog — Layout"), icon: LayoutDashboard, color: "text-purple-500" },
-      { label: "Theme", href: soon("Blog — Theme"), icon: Palette, color: "text-pink-500" },
+      { label: "Theme", href: "/admin/blog/theme", icon: Palette, color: "text-pink-500" },
       { label: "Settings", href: soon("Blog — Settings"), icon: SettingsIcon, color: "text-gray-500" },
       { label: "Reading List", href: soon("Blog — Reading List"), icon: Bookmark, color: "text-amber-500" },
       { label: "View blog", href: "/blog", icon: ExternalLink, color: "text-teal-500" },
