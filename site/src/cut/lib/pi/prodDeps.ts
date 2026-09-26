@@ -1,7 +1,6 @@
 "use client";
 
 import { geminiModelRoles } from "@/lib/inference/gemini-models";
-import { AI_SKILL_INDEX, AI_SKILLS } from "@/cut/server/ai/catalog";
 import { buildAiContext } from "../aiContext";
 import { runAiTool } from "../aiTools";
 import { normalizeRef } from "../assetRef";
@@ -10,6 +9,7 @@ import { hostedPost } from "../hosted";
 import { refsToParts } from "../refMedia";
 import type { CutAgentDeps } from "./cutAgent";
 import { currentDebris } from "./debris";
+import { listCutSkills, readCutSkill } from "./skillsClient";
 
 // The live editor's wiring for the pi chat loop. This module carries the
 // browser-only graph (the editor store, hosted auth, media resolution), so
@@ -20,12 +20,8 @@ export function productionDeps(): CutAgentDeps {
   return {
     post: (payload, signal) => hostedPost("/api/inference/responses", payload, signal),
     execTool: async (name, args) => {
-      if (name === "list_skills") return { skills: AI_SKILL_INDEX };
-      if (name === "read_skill") {
-        const doc = AI_SKILLS[String(args.name ?? "")];
-        if (!doc) throw new Error(`No such skill. Available: ${AI_SKILL_INDEX.join(", ")}`);
-        return doc;
-      }
+      if (name === "list_skills") return listCutSkills();
+      if (name === "read_skill") return readCutSkill(String(args.name ?? ""));
       return runAiTool(name, args);
     },
     models: {

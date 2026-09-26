@@ -154,3 +154,9 @@ export const hostedPost = async (path: string, body: unknown, signal?: AbortSign
   noteBalance(res);
   return res;
 };
+
+/** GET one of DepCut's hosted routes with the user's session — the read
+ * counterpart to hostedPost, for a hosted carve-out that just fetches data
+ * (no billing, no retry-on-drop; a lost GET is cheap to just re-issue). */
+export const hostedGet = (path: string, signal?: AbortSignal) =>
+  fetch(path, { headers: { "x-depcut-client-id": CLIENT_ID }, signal });

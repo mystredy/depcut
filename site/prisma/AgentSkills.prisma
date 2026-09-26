@@ -1,0 +1,25 @@
+// Reusable instructions for an AI agent's chat tools — the Cut editor
+// agent's "watching-and-cutting"/"lyric-sync-cut"-style playbooks
+// (AI_SKILLS in cut/server/ai/catalog.ts) and the blog admin agent's own.
+// Code-shipped skills stay in catalog.ts, reviewed and versioned like any
+// other prompt text; rows here are the ones an admin adds or edits from
+// /admin/ai/skills without a deploy. A row's name can also override a
+// built-in skill of the same name — see resolveSkills() in
+// cut/server/ai/skillsStore.ts, the single place both are merged.
+enum AgentSkillAgent {
+  cut
+  blog
+}
+
+model AgentSkill {
+  id        String          @id @default(cuid())
+  agent     AgentSkillAgent
+  // The key list_skills/read_skill key on — kebab-case, e.g. "lyric-sync-cut".
+  name      String
+  body      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([agent, name])
+  @@index([agent])
+}

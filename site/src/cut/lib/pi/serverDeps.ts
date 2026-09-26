@@ -1,5 +1,4 @@
 import { geminiModelRoles } from "@/lib/inference/gemini-models";
-import { AI_SKILL_INDEX, AI_SKILLS } from "@/cut/server/ai/catalog";
 import { buildAiContext } from "../aiContext";
 import { BROWSER_MEDIA_TOOLS, runAiTool, UI_TOOLS } from "../aiTools";
 import { normalizeRef } from "../assetRef";
@@ -9,6 +8,7 @@ import { bindHeadlessSession, type HeadlessSession } from "../headless/bind";
 import { refsToParts } from "../refMedia";
 import type { CutAgentDeps } from "./cutAgent";
 import { currentDebris } from "./debris";
+import { listCutSkills, readCutSkill } from "./skillsClient";
 
 // The headless wiring for the pi chat loop. The runner opens a project into
 // the store (openProjectDoc), runs the turn with these deps, and pushes the
@@ -21,12 +21,8 @@ export function headlessDeps(session: HeadlessSession): CutAgentDeps {
   return {
     post: (payload, signal) => hostedPost("/api/inference/responses", payload, signal),
     execTool: async (name, args) => {
-      if (name === "list_skills") return { skills: AI_SKILL_INDEX };
-      if (name === "read_skill") {
-        const doc = AI_SKILLS[String(args.name ?? "")];
-        if (!doc) throw new Error(`No such skill. Available: ${AI_SKILL_INDEX.join(", ")}`);
-        return doc;
-      }
+      if (name === "list_skills") return listCutSkills();
+      if (name === "read_skill") return readCutSkill(String(args.name ?? ""));
       if (UI_TOOLS.has(name))
         return {
           noEditor: true,
