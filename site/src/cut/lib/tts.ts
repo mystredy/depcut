@@ -507,7 +507,12 @@ export async function speechClipToAsset(
   language?: string
 ): Promise<MediaAsset> {
   const label = name?.trim() || "AI voice";
-  const file = new File([blob], `${mediaSlug(label, "ai-voice")}.wav`, { type: "audio/wav" });
+  // Gemini's clips are always the WAV this module assembles; ElevenLabs hands
+  // back an already-encoded clip (mp3 by default) — named and typed off the
+  // blob's own type rather than assumed, so it doesn't get mislabeled.
+  const type = blob.type || "audio/wav";
+  const ext = type === "audio/mpeg" ? "mp3" : type === "audio/wav" ? "wav" : (type.split("/")[1] ?? "wav");
+  const file = new File([blob], `${mediaSlug(label, "ai-voice")}.${ext}`, { type });
   const asset = await importFileToProject(projectId, file);
   if (!asset) throw new Error("Could not save the voiceover into the project.");
   asset.name = label;
@@ -531,4 +536,19 @@ export async function synthesizeSpeech(
   const { blob, offset, layout, language } = await renderSpeechClip(segments, opts);
   const asset = await speechClipToAsset(projectId, blob, opts.name, language);
   return { asset, offset, layout };
+}
+
+/** Render one script through ElevenLabs and save it as a project voiceover
+ * asset — the ElevenLabs twin of synthesizeSpeech. ElevenLabs speaks a single
+ * script per call (see renderElevenLabsClip), so there's no multi-segment
+ * timeline layout to compute: the clip always starts at the caller's own
+ * placement time, not an offset derived from cue times. */
+export async function synthesizeElevenLabsSpeech(
+  projectId: string,
+  text: string,
+  opts: { model: string; voiceId: string; speed?: number; name?: string }
+): Promise<{ asset: MediaAsset }> {
+  const { blob } = await renderElevenLabsClip(text, opts);
+  const asset = await speechClipToAsset(projectId, blob, opts.name);
+  return { asset };
 }

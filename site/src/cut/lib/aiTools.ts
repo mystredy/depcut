@@ -76,9 +76,11 @@ import { buildAiContext } from "./aiContext";
 import { sampleClipFrameData } from "./previewCanvas";
 import { laneCues, subtitleLaneCount } from "./subtitles";
 import { synthesizeMusic } from "./audioGen";
+import { resolveAudioModel } from "./audioModels";
 import { composeMusicPrompt } from "./composeGen";
+import { fetchElevenLabsVoices } from "./elevenLabsVoices";
 import { stockAssetInDoc } from "./genvideo/docWriter";
-import { resolveVoice, synthesizeSpeech, SPEECH_VOICES } from "./tts";
+import { resolveVoice, synthesizeElevenLabsSpeech, synthesizeSpeech, SPEECH_VOICES } from "./tts";
 import { defaultVideoAspects } from "./videoModels";
 import { DUCK_DEFAULT, generateSubtitlesReadout } from "./voiceover";
 import {
@@ -1944,9 +1946,23 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
       };
   },
 
-  list_voices: () => {
+  list_voices: async (s, input) => {
+      if (input.provider === "elevenlabs") {
+        const voices = await fetchElevenLabsVoices().catch((e) => {
+          throw new ToolError(e instanceof Error ? e.message : "Could not load ElevenLabs voices.");
+        });
+        return {
+          provider: "elevenlabs",
+          voices: voices.map((v) => ({ id: v.id, name: v.name, labels: v.labels ?? {} })),
+          total: voices.length,
+          ...(voices.length === 0
+            ? { note: "No ElevenLabs voices in this account yet — add one in the ai-suite text-to-speech page, or use a gemini voice instead." }
+            : {}),
+        };
+      }
       // Gemini's prebuilt voice catalog is fixed and ships hardcoded.
       return {
+        provider: "gemini",
         voices: SPEECH_VOICES.map((v) => ({ name: v.name, style: v.style })),
         total: SPEECH_VOICES.length,
       };
@@ -2254,21 +2270,41 @@ async function synthesizeVoiceover(
 ) {
   const projectId = useEditor.getState().projectId;
   if (!projectId) throw new ToolError("No project open.");
-  const voice = resolveVoice(typeof input.voice === "string" ? input.voice : undefined);
-  const direction =
-    typeof input.direction === "string" && input.direction.trim()
-      ? input.direction.trim()
-      : undefined;
   const duck = isNum(input.duck) ? clamp(input.duck, 0, 1) : DUCK_DEFAULT;
   // Captured before synthesis: the audio files under the chat that asked,
   // even if the user switches threads while it renders.
   const chatId = chatOwner();
-  const { asset, offset } = await synthesizeSpeech(projectId, segments, {
-    voice,
-    direction,
-    language: typeof input.language === "string" ? input.language : undefined,
-    name,
-  });
+
+  // Only voiceover_generate's schema carries `model` — read_subtitles_aloud
+  // never sets it, so it always takes the gemini branch below.
+  const audioModel = resolveAudioModel(typeof input.model === "string" ? input.model : undefined);
+  let asset: MediaAsset;
+  let offset = 0;
+  let voice: string;
+  if (audioModel.provider === "elevenlabs") {
+    voice = typeof input.voice === "string" ? input.voice.trim() : "";
+    if (!voice)
+      throw new ToolError(`${audioModel.label} needs a voice id — call list_voices with provider:"elevenlabs" first.`);
+    // ElevenLabs speaks one script per call — voiceover_generate is the only
+    // caller that can reach this branch, and it always passes one segment.
+    ({ asset } = await synthesizeElevenLabsSpeech(projectId, segments[0].text, {
+      model: audioModel.model,
+      voiceId: voice,
+      name,
+    }));
+  } else {
+    voice = resolveVoice(typeof input.voice === "string" ? input.voice : undefined);
+    const direction =
+      typeof input.direction === "string" && input.direction.trim()
+        ? input.direction.trim()
+        : undefined;
+    ({ asset, offset } = await synthesizeSpeech(projectId, segments, {
+      voice,
+      direction,
+      language: typeof input.language === "string" ? input.language : undefined,
+      name,
+    }));
+  }
   const cur = useEditor.getState();
   cur.addAsset(asset);
   tagChatAsset(asset.id, chatId);

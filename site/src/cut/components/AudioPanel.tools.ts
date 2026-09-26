@@ -6,24 +6,30 @@
  * keys its handlers on `AudioToolName`.
  */
 
+import { AUDIO_MODELS } from "@/cut/lib/audioModels";
 import { bool, num, obj, str, type AiToolDef } from "@/cut/lib/aiToolDef";
+
+const AUDIO_MODEL_IDS = AUDIO_MODELS.map((m) => m.id);
 
 export const AUDIO_TOOLS = [
   {
     name: "list_voices",
     description:
-      "List the AI voices available for voiceover (Gemini's prebuilt set; each has a one-word character like Warm, Upbeat, Gravelly). Call this when the user asks for a specific kind of voice so you can pass the right voice id to voiceover_generate or read_subtitles_aloud.",
-    inputSchema: obj({}),
+      "List the AI voices available for voiceover. `provider` \"gemini\" (default) is DepCut's fixed prebuilt set — each has a one-word character like Warm, Upbeat, Gravelly, and any of them works with any gemini-model voiceover. `provider` \"elevenlabs\" fetches the user's own ElevenLabs account voices (their library/clones) — call this before using an eleven_* model, since there's no built-in default to fall back to; empty means the user has no ElevenLabs voices set up. Call this when the user asks for a specific kind of voice, or wants ElevenLabs specifically, so you can pass the right voice id to voiceover_generate or read_subtitles_aloud.",
+    inputSchema: obj({
+      provider: { type: "string", enum: ["gemini", "elevenlabs"], description: "Which catalog to list (default gemini)" },
+    }),
   },
   {
     name: "voiceover_generate",
     description:
-      "Generate a spoken AI voiceover from a script (DepCut's hosted speech model). The audio previews as a playable card in this chat; pass add_to_timeline:true (or a `start`) to also drop it on the soundtrack when the user asked for it in the cut ('add a voiceover', 'narrate this'). When the user asks you to write or rework the script itself, put the text in chat and wait for them to ask for the voiceover. Pick a `voice` id from list_voices, or omit for a good default. `direction` steers delivery in natural language and can ask for another language — 'say it in Spanish' translates the script before synthesis; the script itself may carry inline tags like [whispers] or [excited]. `duck` lowers all other audio to that gain while the voice plays (0..1; ~0.3–0.5 is typical, 1 = don't duck). Needs the user signed in to DepCut (spends their credits).",
+      `Generate a spoken AI voiceover from a script. \`model\` picks the speech engine (default "gemini" — DepCut's hosted voices, fast, with delivery directions and inline tags): ${AUDIO_MODELS.map((m) => `"${m.id}" (${m.label} — ${m.description})`).join(", ")}. The audio previews as a playable card in this chat; pass add_to_timeline:true (or a \`start\`) to also drop it on the soundtrack when the user asked for it in the cut ('add a voiceover', 'narrate this'). When the user asks you to write or rework the script itself, put the text in chat and wait for them to ask for the voiceover. Pick a \`voice\` id from list_voices (pass the matching provider) — for a gemini model omit it for a good default; for an eleven_* model it's required, since ElevenLabs has no built-in default (call list_voices provider:"elevenlabs" first). \`direction\`, inline tags like [whispers], and the \`language\` pronunciation override are gemini-only — ElevenLabs speaks the script exactly as written, in whichever language it's written in. \`duck\` lowers all other audio to that gain while the voice plays (0..1; ~0.3–0.5 is typical, 1 = don't duck). Needs the user signed in to DepCut (spends their credits).`,
     inputSchema: obj({
       script: str("What the voice should say"),
-      voice: str("Voice id from list_voices (optional; a sensible default is chosen)"),
-      direction: str("Delivery instruction, e.g. 'Say warmly, like an old friend'; may include a language ask, which translates the script (optional)"),
-      language: str("Pronunciation language as BCP-47, e.g. es-US, ja-JP (optional; default auto-detects — this reads the script as written, it does not translate)"),
+      model: { type: "string", enum: AUDIO_MODEL_IDS, description: "Speech engine (default gemini)" },
+      voice: str("Voice id from list_voices — optional for gemini (a sensible default is chosen), required for an eleven_* model"),
+      direction: str("Delivery instruction, e.g. 'Say warmly, like an old friend'; may include a language ask, which translates the script (gemini only, optional)"),
+      language: str("Pronunciation language as BCP-47, e.g. es-US, ja-JP (gemini only, optional; default auto-detects — this reads the script as written, it does not translate)"),
       duck: num("Lower other audio to this gain while the voice plays, 0..1 (default 0.4; 1 = no ducking)"),
       add_to_timeline: bool("Place it on the soundtrack (default false — it stays on its chat card until the user asks)"),
       start: num("Timeline start in seconds (passing it implies add_to_timeline; default when placed: the playhead)"),
