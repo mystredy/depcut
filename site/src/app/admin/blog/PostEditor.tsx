@@ -58,7 +58,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { isDark, useTheme } from "@/cut/components/ThemeProvider";
 import { authClient } from "@/lib/auth-client";
-import { ApiError } from "@/queries/apiClient";
+import { apiFetch, ApiError } from "@/queries/apiClient";
 import { useAccountProfile, visibleName } from "@/queries/accountProfile";
 import {
   adminBlogPostsQueryKey,
@@ -616,6 +616,13 @@ export function PostEditor({ postId }: { postId: string | null }) {
         input: { contentType: out.contentType || "video/mp4", dataBase64: out.dataBase64, kind: "base64" },
       });
       return result.url;
+    },
+    listSkills: () => apiFetch<{ index: string[] }>("/api/agent-skills?agent=blog").then((r) => ({ skills: r.index })),
+    readSkill: async (name) => {
+      const { skills } = await apiFetch<{ skills: Record<string, string> }>("/api/agent-skills?agent=blog");
+      const body = skills[name];
+      if (!body) throw new Error(`No such skill. Available: ${Object.keys(skills).join(", ")}`);
+      return body;
     },
     setContent: (next) => {
       setContentMarkdown(next);

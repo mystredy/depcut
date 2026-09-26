@@ -36,7 +36,9 @@ export type BlogAiToolName =
   | "set_cover_from_url"
   | "import_youtube"
   | "generate_image"
-  | "generate_video";
+  | "generate_video"
+  | "list_skills"
+  | "read_skill";
 
 export type BlogAiToolDef = {
   name: BlogAiToolName;
@@ -133,6 +135,22 @@ export const BLOG_AI_TOOLS: BlogAiToolDef[] = [
     },
     name: "generate_video",
   },
+  {
+    description:
+      "List the names of every skill an admin has written for you at /admin/ai/skills — a playbook for a recurring editorial pattern this post might call for. Read one with read_skill before working in an area you're unsure about.",
+    inputSchema: { additionalProperties: false, properties: {}, type: "object" },
+    name: "list_skills",
+  },
+  {
+    description: "Read one skill's full instructions by name (see list_skills).",
+    inputSchema: {
+      additionalProperties: false,
+      properties: { name: { description: "The skill's name, from list_skills.", type: "string" } },
+      required: ["name"],
+      type: "object",
+    },
+    name: "read_skill",
+  },
 ];
 
 // The setters PostEditor already has — a tool call runs one of these
@@ -150,6 +168,8 @@ export type BlogEditorActions = {
   importYoutube: (url: string) => Promise<BlogYoutubeImport>;
   generateImage: (prompt: string) => Promise<string>;
   generateVideo: (prompt: string) => Promise<string>;
+  listSkills: () => Promise<{ skills: string[] }>;
+  readSkill: (name: string) => Promise<string>;
 };
 
 // `data` rides along on a successful import_youtube call — the model reads
@@ -234,6 +254,20 @@ export async function runBlogAiTool(
         return { data: { url }, ok: true, summary: `Generated a video: ${url}` };
       } catch (err) {
         return { error: err instanceof Error ? err.message : "Could not generate that video.", ok: false };
+      }
+    }
+    case "list_skills": {
+      const { skills } = await actions.listSkills();
+      return { data: { skills }, ok: true, summary: `${skills.length} skill${skills.length === 1 ? "" : "s"} available.` };
+    }
+    case "read_skill": {
+      const skillName = typeof args.name === "string" ? args.name.trim() : "";
+      if (!skillName) return { error: "name is required.", ok: false };
+      try {
+        const body = await actions.readSkill(skillName);
+        return { data: { body }, ok: true, summary: `Read skill "${skillName}".` };
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : "Could not read that skill.", ok: false };
       }
     }
     default:
