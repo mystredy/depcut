@@ -78,7 +78,7 @@ import { laneCues, subtitleLaneCount } from "./subtitles";
 import { synthesizeMusic } from "./audioGen";
 import { resolveAudioModel } from "./audioModels";
 import { composeMusicPrompt } from "./composeGen";
-import { fetchElevenLabsVoices } from "./elevenLabsVoices";
+import { fetchElevenLabsVoices, type ElevenLabsVoice } from "./elevenLabsVoices";
 import { stockAssetInDoc } from "./genvideo/docWriter";
 import { resolveVoice, synthesizeElevenLabsSpeech, synthesizeSpeech, SPEECH_VOICES } from "./tts";
 import { defaultVideoAspects } from "./videoModels";
@@ -2282,9 +2282,23 @@ async function synthesizeVoiceover(
   let offset = 0;
   let voice: string;
   if (audioModel.provider === "elevenlabs") {
-    voice = typeof input.voice === "string" ? input.voice.trim() : "";
-    if (!voice)
-      throw new ToolError(`${audioModel.label} needs a voice id — call list_voices with provider:"elevenlabs" first.`);
+    const wanted = typeof input.voice === "string" ? input.voice.trim() : "";
+    if (!wanted)
+      throw new ToolError(`${audioModel.label} needs a voice — say which one, or call list_voices with provider:"elevenlabs" to see the account's options.`);
+    // The user names a voice by its ElevenLabs display name at least as often
+    // as by raw id ("use Confident Narrator"), so resolve either the same way
+    // resolveVoice does for gemini: exact id, then case-insensitive name —
+    // and only once, since the account list rarely changes mid-conversation.
+    const known = await fetchElevenLabsVoices().catch(() => [] as ElevenLabsVoice[]);
+    const match =
+      known.find((v) => v.id === wanted) ??
+      known.find((v) => v.name.toLowerCase() === wanted.toLowerCase());
+    if (!match && known.length > 0) {
+      throw new ToolError(
+        `No ElevenLabs voice named "${wanted}" in this account. Options: ${known.map((v) => v.name).join(", ")}.`
+      );
+    }
+    voice = match?.id ?? wanted; // an empty account still lets a raw id through
     // ElevenLabs speaks one script per call — voiceover_generate is the only
     // caller that can reach this branch, and it always passes one segment.
     ({ asset } = await synthesizeElevenLabsSpeech(projectId, segments[0].text, {
