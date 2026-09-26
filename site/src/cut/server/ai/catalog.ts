@@ -109,16 +109,58 @@ Cutting speech well: pace is part of the message. Keep a beat of the speaker's o
 Cutting between two or more performances of the same song on matching lyrics (a cover vs the official video, a duet, several covers) is its own recipe — read the lyric-sync-cut skill.`,
 
   "lyric-sync-cut": `# Lyric-synced comparison cuts
-For "sync this cover to the official video", "cut between the two so they alternate on the same lyric", "cut between all four covers of this song" — a comparison edit between TWO OR MORE performances of the same song (a fan cover vs the official music video, several different covers). It cuts on track 0 like any other build, rotating through whichever sources there are; the part that's easy to get wrong is finding where the performances actually match, which is a measurement, not a guess.
+For "sync this cover to the official video," "cut between the two so they alternate on the same lyric," "alternate every 5+ seconds," or a comparison edit between two or more performances of the same song.
 
-1. Every performance must already be a project asset — import_url or have the user attach them before you start.
-2. Pick one source as the reference — whichever has the clearest structure — and call align_audio_sources(reference_asset_id, compared_asset_id) once for EACH other source against that same reference. This puts every source's matching moments on one shared clock: the reference's own timeline. (Two sources total means one call; four means three, each against the same reference.) A source over 240s analyzes in pieces — pass reference_from/to (and compared_from/to) to cover the rest, or to scope to just the requested section.
-3. Each call returns a dense run of matched points (one every step_seconds), not a single offset — never collapse them into one global shift and extrapolate. A cover can drift tempo across a song, so a cut point's mapping always comes from the alignment points nearest to that point, not from an offset measured earlier in the track. Treat a point below roughly 0.5 confidence as unreliable (an instrumental break, a spoken intro one source doesn't have, a key change) — a cut point only needs a reliable mapping for the source it switches FROM and the one it switches TO, not every source in the mix. Verify an uncertain point with listen_audio on both sources before cutting on it, and watch_video the shot to confirm it doesn't land mid-motion.
-4. Walk the reference's timeline and pick cut points where the incoming and outgoing source both have a confident nearby match, each segment at least as long as asked (default ~5s), rotating through every source in the mix (not just two) end to end through the requested section — a source with no reliable match for a stretch just sits out that segment. Prefer holding the current source a little longer over forcing the rotation into a low-confidence or mid-lyric cut — a delayed switch reads fine; a wrong one doesn't.
-5. Build it in order: for each segment, add_clip the asset (appended at the end), then map that segment's reference-time boundaries into the source's own time using the alignment points nearest each boundary (interpolate between the two closest when neither lands exactly on it). Before trusting that pair, sanity-check their implied local tempo (Δcompared / Δreference between them) against the trend of the points around them and against the last confirmed boundary — a pair whose implied tempo, or whose jump from that last boundary, swings sharply against the trend has likely locked onto the wrong occurrence of a repeated passage. But a smooth, trend-consistent pair is not proof either: monotonic and locally consistent only means the DTW path didn't jump — chroma still can't tell a repeated chorus or a second verse on the same chords from the one you want, so it can lock onto the wrong occurrence while reading as perfectly smooth. If the song has any repeated structure near a boundary, don't stop at the timing check — listen_audio the candidate window on the compared source and confirm the words are the expected next line, not just musically similar, before trim_clip to the mapped in/out. A clip's timeline length is (out-in)/speed, so it lands right after the previous segment with no gap to close.
-6. Audio: decide which source's sound plays under each segment (usually whichever is "up") and set_clip_muted every other source for that span — or, if the user wants one continuous bed (e.g. keep the original song's audio the whole way through), mute every clip from every other source instead.
-7. Unrelated sources rarely share a frame size or crop — set_framing (fill + pan) per clip so every source fills the project frame consistently.
-8. Refine by ear: listen_audio across each cut point. A clipped word means the trim landed mid-syllable — nudge in/out a few frames and recheck. A repeated or skipped verse has two different causes, and nudging only fixes one: first recompute the boundary from the nearest alignment points (stale interpolation, step 5). If the remapped point is still smooth and trend-consistent but the wrong lyric still plays, that's structural repeat ambiguity, not a bad mapping — listen_audio and confirm the actual words against the expected line, then move to the next candidate point whose words check out; don't just nudge frames on a confidently wrong match.`,
+The hard part is not placing clips; it is proving that the performances are on the same lyric. Use measured alignment, then verify by ear.
+
+1. Confirm the sources exist as project assets.
+   - Use get_state to identify the official/reference asset, cover assets, current timeline clips, project aspect, and whether there is an existing attempt to replace.
+   - If the user asks to rebuild the cut, delete_item only the existing timeline clips that are part of the old attempt. Do not delete project assets.
+
+2. Choose one reference clock.
+   - Use the clearest/fullest performance as the reference, usually the official video.
+   - For every other performance, call align_audio_sources(reference_asset_id, compared_asset_id).
+   - If a source is longer than 240s, align in scoped chunks with the from/to parameters.
+
+3. Read the alignment as a path, not as a single offset.
+   - Never compute one global offset and apply it everywhere.
+   - Map each planned reference-time boundary using nearby alignment points.
+   - Treat confidence below about 0.5 as unreliable.
+   - Treat a flat or stalled path as unreliable too: if many increasing reference times map to the same comparedTime, the compared source has probably ended, paused, or matched the wrong repeated passage. Do not build alternating segments through that range.
+
+4. Verify the song structure before cutting.
+   - Use listen_audio on the reference around the start, middle, likely cut points, and ending.
+   - Use listen_audio on the compared source at the mapped times, not merely the same numeric timestamps.
+   - When lyrics repeat, confirm the actual words and section, not just that the music sounds aligned.
+   - Use watch_video on each source, especially around candidate cut points, so a cut does not land on an awkward visual moment.
+
+5. Pick cut points on the reference timeline.
+   - Honor the requested minimum segment length, e.g. every 5+ seconds means each segment should be at least about 5 seconds unless the user explicitly wants faster cuts.
+   - Rotate through the sources when both outgoing and incoming sources have reliable mapped times.
+   - Prefer holding the current source longer over cutting on a low-confidence, flat, or mid-word alignment point.
+   - If one source runs out or the mapping becomes unreliable near the end, stop alternating there and finish with the source that still has valid audio/video, or ask the user whether to end the cut early.
+
+6. Build the timeline in order.
+   - For each segment, add_clip the chosen asset in sequence.
+   - Use trim_clip with source-second in/out values mapped from the reference segment boundaries.
+   - Remember: trim_clip uses source seconds; add_clip placement and the timeline use timeline seconds.
+   - A clip's timeline length is \`(out - in) / speed\`, so appended trimmed clips should form the song sequence without gaps.
+
+7. Set audio intentionally.
+   - If the segment's visible source should also be heard, leave that clip unmuted and set_clip_muted on other overlapping/unwanted audio.
+   - If the user wants one continuous official audio bed, mute every cover clip with set_clip_muted.
+   - If using alternating audio, listen across every joint to catch skipped syllables, doubled words, or mid-word cuts.
+
+8. Match framing.
+   - Use set_framing on each clip so mismatched source formats fill the project consistently.
+   - Use fill with panX/panY when needed to keep the singer or main subject visible.
+
+9. Refine and verify.
+   - Use listen_audio across each cut point after trimming.
+   - If a word is clipped, nudge the trim_clip in/out a few frames and listen again.
+   - If a lyric repeats or skips, do not just nudge frames. Re-check the alignment points near that boundary, then listen_audio to confirm the expected lyric section.
+   - Use watch_video or capture_frame to spot-check visual continuity and framing.
+   - If the tail alignment is flat, low-confidence, or maps beyond the compared source's usable ending, rebuild that tail with only the reliable source rather than forcing a fake alternation.`,
 
   "transitions-and-fades": `# Transitions, animations, looks & fades
 Route the ask to the right feature:
