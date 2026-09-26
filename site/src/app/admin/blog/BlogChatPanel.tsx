@@ -49,6 +49,28 @@ function deriveTitle(messages: BlogChatMessage[]): string {
   return firstUser ? firstUser.text.slice(0, 60) : "New chat";
 }
 
+// Which thread the panel reopens into, per post — the blog-chat twin of
+// Cut's own activeChatKey/readActiveChat/writeActiveChat (chatThreads.ts).
+// Threads themselves live server-side (Prisma), so unlike Cut's localStorage-
+// only history this only remembers an id; the messages still need fetching.
+const activeBlogChatKey = (postId: string) => `blog-ai-active-${postId}`;
+
+function readActiveBlogChat(postId: string): string | null {
+  try {
+    return localStorage.getItem(activeBlogChatKey(postId));
+  } catch {
+    return null;
+  }
+}
+
+function writeActiveBlogChat(postId: string, threadId: string): void {
+  try {
+    localStorage.setItem(activeBlogChatKey(postId), threadId);
+  } catch {
+    // Storage full/blocked — the open chat just won't be remembered.
+  }
+}
+
 // The post editor's persistent AI chat panel — a docked side panel (not a
 // modal), architecturally mirroring Cut's own AiPanel/ChatSession: thread
 // history, a model picker, and tool calls that edit the post directly as
@@ -74,6 +96,35 @@ export function BlogChatPanel({
   const threads = useBlogChatThreads(postId);
   const saveThread = useSaveBlogChatThread(postId);
   const deleteThread = useDeleteBlogChatThread(postId);
+
+  // Resume the thread the panel was last on for this post, instead of always
+  // starting blank — the saved id if it still exists, else the post's newest
+  // thread, exactly once per mount. A post with no threads yet just keeps
+  // the fresh chat already showing.
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (resumed.current || threads.isLoading) return;
+    resumed.current = true;
+    const savedId = readActiveBlogChat(postId);
+    const list = threads.data?.threads ?? [];
+    const resumeId = savedId && list.some((t) => t.id === savedId) ? savedId : list[0]?.id;
+    if (!resumeId) return;
+    void fetchBlogChatThread(postId, resumeId)
+      .then((thread) => {
+        setThreadId(resumeId);
+        setInitialMessages(Array.isArray(thread.data) ? (thread.data as BlogChatMessage[]) : []);
+      })
+      .catch(() => {
+        // The saved/newest thread is gone (deleted elsewhere) — the fresh
+        // chat already showing is the right fallback.
+      });
+  }, [threads.isLoading, threads.data, postId]);
+
+  // Persisted on every change — new chat, a resume above, or picking one
+  // from history — so the next open of this post reopens here.
+  useEffect(() => {
+    writeActiveBlogChat(postId, threadId);
+  }, [postId, threadId]);
 
   const newChat = () => {
     setThreadId(crypto.randomUUID());
