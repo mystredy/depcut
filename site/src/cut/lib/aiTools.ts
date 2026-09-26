@@ -33,6 +33,7 @@ import type { TimelineToolName } from "@/cut/components/Timeline.tools";
 import type { TopBarToolName } from "@/cut/components/TopBar.tools";
 import type { TransitionsToolName } from "@/cut/components/TransitionsPanel.tools";
 import { apiFetch, apiJson, getBackend } from "./backend";
+import { ALIGN_MAX_SECONDS, type AlignResult } from "./audioAlign";
 import { refFromAsset, refFromStockVideo, type AssetRef } from "./assetRef";
 import { chatOwner, tagChatAsset } from "./chatAssets";
 import { applyOwnership, clipFingerprint, useGenerate, type VideoAttempt, type VideoGenOptions } from "./generate";
@@ -51,6 +52,7 @@ import {
   saveAssetToLibrary,
 } from "./library";
 import {
+  alignAudioClientSide,
   captureFreezeFrame,
   detectSilenceClientSide,
   enrichAsset,
@@ -521,6 +523,46 @@ const toolRuns: Record<BrowserToolName, ToolRun> = {
           ? { note: "No silence at these settings — a higher threshold_db or shorter min_silence hears more." }
           : {}),
       };
+  },
+
+  align_audio_sources: async (s, input) => {
+    if (!s.projectId) throw new ToolError("No project open.");
+    const reference = requireItem(s.assets, input.reference_asset_id, "project asset");
+    const compared = requireItem(s.assets, input.compared_asset_id, "project asset");
+    if (reference.type === "image" || compared.type === "image")
+      throw new ToolError("Both sources must have audio — an image has none.");
+    const span = (asset: typeof reference, fromKey: string, toKey: string) => {
+      const dur = asset.duration > 0 ? asset.duration : Infinity;
+      const from = clamp(isNum(input[fromKey]) ? input[fromKey] : 0, 0, Number.isFinite(dur) ? dur : Infinity);
+      const cap = from + ALIGN_MAX_SECONDS;
+      const to = clamp(isNum(input[toKey]) ? input[toKey] : Number.isFinite(dur) ? dur : cap, from, cap);
+      if (!(to > from)) throw new ToolError(`"${asset.name}": from/to describe an empty range.`);
+      return { from, to };
+    };
+    const ref = span(reference, "reference_from", "reference_to");
+    const cmp = span(compared, "compared_from", "compared_to");
+    const stepSeconds = clamp(isNum(input.step_seconds) ? input.step_seconds : 1, 0.2, 10);
+    const result = await fetchAlignment(s.projectId, reference, compared, {
+      referenceFrom: ref.from,
+      referenceTo: ref.to,
+      comparedFrom: cmp.from,
+      comparedTo: cmp.to,
+      stepSeconds,
+    });
+    return {
+      reference: { assetId: reference.id, name: reference.name, from: round2(ref.from), to: round2(ref.to) },
+      compared: { assetId: compared.id, name: compared.name, from: round2(cmp.from), to: round2(cmp.to) },
+      confidence: result.confidence,
+      points: result.points.map((p) => ({
+        referenceTime: round2(p.referenceTime),
+        comparedTime: round2(p.comparedTime),
+        confidence: p.confidence,
+      })),
+      note:
+        result.confidence < 0.4
+          ? "Low overall confidence — these two ranges may share little matching content (mostly instrumental/silent, or not actually the same performance here). Verify with listen_audio before cutting on these points."
+          : "Match points are candidates, not gospel — verify a cut with listen_audio before trimming to it.",
+    };
   },
 
   listen_audio: async (s, input) => {
@@ -2394,6 +2436,44 @@ async function fetchSilences(
   }>(res);
   if (!res.ok) throw new ToolError(body.error ?? "Could not scan for silence.");
   return body.silences;
+}
+
+/** Matched timestamps between two sources' audio, by pitch content — the
+ * engine's ffmpeg-extracted PCM locally, the browser's decoded/downsampled
+ * PCM in cloud mode, both handed to the same chroma/DTW aligner. */
+async function fetchAlignment(
+  projectId: string,
+  reference: MediaAsset,
+  compared: MediaAsset,
+  opts: { referenceFrom: number; referenceTo: number; comparedFrom: number; comparedTo: number; stepSeconds: number }
+): Promise<AlignResult> {
+  if (getBackend().kind === "cloud") {
+    return alignAudioClientSide(reference.url, compared.url, {
+      referenceFrom: opts.referenceFrom,
+      referenceTo: opts.referenceTo,
+      comparedFrom: opts.comparedFrom,
+      comparedTo: opts.comparedTo,
+      stepSeconds: opts.stepSeconds,
+    }).catch((e) => {
+      throw new ToolError(e instanceof Error ? e.message : "Could not align the two sources.");
+    });
+  }
+  const res = await apiFetch(`/api/cut/projects/${projectId}/align-audio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      reference_file: reference.fileName,
+      compared_file: compared.fileName,
+      reference_from: opts.referenceFrom,
+      reference_to: opts.referenceTo,
+      compared_from: opts.comparedFrom,
+      compared_to: opts.comparedTo,
+      step_seconds: opts.stepSeconds,
+    }),
+  });
+  const body = await apiJson<AlignResult & { error?: string }>(res);
+  if (!res.ok) throw new ToolError(body.error ?? "Could not align the two sources.");
+  return body;
 }
 
 /** Pull a source's audio track off (video and audio alike) and inline it for

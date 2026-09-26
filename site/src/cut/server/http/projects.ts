@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
+import { ALIGN_MAX_SECONDS } from "@/cut/lib/audioAlign";
 import { normalizeAspect, type ProjectDoc } from "@/cut/lib/types";
-import { detectSilence, extractAudio, makeContactSheets, makeFreezeFrame, probeDims, probeDuration } from "../frames";
+import { alignAudioSources, detectSilence, extractAudio, makeContactSheets, makeFreezeFrame, probeDims, probeDuration } from "../frames";
 import {
   createProject,
   createProjectFolder,
@@ -460,6 +461,54 @@ export const projectsApi = {
       return Response.json({ silences, from, to });
     } catch (e) {
       return caught(e, "Could not scan for silence.");
+    }
+  },
+
+  /** Align two media files' audio by pitch content (chroma/DTW) so the
+   * assistant can cut on real matched timestamps instead of guessing by ear. */
+  async alignAudio(req: Request, { id }: { id: string }) {
+    try {
+      if (!(await readProject(id))) return err("Project not found.", 404);
+      const body = (await req.json()) as {
+        reference_file?: string;
+        compared_file?: string;
+        reference_from?: number;
+        reference_to?: number;
+        compared_from?: number;
+        compared_to?: number;
+        step_seconds?: number;
+      };
+      if (!body.reference_file) return err("reference_file is required.", 400);
+      if (!body.compared_file) return err("compared_file is required.", 400);
+      const span = async (file: string, from?: number, to?: number) => {
+        const start = Math.max(0, typeof from === "number" ? from : 0);
+        const end = clamp(
+          typeof to === "number" ? to : await probeDuration(mediaPath(id, file)),
+          start,
+          start + ALIGN_MAX_SECONDS
+        );
+        if (!(end > start)) throw new Error(`Could not read "${file}"'s duration.`);
+        return { start, end };
+      };
+      const [reference, compared] = await Promise.all([
+        span(body.reference_file, body.reference_from, body.reference_to),
+        span(body.compared_file, body.compared_from, body.compared_to),
+      ]);
+      const stepSeconds = clamp(typeof body.step_seconds === "number" ? body.step_seconds : 1, 0.2, 10);
+      const result = await alignAudioSources(id, body.reference_file, body.compared_file, {
+        referenceFrom: reference.start,
+        referenceTo: reference.end,
+        comparedFrom: compared.start,
+        comparedTo: compared.end,
+        stepSeconds,
+      });
+      return Response.json({
+        ...result,
+        reference: { from: reference.start, to: reference.end },
+        compared: { from: compared.start, to: compared.end },
+      });
+    } catch (e) {
+      return caught(e, "Could not align the two sources.");
     }
   },
 

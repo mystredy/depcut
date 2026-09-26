@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { ALIGN_SAMPLE_RATE, alignAudio, type AlignResult } from "@/cut/lib/audioAlign";
 import { mediaPath } from "./projects";
 import { num, round } from "./util";
 
@@ -554,4 +555,68 @@ export function extractAudio(
       reject(new Error(errTail(err) || "Could not read the audio."));
     });
   });
+}
+
+/** Decode a source's audio span to raw mono float32 PCM at the alignment
+ * analysis rate (ffmpeg does the resample/mixdown — no anti-alias filter
+ * needed on our end). Times are absolute source seconds. */
+function extractPcm(
+  projectId: string,
+  sourceFile: string,
+  opts: { from: number; to?: number },
+): Promise<Float32Array> {
+  const { from, to } = opts;
+  return new Promise((resolve, reject) => {
+    const p = spawn("ffmpeg", [
+      "-hide_banner", "-nostats", "-loglevel", "error",
+      ...(from > 0 ? ["-ss", num(from)] : []),
+      ...(to !== undefined ? ["-t", num(to - from)] : []),
+      "-i", mediaPath(projectId, sourceFile),
+      "-vn", "-sn", "-dn",
+      "-ac", "1", "-ar", String(ALIGN_SAMPLE_RATE), "-f", "f32le", "-",
+    ]);
+    const chunks: Buffer[] = [];
+    let err = "";
+    const timer = setTimeout(() => {
+      p.kill("SIGKILL");
+      reject(new Error("Reading the audio timed out — try a shorter range."));
+    }, 120_000);
+    timer.unref();
+    p.stdout.on("data", (d: Buffer) => chunks.push(d));
+    p.stderr.on("data", (d) => (err = (err + d.toString()).slice(-4000)));
+    p.on("error", (e) =>
+      reject(
+        e.message.includes("ENOENT")
+          ? new Error("ffmpeg was not found. Install it with: brew install ffmpeg")
+          : e,
+      ),
+    );
+    p.on("close", (code) => {
+      clearTimeout(timer);
+      if (code !== 0 || chunks.length === 0) {
+        if (/does not contain any stream|matches no streams|Cannot find a matching stream/i.test(err))
+          return reject(new Error("This file has no audio track."));
+        return reject(new Error(errTail(err) || "Could not read the audio."));
+      }
+      const buf = Buffer.concat(chunks);
+      resolve(new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4));
+    });
+  });
+}
+
+/** Align two sources by pitch content (chroma/DTW — see lib/audioAlign.ts):
+ * extract each span to mono PCM at the analysis rate, then hand both to the
+ * shared aligner. Times are absolute source seconds; an empty `to` runs to
+ * the end. */
+export async function alignAudioSources(
+  projectId: string,
+  referenceFile: string,
+  comparedFile: string,
+  opts: { referenceFrom: number; referenceTo?: number; comparedFrom: number; comparedTo?: number; stepSeconds?: number },
+): Promise<AlignResult> {
+  const [referencePcm, comparedPcm] = await Promise.all([
+    extractPcm(projectId, referenceFile, { from: opts.referenceFrom, to: opts.referenceTo }),
+    extractPcm(projectId, comparedFile, { from: opts.comparedFrom, to: opts.comparedTo }),
+  ]);
+  return alignAudio(referencePcm, comparedPcm, ALIGN_SAMPLE_RATE, opts.stepSeconds);
 }

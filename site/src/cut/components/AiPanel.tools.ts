@@ -53,6 +53,20 @@ export const AI_PANEL_TOOLS = [
     }),
   },
   {
+    name: "align_audio_sources",
+    description:
+      "Numerically align two sources of the SAME performance (a cover against the official track, two takes of the same song) by pitch content — not by ear. Returns matched timestamp pairs (reference source seconds ↔ compared source seconds) plus a confidence per point and overall, so you can cut on real measured sync instead of an estimate. Tempo drift, a different intro, or a key change are exactly what this is for — it warps, it doesn't assume a fixed offset. Each source analyzes at most 240s per call; scope a longer file with the from/to pair for whichever side needs it. Read the lyric-sync-cut skill before using this for a comparison edit — it still wants listen_audio to verify a cut doesn't land mid-word, and watch_video to confirm the shot.",
+    inputSchema: obj({
+      reference_asset_id: str("Project asset id to align against"),
+      compared_asset_id: str("Project asset id to find matching moments in"),
+      reference_from: num("Reference source start s (default 0)"),
+      reference_to: num("Reference source end s (default: its end, capped at 240s of analysis)"),
+      compared_from: num("Compared source start s (default 0)"),
+      compared_to: num("Compared source end s (default: its end, capped at 240s of analysis)"),
+      step_seconds: num("Spacing between returned match points, 0.2–10 (default 1)"),
+    }, ["reference_asset_id", "compared_asset_id"]),
+  },
+  {
     name: "wait_for_renders",
     description:
       "Block until this project's in-flight video renders settle (up to ~100s), then report each one: landed (with its asset id, ready to place) or failed (with the error). Call it whenever the user's ask depends on a render that `renders` in the state shows as running — \"add it when it's done\", \"assemble the clips\" — and then finish the job in the same turn; never tell the user to come back and report when a card appears. If some renders are still running when it returns, say how long they've been going and call it again on the user's go-ahead.",

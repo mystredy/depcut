@@ -109,15 +109,16 @@ Cutting speech well: pace is part of the message. Keep a beat of the speaker's o
 Alternating between two performances of the same song on matching lyrics (a cover vs the official video, a duet, two covers) is its own recipe — read the lyric-sync-cut skill.`,
 
   "lyric-sync-cut": `# Lyric-synced comparison cuts
-For "sync this cover to the official video", "cut between the two so they alternate on the same lyric" — a duet-style comparison edit between two performances of the same song (a fan cover vs the official music video, two different covers). No dedicated tool for this: it's an ordinary alternating build on track 0 once you know where the lyrics land in each source.
+For "sync this cover to the official video", "cut between the two so they alternate on the same lyric" — a duet-style comparison edit between two performances of the same song (a fan cover vs the official music video, two different covers). It alternates on track 0 like any other build; the part that's easy to get wrong is finding where the two performances actually match, which is a measurement, not a guess.
 
 1. Both performances must already be project assets — import_url or have the user attach them before you start.
-2. Build your own lyric map for each source by ear, not by guessing: listen_audio(asset_id, from?, to?) in ~20–30s stretches across the whole source, noting (lyric line, source-seconds) as you go. The two recordings drift in tempo against each other, so match segments by lyric TEXT between the two maps, never by wall-clock position — and never invent a line you didn't actually hear.
-3. Pick cut points on lyric lines both sources share, each segment at least as long as asked (default ~5s), alternating which source is "up," end to end through the requested section. watch_video the shot around a candidate cut to confirm it doesn't land mid-motion.
-4. Build it in order: for each segment, add_clip the asset (appended at the end) then trim_clip its in/out to that source's window for that lyric — a clip's timeline length is (out-in)/speed, so it lands right after the previous segment with no gap to close.
-5. Audio: decide which source's sound plays under each segment (usually whichever is "up") and set_clip_muted the other for that span — or, if the user wants one continuous bed (e.g. keep the original song's audio the whole way through), mute every clip from the other source instead.
-6. Two unrelated sources rarely share a frame size or crop — set_framing (fill + pan) per clip so both sides fill the project frame consistently.
-7. Refine by ear: listen_audio across each cut point; a clipped word means the trim landed mid-syllable — nudge in/out a few frames and recheck.`,
+2. align_audio_sources(reference_asset_id, compared_asset_id): numerically aligns the two by pitch content (chroma/DTW), tempo drift and all, and returns matched timestamp pairs with a confidence per point. Pick whichever source has the clearer structure as the reference. A source over 240s analyzes in pieces — pass reference_from/to (and compared_from/to) to cover the rest, or to scope to just the requested section.
+3. Points below ~0.5 confidence are unreliable (an instrumental break, a spoken intro one source doesn't have, a key change) — don't cut on those blindly. listen_audio around a candidate cut point on both sources to confirm what's actually there and that it isn't mid-word; watch_video the shot to confirm it doesn't land mid-motion.
+4. Pick cut points from the matched pairs, each segment at least as long as asked (default ~5s), alternating which source is "up," end to end through the requested section.
+5. Build it in order: for each segment, add_clip the asset (appended at the end) then trim_clip its in/out to that source's window — a clip's timeline length is (out-in)/speed, so it lands right after the previous segment with no gap to close.
+6. Audio: decide which source's sound plays under each segment (usually whichever is "up") and set_clip_muted the other for that span — or, if the user wants one continuous bed (e.g. keep the original song's audio the whole way through), mute every clip from the other source instead.
+7. Two unrelated sources rarely share a frame size or crop — set_framing (fill + pan) per clip so both sides fill the project frame consistently.
+8. Refine by ear: listen_audio across each cut point; a clipped word means the trim landed mid-syllable — nudge in/out a few frames and recheck.`,
 
   "transitions-and-fades": `# Transitions, animations, looks & fades
 Route the ask to the right feature:

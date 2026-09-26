@@ -1,5 +1,6 @@
 "use client";
 
+import { ALIGN_SAMPLE_RATE, alignAudio, type AlignResult } from "./audioAlign";
 import { scanSilence, type PcmChunk } from "./audioScan";
 import { apiFetch, apiJson, getBackend, type CutBackend } from "./backend";
 import { quotaErrorMessage } from "./backend/cloud";
@@ -816,6 +817,61 @@ export async function detectSilenceClientSide(
     }
   }
   return scanSilence(pcm(), { ...opts, from });
+}
+
+/** Mono mixdown of an AudioBuffer, box-averaged down to `targetRate` — a
+ * crude but adequate low-pass for chroma content, which lives well under
+ * both this and the source's own Nyquist frequency. */
+function downsampleMono(buf: AudioBuffer, targetRate: number): Float32Array {
+  const channels = Array.from({ length: buf.numberOfChannels }, (_, c) => buf.getChannelData(c));
+  const n = buf.length;
+  const mono = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let sum = 0;
+    for (const ch of channels) sum += ch[i];
+    mono[i] = sum / channels.length;
+  }
+  if (buf.sampleRate <= targetRate) return mono;
+  const ratio = buf.sampleRate / targetRate;
+  const outLen = Math.max(1, Math.floor(n / ratio));
+  const out = new Float32Array(outLen);
+  for (let o = 0; o < outLen; o++) {
+    const start = Math.floor(o * ratio);
+    const end = Math.min(n, Math.floor((o + 1) * ratio));
+    let sum = 0;
+    let count = 0;
+    for (let i = start; i < end; i++) {
+      sum += mono[i];
+      count++;
+    }
+    out[o] = count > 0 ? sum / count : 0;
+  }
+  return out;
+}
+
+/** Cloud twin of the engine's align route: decode both sources' audio spans
+ * in the browser, downsample each to a mono analysis rate, and align them by
+ * chroma/DTW (see audioAlign.ts). */
+export async function alignAudioClientSide(
+  referenceUrl: string,
+  comparedUrl: string,
+  opts: {
+    referenceFrom: number;
+    referenceTo?: number;
+    comparedFrom: number;
+    comparedTo?: number;
+    stepSeconds?: number;
+  }
+): Promise<AlignResult> {
+  const [refBuf, cmpBuf] = await Promise.all([
+    decodeAudioSpan(referenceUrl, opts.referenceFrom, opts.referenceTo),
+    decodeAudioSpan(comparedUrl, opts.comparedFrom, opts.comparedTo),
+  ]);
+  if (!refBuf) throw new Error("The reference source has no audio track.");
+  if (!cmpBuf) throw new Error("The compared source has no audio track.");
+  const refPcm = downsampleMono(refBuf, ALIGN_SAMPLE_RATE);
+  const cmpPcm = downsampleMono(cmpBuf, ALIGN_SAMPLE_RATE);
+  return alignAudio(refPcm, cmpPcm, ALIGN_SAMPLE_RATE, opts.stepSeconds);
 }
 
 /** Cloud twin of the engine's audio-extract route: render a span of the
