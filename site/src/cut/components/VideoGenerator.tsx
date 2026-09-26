@@ -208,7 +208,18 @@ function refFromImageBlob(blob: Blob, name: string): AssetRef {
 // async (the model can take a while), so this polls
 // /api/inference/assets/refresh itself rather than reaching into generate.ts's
 // project-scoped job store; image is a single synchronous call.
-export function VideoGenerator({ className }: { className?: string }) {
+export function VideoGenerator({
+  className,
+  promptPosition = "top",
+}: {
+  className?: string;
+  /** Where the prompt composer sits relative to results/history (default
+   * "top", matching the dashboard's embedded generator). The standalone
+   * text-to-video/text-to-image pages want "bottom" instead — history and
+   * results read top-down, the composer stays reachable at the bottom like a
+   * chat input. */
+  promptPosition?: "top" | "bottom";
+}) {
   const signedIn = useSignedIn();
   const signedOut = signedIn === false;
 
@@ -515,213 +526,215 @@ export function VideoGenerator({ className }: { className?: string }) {
     if (IMAGE_MODELS.some((m) => m.tier === row.tier)) setImageTier(row.tier as ImageTier);
   };
 
-  return (
-    <div className={cn("space-y-5", className)}>
-      <div className="relative flex flex-col rounded-2xl border border-input bg-card focus-within:border-ring">
-        <RefChips
-          refs={refs}
-          onRemove={(r) => setRefs((prev) => prev.filter((x) => !(x.scope === r.scope && x.id === r.id)))}
-          className="p-2.5 pb-0"
-          thumbClassName="size-12"
-        />
-        <MentionTextarea
-          className="min-h-[100px] w-full resize-y bg-transparent px-3.5 py-3 text-[13px] leading-relaxed outline-none"
-          placeholder="What do you want to create?"
-          value={prompt}
-          onChange={setPrompt}
-          candidates={candidates}
-          submitKey="mod-enter"
-          menuSide="bottom"
-          onSubmit={() => void generate()}
-          attachedRefs={refs}
-          uploadFile={(file) => Promise.resolve(refFromLocalFile(file))}
-          inputRef={promptRef}
-        />
+  const composer = (
+    <div className="relative flex flex-col rounded-2xl border border-input bg-card focus-within:border-ring">
+      <RefChips
+        refs={refs}
+        onRemove={(r) => setRefs((prev) => prev.filter((x) => !(x.scope === r.scope && x.id === r.id)))}
+        className="p-2.5 pb-0"
+        thumbClassName="size-12"
+      />
+      <MentionTextarea
+        className="min-h-[100px] w-full resize-y bg-transparent px-3.5 py-3 text-[13px] leading-relaxed outline-none"
+        placeholder="What do you want to create?"
+        value={prompt}
+        onChange={setPrompt}
+        candidates={candidates}
+        submitKey="mod-enter"
+        menuSide="bottom"
+        onSubmit={() => void generate()}
+        attachedRefs={refs}
+        uploadFile={(file) => Promise.resolve(refFromLocalFile(file))}
+        inputRef={promptRef}
+      />
 
-        <div className="flex flex-col gap-2 px-3 pb-3">
-          {settingsOpen &&
-            (kind === "video" ? (
-              <div className="flex flex-col gap-3 rounded-xl border border-input bg-muted/30 p-3">
-                {selectableModels.length > 1 && (
-                  <SegRow
-                    title="Model"
-                    value={tier}
-                    onChange={setTier}
-                    options={selectableModels.map((m) => ({ value: m.tier, label: m.model }))}
-                  />
-                )}
-                {acceptsReferences && (
-                  <SegRow
-                    title="How references are used"
-                    value={refMode}
-                    onChange={setRefMode}
-                    options={REF_MODE_OPTIONS}
-                  />
-                )}
-                <SegRow title="Aspect ratio" value={effAspect} onChange={setAspect} options={aspectOptions} />
-                <SegRow title="Resolution" value={effResolution} onChange={setResolution} options={resolutionOptions} />
-                <div className="h-px shrink-0 bg-border" />
+      <div className="flex flex-col gap-2 px-3 pb-3">
+        {settingsOpen &&
+          (kind === "video" ? (
+            <div className="flex flex-col gap-3 rounded-xl border border-input bg-muted/30 p-3">
+              {selectableModels.length > 1 && (
                 <SegRow
-                  title="Duration"
-                  value={effDurationSeconds}
-                  onChange={setDurationSeconds}
-                  options={durationOptions}
-                />
-                {model.provider === "gemini-omni" && (
-                  <p className="px-0.5 text-[10.5px] leading-relaxed text-muted-foreground">
-                    {OMNI_BEST_EFFORT_NOTE}
-                  </p>
-                )}
-                <SegRow title="Number of takes" value={count} onChange={setCount} options={COUNT_OPTIONS} />
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3 rounded-xl border border-input bg-muted/30 p-3">
-                {selectableImageModels.length > 1 && (
-                  <SegRow
-                    title="Model"
-                    value={imageTier}
-                    onChange={setImageTier}
-                    options={selectableImageModels.map((m) => ({ value: m.tier, label: m.label }))}
-                  />
-                )}
-                <SegRow
-                  title="Aspect ratio"
-                  value={imageAspect}
-                  onChange={setImageAspect}
-                  options={imageAspectOptions}
-                />
-                <SegRow title="Number of takes" value={count} onChange={setCount} options={COUNT_OPTIONS} />
-              </div>
-            ))}
-          <div className="flex items-center justify-between gap-1">
-            <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
-              <button
-                type="button"
-                title="More settings"
-                aria-label="More settings"
-                aria-pressed={settingsOpen}
-                onClick={() => setSettingsOpen((v) => !v)}
-                className={cn(
-                  "grid size-7 shrink-0 place-items-center rounded-full transition-colors",
-                  settingsOpen
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                )}
-              >
-                <SlidersHorizontal className="size-4" />
-              </button>
-              <div className="mx-0.5 h-4 w-px shrink-0 bg-border" />
-              <IconSelect
-                icon={kind === "video" ? VideoIcon : ImageIcon}
-                title="Content type"
-                value={kind}
-                display={kind === "video" ? "Video" : "Image"}
-                options={KIND_OPTIONS}
-                onChange={setKind}
-              />
-              {(kind === "image" || acceptsReferences) && (
-                <AddRefButton
-                  onPick={addRef}
-                  onUploadFiles={(files) => {
-                    for (const file of files) addRef(refFromLocalFile(file));
-                  }}
-                  prompt={prompt}
-                  onPromptChange={setPrompt}
-                  inputRef={promptRef}
-                  accept="image/*,video/*"
+                  title="Model"
+                  value={tier}
+                  onChange={setTier}
+                  options={selectableModels.map((m) => ({ value: m.tier, label: m.model }))}
                 />
               )}
-              {kind === "video" ? (
-                <>
-                  <IconSelect
-                    icon={Film}
-                    title="Model"
-                    value={tier}
-                    display={model.model}
-                    options={selectableModels.map((m) => ({ value: m.tier, label: m.model }))}
-                    onChange={setTier}
-                  />
-                  <IconSelect
-                    icon={Sparkles}
-                    title="Resolution"
-                    value={effResolution}
-                    display={effResolution}
-                    options={resolutionOptions}
-                    onChange={setResolution}
-                  />
-                  {acceptsReferences && (
-                    <IconSelect
-                      icon={refModeOption.icon}
-                      title="How references are used"
-                      value={refMode}
-                      display={refModeOption.label}
-                      options={REF_MODE_OPTIONS}
-                      onChange={setRefMode}
-                    />
-                  )}
-                </>
-              ) : (
-                <IconSelect
-                  icon={Sparkles}
+              {acceptsReferences && (
+                <SegRow
+                  title="How references are used"
+                  value={refMode}
+                  onChange={setRefMode}
+                  options={REF_MODE_OPTIONS}
+                />
+              )}
+              <SegRow title="Aspect ratio" value={effAspect} onChange={setAspect} options={aspectOptions} />
+              <SegRow title="Resolution" value={effResolution} onChange={setResolution} options={resolutionOptions} />
+              <div className="h-px shrink-0 bg-border" />
+              <SegRow
+                title="Duration"
+                value={effDurationSeconds}
+                onChange={setDurationSeconds}
+                options={durationOptions}
+              />
+              {model.provider === "gemini-omni" && (
+                <p className="px-0.5 text-[10.5px] leading-relaxed text-muted-foreground">
+                  {OMNI_BEST_EFFORT_NOTE}
+                </p>
+              )}
+              <SegRow title="Number of takes" value={count} onChange={setCount} options={COUNT_OPTIONS} />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 rounded-xl border border-input bg-muted/30 p-3">
+              {selectableImageModels.length > 1 && (
+                <SegRow
                   title="Model"
                   value={imageTier}
-                  display={imageModel.label}
-                  options={selectableImageModels.map((m) => ({ value: m.tier, label: m.label }))}
                   onChange={setImageTier}
+                  options={selectableImageModels.map((m) => ({ value: m.tier, label: m.label }))}
                 />
               )}
-              <IconSelect
-                icon={Layers}
-                title="Number of takes"
-                value={count}
-                display={`x${count}`}
-                options={COUNT_OPTIONS}
-                onChange={setCount}
+              <SegRow
+                title="Aspect ratio"
+                value={imageAspect}
+                onChange={setImageAspect}
+                options={imageAspectOptions}
               />
-              {kind === "video" && (
-                <IconSelect
-                  icon={Clock}
-                  title="Duration"
-                  value={effDurationSeconds}
-                  display={`${effDurationSeconds}s`}
-                  options={durationOptions}
-                  onChange={setDurationSeconds}
-                />
-              )}
-              {kind === "video" ? (
-                <IconSelect
-                  icon={Scaling}
-                  title="Aspect ratio"
-                  value={effAspect}
-                  display={effAspect}
-                  options={aspectOptions}
-                  onChange={setAspect}
-                />
-              ) : (
-                <IconSelect
-                  icon={Scaling}
-                  title="Aspect ratio"
-                  value={imageAspect}
-                  display={imageAspect}
-                  options={imageAspectOptions}
-                  onChange={setImageAspect}
-                />
-              )}
+              <SegRow title="Number of takes" value={count} onChange={setCount} options={COUNT_OPTIONS} />
             </div>
+          ))}
+        <div className="flex items-center justify-between gap-1">
+          <div className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
             <button
               type="button"
-              title={kind === "video" ? "Generate video" : "Generate image"}
-              aria-label={kind === "video" ? "Generate video" : "Generate image"}
-              disabled={!prompt.trim() || signedOut || busy}
-              onClick={() => void generate()}
-              className="grid size-8 shrink-0 place-items-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90 disabled:opacity-40"
+              title="More settings"
+              aria-label="More settings"
+              aria-pressed={settingsOpen}
+              onClick={() => setSettingsOpen((v) => !v)}
+              className={cn(
+                "grid size-7 shrink-0 place-items-center rounded-full transition-colors",
+                settingsOpen
+                  ? "bg-muted text-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
             >
-              {busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
+              <SlidersHorizontal className="size-4" />
             </button>
+            <div className="mx-0.5 h-4 w-px shrink-0 bg-border" />
+            <IconSelect
+              icon={kind === "video" ? VideoIcon : ImageIcon}
+              title="Content type"
+              value={kind}
+              display={kind === "video" ? "Video" : "Image"}
+              options={KIND_OPTIONS}
+              onChange={setKind}
+            />
+            {(kind === "image" || acceptsReferences) && (
+              <AddRefButton
+                onPick={addRef}
+                onUploadFiles={(files) => {
+                  for (const file of files) addRef(refFromLocalFile(file));
+                }}
+                prompt={prompt}
+                onPromptChange={setPrompt}
+                inputRef={promptRef}
+                accept="image/*,video/*"
+              />
+            )}
+            {kind === "video" ? (
+              <>
+                <IconSelect
+                  icon={Film}
+                  title="Model"
+                  value={tier}
+                  display={model.model}
+                  options={selectableModels.map((m) => ({ value: m.tier, label: m.model }))}
+                  onChange={setTier}
+                />
+                <IconSelect
+                  icon={Sparkles}
+                  title="Resolution"
+                  value={effResolution}
+                  display={effResolution}
+                  options={resolutionOptions}
+                  onChange={setResolution}
+                />
+                {acceptsReferences && (
+                  <IconSelect
+                    icon={refModeOption.icon}
+                    title="How references are used"
+                    value={refMode}
+                    display={refModeOption.label}
+                    options={REF_MODE_OPTIONS}
+                    onChange={setRefMode}
+                  />
+                )}
+              </>
+            ) : (
+              <IconSelect
+                icon={Sparkles}
+                title="Model"
+                value={imageTier}
+                display={imageModel.label}
+                options={selectableImageModels.map((m) => ({ value: m.tier, label: m.label }))}
+                onChange={setImageTier}
+              />
+            )}
+            <IconSelect
+              icon={Layers}
+              title="Number of takes"
+              value={count}
+              display={`x${count}`}
+              options={COUNT_OPTIONS}
+              onChange={setCount}
+            />
+            {kind === "video" && (
+              <IconSelect
+                icon={Clock}
+                title="Duration"
+                value={effDurationSeconds}
+                display={`${effDurationSeconds}s`}
+                options={durationOptions}
+                onChange={setDurationSeconds}
+              />
+            )}
+            {kind === "video" ? (
+              <IconSelect
+                icon={Scaling}
+                title="Aspect ratio"
+                value={effAspect}
+                display={effAspect}
+                options={aspectOptions}
+                onChange={setAspect}
+              />
+            ) : (
+              <IconSelect
+                icon={Scaling}
+                title="Aspect ratio"
+                value={imageAspect}
+                display={imageAspect}
+                options={imageAspectOptions}
+                onChange={setImageAspect}
+              />
+            )}
           </div>
+          <button
+            type="button"
+            title={kind === "video" ? "Generate video" : "Generate image"}
+            aria-label={kind === "video" ? "Generate video" : "Generate image"}
+            disabled={!prompt.trim() || signedOut || busy}
+            onClick={() => void generate()}
+            className="grid size-8 shrink-0 place-items-center rounded-full bg-foreground text-background transition-opacity hover:opacity-90 disabled:opacity-40"
+          >
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
+          </button>
         </div>
       </div>
+    </div>
+  );
 
+  const extras = (
+    <>
       {signedOut ? (
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           Generating runs on your DepCut account.{" "}
@@ -818,6 +831,14 @@ export function VideoGenerator({ className }: { className?: string }) {
             onUseAgain={reuseImage}
           />
         ))}
+    </>
+  );
+
+  return (
+    <div className={cn("space-y-5", className)}>
+      {promptPosition === "top" && composer}
+      {extras}
+      {promptPosition === "bottom" && composer}
     </div>
   );
 }

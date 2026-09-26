@@ -13,7 +13,7 @@ export default function TextToVideoPage() {
           Describe a clip and DepCut&apos;s AI model will render it.
         </p>
       </div>
-      <VideoGenerator />
+      <VideoGenerator promptPosition="bottom" />
     </div>
   );
 }
