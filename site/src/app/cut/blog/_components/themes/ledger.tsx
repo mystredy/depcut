@@ -2,22 +2,25 @@ import Link from "next/link";
 
 import { categorySlug } from "@/lib/blog/categories";
 
+import { THEME_FONTS } from "./fonts";
 import { formatDate, FullBleedSection, type BlogListPost } from "./shared";
 
 const ACCENT = "#8A6A2F";
+const HEADLINE = THEME_FONTS.ledger.headline;
+const BODY = THEME_FONTS.ledger.body;
 
 export function LedgerList({ posts }: { posts: BlogListPost[] }) {
   return (
     <FullBleedSection background="#F7F5EF">
       <div
         className="flex flex-col gap-8"
-        style={{ color: "#14110F", fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}
+        style={{ color: "#14110F", fontFamily: BODY }}
       >
         <div
           className="flex items-baseline justify-between pb-4"
           style={{ borderBottom: "2px solid #14110F" }}
         >
-          <span style={{ fontFamily: "'Source Serif 4', Georgia, serif", fontSize: 17, fontWeight: 600 }}>
+          <span style={{ fontFamily: HEADLINE, fontSize: 17, fontWeight: 600 }}>
             DepCut Intel
           </span>
           <span className="text-[11px] font-medium tracking-[0.12em] uppercase" style={{ color: "#6B6558" }}>
@@ -31,7 +34,7 @@ export function LedgerList({ posts }: { posts: BlogListPost[] }) {
                 <div className="flex items-center gap-2.5">
                   <span
                     style={{
-                      fontFamily: "'Source Serif 4', Georgia, serif",
+                      fontFamily: HEADLINE,
                       fontSize: 28,
                       fontWeight: 600,
                       color: ACCENT,
@@ -50,7 +53,7 @@ export function LedgerList({ posts }: { posts: BlogListPost[] }) {
                 </div>
                 <h2
                   className="text-[19px] leading-snug font-semibold"
-                  style={{ fontFamily: "'Source Serif 4', Georgia, serif", color: "#14110F" }}
+                  style={{ fontFamily: HEADLINE, color: "#14110F" }}
                 >
                   {post.title}
                 </h2>

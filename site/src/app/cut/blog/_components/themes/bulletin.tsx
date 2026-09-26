@@ -2,17 +2,20 @@ import Link from "next/link";
 
 import { categorySlug } from "@/lib/blog/categories";
 
+import { THEME_FONTS } from "./fonts";
 import { coverUrl, formatDate, FullBleedSection, type BlogListPost } from "./shared";
 
 const COVER_COLORS = ["#FF5A36", "#16130F", "#C9C4B4"];
 const ACCENT = "#FF5A36";
+const HEADLINE = THEME_FONTS.bulletin.headline;
+const BODY = THEME_FONTS.bulletin.body;
 
 export function BulletinList({ posts }: { posts: BlogListPost[] }) {
   return (
     <FullBleedSection background="#FFFFFF">
       <div
         className="flex flex-col gap-8"
-        style={{ color: "#16130F", fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}
+        style={{ color: "#16130F", fontFamily: BODY }}
       >
         <div
           className="flex items-center justify-between pb-3.5"
@@ -20,7 +23,7 @@ export function BulletinList({ posts }: { posts: BlogListPost[] }) {
         >
           <span
             className="text-[20px] font-black tracking-[-0.01em] uppercase"
-            style={{ fontFamily: "'Archivo', system-ui, sans-serif" }}
+            style={{ fontFamily: HEADLINE }}
           >
             DepCut Bulletin
           </span>
@@ -52,7 +55,7 @@ export function BulletinList({ posts }: { posts: BlogListPost[] }) {
                   </div>
                   <h2
                     className="text-[19px] leading-[1.15] font-black tracking-[-0.01em]"
-                    style={{ fontFamily: "'Archivo', system-ui, sans-serif" }}
+                    style={{ fontFamily: HEADLINE }}
                   >
                     {post.title}
                   </h2>

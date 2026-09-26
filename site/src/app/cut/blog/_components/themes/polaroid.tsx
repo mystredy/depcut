@@ -2,17 +2,19 @@ import Link from "next/link";
 
 import { categorySlug } from "@/lib/blog/categories";
 
+import { CAVEAT_FONT, THEME_FONTS } from "./fonts";
 import { coverUrl, FullBleedSection, type BlogListPost } from "./shared";
 
 const BLOCKS = ["#FF8B6B", "#6BC7B8", "#B3A6E0"];
 const ROTATIONS = ["-2deg", "2deg", "-1deg"];
 const ACCENT = "#D6455D";
+const HEADLINE = THEME_FONTS.polaroid.headline;
 
 export function PolaroidList({ posts }: { posts: BlogListPost[] }) {
   return (
     <FullBleedSection background="#FDF6EC">
       <div className="flex flex-col gap-9" style={{ color: "#2B241C" }}>
-        <span style={{ fontFamily: "'Baloo 2', system-ui, sans-serif", fontSize: 22, fontWeight: 700 }}>
+        <span style={{ fontFamily: HEADLINE, fontSize: 22, fontWeight: 700 }}>
           DepCut Blog
         </span>
         <div className="flex flex-wrap items-start gap-10">
@@ -42,13 +44,13 @@ export function PolaroidList({ posts }: { posts: BlogListPost[] }) {
                     )}
                   </div>
                   {post.tags[0] && (
-                    <p className="mt-3 text-[19px]" style={{ fontFamily: "'Caveat', cursive", color: ACCENT }}>
+                    <p className="mt-3 text-[19px]" style={{ fontFamily: CAVEAT_FONT, color: ACCENT }}>
                       {post.tags[0]}
                     </p>
                   )}
                   <h2
                     className="mt-0.5 text-[16px] leading-[1.3] font-semibold"
-                    style={{ fontFamily: "'Baloo 2', system-ui, sans-serif" }}
+                    style={{ fontFamily: HEADLINE }}
                   >
                     {post.title}
                   </h2>

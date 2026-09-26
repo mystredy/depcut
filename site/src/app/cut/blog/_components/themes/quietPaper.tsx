@@ -2,13 +2,16 @@ import Link from "next/link";
 
 import { categorySlug } from "@/lib/blog/categories";
 
+import { THEME_FONTS } from "./fonts";
 import { formatDate, FullBleedSection, type BlogListPost } from "./shared";
+
+const HEADLINE = THEME_FONTS.quietPaper.headline;
 
 export function QuietPaperList({ posts }: { posts: BlogListPost[] }) {
   return (
     <FullBleedSection background="#F6F2E9">
       <div className="flex flex-col gap-10" style={{ color: "#241F19" }}>
-        <span style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: 15, fontStyle: "italic", color: "#8A8270" }}>
+        <span style={{ fontFamily: HEADLINE, fontSize: 15, fontStyle: "italic", color: "#8A8270" }}>
           DepCut Journal
         </span>
         <div className="flex flex-col">
@@ -27,7 +30,7 @@ export function QuietPaperList({ posts }: { posts: BlogListPost[] }) {
               >
                 <h2
                   className="text-[22px] leading-[1.3] font-medium sm:text-[25px]"
-                  style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#241F19" }}
+                  style={{ fontFamily: HEADLINE, color: "#241F19" }}
                 >
                   {post.title}
                 </h2>

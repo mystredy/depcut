@@ -2,7 +2,10 @@ import Link from "next/link";
 
 import { categorySlug } from "@/lib/blog/categories";
 
+import { THEME_FONTS } from "./fonts";
 import { coverUrl, formatDate, FullBleedSection, type BlogListPost } from "./shared";
+
+const HEADLINE = THEME_FONTS.deck.headline;
 
 const STRIPES = [
   { bar: "#3B6EF6", chip: "rgba(59,110,246,0.1)", text: "#3B6EF6" },
@@ -20,7 +23,7 @@ export function DeckList({ posts }: { posts: BlogListPost[] }) {
   return (
     <FullBleedSection background="#FBFAF8">
       <div className="flex flex-col gap-8" style={{ color: "#16130F" }}>
-        <span className="text-[17px] font-bold" style={{ fontFamily: "'Sora', system-ui, sans-serif" }}>
+        <span className="text-[17px] font-bold" style={{ fontFamily: HEADLINE }}>
           Blog
         </span>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -50,7 +53,7 @@ export function DeckList({ posts }: { posts: BlogListPost[] }) {
                     )}
                     <h2
                       className="text-[17px] leading-[1.35] font-semibold"
-                      style={{ fontFamily: "'Sora', system-ui, sans-serif" }}
+                      style={{ fontFamily: HEADLINE }}
                     >
                       {post.title}
                     </h2>
@@ -62,7 +65,7 @@ export function DeckList({ posts }: { posts: BlogListPost[] }) {
                     <div className="mt-1 flex items-center gap-2">
                       <span
                         className="grid size-[22px] place-items-center rounded-full text-[10px] font-semibold text-white"
-                        style={{ background: stripe.bar, fontFamily: "'Sora', system-ui, sans-serif" }}
+                        style={{ background: stripe.bar, fontFamily: HEADLINE }}
                       >
                         {initials(post.authorName)}
                       </span>

@@ -2,7 +2,10 @@ import Link from "next/link";
 
 import { categorySlug } from "@/lib/blog/categories";
 
+import { THEME_FONTS } from "./fonts";
 import { formatDate, FullBleedSection, type BlogListPost } from "./shared";
+
+const HEADLINE = THEME_FONTS.digest.headline;
 
 const TILES = ["#C9542C", "#1B1812", "#6B6558", "#2E6B5E", "#3C5AA6"];
 
@@ -15,7 +18,7 @@ export function DigestList({ posts }: { posts: BlogListPost[] }) {
     <FullBleedSection background="#FAF8F3">
       <div className="flex flex-col gap-2" style={{ color: "#1B1812" }}>
         <div className="mb-4 flex items-baseline justify-between">
-          <span className="text-[19px] font-extrabold" style={{ fontFamily: "'Libre Franklin', system-ui, sans-serif" }}>
+          <span className="text-[19px] font-extrabold" style={{ fontFamily: HEADLINE }}>
             The DepCut Digest
           </span>
           <span className="text-[11.5px]" style={{ color: "#8A8578" }}>
@@ -31,7 +34,7 @@ export function DigestList({ posts }: { posts: BlogListPost[] }) {
             <div className="flex items-start gap-5">
               <span
                 className="w-[34px] shrink-0 text-[22px] font-bold"
-                style={{ fontFamily: "'Libre Franklin', system-ui, sans-serif", color: "#D8D2C1" }}
+                style={{ fontFamily: HEADLINE, color: "#D8D2C1" }}
               >
                 {String(i + 1).padStart(2, "0")}
               </span>
@@ -46,7 +49,7 @@ export function DigestList({ posts }: { posts: BlogListPost[] }) {
               <Link href={`/blog/${post.slug}`} className="no-underline">
                 <h2
                   className="text-[17px] leading-[1.3] font-bold"
-                  style={{ fontFamily: "'Libre Franklin', system-ui, sans-serif", color: "#1B1812" }}
+                  style={{ fontFamily: HEADLINE, color: "#1B1812" }}
                 >
                   {post.title}
                 </h2>

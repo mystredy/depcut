@@ -2,9 +2,11 @@ import Link from "next/link";
 
 import { categorySlug } from "@/lib/blog/categories";
 
+import { THEME_FONTS } from "./fonts";
 import { FullBleedSection, type BlogListPost } from "./shared";
 
 const ACCENT = "#5FD97A";
+const BODY = THEME_FONTS.terminal.body;
 
 function slugify(title: string): string {
   return title
@@ -20,7 +22,7 @@ function slugify(title: string): string {
 export function TerminalList({ posts }: { posts: BlogListPost[] }) {
   return (
     <FullBleedSection background="#0A0E0C">
-      <div className="flex flex-col gap-6" style={{ color: "#C9D1C9", fontFamily: "'JetBrains Mono', ui-monospace, monospace" }}>
+      <div className="flex flex-col gap-6" style={{ color: "#C9D1C9", fontFamily: BODY }}>
         <div className="flex items-center gap-2.5">
           <span className="size-[9px] rounded-full" style={{ background: ACCENT }} />
           <span className="text-[13.5px] font-semibold" style={{ color: "#E4EAE4" }}>

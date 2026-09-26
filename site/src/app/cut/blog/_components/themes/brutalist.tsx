@@ -2,21 +2,24 @@ import Link from "next/link";
 
 import { categorySlug } from "@/lib/blog/categories";
 
+import { THEME_FONTS } from "./fonts";
 import { coverUrl, formatDate, FullBleedSection, type BlogListPost } from "./shared";
 
 const ACCENT = "#E8FF3D";
+const HEADLINE = THEME_FONTS.brutalist.headline;
+const BODY = THEME_FONTS.brutalist.body;
 
 export function BrutalistList({ posts }: { posts: BlogListPost[] }) {
   return (
     <FullBleedSection background="#FFFFFF">
       <div
         className="flex flex-col gap-7"
-        style={{ color: "#000000", fontFamily: "'IBM Plex Mono', ui-monospace, monospace" }}
+        style={{ color: "#000000", fontFamily: BODY }}
       >
         <div className="flex items-center justify-between pb-3.5" style={{ borderBottom: "4px solid #000000" }}>
           <span
             className="text-[20px] font-bold uppercase"
-            style={{ fontFamily: "'Unbounded', system-ui, sans-serif" }}
+            style={{ fontFamily: HEADLINE }}
           >
             DepCut / Blog
           </span>
@@ -50,7 +53,7 @@ export function BrutalistList({ posts }: { posts: BlogListPost[] }) {
                     </span>
                     <h2
                       className="text-[19px] leading-[1.2] font-bold uppercase"
-                      style={{ fontFamily: "'Unbounded', system-ui, sans-serif" }}
+                      style={{ fontFamily: HEADLINE }}
                     >
                       {post.title}
                     </h2>

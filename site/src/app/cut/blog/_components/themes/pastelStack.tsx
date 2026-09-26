@@ -2,7 +2,10 @@ import Link from "next/link";
 
 import { categorySlug } from "@/lib/blog/categories";
 
+import { THEME_FONTS } from "./fonts";
 import { formatDate, FullBleedSection, type BlogListPost } from "./shared";
+
+const HEADLINE = THEME_FONTS.pastelStack.headline;
 
 const BANDS = [
   { bg: "#DCEBFF", label: "#3B6EF6", date: "#5A6B8C" },
@@ -14,7 +17,7 @@ export function PastelStackList({ posts }: { posts: BlogListPost[] }) {
   return (
     <FullBleedSection background="#FFFFFF">
       <div className="flex flex-col gap-5" style={{ color: "#2A2A2A" }}>
-        <span style={{ fontFamily: "'Quicksand', system-ui, sans-serif", fontSize: 19, fontWeight: 700 }}>
+        <span style={{ fontFamily: HEADLINE, fontSize: 19, fontWeight: 700 }}>
           What&apos;s new
         </span>
         {posts.map((post, i) => {
@@ -36,7 +39,7 @@ export function PastelStackList({ posts }: { posts: BlogListPost[] }) {
                 )}
                 <h2
                   className="mt-1.5 text-[20px] leading-[1.3] font-bold"
-                  style={{ fontFamily: "'Quicksand', system-ui, sans-serif" }}
+                  style={{ fontFamily: HEADLINE }}
                 >
                   {post.title}
                 </h2>

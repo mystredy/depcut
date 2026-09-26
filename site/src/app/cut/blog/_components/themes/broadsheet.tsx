@@ -2,9 +2,11 @@ import Link from "next/link";
 
 import { categorySlug } from "@/lib/blog/categories";
 
+import { THEME_FONTS } from "./fonts";
 import { coverUrl, formatDate, FullBleedSection, type BlogListPost } from "./shared";
 
 const ACCENT = "#B3261E";
+const HEADLINE = THEME_FONTS.broadsheet.headline;
 
 function TagRow({ tags }: { tags: string[] }) {
   if (tags.length === 0) return null;
@@ -37,7 +39,7 @@ export function BroadsheetList({ posts }: { posts: BlogListPost[] }) {
           className="flex flex-col items-center gap-2.5 pb-3.5"
           style={{ borderBottom: "3px double #14110F" }}
         >
-          <span style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 28, fontWeight: 800 }}>
+          <span style={{ fontFamily: HEADLINE, fontSize: 28, fontWeight: 800 }}>
             The DepCut Times
           </span>
           <span className="text-[10.5px] font-medium tracking-[0.14em] uppercase" style={{ color: "#6B6558" }}>
@@ -62,7 +64,7 @@ export function BroadsheetList({ posts }: { posts: BlogListPost[] }) {
                 )}
                 <h2
                   className="text-[32px] leading-[1.15] font-bold"
-                  style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+                  style={{ fontFamily: HEADLINE }}
                 >
                   {lead.title}
                 </h2>
@@ -102,7 +104,7 @@ export function BroadsheetList({ posts }: { posts: BlogListPost[] }) {
                         )}
                         <h3
                           className="text-[16.5px] leading-[1.25] font-bold"
-                          style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+                          style={{ fontFamily: HEADLINE }}
                         >
                           {post.title}
                         </h3>

@@ -2,9 +2,11 @@ import Link from "next/link";
 
 import { categorySlug } from "@/lib/blog/categories";
 
+import { THEME_FONTS } from "./fonts";
 import { coverUrl, formatDate, type BlogListPost } from "./shared";
 
 const ACCENT = "#7C8CFF";
+const HEADLINE = THEME_FONTS.nightdesk.headline;
 
 // Dark, like the page chrome already is — no full-bleed background needed,
 // this just sits on BlogShell's own dark background with nicer typography
@@ -42,7 +44,7 @@ export function NightdeskList({ posts }: { posts: BlogListPost[] }) {
                 )}
                 <h2
                   className="mt-2 text-[16.5px] leading-[1.35] font-semibold"
-                  style={{ fontFamily: "'Space Grotesk', system-ui, sans-serif", color: "#F2F1EC" }}
+                  style={{ fontFamily: HEADLINE, color: "#F2F1EC" }}
                 >
                   {post.title}
                 </h2>
